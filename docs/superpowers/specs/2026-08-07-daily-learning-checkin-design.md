@@ -13,7 +13,8 @@ MVP 先聚焦一个垂类切入：**Senior SWE Interview / System Design 面试�
 ## 范围（MVP）
 
 包含：
-- 创建学习 Track，AI 生成大纲（按天拆分的任务列表）
+- 创建学习 Track，AI 生成大纲（按天拆分的任务列表），支持对话式反馈调整后再确认
+- Track 进行中，用户随时可对未完成部分提出修改意见，AI 重新生成草稿供确认
 - 按需生成当日教材（markdown 正文 + 引用来源），AI 自主判断是否需要联网搜索
 - 用户可选提供参考 source（含 YouTube 链接），AI 生成内容时优先参考
 - YouTube 链接以嵌入卡片形式展示，不做 transcript 提取/总结
@@ -44,6 +45,7 @@ Track（一个学习方向，如 "System Design 面试准备"）
   - id, userId, title, description
   - status: active / completed / archived
   - createdAt
+  （创建流程见下方"AI 内容生成流程"：Track 与其 OutlineItem 是在用户确认草稿后一起写入的，草稿阶段不落库）
 
 Source（用户可选提供的参考资料，归属某个 Track）
   - id, trackId, type: link / youtube
@@ -67,11 +69,18 @@ CheckIn（打卡记录）
 
 ## AI 内容生成流程
 
-**创建 Track（生成大纲）：**
+**创建 Track（对话式生成大纲草稿）：**
 1. 用户输入主题、可选学习周期、可选 sources 链接
-2. Agent 用结构化生成（`generateObject`）产出 `OutlineItem[]`（dayIndex/title/summary），内容由易到难排列
-3. 若提供了 sources，大纲会参考其目录/内容规划顺序；若主题偏时效性，agent 会先用 `web_search` 查一轮再生成大纲
-4. 是否联网完全由模型自主判断，不在产品层面为不同 topic 写死规则
+2. Agent 用结构化生成（`generateObject`）产出大纲草稿：`OutlineItem[]`（dayIndex/title/summary），内容由易到难排列。若提供了 sources，草稿会参考其目录/内容规划顺序；若主题偏时效性，agent 会先用 `web_search` 查一轮再生成
+3. 草稿只在前端展示，不写入数据库。用户可以输入反馈文字（如"第5-10天太难了，拆细一点"），agent 基于当前草稿 + 反馈重新生成整份草稿，可反复多轮
+4. 用户点击"确认"后，才一次性将 Track 和确认版的 `OutlineItem[]` 写入数据库，Track 状态变为 active
+5. 是否联网完全由模型自主判断，不在产品层面为不同 topic 写死规则
+
+**学习中调整大纲：**
+1. Track 处于 active 状态时，用户可随时打开"调整计划"入口，输入修改意见
+2. Agent 基于当前大纲中**未完成**的 `OutlineItem`（status 为 pending 或 generated）+ 用户反馈，重新生成这部分的草稿，同样可反复调整；已 completed 的条目不参与，也不会展示为可改
+3. 用户确认后，原来未完成的 `OutlineItem` 连同其关联的 `DailyContent`（若已生成过还未打卡）一起删除，替换为新草稿对应的记录，`dayIndex` 从最后一个 completed 之后重新连续排列
+4. 若用户在预览草稿阶段放弃，数据库中原有大纲不受任何影响
 
 **打开某天任务（生成当日教材）：**
 1. 若 `DailyContent` 已存在，直接返回缓存内容
@@ -83,8 +92,8 @@ CheckIn（打卡记录）
 ## 页面结构
 
 - `/dashboard` — 所有 Track 卡片列表（标题、进度条、streak），"新建 Track" 入口
-- `/tracks/new` — 创建 Track 表单（主题、可选周期、可选 sources）→ 提交后生成大纲并跳转详情页
-- `/tracks/[id]` — 大纲总览：按天列出的任务列表，展示完成状态
+- `/tracks/new` — 创建 Track 表单（主题、可选周期、可选 sources）→ 提交后进入大纲草稿对话式确认界面（展示当前草稿列表 + 反馈输入框 + "重新生成"/"确认"按钮），确认后写入数据库并跳转详情页
+- `/tracks/[id]` — 大纲总览：按天列出的任务列表，展示完成状态；提供"调整计划"入口，打开后进入与创建时类似的草稿确认界面，但只针对未完成部分
 - `/tracks/[id]/day/[dayIndex]` — 当日教材页：markdown 正文、引用来源、YouTube 卡片、"标记完成"按钮
 
 ## 后续迭代方向（不在 MVP 范围内）
