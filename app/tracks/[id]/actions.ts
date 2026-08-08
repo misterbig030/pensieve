@@ -4,7 +4,11 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { generateOutlineDraft } from "@/lib/ai/outline";
 import { computeOutlineReplacement } from "@/lib/outlineRevision";
-import { getTrackDetail, replaceUnfinishedOutlineItems } from "@/lib/db/queries";
+import {
+  getTrackDetail,
+  markOutlineItemComplete,
+  replaceUnfinishedOutlineItems,
+} from "@/lib/db/queries";
 import type { OutlineDraft } from "@/lib/schemas/outline";
 import type { AiModelId } from "@/lib/ai/models";
 
@@ -52,4 +56,10 @@ export async function confirmRevisionAction(input: {
 
   await replaceUnfinishedOutlineItems(input.trackId, userId, reindexed);
   redirect(`/tracks/${input.trackId}`);
+}
+
+export async function markCompleteAction(outlineItemId: string): Promise<void> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Not authenticated");
+  await markOutlineItemComplete(outlineItemId, userId);
 }
