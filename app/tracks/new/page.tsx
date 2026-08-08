@@ -48,7 +48,7 @@ export default function NewTrackPage() {
   if (draft) {
     return (
       <div className="mx-auto max-w-2xl space-y-4 p-6">
-        <h1 className="text-xl font-semibold">确认大纲：{topic}</h1>
+        <h1 className="text-xl font-heading font-semibold">确认大纲：{topic}</h1>
         <OutlineDraftEditor topic={topic} periodDays={periodDays} sources={sources} initialDraft={draft} />
       </div>
     );
@@ -56,7 +56,7 @@ export default function NewTrackPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-6">
-      <h1 className="text-xl font-semibold">新建学习方向</h1>
+      <h1 className="text-xl font-heading font-semibold">新建学习方向</h1>
       <Input placeholder="想学什么？比如 System Design 面试准备" value={topic} onChange={(e) => setTopic(e.target.value)} />
       <Input
         type="number"

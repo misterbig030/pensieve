@@ -22,7 +22,7 @@ export default async function TrackDetailPage({
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{track.title}</h1>
+        <h1 className="text-xl font-heading font-semibold">{track.title}</h1>
         <Button
           variant="secondary"
           render={<Link href={`/tracks/${track.id}/adjust`}>调整计划</Link>}

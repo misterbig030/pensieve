@@ -18,7 +18,7 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">我的学习 · 连续打卡 {streak} 天</h1>
+        <h1 className="text-xl font-heading font-semibold">我的学习 · 连续打卡 {streak} 天</h1>
         <Button render={<Link href="/tracks/new">+ 新建 Track</Link>} />
       </div>
       <div className="grid gap-3">

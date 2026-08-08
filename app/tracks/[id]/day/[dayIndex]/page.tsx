@@ -33,7 +33,7 @@ export default async function DayPage({
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-6">
-      <h1 className="text-xl font-semibold">Day {item.dayIndex}: {item.title}</h1>
+      <h1 className="text-xl font-heading font-semibold">Day {item.dayIndex}: {item.title}</h1>
       <p className="text-sm text-muted-foreground">{item.summary}</p>
       <DailyContentView
         trackId={id}
