@@ -25,6 +25,7 @@ export default async function TrackDetailPage({
         <h1 className="text-xl font-heading font-semibold">{track.title}</h1>
         <Button
           variant="secondary"
+          nativeButton={false}
           render={<Link href={`/tracks/${track.id}/adjust`}>调整计划</Link>}
         />
       </div>
