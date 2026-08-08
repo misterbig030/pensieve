@@ -1,3 +1,11 @@
+// Known limitation: day boundaries here are UTC-based (see toISOString
+// below), not the user's local calendar day. For a user in a non-UTC
+// timezone, a check-in made late at night or early in the morning local
+// time may be attributed to the "wrong" day, which can under- or
+// over-count the streak near midnight UTC. This is acceptable for a
+// single-user MVP that doesn't store a timezone preference; a proper fix
+// would require adding a user timezone column and threading it through
+// wherever `completedAt` is generated/queried, which is out of scope here.
 function toDayKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }

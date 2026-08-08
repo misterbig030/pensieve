@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -26,9 +27,11 @@ export function OutlineDraftEditor({ topic, periodDays, sources, initialDraft }:
   const [feedback, setFeedback] = useState("");
   const [model, setModel] = useState<AiModelId>(DEFAULT_OUTLINE_MODEL);
   const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleRegenerate() {
     setIsPending(true);
+    setError(null);
     try {
       const newDraft = await generateOutlineDraftAction({
         topic,
@@ -40,6 +43,8 @@ export function OutlineDraftEditor({ topic, periodDays, sources, initialDraft }:
       });
       setDraft(newDraft);
       setFeedback("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成失败，请重试");
     } finally {
       setIsPending(false);
     }
@@ -47,8 +52,12 @@ export function OutlineDraftEditor({ topic, periodDays, sources, initialDraft }:
 
   async function handleConfirm() {
     setIsPending(true);
+    setError(null);
     try {
       await confirmTrackAction({ topic, sources, draft });
+    } catch (err) {
+      unstable_rethrow(err);
+      setError(err instanceof Error ? err.message : "确认失败，请重试");
     } finally {
       setIsPending(false);
     }
@@ -92,6 +101,7 @@ export function OutlineDraftEditor({ topic, periodDays, sources, initialDraft }:
           确认
         </Button>
       </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }

@@ -43,12 +43,16 @@ export function DailyContentView({
   );
   const [isPending, setIsPending] = useState(false);
   const [completed, setCompleted] = useState(isCompleted);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleGenerate() {
     setIsPending(true);
+    setError(null);
     try {
       const result = await generateDailyContentAction({ trackId, dayIndex, model });
       setContent({ ...result, model });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成失败，请重试");
     } finally {
       setIsPending(false);
     }
@@ -56,9 +60,12 @@ export function DailyContentView({
 
   async function handleMarkComplete() {
     setIsPending(true);
+    setError(null);
     try {
       await markCompleteAction(outlineItemId);
       setCompleted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "标记完成失败，请重试");
     } finally {
       setIsPending(false);
     }
@@ -81,6 +88,7 @@ export function DailyContentView({
           {content ? "换个模型重新生成" : "生成教材"}
         </Button>
       </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       {content && (
         <>

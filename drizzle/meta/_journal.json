@@ -8,6 +8,13 @@
       "when": 1786153136283,
       "tag": "0000_narrow_power_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786170388325,
+      "tag": "0001_charming_puppet_master",
+      "breakpoints": true
     }
   ]
 }

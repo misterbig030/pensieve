@@ -23,6 +23,7 @@ export default function NewTrackPage() {
   const [model, setModel] = useState<AiModelId>(DEFAULT_OUTLINE_MODEL);
   const [draft, setDraft] = useState<OutlineDraft | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function addSource() {
     if (!sourceUrl.trim()) return;
@@ -33,9 +34,12 @@ export default function NewTrackPage() {
 
   async function handleGenerate() {
     setIsPending(true);
+    setError(null);
     try {
       const result = await generateOutlineDraftAction({ topic, periodDays, sources, model });
       setDraft(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成失败，请重试");
     } finally {
       setIsPending(false);
     }
@@ -82,6 +86,7 @@ export default function NewTrackPage() {
       <Button onClick={handleGenerate} disabled={isPending || !topic.trim()}>
         生成大纲
       </Button>
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }

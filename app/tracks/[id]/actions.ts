@@ -2,6 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { generateOutlineDraft } from "@/lib/ai/outline";
 import { computeOutlineReplacement } from "@/lib/outlineRevision";
 import {
@@ -9,7 +10,7 @@ import {
   markOutlineItemComplete,
   replaceUnfinishedOutlineItems,
 } from "@/lib/db/queries";
-import type { OutlineDraft } from "@/lib/schemas/outline";
+import { outlineDraftSchema, type OutlineDraft } from "@/lib/schemas/outline";
 import type { AiModelId } from "@/lib/ai/models";
 
 export async function reviseOutlineDraftAction(input: {
@@ -46,20 +47,26 @@ export async function confirmRevisionAction(input: {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
+  const draft = outlineDraftSchema.parse(input.draft);
+
   const detail = await getTrackDetail(input.trackId, userId);
   if (!detail) throw new Error("Track not found");
 
   const reindexed = computeOutlineReplacement(
     detail.items.map((i) => ({ dayIndex: i.dayIndex, status: i.status })),
-    input.draft.items.map((i) => ({ title: i.title, summary: i.summary })),
+    draft.items.map((i) => ({ title: i.title, summary: i.summary })),
   );
 
   await replaceUnfinishedOutlineItems(input.trackId, userId, reindexed);
+  revalidatePath(`/tracks/${input.trackId}`);
+  revalidatePath("/dashboard");
   redirect(`/tracks/${input.trackId}`);
 }
 
 export async function markCompleteAction(outlineItemId: string): Promise<void> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
-  await markOutlineItemComplete(outlineItemId, userId);
+  const { trackId } = await markOutlineItemComplete(outlineItemId, userId);
+  revalidatePath(`/tracks/${trackId}`);
+  revalidatePath("/dashboard");
 }

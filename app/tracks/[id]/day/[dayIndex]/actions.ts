@@ -2,6 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { eq, and } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { outlineItems, tracks, sources } from "@/lib/db/schema";
 import { generateDailyContent } from "@/lib/ai/dailyContent";
@@ -40,6 +41,8 @@ export async function generateDailyContentAction(input: {
     citations: result.citations,
     model: input.model,
   });
+
+  revalidatePath(`/tracks/${input.trackId}`);
 
   return result;
 }

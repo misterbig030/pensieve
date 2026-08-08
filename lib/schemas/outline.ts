@@ -7,7 +7,9 @@ export const outlineDraftItemSchema = z.object({
 });
 
 export const outlineDraftSchema = z.object({
-  items: z.array(outlineDraftItemSchema).min(1),
+  // Upper bound keeps curricula to a realistic length (~2 months); also
+  // guards against unbounded client-supplied payloads reaching the DB.
+  items: z.array(outlineDraftItemSchema).min(1).max(60),
 });
 
 export type OutlineDraftItem = z.infer<typeof outlineDraftItemSchema>;

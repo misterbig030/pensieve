@@ -141,7 +141,10 @@ export async function upsertDailyContent(
     .where(and(eq(outlineItems.id, outlineItemId), ne(outlineItems.status, "completed")));
 }
 
-export async function markOutlineItemComplete(outlineItemId: string, userId: string): Promise<void> {
+export async function markOutlineItemComplete(
+  outlineItemId: string,
+  userId: string,
+): Promise<{ trackId: string }> {
   const item = await db.query.outlineItems.findFirst({
     where: eq(outlineItems.id, outlineItemId),
     with: { track: true },
@@ -149,7 +152,14 @@ export async function markOutlineItemComplete(outlineItemId: string, userId: str
   if (!item || item.track.userId !== userId) throw new Error("Outline item not found for this user");
 
   await db.transaction(async (tx) => {
+    if (item.status === "completed") {
+      // Already completed — no-op to keep this call idempotent and avoid
+      // inserting duplicate check-in rows on repeated calls.
+      return;
+    }
     await tx.insert(checkIns).values({ outlineItemId });
     await tx.update(outlineItems).set({ status: "completed" }).where(eq(outlineItems.id, outlineItemId));
   });
+
+  return { trackId: item.track.id };
 }

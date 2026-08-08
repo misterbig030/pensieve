@@ -5,6 +5,7 @@ import {
   integer,
   timestamp,
   jsonb,
+  unique,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -29,20 +30,24 @@ export const sources = pgTable("sources", {
   title: text("title"),
 });
 
-export const outlineItems = pgTable("outline_items", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  trackId: uuid("track_id")
-    .notNull()
-    .references(() => tracks.id, { onDelete: "cascade" }),
-  dayIndex: integer("day_index").notNull(),
-  title: text("title").notNull(),
-  summary: text("summary").notNull(),
-  status: text("status", {
-    enum: ["pending", "generated", "completed"],
-  })
-    .notNull()
-    .default("pending"),
-});
+export const outlineItems = pgTable(
+  "outline_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    trackId: uuid("track_id")
+      .notNull()
+      .references(() => tracks.id, { onDelete: "cascade" }),
+    dayIndex: integer("day_index").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    status: text("status", {
+      enum: ["pending", "generated", "completed"],
+    })
+      .notNull()
+      .default("pending"),
+  },
+  (t) => [unique().on(t.trackId, t.dayIndex)],
+);
 
 export const dailyContent = pgTable("daily_content", {
   id: uuid("id").primaryKey().defaultRandom(),

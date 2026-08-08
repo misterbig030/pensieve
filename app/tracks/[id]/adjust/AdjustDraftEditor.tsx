@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -19,13 +20,17 @@ export function AdjustDraftEditor({ trackId }: { trackId: string }) {
   const [feedback, setFeedback] = useState("");
   const [model, setModel] = useState<AiModelId>(DEFAULT_OUTLINE_MODEL);
   const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleGenerate() {
     setIsPending(true);
+    setError(null);
     try {
       const result = await reviseOutlineDraftAction({ trackId, feedback, existingDraft: draft ?? undefined, model });
       setDraft(result);
       setFeedback("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成失败，请重试");
     } finally {
       setIsPending(false);
     }
@@ -34,8 +39,12 @@ export function AdjustDraftEditor({ trackId }: { trackId: string }) {
   async function handleConfirm() {
     if (!draft) return;
     setIsPending(true);
+    setError(null);
     try {
       await confirmRevisionAction({ trackId, draft });
+    } catch (err) {
+      unstable_rethrow(err);
+      setError(err instanceof Error ? err.message : "确认失败，请重试");
     } finally {
       setIsPending(false);
     }
@@ -78,6 +87,7 @@ export function AdjustDraftEditor({ trackId }: { trackId: string }) {
           <Button onClick={handleConfirm} disabled={isPending}>确认</Button>
         )}
       </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }

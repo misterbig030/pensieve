@@ -1,0 +1,1 @@
+ALTER TABLE "outline_items" ADD CONSTRAINT "outline_items_track_id_day_index_unique" UNIQUE("track_id","day_index");
