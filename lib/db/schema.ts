@@ -6,6 +6,7 @@ import {
   timestamp,
   jsonb,
 } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 
 export const tracks = pgTable("tracks", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -72,3 +73,7 @@ export type NewOutlineItem = typeof outlineItems.$inferInsert;
 export type DailyContent = typeof dailyContent.$inferSelect;
 export type NewDailyContent = typeof dailyContent.$inferInsert;
 export type CheckIn = typeof checkIns.$inferSelect;
+
+export const outlineItemsRelations = relations(outlineItems, ({ one }) => ({
+  track: one(tracks, { fields: [outlineItems.trackId], references: [tracks.id] }),
+}));
