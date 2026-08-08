@@ -1,0 +1,55 @@
+"use server";
+
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { generateOutlineDraft } from "@/lib/ai/outline";
+import { computeOutlineReplacement } from "@/lib/outlineRevision";
+import { getTrackDetail, replaceUnfinishedOutlineItems } from "@/lib/db/queries";
+import type { OutlineDraft } from "@/lib/schemas/outline";
+import type { AiModelId } from "@/lib/ai/models";
+
+export async function reviseOutlineDraftAction(input: {
+  trackId: string;
+  feedback: string;
+  existingDraft?: OutlineDraft;
+  model: AiModelId;
+}): Promise<OutlineDraft> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Not authenticated");
+
+  const detail = await getTrackDetail(input.trackId, userId);
+  if (!detail) throw new Error("Track not found");
+
+  const unfinished = detail.items.filter((i) => i.status !== "completed");
+  const baseDraft: OutlineDraft =
+    input.existingDraft ?? {
+      items: unfinished.map((i) => ({ dayIndex: i.dayIndex, title: i.title, summary: i.summary })),
+    };
+
+  return generateOutlineDraft({
+    topic: detail.track.title,
+    sources: detail.sources.map((s) => ({ url: s.url, title: s.title ?? undefined })),
+    existingDraft: baseDraft,
+    feedback: input.feedback,
+    model: input.model,
+  });
+}
+
+export async function confirmRevisionAction(input: {
+  trackId: string;
+  draft: OutlineDraft;
+}): Promise<void> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Not authenticated");
+
+  const detail = await getTrackDetail(input.trackId, userId);
+  if (!detail) throw new Error("Track not found");
+
+  const reindexed = computeOutlineReplacement(
+    detail.items.map((i) => ({ dayIndex: i.dayIndex, status: i.status })),
+    input.draft.items.map((i) => ({ title: i.title, summary: i.summary })),
+  );
+
+  await replaceUnfinishedOutlineItems(input.trackId, userId, reindexed);
+  redirect(`/tracks/${input.trackId}`);
+}
