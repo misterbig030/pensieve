@@ -43,3 +43,7 @@ next-env.d.ts
 # clerk configuration (can include secrets)
 /.clerk/
 .superpowers/
+
+# claude code local/personal state (not shared with the team)
+.claude/settings.local.json
+.claude/worktrees/
