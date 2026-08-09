@@ -13,7 +13,7 @@ export async function generateDailyContentAction(input: {
   trackId: string;
   dayIndex: number;
   model: AiModelId;
-}): Promise<{ contentMarkdown: string; citations: { title: string; url: string }[] }> {
+}): Promise<{ contentMarkdown: string; citations: { title: string; url: string }[]; costUsd: number }> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
@@ -29,7 +29,7 @@ export async function generateDailyContentAction(input: {
 
   const trackSources = await db.query.sources.findMany({ where: eq(sources.trackId, input.trackId) });
 
-  const result = await generateDailyContent({
+  const { content, costUsd } = await generateDailyContent({
     title: item.title,
     summary: item.summary,
     sources: trackSources.map((s) => ({ url: s.url, title: s.title ?? undefined, type: s.type as "link" | "youtube" })),
@@ -37,12 +37,12 @@ export async function generateDailyContentAction(input: {
   });
 
   await upsertDailyContent(item.id, {
-    contentMarkdown: result.contentMarkdown,
-    citations: result.citations,
+    contentMarkdown: content.contentMarkdown,
+    citations: content.citations,
     model: input.model,
   });
 
   revalidatePath(`/tracks/${input.trackId}`);
 
-  return result;
+  return { ...content, costUsd };
 }

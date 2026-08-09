@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { generateOutlineDraft } from "@/lib/ai/outline";
+import { generateOutlineDraft, type GenerateOutlineDraftResult } from "@/lib/ai/outline";
 import { createTrackWithOutline } from "@/lib/db/queries";
 import { outlineDraftSchema, type OutlineDraft } from "@/lib/schemas/outline";
 import type { AiModelId } from "@/lib/ai/models";
@@ -18,7 +18,7 @@ export async function generateOutlineDraftAction(input: {
   existingDraft?: OutlineDraft;
   feedback?: string;
   model: AiModelId;
-}): Promise<OutlineDraft> {
+}): Promise<GenerateOutlineDraftResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 

@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { outlineDraftSchema, type OutlineDraft } from "@/lib/schemas/outline";
-import type { AiModelId } from "./models";
+import { estimateCostUsd, type AiModelId } from "./models";
 
 interface BuildOutlinePromptInput {
   topic: string;
@@ -49,13 +49,18 @@ interface GenerateOutlineDraftInput extends BuildOutlinePromptInput {
   model: AiModelId;
 }
 
+export interface GenerateOutlineDraftResult {
+  draft: OutlineDraft;
+  costUsd: number;
+}
+
 export async function generateOutlineDraft(
   input: GenerateOutlineDraftInput,
-): Promise<OutlineDraft> {
-  const { object } = await generateObject({
+): Promise<GenerateOutlineDraftResult> {
+  const { object, usage } = await generateObject({
     model: input.model,
     schema: outlineDraftSchema,
     prompt: buildOutlinePrompt(input),
   });
-  return object;
+  return { draft: object, costUsd: estimateCostUsd(input.model, usage) };
 }

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AVAILABLE_MODELS, DEFAULT_OUTLINE_MODEL, type AiModelId } from "@/lib/ai/models";
+import { formatCostUsd } from "@/lib/formatCost";
 import type { OutlineDraft } from "@/lib/schemas/outline";
 import { reviseOutlineDraftAction, confirmRevisionAction } from "../actions";
 
@@ -21,13 +22,15 @@ export function AdjustDraftEditor({ trackId }: { trackId: string }) {
   const [model, setModel] = useState<AiModelId>(DEFAULT_OUTLINE_MODEL);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [costUsd, setCostUsd] = useState(0);
 
   async function handleGenerate() {
     setIsPending(true);
     setError(null);
     try {
       const result = await reviseOutlineDraftAction({ trackId, feedback, existingDraft: draft ?? undefined, model });
-      setDraft(result);
+      setDraft(result.draft);
+      setCostUsd(result.costUsd);
       setFeedback("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成失败，请重试");
@@ -87,6 +90,7 @@ export function AdjustDraftEditor({ trackId }: { trackId: string }) {
           <Button onClick={handleConfirm} disabled={isPending}>确认</Button>
         )}
       </div>
+      {draft && <p className="text-sm text-muted-foreground">预估花费：{formatCostUsd(costUsd)}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );

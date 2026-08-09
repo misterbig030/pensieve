@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AVAILABLE_MODELS, DEFAULT_OUTLINE_MODEL, type AiModelId } from "@/lib/ai/models";
+import { formatCostUsd } from "@/lib/formatCost";
 import type { OutlineDraft } from "@/lib/schemas/outline";
 import { generateOutlineDraftAction, confirmTrackAction } from "./actions";
 
@@ -20,20 +21,22 @@ interface Props {
   periodDays?: number;
   sources: { url: string; title?: string; type: "link" | "youtube" }[];
   initialDraft: OutlineDraft;
+  initialCostUsd: number;
 }
 
-export function OutlineDraftEditor({ topic, periodDays, sources, initialDraft }: Props) {
+export function OutlineDraftEditor({ topic, periodDays, sources, initialDraft, initialCostUsd }: Props) {
   const [draft, setDraft] = useState(initialDraft);
   const [feedback, setFeedback] = useState("");
   const [model, setModel] = useState<AiModelId>(DEFAULT_OUTLINE_MODEL);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [costUsd, setCostUsd] = useState(initialCostUsd);
 
   async function handleRegenerate() {
     setIsPending(true);
     setError(null);
     try {
-      const newDraft = await generateOutlineDraftAction({
+      const result = await generateOutlineDraftAction({
         topic,
         periodDays,
         sources,
@@ -41,7 +44,8 @@ export function OutlineDraftEditor({ topic, periodDays, sources, initialDraft }:
         feedback,
         model,
       });
-      setDraft(newDraft);
+      setDraft(result.draft);
+      setCostUsd(result.costUsd);
       setFeedback("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成失败，请重试");
@@ -101,6 +105,7 @@ export function OutlineDraftEditor({ topic, periodDays, sources, initialDraft }:
           确认
         </Button>
       </div>
+      <p className="text-sm text-muted-foreground">预估花费：{formatCostUsd(costUsd)}</p>
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );

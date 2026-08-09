@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
-import type { AiModelId } from "./models";
+import { estimateCostUsd, type AiModelId } from "./models";
 
 interface SourceInput {
   url: string;
@@ -49,13 +49,18 @@ interface GenerateDailyContentInput extends BuildDailyContentPromptInput {
   model: AiModelId;
 }
 
+export interface GenerateDailyContentResult {
+  content: DailyContentDraft;
+  costUsd: number;
+}
+
 export async function generateDailyContent(
   input: GenerateDailyContentInput,
-): Promise<DailyContentDraft> {
-  const { object } = await generateObject({
+): Promise<GenerateDailyContentResult> {
+  const { object, usage } = await generateObject({
     model: input.model,
     schema: dailyContentSchema,
     prompt: buildDailyContentPrompt(input),
   });
-  return object;
+  return { content: object, costUsd: estimateCostUsd(input.model, usage) };
 }

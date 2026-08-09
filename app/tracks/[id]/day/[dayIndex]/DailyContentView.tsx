@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AVAILABLE_MODELS, DEFAULT_CONTENT_MODEL, type AiModelId } from "@/lib/ai/models";
+import { formatCostUsd } from "@/lib/formatCost";
 import { generateDailyContentAction } from "./actions";
 import { markCompleteAction } from "../../actions";
 
@@ -44,13 +45,15 @@ export function DailyContentView({
   const [isPending, setIsPending] = useState(false);
   const [completed, setCompleted] = useState(isCompleted);
   const [error, setError] = useState<string | null>(null);
+  const [costUsd, setCostUsd] = useState<number | null>(null);
 
   async function handleGenerate() {
     setIsPending(true);
     setError(null);
     try {
-      const result = await generateDailyContentAction({ trackId, dayIndex, model });
+      const { costUsd: cost, ...result } = await generateDailyContentAction({ trackId, dayIndex, model });
       setContent({ ...result, model });
+      setCostUsd(cost);
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成失败，请重试");
     } finally {
@@ -88,6 +91,7 @@ export function DailyContentView({
           {content ? "换个模型重新生成" : "生成教材"}
         </Button>
       </div>
+      {costUsd !== null && <p className="text-sm text-muted-foreground">预估花费：{formatCostUsd(costUsd)}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {content && (

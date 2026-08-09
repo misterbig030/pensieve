@@ -22,6 +22,7 @@ export default function NewTrackPage() {
   const [sources, setSources] = useState<{ url: string; title?: string; type: "link" | "youtube" }[]>([]);
   const [model, setModel] = useState<AiModelId>(DEFAULT_OUTLINE_MODEL);
   const [draft, setDraft] = useState<OutlineDraft | null>(null);
+  const [costUsd, setCostUsd] = useState(0);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +38,8 @@ export default function NewTrackPage() {
     setError(null);
     try {
       const result = await generateOutlineDraftAction({ topic, periodDays, sources, model });
-      setDraft(result);
+      setDraft(result.draft);
+      setCostUsd(result.costUsd);
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成失败，请重试");
     } finally {
@@ -49,7 +51,13 @@ export default function NewTrackPage() {
     return (
       <div className="mx-auto max-w-2xl space-y-4 p-6">
         <h1 className="text-xl font-heading font-semibold">确认大纲：{topic}</h1>
-        <OutlineDraftEditor topic={topic} periodDays={periodDays} sources={sources} initialDraft={draft} />
+        <OutlineDraftEditor
+          topic={topic}
+          periodDays={periodDays}
+          sources={sources}
+          initialDraft={draft}
+          initialCostUsd={costUsd}
+        />
       </div>
     );
   }

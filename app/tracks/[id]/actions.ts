@@ -3,7 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { generateOutlineDraft } from "@/lib/ai/outline";
+import { generateOutlineDraft, type GenerateOutlineDraftResult } from "@/lib/ai/outline";
 import { computeOutlineReplacement } from "@/lib/outlineRevision";
 import {
   getTrackDetail,
@@ -18,7 +18,7 @@ export async function reviseOutlineDraftAction(input: {
   feedback: string;
   existingDraft?: OutlineDraft;
   model: AiModelId;
-}): Promise<OutlineDraft> {
+}): Promise<GenerateOutlineDraftResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
