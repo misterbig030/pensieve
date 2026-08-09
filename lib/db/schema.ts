@@ -8,12 +8,14 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { SOURCE_TYPES } from "@/lib/schemas/source";
 
 export const tracks = pgTable("tracks", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull(),
   title: text("title").notNull(),
   description: text("description"),
+  instructions: text("instructions"),
   status: text("status", { enum: ["active", "completed", "archived"] })
     .notNull()
     .default("active"),
@@ -25,7 +27,7 @@ export const sources = pgTable("sources", {
   trackId: uuid("track_id")
     .notNull()
     .references(() => tracks.id, { onDelete: "cascade" }),
-  type: text("type", { enum: ["link", "youtube"] }).notNull(),
+  type: text("type", { enum: SOURCE_TYPES }).notNull(),
   url: text("url").notNull(),
   title: text("title"),
 });

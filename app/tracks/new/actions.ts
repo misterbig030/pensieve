@@ -7,7 +7,7 @@ import { z } from "zod";
 import { generateOutlineDraft, type GenerateOutlineDraftResult } from "@/lib/ai/outline";
 import { createTrackWithOutline } from "@/lib/db/queries";
 import { outlineDraftSchema, type OutlineDraft } from "@/lib/schemas/outline";
-import type { AiModelId } from "@/lib/ai/models";
+import { sourceInputSchema, type SourceInput } from "@/lib/schemas/source";
 
 const topicSchema = z.string().trim().min(1).max(200);
 
@@ -16,8 +16,8 @@ export async function generateOutlineDraftAction(input: {
   periodDays?: number;
   sources: { url: string; title?: string }[];
   existingDraft?: OutlineDraft;
+  instructions?: string;
   feedback?: string;
-  model: AiModelId;
 }): Promise<GenerateOutlineDraftResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
@@ -27,7 +27,8 @@ export async function generateOutlineDraftAction(input: {
 
 export async function confirmTrackAction(input: {
   topic: string;
-  sources: { url: string; title?: string; type: "link" | "youtube" }[];
+  instructions?: string;
+  sources: SourceInput[];
   draft: OutlineDraft;
 }): Promise<void> {
   const { userId } = await auth();
@@ -35,11 +36,13 @@ export async function confirmTrackAction(input: {
 
   const topic = topicSchema.parse(input.topic);
   const draft = outlineDraftSchema.parse(input.draft);
+  const sources = z.array(sourceInputSchema).parse(input.sources);
 
   const { trackId } = await createTrackWithOutline({
     userId,
     title: topic,
-    sources: input.sources,
+    instructions: input.instructions,
+    sources,
     items: draft.items,
   });
 

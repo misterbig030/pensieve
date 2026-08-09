@@ -25,4 +25,14 @@ describe("buildDailyContentPrompt", () => {
     expect(prompt).toMatch(/embed|link card/i);
     expect(prompt).not.toMatch(/transcript/i);
   });
+
+  it("mentions file/note materials as context without treating them as citable", () => {
+    const prompt = buildDailyContentPrompt({
+      title: "Caching",
+      summary: "Cache strategies",
+      sources: [{ url: "notes.pdf", type: "file", title: "My notes" }],
+    });
+    expect(prompt).toContain("My notes");
+    expect(prompt).toMatch(/cannot access their contents/i);
+  });
 });

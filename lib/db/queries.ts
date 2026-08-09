@@ -16,6 +16,42 @@ export async function getTracksForUser(userId: string) {
   });
 }
 
+export interface DashboardTrack {
+  track: Awaited<ReturnType<typeof getTracksForUser>>[number];
+  total: number;
+  done: number;
+  checkInDates: Date[];
+}
+
+/** Batches per-track progress and check-in dates for the dashboard, avoiding an N+1 query per track. */
+export async function getDashboardTracksForUser(userId: string): Promise<DashboardTrack[]> {
+  const userTracks = await getTracksForUser(userId);
+  if (userTracks.length === 0) return [];
+
+  const trackIds = userTracks.map((t) => t.id);
+
+  const itemRows = await db
+    .select({ trackId: outlineItems.trackId, status: outlineItems.status })
+    .from(outlineItems)
+    .where(inArray(outlineItems.trackId, trackIds));
+
+  const checkInRows = await db
+    .select({ trackId: outlineItems.trackId, completedAt: checkIns.completedAt })
+    .from(checkIns)
+    .innerJoin(outlineItems, eq(checkIns.outlineItemId, outlineItems.id))
+    .where(inArray(outlineItems.trackId, trackIds));
+
+  return userTracks.map((track) => {
+    const items = itemRows.filter((i) => i.trackId === track.id);
+    return {
+      track,
+      total: items.length,
+      done: items.filter((i) => i.status === "completed").length,
+      checkInDates: checkInRows.filter((c) => c.trackId === track.id).map((c) => c.completedAt),
+    };
+  });
+}
+
 export async function getTrackDetail(trackId: string, userId: string) {
   const track = await db.query.tracks.findFirst({
     where: and(eq(tracks.id, trackId), eq(tracks.userId, userId)),
@@ -57,10 +93,21 @@ export async function getCheckInDatesForUser(userId: string): Promise<Date[]> {
   return rows.map((r) => r.completedAt);
 }
 
+export async function getCheckInDatesForTrack(trackId: string, userId: string): Promise<Date[]> {
+  const rows = await db
+    .select({ completedAt: checkIns.completedAt })
+    .from(checkIns)
+    .innerJoin(outlineItems, eq(checkIns.outlineItemId, outlineItems.id))
+    .innerJoin(tracks, eq(outlineItems.trackId, tracks.id))
+    .where(and(eq(outlineItems.trackId, trackId), eq(tracks.userId, userId)));
+  return rows.map((r) => r.completedAt);
+}
+
 export async function createTrackWithOutline(input: {
   userId: string;
   title: string;
   description?: string;
+  instructions?: string;
   sources: Omit<NewSource, "id" | "trackId">[];
   items: { dayIndex: number; title: string; summary: string }[];
 }): Promise<{ trackId: string }> {
@@ -71,6 +118,7 @@ export async function createTrackWithOutline(input: {
         userId: input.userId,
         title: input.title,
         description: input.description,
+        instructions: input.instructions,
         status: "active",
       })
       .returning({ id: tracks.id });

@@ -11,13 +11,11 @@ import {
   replaceUnfinishedOutlineItems,
 } from "@/lib/db/queries";
 import { outlineDraftSchema, type OutlineDraft } from "@/lib/schemas/outline";
-import type { AiModelId } from "@/lib/ai/models";
 
 export async function reviseOutlineDraftAction(input: {
   trackId: string;
   feedback: string;
   existingDraft?: OutlineDraft;
-  model: AiModelId;
 }): Promise<GenerateOutlineDraftResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
@@ -35,8 +33,8 @@ export async function reviseOutlineDraftAction(input: {
     topic: detail.track.title,
     sources: detail.sources.map((s) => ({ url: s.url, title: s.title ?? undefined })),
     existingDraft: baseDraft,
+    instructions: detail.track.instructions ?? undefined,
     feedback: input.feedback,
-    model: input.model,
   });
 }
 

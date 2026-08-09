@@ -1,12 +1,13 @@
 import { generateObject } from "ai";
 import { outlineDraftSchema, type OutlineDraft } from "@/lib/schemas/outline";
-import { estimateCostUsd, type AiModelId } from "./models";
+import { estimateCostUsd, DEFAULT_OUTLINE_MODEL } from "./models";
 
 interface BuildOutlinePromptInput {
   topic: string;
   periodDays?: number;
   sources: { url: string; title?: string }[];
   existingDraft?: OutlineDraft;
+  instructions?: string;
   feedback?: string;
 }
 
@@ -17,6 +18,9 @@ export function buildOutlinePrompt(input: BuildOutlinePromptInput): string {
   parts.push(`Topic: ${input.topic}`);
   if (input.periodDays) {
     parts.push(`Target length: approximately ${input.periodDays} days.`);
+  }
+  if (input.instructions) {
+    parts.push(`The learner's focus & instructions: "${input.instructions}"`);
   }
   if (input.sources.length > 0) {
     parts.push(
@@ -45,9 +49,7 @@ export function buildOutlinePrompt(input: BuildOutlinePromptInput): string {
   return parts.join("\n");
 }
 
-interface GenerateOutlineDraftInput extends BuildOutlinePromptInput {
-  model: AiModelId;
-}
+type GenerateOutlineDraftInput = BuildOutlinePromptInput;
 
 export interface GenerateOutlineDraftResult {
   draft: OutlineDraft;
@@ -58,9 +60,9 @@ export async function generateOutlineDraft(
   input: GenerateOutlineDraftInput,
 ): Promise<GenerateOutlineDraftResult> {
   const { object, usage } = await generateObject({
-    model: input.model,
+    model: DEFAULT_OUTLINE_MODEL,
     schema: outlineDraftSchema,
     prompt: buildOutlinePrompt(input),
   });
-  return { draft: object, costUsd: estimateCostUsd(input.model, usage) };
+  return { draft: object, costUsd: estimateCostUsd(DEFAULT_OUTLINE_MODEL, usage) };
 }

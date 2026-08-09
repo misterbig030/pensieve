@@ -1,12 +1,7 @@
 import { generateObject } from "ai";
 import { dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
-import { estimateCostUsd, type AiModelId } from "./models";
-
-interface SourceInput {
-  url: string;
-  title?: string;
-  type: "link" | "youtube";
-}
+import type { SourceInput } from "@/lib/schemas/source";
+import { estimateCostUsd, DEFAULT_CONTENT_MODEL } from "./models";
 
 interface BuildDailyContentPromptInput {
   title: string;
@@ -23,6 +18,7 @@ export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): st
 
   const linkSources = input.sources.filter((s) => s.type === "link");
   const youtubeSources = input.sources.filter((s) => s.type === "youtube");
+  const otherSources = input.sources.filter((s) => s.type === "file" || s.type === "note");
 
   if (linkSources.length > 0) {
     parts.push(`Reference sources to draw from (cite them in the citations list when used):`);
@@ -33,6 +29,12 @@ export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): st
       `The learner also provided these YouTube videos. Do not attempt to watch, summarize, or extract spoken content from them — just mention them by title in the lesson text as a suggested video, since the app will render them as an embed/link card separately:`,
     );
     for (const s of youtubeSources) parts.push(`- ${s.title ?? s.url} (${s.url})`);
+  }
+  if (otherSources.length > 0) {
+    parts.push(
+      `The learner also referenced these materials (a local file or a free-text note) — you cannot access their contents, so use them only as context for what to emphasize, not as a citable source:`,
+    );
+    for (const s of otherSources) parts.push(`- ${s.title ?? s.url}`);
   }
 
   parts.push(
@@ -45,9 +47,7 @@ export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): st
   return parts.join("\n");
 }
 
-interface GenerateDailyContentInput extends BuildDailyContentPromptInput {
-  model: AiModelId;
-}
+type GenerateDailyContentInput = BuildDailyContentPromptInput;
 
 export interface GenerateDailyContentResult {
   content: DailyContentDraft;
@@ -58,9 +58,9 @@ export async function generateDailyContent(
   input: GenerateDailyContentInput,
 ): Promise<GenerateDailyContentResult> {
   const { object, usage } = await generateObject({
-    model: input.model,
+    model: DEFAULT_CONTENT_MODEL,
     schema: dailyContentSchema,
     prompt: buildDailyContentPrompt(input),
   });
-  return { content: object, costUsd: estimateCostUsd(input.model, usage) };
+  return { content: object, costUsd: estimateCostUsd(DEFAULT_CONTENT_MODEL, usage) };
 }

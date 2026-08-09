@@ -19,6 +19,11 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // Organic "tag" system — see design_handoff_pensieve_redesign/styles.css
+        accent: "bg-accent-100 text-accent-800",
+        accent2: "bg-accent-2-100 text-accent-2-800",
+        neutral: "bg-neutral-100 text-neutral-800",
+        tagOutline: "border-primary text-primary bg-transparent",
       },
     },
     defaultVariants: {
