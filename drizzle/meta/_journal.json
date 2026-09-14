@@ -22,6 +22,13 @@
       "when": 1786316234353,
       "tag": "0002_red_vampiro",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789421885223,
+      "tag": "0003_elite_major_mapleleaf",
+      "breakpoints": true
     }
   ]
 }

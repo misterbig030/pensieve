@@ -7,6 +7,7 @@ import { db } from "@/lib/db/client";
 import { outlineItems, tracks, sources } from "@/lib/db/schema";
 import { generateDailyContent } from "@/lib/ai/dailyContent";
 import { upsertDailyContent } from "@/lib/db/queries";
+import { insertGenerationLog } from "@/lib/db/generationLog";
 import { DEFAULT_CONTENT_MODEL } from "@/lib/ai/models";
 
 export async function generateDailyContentAction(input: {
@@ -32,6 +33,7 @@ export async function generateDailyContentAction(input: {
     title: item.title,
     summary: item.summary,
     sources: trackSources.map((s) => ({ url: s.url, title: s.title ?? undefined, type: s.type })),
+    log: { trackId: input.trackId, userId, onLog: insertGenerationLog },
   });
 
   await upsertDailyContent(item.id, {

@@ -1,7 +1,7 @@
-import { generateObject } from "ai";
 import { dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
 import type { SourceInput } from "@/lib/schemas/source";
-import { estimateCostUsd, DEFAULT_CONTENT_MODEL } from "./models";
+import { loggedGenerateObject, type GenerationLogContext } from "./logged";
+import { DEFAULT_CONTENT_MODEL } from "./models";
 
 interface BuildDailyContentPromptInput {
   title: string;
@@ -47,7 +47,10 @@ export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): st
   return parts.join("\n");
 }
 
-type GenerateDailyContentInput = BuildDailyContentPromptInput;
+type GenerateDailyContentInput = BuildDailyContentPromptInput & {
+  /** Who is asking and where to record the call. Omit for no logging (eval harness, tests). */
+  log?: GenerationLogContext;
+};
 
 export interface GenerateDailyContentResult {
   content: DailyContentDraft;
@@ -57,10 +60,13 @@ export interface GenerateDailyContentResult {
 export async function generateDailyContent(
   input: GenerateDailyContentInput,
 ): Promise<GenerateDailyContentResult> {
-  const { object, usage } = await generateObject({
-    model: DEFAULT_CONTENT_MODEL,
-    schema: dailyContentSchema,
-    prompt: buildDailyContentPrompt(input),
-  });
-  return { content: object, costUsd: estimateCostUsd(DEFAULT_CONTENT_MODEL, usage) };
+  const { object, costUsd } = await loggedGenerateObject(
+    {
+      model: DEFAULT_CONTENT_MODEL,
+      schema: dailyContentSchema,
+      prompt: buildDailyContentPrompt(input),
+    },
+    { ...input.log, caller: "daily" },
+  );
+  return { content: object, costUsd };
 }

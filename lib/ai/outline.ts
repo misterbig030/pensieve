@@ -1,6 +1,6 @@
-import { generateObject } from "ai";
 import { outlineDraftSchema, type OutlineDraft } from "@/lib/schemas/outline";
-import { estimateCostUsd, DEFAULT_OUTLINE_MODEL } from "./models";
+import { loggedGenerateObject, type GenerationLogContext } from "./logged";
+import { DEFAULT_OUTLINE_MODEL } from "./models";
 
 interface BuildOutlinePromptInput {
   topic: string;
@@ -49,7 +49,10 @@ export function buildOutlinePrompt(input: BuildOutlinePromptInput): string {
   return parts.join("\n");
 }
 
-type GenerateOutlineDraftInput = BuildOutlinePromptInput;
+type GenerateOutlineDraftInput = BuildOutlinePromptInput & {
+  /** Who is asking and where to record the call. Omit for no logging (eval harness, tests). */
+  log?: GenerationLogContext;
+};
 
 export interface GenerateOutlineDraftResult {
   draft: OutlineDraft;
@@ -59,10 +62,13 @@ export interface GenerateOutlineDraftResult {
 export async function generateOutlineDraft(
   input: GenerateOutlineDraftInput,
 ): Promise<GenerateOutlineDraftResult> {
-  const { object, usage } = await generateObject({
-    model: DEFAULT_OUTLINE_MODEL,
-    schema: outlineDraftSchema,
-    prompt: buildOutlinePrompt(input),
-  });
-  return { draft: object, costUsd: estimateCostUsd(DEFAULT_OUTLINE_MODEL, usage) };
+  const { object, costUsd } = await loggedGenerateObject(
+    {
+      model: DEFAULT_OUTLINE_MODEL,
+      schema: outlineDraftSchema,
+      prompt: buildOutlinePrompt(input),
+    },
+    { ...input.log, caller: input.existingDraft ? "outline_revision" : "outline" },
+  );
+  return { draft: object, costUsd };
 }
