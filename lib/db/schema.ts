@@ -6,6 +6,7 @@ import {
   timestamp,
   jsonb,
   unique,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { SOURCE_TYPES } from "@/lib/schemas/source";
@@ -71,6 +72,26 @@ export const checkIns = pgTable("check_ins", {
   completedAt: timestamp("completed_at").notNull().defaultNow(),
 });
 
+export const GENERATION_CALLERS = ["outline", "outline_revision", "daily", "judge"] as const;
+export type GenerationCaller = (typeof GENERATION_CALLERS)[number];
+
+/** One row per model call. Written by the app's server actions; read by cost reporting and the eval harness. */
+export const generationLog = pgTable("generation_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  caller: text("caller", { enum: GENERATION_CALLERS }).notNull(),
+  model: text("model").notNull(),
+  effort: text("effort"), // null until the effort axis is wired (W4 Task 4 / W5)
+  inputTokens: integer("input_tokens"),
+  outputTokens: integer("output_tokens"),
+  cacheReadTokens: integer("cache_read_tokens"), // usage.inputTokenDetails.cacheReadTokens
+  reasoningTokens: integer("reasoning_tokens"), // usage.outputTokenDetails.reasoningTokens
+  costUsd: doublePrecision("cost_usd").notNull(),
+  latencyMs: integer("latency_ms").notNull(),
+  trackId: uuid("track_id"), // nullable: draft outlines have no track yet
+  userId: text("user_id"), // nullable: eval-harness rows have no user
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export type Track = typeof tracks.$inferSelect;
 export type NewTrack = typeof tracks.$inferInsert;
 export type Source = typeof sources.$inferSelect;
@@ -80,6 +101,8 @@ export type NewOutlineItem = typeof outlineItems.$inferInsert;
 export type DailyContent = typeof dailyContent.$inferSelect;
 export type NewDailyContent = typeof dailyContent.$inferInsert;
 export type CheckIn = typeof checkIns.$inferSelect;
+export type GenerationLog = typeof generationLog.$inferSelect;
+export type NewGenerationLog = typeof generationLog.$inferInsert;
 
 export const outlineItemsRelations = relations(outlineItems, ({ one }) => ({
   track: one(tracks, { fields: [outlineItems.trackId], references: [tracks.id] }),

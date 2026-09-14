@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { generateOutlineDraft, type GenerateOutlineDraftResult } from "@/lib/ai/outline";
 import { createTrackWithOutline } from "@/lib/db/queries";
+import { insertGenerationLog } from "@/lib/db/generationLog";
 import { outlineDraftSchema, type OutlineDraft } from "@/lib/schemas/outline";
 import { sourceInputSchema, type SourceInput } from "@/lib/schemas/source";
 
@@ -22,7 +23,7 @@ export async function generateOutlineDraftAction(input: {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
-  return generateOutlineDraft(input);
+  return generateOutlineDraft({ ...input, log: { userId, onLog: insertGenerationLog } });
 }
 
 export async function confirmTrackAction(input: {

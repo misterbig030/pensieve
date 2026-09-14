@@ -10,6 +10,7 @@ import {
   markOutlineItemComplete,
   replaceUnfinishedOutlineItems,
 } from "@/lib/db/queries";
+import { insertGenerationLog } from "@/lib/db/generationLog";
 import { outlineDraftSchema, type OutlineDraft } from "@/lib/schemas/outline";
 
 export async function reviseOutlineDraftAction(input: {
@@ -35,6 +36,7 @@ export async function reviseOutlineDraftAction(input: {
     existingDraft: baseDraft,
     instructions: detail.track.instructions ?? undefined,
     feedback: input.feedback,
+    log: { trackId: input.trackId, userId, onLog: insertGenerationLog },
   });
 }
 
