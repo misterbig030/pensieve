@@ -4,47 +4,38 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { generateOutlineDraft, type GenerateOutlineDraftResult } from "@/lib/ai/outline";
-import { createTrackWithOutline } from "@/lib/db/queries";
-import { insertGenerationLog } from "@/lib/db/generationLog";
-import { outlineDraftSchema, type OutlineDraft } from "@/lib/schemas/outline";
+import { createTrackWithPlan } from "@/lib/db/queries";
+import { fromTreeInput } from "@/lib/planInput";
+import { granularitySchema, planTreeInputSchema, type PlanTreeInput } from "@/lib/schemas/plan";
 import { sourceInputSchema, type SourceInput } from "@/lib/schemas/source";
+import type { Granularity } from "@/lib/planTree";
 
 const topicSchema = z.string().trim().min(1).max(200);
-
-export async function generateOutlineDraftAction(input: {
-  topic: string;
-  periodDays?: number;
-  sources: { url: string; title?: string }[];
-  existingDraft?: OutlineDraft;
-  instructions?: string;
-  feedback?: string;
-}): Promise<GenerateOutlineDraftResult> {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Not authenticated");
-
-  return generateOutlineDraft({ ...input, log: { userId, onLog: insertGenerationLog } });
-}
 
 export async function confirmTrackAction(input: {
   topic: string;
   instructions?: string;
+  granularity: Granularity;
   sources: SourceInput[];
-  draft: OutlineDraft;
+  tree: PlanTreeInput;
+  summary?: string;
 }): Promise<void> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
   const topic = topicSchema.parse(input.topic);
-  const draft = outlineDraftSchema.parse(input.draft);
+  const root = fromTreeInput(planTreeInputSchema.parse(input.tree));
+  const granularity = granularitySchema.parse(input.granularity);
   const sources = z.array(sourceInputSchema).parse(input.sources);
 
-  const { trackId } = await createTrackWithOutline({
+  const { trackId } = await createTrackWithPlan({
     userId,
     title: topic,
     instructions: input.instructions,
+    summary: input.summary,
+    granularity,
     sources,
-    items: draft.items,
+    root,
   });
 
   revalidatePath("/dashboard");

@@ -45,6 +45,43 @@ export interface LoggedGenerateObjectResult<T> {
   costUsd: number;
 }
 
+export interface BuildGenerationLogRowInput {
+  caller: GenerationCaller;
+  model: AiModelId;
+  usage: LanguageModelUsage;
+  latencyMs: number;
+  trackId?: string;
+  userId?: string;
+}
+
+/** Normalizes the AI SDK usage shape into a flat `generation_log` row. Shared by the object wrapper and the streaming routes. */
+export function buildGenerationLogRow(input: BuildGenerationLogRowInput): GenerationLogRow {
+  const { usage } = input;
+  return {
+    caller: input.caller,
+    model: input.model,
+    effort: null,
+    inputTokens: usage.inputTokens ?? null,
+    outputTokens: usage.outputTokens ?? null,
+    cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? null,
+    reasoningTokens: usage.outputTokenDetails?.reasoningTokens ?? null,
+    costUsd: estimateCostUsd(input.model, usage),
+    latencyMs: input.latencyMs,
+    trackId: input.trackId ?? null,
+    userId: input.userId ?? null,
+  };
+}
+
+/** Invokes `onLog` and reports (never throws) so telemetry can't break a user-facing generation. */
+export async function emitGenerationLog(onLog: OnGenerationLog | undefined, row: GenerationLogRow): Promise<void> {
+  if (!onLog) return;
+  try {
+    await onLog(row);
+  } catch (error) {
+    console.error("[generation_log] failed to record row", { caller: row.caller, model: row.model }, error);
+  }
+}
+
 /**
  * Wraps `generateObject`: times the call, computes list-price cost, and hands a normalized row to `meta.onLog`.
  * A failing `onLog` is reported and swallowed so telemetry never breaks a user-facing generation.
@@ -60,28 +97,16 @@ export async function loggedGenerateObject<T>(
     prompt: opts.prompt,
   });
   const latencyMs = Math.round(performance.now() - startedAt);
-  const costUsd = estimateCostUsd(opts.model, usage);
-
-  if (meta.onLog) {
-    const row: GenerationLogRow = {
-      caller: meta.caller,
-      model: opts.model,
-      effort: null,
-      inputTokens: usage.inputTokens ?? null,
-      outputTokens: usage.outputTokens ?? null,
-      cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? null,
-      reasoningTokens: usage.outputTokenDetails?.reasoningTokens ?? null,
-      costUsd,
-      latencyMs,
-      trackId: meta.trackId ?? null,
-      userId: meta.userId ?? null,
-    };
-    try {
-      await meta.onLog(row);
-    } catch (error) {
-      console.error("[generation_log] failed to record row", { caller: meta.caller, model: opts.model }, error);
-    }
-  }
+  const row = buildGenerationLogRow({
+    caller: meta.caller,
+    model: opts.model,
+    usage,
+    latencyMs,
+    trackId: meta.trackId,
+    userId: meta.userId,
+  });
+  await emitGenerationLog(meta.onLog, row);
+  const costUsd = row.costUsd;
 
   return { object: object as T, usage, latencyMs, costUsd };
 }

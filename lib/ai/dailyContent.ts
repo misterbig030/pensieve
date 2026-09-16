@@ -7,14 +7,26 @@ interface BuildDailyContentPromptInput {
   title: string;
   summary: string;
   sources: SourceInput[];
+  /** A day is one lesson; a week is the material for several self-paced sessions. Defaults to a day. */
+  unit?: "day" | "week";
+  /** Span of the unit in days (weeks only). */
+  spanDays?: number;
 }
 
 export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): string {
   const parts: string[] = [];
 
-  parts.push(`Write today's lesson for a self-study curriculum.`);
-  parts.push(`Day title: ${input.title}`);
-  parts.push(`Day summary: ${input.summary}`);
+  if (input.unit === "week") {
+    parts.push(
+      `Write this week's study material for a self-study curriculum. The learner works through it in several sessions of their own choosing over ${input.spanDays ?? 7} days, so organise it as a few clearly separated parts they can pick up one at a time, not as a day-by-day timetable.`,
+    );
+    parts.push(`Week title: ${input.title}`);
+    parts.push(`Week summary: ${input.summary}`);
+  } else {
+    parts.push(`Write today's lesson for a self-study curriculum.`);
+    parts.push(`Day title: ${input.title}`);
+    parts.push(`Day summary: ${input.summary}`);
+  }
 
   const linkSources = input.sources.filter((s) => s.type === "link");
   const youtubeSources = input.sources.filter((s) => s.type === "youtube");

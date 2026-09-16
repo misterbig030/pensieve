@@ -201,3 +201,31 @@
 .elev-lg {
   box-shadow: var(--shadow-lg);
 }
+/* Shimmer bar for streaming placeholders (outline workspace). */
+.skeleton-bar {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--neutral-300) 25%, var(--neutral-200) 50%, var(--neutral-300) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s linear infinite;
+}
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes caret-blink {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.caret-blink {
+  animation: caret-blink 0.8s ease-in-out infinite;
+}
