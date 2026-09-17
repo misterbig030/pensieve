@@ -29,6 +29,27 @@
       "when": 1789421885223,
       "tag": "0003_elite_major_mapleleaf",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789433929904,
+      "tag": "0004_milky_the_executioner",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789597870863,
+      "tag": "0005_plan_nodes",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789597879488,
+      "tag": "0006_drop_outline_items",
+      "breakpoints": true
     }
   ]
 }

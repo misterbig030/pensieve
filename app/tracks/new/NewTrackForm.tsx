@@ -2,67 +2,43 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { OutlinePlanEditor } from "@/components/pensieve/OutlinePlanEditor";
+import { PlanWorkspace } from "@/components/pensieve/PlanWorkspace";
 import { TrackFormFields, type TrackFormValue } from "@/components/pensieve/TrackFormFields";
-import type { OutlineDraft } from "@/lib/schemas/outline";
-import { generateOutlineDraftAction, confirmTrackAction } from "./actions";
+import { toTreeInput } from "@/lib/planInput";
+import { resolveGranularity } from "@/lib/planTree";
+import { confirmTrackAction } from "./actions";
 
-const EMPTY_FORM: TrackFormValue = { topic: "", days: 14, instructions: "", sources: [] };
+const EMPTY_FORM: TrackFormValue = { topic: "", days: 30, granularity: "auto", instructions: "", sources: [] };
 
 export function NewTrackForm() {
   const [form, setForm] = useState<TrackFormValue>(EMPTY_FORM);
-  const [draft, setDraft] = useState<OutlineDraft | null>(null);
-  const [costUsd, setCostUsd] = useState(0);
-  const [isPending, setIsPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [brief, setBrief] = useState<TrackFormValue | null>(null);
 
-  async function handleGenerate() {
-    setIsPending(true);
-    setError(null);
-    try {
-      const result = await generateOutlineDraftAction({
-        topic: form.topic,
-        periodDays: form.days || undefined,
-        sources: form.sources,
-        instructions: form.instructions || undefined,
-      });
-      setDraft(result.draft);
-      setCostUsd(result.costUsd);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "生成失败，请重试");
-    } finally {
-      setIsPending(false);
-    }
-  }
-
-  if (draft) {
+  if (brief && brief.days) {
+    const topic = brief.topic.trim();
+    const days = brief.days;
+    const granularity = resolveGranularity(brief.granularity, days);
+    const instructions = brief.instructions.trim() || undefined;
     return (
-      <OutlinePlanEditor
+      <PlanWorkspace
         mode="create"
+        topic={topic}
+        days={days}
+        granularity={granularity}
+        instructions={instructions}
+        sources={brief.sources}
         backHref="/dashboard"
         backLabel="Dashboard"
-        heading={`Here's the plan for "${form.topic}"`}
-        subtext="Skim the days below, then confirm or ask for changes."
-        initialDraft={draft}
-        initialCostUsd={costUsd}
-        formValue={form}
-        onFormChange={setForm}
-        onRegenerate={(feedback) =>
-          generateOutlineDraftAction({
-            topic: form.topic,
-            periodDays: form.days || undefined,
-            sources: form.sources,
-            instructions: form.instructions || undefined,
-            existingDraft: draft,
-            feedback,
-          })
-        }
-        onConfirm={(confirmedDraft) =>
+        heading={`Here's the plan for "${topic}"`}
+        subtext="Skim the plan, expand what you want to see, then confirm — or talk it over on the right."
+        onConfirm={(tree, summary) =>
           confirmTrackAction({
-            topic: form.topic,
-            instructions: form.instructions || undefined,
-            sources: form.sources,
-            draft: confirmedDraft,
+            topic,
+            instructions,
+            granularity,
+            sources: brief.sources,
+            tree: toTreeInput(tree),
+            summary,
           })
         }
       />
@@ -78,14 +54,9 @@ export function NewTrackForm() {
         </p>
       </div>
       <TrackFormFields value={form} onChange={setForm} />
-      <Button
-        className="mt-2 w-full"
-        onClick={handleGenerate}
-        disabled={isPending || !form.topic.trim() || !form.days}
-      >
+      <Button className="mt-2 w-full" onClick={() => setBrief(form)} disabled={!form.topic.trim() || !form.days}>
         Generate outline
       </Button>
-      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }

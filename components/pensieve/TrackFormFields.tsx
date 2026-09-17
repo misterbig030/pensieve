@@ -5,10 +5,23 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { GranularityChoice } from "@/lib/planTree";
 import { detectSourceType, type SourceInput, type SourceType } from "@/lib/schemas/source";
 import { cn } from "@/lib/utils";
 
-const DAY_PRESETS = [7, 14, 30];
+const DAY_PRESETS = [7, 30, 90, 180];
+
+const GRANULARITY_OPTIONS: { key: GranularityChoice; label: string }[] = [
+  { key: "day", label: "Day" },
+  { key: "week", label: "Week" },
+  { key: "auto", label: "Auto" },
+];
+
+const GRANULARITY_HINT: Record<GranularityChoice, string> = {
+  day: "One lesson and one check-in per day.",
+  week: "Weekly goals with a time budget; log study sessions as you go.",
+  auto: "Days for short plans, weeks for long ones.",
+};
 
 const SOURCE_CHIP: Record<SourceType, { kicker: string; variant: "accent2" | "tagOutline" | "accent" | "neutral" }> = {
   youtube: { kicker: "YouTube · ", variant: "accent2" },
@@ -25,6 +38,7 @@ function sourceLabel(source: SourceInput): string {
 export interface TrackFormValue {
   topic: string;
   days: number | "";
+  granularity: GranularityChoice;
   instructions: string;
   sources: SourceInput[];
 }
@@ -61,39 +75,63 @@ export function TrackFormFields({ value, onChange, topicPlaceholder }: TrackForm
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[11px] tracking-wide text-muted-foreground uppercase">Length</label>
-        <div className="flex flex-wrap items-center gap-2">
-          {DAY_PRESETS.map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => onChange({ ...value, days: n })}
-              className={cn(
-                "rounded-full border px-[18px] py-[7px] text-[13px]",
-                value.days === n
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-transparent text-foreground",
-              )}
-            >
-              {n} days
-            </button>
-          ))}
-          <span className="inline-flex items-center gap-2">
-            <Input
-              type="number"
-              min={1}
-              max={365}
-              placeholder="Custom"
-              className="w-[90px]"
-              value={DAY_PRESETS.includes(value.days as number) ? "" : value.days}
-              onChange={(e) => {
-                const n = e.target.value ? Number(e.target.value) : "";
-                onChange({ ...value, days: n === "" ? "" : Math.min(Math.max(n, 1), 365) });
-              }}
-            />
-            <span className="text-[13px] text-muted-foreground">days</span>
-          </span>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-7 gap-y-5 max-[640px]:grid-cols-1">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] tracking-wide text-muted-foreground uppercase">Length</label>
+          <div className="flex flex-wrap items-center gap-2">
+            {DAY_PRESETS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => onChange({ ...value, days: n })}
+                className={cn(
+                  "rounded-full border px-[18px] py-[7px] text-[13px]",
+                  value.days === n
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-transparent text-foreground hover:bg-accent-100",
+                )}
+              >
+                {n} days
+              </button>
+            ))}
+            <span className="inline-flex items-center gap-2">
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                placeholder="Custom"
+                className="w-[90px]"
+                value={DAY_PRESETS.includes(value.days as number) ? "" : value.days}
+                onChange={(e) => {
+                  const n = e.target.value ? Number(e.target.value) : "";
+                  onChange({ ...value, days: n === "" ? "" : Math.min(Math.max(n, 1), 365) });
+                }}
+              />
+              <span className="text-[13px] text-muted-foreground">days</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] tracking-wide text-muted-foreground uppercase">Working unit</label>
+          <div className="flex flex-wrap gap-2">
+            {GRANULARITY_OPTIONS.map((g) => (
+              <button
+                key={g.key}
+                type="button"
+                onClick={() => onChange({ ...value, granularity: g.key })}
+                className={cn(
+                  "rounded-full border px-[18px] py-[7px] text-[13px]",
+                  value.granularity === g.key
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-transparent text-foreground hover:bg-accent-100",
+                )}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+          <p className="m-0 text-xs opacity-55">{GRANULARITY_HINT[value.granularity]}</p>
         </div>
       </div>
 

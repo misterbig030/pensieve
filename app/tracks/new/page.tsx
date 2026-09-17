@@ -3,7 +3,7 @@ import { NewTrackForm } from "./NewTrackForm";
 
 export default function NewTrackPage() {
   return (
-    <PageShell>
+    <PageShell wide>
       <NewTrackForm />
     </PageShell>
   );
