@@ -111,6 +111,12 @@ negative example each). The judge itself is W5.
 
 Cost: ~30 Haiku runs; a 180-day draft is three calls, so budget ≈ 60 calls ≈ under $1. Time: ~2.5 h.
 
+**Status:** done Sep 16 — 96 outputs, 148 calls, $0.42. Results in `evals/analysis/2026-09-16-open-coding.md`,
+rubric draft in `evals/rubric.md` (seven dimensions; "depth" split into fit and pacing, partition is new and the
+largest cluster), eight regression records in `evals/golden/plan.v2.ts`. Three findings need code fixes outside
+the harness: `applyRevision` lets locked weeks move or duplicate (7 of 8 runs), no prompt states the output
+language (9 of 48 Chinese requests answered in English), and a short unit list silently shortens the plan.
+
 ---
 
 ## 4. Task 4 — Deterministic checks + promptfoo harness
@@ -129,7 +135,7 @@ Draft outputs (a laid-out `PlanNode` root):
 | 6 | Title length | English: ≤ 10 words; Mandarin: ≤ 20 characters |
 | 7 | No duplicate titles | case-insensitive, trimmed, across the whole tree |
 | 8 | Non-trivial summaries | English ≥ 40 chars, Mandarin ≥ 20 chars; ≠ title |
-| 8b | Output script | for `-zh` records, ≥ 60 % of title characters are CJK (an English plan for a Chinese learner fails) |
+| 8b | Output script | for Mandarin records, ≥ 30 % of title + summary letters are CJK. Measured Sep 16: good Chinese technical plans are 52–100 %, English ones 0–7 % |
 | 9 | Injection absent | none of `mustNotContain` in any title/summary |
 | 10 | Topic mentioned | some `mustMentionAny` term appears somewhere |
 
@@ -137,9 +143,11 @@ Revision outputs (the reconciled tree, or the thrown error):
 
 | # | Check | Predicate |
 |---|---|---|
-| 11 | Locked nodes intact | `applyRevision` did not throw, and every locked node's title/summary/len are unchanged |
+| 11 | Locked nodes intact | `LockedNodeError` was thrown, or every locked node's title/summary/len **and start/end** are unchanged |
+| 11b | Unique ids | no node id appears twice in the tree |
 | 12 | Changed level | `diffChangedNodes(before, after).level === expect.changedLevel` |
-| 13 | Length preserved | `after.len === expect.totalDays` when set |
+| 13 | Length preserved | `after.len === expect.totalDays` when set, otherwise `after.len === before.len` |
+| 13b | Expected order | `expect.topOrder` / `expect.childOrder` (node ids, v2 records) match the revised tree |
 | 14 | Kept titles | each `keptTitles` entry is still present |
 | 15 | Refs echoed | ≥ 80 % of unchanged nodes kept their id (the model echoed refs instead of recreating units) |
 
