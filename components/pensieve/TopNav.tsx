@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { getCheckInDatesForUser } from "@/lib/db/queries";
+import { isAdminUserId } from "@/lib/admin";
 import { computeStreak } from "@/lib/streak";
 import { Button } from "@/components/ui/button";
+import { AdminToggle } from "@/components/pensieve/AdminToggle";
 import { StreakChip } from "@/components/pensieve/StreakChip";
 
 export async function TopNav() {
@@ -16,6 +18,7 @@ export async function TopNav() {
         <span className="font-heading text-[19px]">Pensieve</span>
       </Link>
       <StreakChip days={streak} />
+      {isAdminUserId(userId) && <AdminToggle />}
       <Button nativeButton={false} render={<Link href="/tracks/new">+ New track</Link>} />
     </div>
   );

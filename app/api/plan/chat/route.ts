@@ -1,6 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { isAdminUserId } from "@/lib/admin";
+import { withCallEvents } from "@/lib/ai/callEvents";
 import { runPlanChat } from "@/lib/ai/planChat";
 import { db } from "@/lib/db/client";
 import { insertGenerationLog } from "@/lib/db/generationLog";
@@ -23,6 +25,7 @@ const bodySchema = z.object({
     .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().max(8000) }))
     .min(1)
     .max(60),
+  debug: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -45,10 +48,10 @@ export async function POST(request: Request) {
   }
 
   const tree = fromTreeInput(body.tree);
+  const debug = body.debug === true && isAdminUserId(userId);
   return ndjsonResponse(
-    runPlanChat(
-      { ...body, days: tree.len, instructions: body.instructions || undefined, tree },
-      { log: { userId, trackId: body.trackId, onLog: insertGenerationLog } },
+    withCallEvents(debug, { userId, trackId: body.trackId, onLog: insertGenerationLog }, (log) =>
+      runPlanChat({ ...body, days: tree.len, instructions: body.instructions || undefined, tree }, { log }),
     ),
   );
 }
