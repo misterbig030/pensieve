@@ -108,6 +108,7 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       model: DEFAULT_OUTLINE_MODEL,
       schema: revisedTreeSchema,
       prompt: buildRevisionPrompt({ ...input, tree, refs }),
+      label: `Revision · ${input.changeRequest.length > 60 ? `${input.changeRequest.slice(0, 57)}…` : input.changeRequest}`,
     },
     { ...input.log, caller: "outline_revision" },
   );

@@ -5,7 +5,7 @@ import { estimateCostUsd } from "./models";
 vi.mock("ai", () => ({ generateObject: vi.fn() }));
 
 import { generateObject } from "ai";
-import { loggedGenerateObject, type GenerationLogRow } from "./logged";
+import { loggedGenerateObject, type GenerationLogRow, type ModelCall } from "./logged";
 
 const mockedGenerateObject = vi.mocked(generateObject);
 
@@ -80,6 +80,38 @@ describe("loggedGenerateObject", () => {
     expect(row.costUsd).toBe(
       estimateCostUsd("anthropic/claude-sonnet-5", { inputTokens: 1_000, outputTokens: 500 }),
     );
+  });
+
+  it("hands the whole call to onCall: prompt, raw JSON response, label and finish reason", async () => {
+    mockedGenerateObject.mockResolvedValue({ ...mockResult(), finishReason: "stop" } as unknown as Awaited<
+      ReturnType<typeof generateObject>
+    >);
+    const calls: ModelCall[] = [];
+
+    await loggedGenerateObject(
+      { model: "anthropic/claude-haiku-4.5", schema, prompt: "hi", label: "Revision" },
+      { caller: "outline_revision", userId: "user-1", onCall: (call) => void calls.push(call) },
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      caller: "outline_revision",
+      userId: "user-1",
+      label: "Revision",
+      system: null,
+      prompt: "hi",
+      response: JSON.stringify({ answer: "42" }, null, 2),
+      finishReason: "stop",
+      facts: [],
+      inputTokens: 1_000,
+    });
+  });
+
+  it("labels the call by its caller when no label is given", async () => {
+    mockedGenerateObject.mockResolvedValue(mockResult());
+    const onCall = vi.fn();
+    await loggedGenerateObject({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi" }, { caller: "daily", onCall });
+    expect(onCall).toHaveBeenCalledWith(expect.objectContaining({ label: "daily", finishReason: null }));
   });
 
   it("maps undefined usage counts to null and omitted meta to null", async () => {

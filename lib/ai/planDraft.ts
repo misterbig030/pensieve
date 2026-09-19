@@ -5,6 +5,7 @@ import {
   childLevel,
   childSpans,
   findNode,
+  labelOf,
   layout,
   makeNode,
   makeRoot,
@@ -51,7 +52,17 @@ export function reconcileSpans(spans: number[], count: number, level: PlanLevel)
 
 interface StreamUnitsInput {
   prompt: string;
+  /** For the admin panel: what this call plans ("Top level · 4 weeks"). */
+  label: string;
+  /** How many units the prompt asked for. */
+  expected: number;
   log?: GenerationLogContext;
+}
+
+/** What an admin reading the raw response should know first: whether the count came back as asked. */
+export function unitFacts(returned: number, expected: number): string[] {
+  const count = `${returned} of ${expected} units`;
+  return returned === expected ? [count, "spans kept"] : [count, "spans re-split"];
 }
 
 type UnitEvent = { type: "unit"; unit: UnitDraft } | { type: "done"; units: UnitDraft[]; costUsd: number };
@@ -71,7 +82,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
       yield { type: "unit", unit: { title: unit.title, summary: unit.summary } };
     }
   }
-  const [object, usage] = await Promise.all([result.object, result.usage]);
+  const [object, usage, finishReason] = await Promise.all([result.object, result.usage, result.finishReason]);
   const row = buildGenerationLogRow({
     caller: "outline",
     model: DEFAULT_OUTLINE_MODEL,
@@ -81,6 +92,15 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     userId: input.log?.userId,
   });
   await emitGenerationLog(input.log?.onLog, row);
+  input.log?.onCall?.({
+    ...row,
+    label: input.label,
+    system: null,
+    prompt: input.prompt,
+    response: JSON.stringify(object, null, 2),
+    finishReason: finishReason ?? null,
+    facts: unitFacts(object.units.length, input.expected),
+  });
   yield { type: "done", units: object.units, costUsd: row.costUsd };
 }
 
@@ -111,8 +131,12 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     parentId: input.parentId,
     unitsAreLeaves: unitsAreLeaves(level, ctx.granularity),
   };
+  const parentNode = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
+  const where = input.tree && parentNode ? labelOf(input.tree, parentNode) : "Top level";
+  const n = input.spans.length;
+  const label = `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
   const nodes: PlanNode[] = [];
-  for await (const event of streamUnits({ prompt: buildUnitsPrompt(promptInput), log: input.log })) {
+  for await (const event of streamUnits({ prompt: buildUnitsPrompt(promptInput), label, expected: n, log: input.log })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
       const node = nodeFor(event.unit, level, len, ctx.granularity);

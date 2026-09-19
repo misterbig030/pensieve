@@ -5,14 +5,17 @@ import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConversationRail } from "@/components/pensieve/ConversationRail";
+import { ModelCallsPanel } from "@/components/pensieve/ModelCallsPanel";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
+import { useAdminMode, writeAdminMode } from "@/lib/adminMode";
 import { formatCostUsd } from "@/lib/formatCost";
 import { readNdjson } from "@/lib/ndjson";
 import {
   nextMessageId,
   toTranscript,
   type ChatMessage,
+  type ModelCall,
   type PlanChatEvent,
   type PlanChatRequest,
   type PlanDraftEvent,
@@ -94,6 +97,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // Admin panel: the switch lives in the top nav; calls arrive as `call` events (admins only) and live only in this tab.
+  const adminOn = useAdminMode();
+  const [calls, setCalls] = useState<ModelCall[]>([]);
 
   const railOpenRef = useRef(railOpen);
   const draftStarted = useRef(false);
@@ -112,7 +118,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setError(null);
     setTree(makeRoot([]));
     const topLevel = topLevelFor(days);
-    const body: PlanDraftRequest = { topic, days, granularity, instructions, sources };
+    // `debug` is always requested; the server only honours it for admins, so the switch is purely a view toggle.
+    const body: PlanDraftRequest = { topic, days, granularity, instructions, sources, debug: true };
     // The stream is the source of truth while drafting; React state is a snapshot of these two.
     const draftRoot = makeRoot([]);
     draftRoot.len = days;
@@ -129,7 +136,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       });
       let finished = false;
       await readNdjson<PlanDraftEvent>(response, (event) => {
-        if (event.type === "node") {
+        if (event.type === "call") {
+          setCalls((cs) => [...cs, event.call]);
+        } else if (event.type === "node") {
           const parent = findNode(draftRoot, event.parentId);
           if (!parent) return;
           const firstChild = !parent.children || parent.children.length === 0;
@@ -187,7 +196,17 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       next.delete(nodeId);
       return next;
     });
-    const body: PlanExpandRequest = { topic, days: tree.len, granularity, instructions, sources, tree: toTreeInput(tree), nodeId, reason };
+    const body: PlanExpandRequest = {
+      topic,
+      days: tree.len,
+      granularity,
+      instructions,
+      sources,
+      tree: toTreeInput(tree),
+      nodeId,
+      reason,
+      debug: true,
+    };
     const label = labelOf(tree, node);
     try {
       const response = await fetch("/api/plan/expand", {
@@ -197,7 +216,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       });
       let finished = false;
       await readNdjson<PlanExpandEvent>(response, (event) => {
-        if (event.type === "child") {
+        if (event.type === "call") {
+          setCalls((cs) => [...cs, event.call]);
+        } else if (event.type === "child") {
           setTree((t) => {
             const next = cloneTree(t);
             const parent = findNode(next, nodeId);
@@ -282,6 +303,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       lockBefore: isAdjust ? lockBefore : undefined,
       trackId,
       transcript: toTranscript(history),
+      debug: true,
     };
 
     let activeId: string | null = null;
@@ -313,6 +335,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       });
       await readNdjson<PlanChatEvent>(response, (event) => {
         switch (event.type) {
+          case "call":
+            setCalls((cs) => [...cs, event.call]);
+            break;
           case "text":
             appendText(event.text);
             break;
@@ -509,6 +534,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           onUndo={undo}
         />
       </div>
+      {adminOn && <ModelCallsPanel calls={calls} onClear={() => setCalls([])} onClose={() => writeAdminMode(false)} />}
     </div>
   );
 }

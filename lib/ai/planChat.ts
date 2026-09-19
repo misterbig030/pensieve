@@ -69,30 +69,38 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
   });
 
   const messages: ModelMessage[] = req.transcript.map((t) => ({ role: t.role, content: t.content }));
+  const system = buildPlanChatSystemPrompt({
+    mode: req.mode,
+    topic: req.topic,
+    instructions: req.instructions,
+    sources: req.sources,
+    granularity: req.granularity,
+    tree,
+    lockBefore,
+  });
 
   const result = streamText({
     model,
-    system: buildPlanChatSystemPrompt({
-      mode: req.mode,
-      topic: req.topic,
-      instructions: req.instructions,
-      sources: req.sources,
-      granularity: req.granularity,
-      tree,
-      lockBefore,
-    }),
+    system,
     messages,
     tools: { revisePlan },
     stopWhen: stepCountIs(2),
   });
 
   let usage: LanguageModelUsage | null = null;
+  let text = "";
+  let changeRequest: string | null = null;
+  let finishReason: string | null = null;
   for await (const part of result.fullStream) {
     switch (part.type) {
       case "text-delta":
-        if (part.text) yield { type: "text", text: part.text };
+        if (part.text) {
+          text += part.text;
+          yield { type: "text", text: part.text };
+        }
         break;
       case "tool-call":
+        changeRequest = (part.input as { changeRequest?: string } | undefined)?.changeRequest ?? "";
         yield { type: "revising" };
         break;
       case "tool-result":
@@ -108,6 +116,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
         throw part.error instanceof Error ? part.error : new Error(String(part.error));
       case "finish":
         usage = part.totalUsage;
+        finishReason = part.finishReason;
         break;
       default:
         break;
@@ -120,6 +129,25 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
     const row = buildGenerationLogRow({ caller: "chat", model, usage, latencyMs, trackId: log?.trackId, userId: log?.userId });
     chatCostUsd = row.costUsd;
     await emitGenerationLog(log?.onLog, row);
+    log?.onCall?.({
+      ...row,
+      label: changeRequest !== null ? "Answer · revisePlan" : "Answer",
+      system,
+      prompt: renderTranscript(messages),
+      response: changeRequest !== null ? `${text}\n\n[tool call] revisePlan: ${changeRequest}` : text,
+      finishReason,
+      facts: [
+        `${messages.length} transcript turn${messages.length === 1 ? "" : "s"}`,
+        changeRequest !== null ? "tool: revisePlan" : "no tool call",
+      ],
+    });
   }
   yield { type: "finish", costUsd: chatCostUsd + revisionCostUsd };
+}
+
+/** The transcript as an admin reads it: each turn under its role, oldest first. */
+export function renderTranscript(messages: ModelMessage[]): string {
+  return messages
+    .map((m) => `[${m.role}]\n${typeof m.content === "string" ? m.content : JSON.stringify(m.content, null, 2)}`)
+    .join("\n\n");
 }
