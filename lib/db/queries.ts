@@ -1,8 +1,10 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "./client";
-import { tracks, sources, planNodes, checkIns, type NewSource } from "./schema";
-import { insertPlanTree, rowsToTree } from "./planQueries";
+import { tracks, sources, planNodes, checkIns, type NewSource, type Source } from "./schema";
+import { getTrackNodeMaterials, insertPlanTree, rowsToTree } from "./planQueries";
+import { remapTreeRefs } from "@/lib/materials";
 import { doneDays, type Granularity, type PlanNode } from "@/lib/planTree";
+import type { Material } from "@/lib/schemas/material";
 
 export async function getTracksForUser(userId: string) {
   return db.query.tracks.findMany({
@@ -50,12 +52,66 @@ export async function getTrackDetail(trackId: string, userId: string) {
   });
   if (!track) return null;
 
-  const [nodeRows, trackSources] = await Promise.all([
+  const [nodeRows, trackSources, materialRows] = await Promise.all([
     db.query.planNodes.findMany({ where: eq(planNodes.trackId, trackId) }),
-    db.query.sources.findMany({ where: eq(sources.trackId, trackId) }),
+    db.query.sources.findMany({ where: eq(sources.trackId, trackId), orderBy: [asc(sources.position)] }),
+    getTrackNodeMaterials(trackId),
   ]);
 
-  return { track, root: rowsToTree(nodeRows), sources: trackSources };
+  return { track, root: rowsToTree(nodeRows, materialRows), materials: trackSources.map(sourceToMaterial) };
+}
+
+/** A saved source as the browser's material shape. Its id is the row's uuid; saved rows need no signature. */
+export function sourceToMaterial(row: Source): Material {
+  return {
+    id: row.id,
+    origin: row.origin,
+    type: row.type,
+    kind: row.kind,
+    url: row.url,
+    title: row.title ?? row.url,
+    author: row.author,
+    year: row.year,
+    why: row.why,
+    backbone: row.backbone,
+    verifiedAt: row.verifiedAt ? row.verifiedAt.toISOString() : null,
+    fetchedTitle: row.fetchedTitle,
+    recommendedBy: row.recommendedBy ?? [],
+    sig: null,
+  };
+}
+
+/**
+ * Source rows for a materials list, with a fresh uuid per material and the map from each material's id (a short id
+ * while drafting) to it. At most one backbone survives, and only a book can be one.
+ */
+export function materialsToRows(trackId: string, materials: Material[]): { rows: NewSource[]; ids: Map<string, string> } {
+  const ids = new Map<string, string>();
+  let backboneTaken = false;
+  const rows = materials.map((m, position): NewSource => {
+    const id = crypto.randomUUID();
+    ids.set(m.id, id);
+    const backbone = m.backbone && m.kind === "book" && !backboneTaken;
+    if (backbone) backboneTaken = true;
+    return {
+      id,
+      trackId,
+      type: m.type,
+      url: m.url,
+      title: m.title,
+      origin: m.origin,
+      kind: m.kind,
+      backbone,
+      author: m.author,
+      year: m.year,
+      why: m.why,
+      position,
+      verifiedAt: m.verifiedAt ? new Date(m.verifiedAt) : null,
+      fetchedTitle: m.fetchedTitle,
+      recommendedBy: m.recommendedBy,
+    };
+  });
+  return { rows, ids };
 }
 
 export async function getCheckInDatesForUser(userId: string): Promise<Date[]> {
@@ -85,9 +141,10 @@ export async function createTrackWithPlan(input: {
   instructions?: string;
   summary?: string;
   granularity: Granularity;
-  sources: Omit<NewSource, "id" | "trackId">[];
+  /** Already vetted (signatures checked). Node references use these materials' ids. */
+  materials: Material[];
   root: PlanNode;
-}): Promise<{ trackId: string }> {
+}): Promise<{ trackId: string; droppedRefs: number }> {
   return db.transaction(async (tx) => {
     const [track] = await tx
       .insert(tracks)
@@ -102,13 +159,14 @@ export async function createTrackWithPlan(input: {
       })
       .returning({ id: tracks.id });
 
-    if (input.sources.length > 0) {
-      await tx.insert(sources).values(input.sources.map((s) => ({ ...s, trackId: track.id })));
-    }
+    // Short ids become uuids here; a reference to an id not in the list is dropped (and counted).
+    const { rows, ids } = materialsToRows(track.id, input.materials);
+    if (rows.length > 0) await tx.insert(sources).values(rows);
+    const { root, dropped } = remapTreeRefs(input.root, ids);
 
-    await insertPlanTree(tx, track.id, input.root);
+    await insertPlanTree(tx, track.id, root, new Set(ids.values()));
 
-    return { trackId: track.id };
+    return { trackId: track.id, droppedRefs: dropped };
   });
 }
 

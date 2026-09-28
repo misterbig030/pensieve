@@ -1,9 +1,11 @@
 import { streamObject } from "ai";
+import { aliasMaterials, levelFacts, resolveCoverRefs, resolveMaterialRefs, type MaterialAliases } from "@/lib/materials";
 import type { PlanDraftEvent, PlanDraftRequest, PlanExpandEvent, PlanExpandRequest } from "@/lib/planChat";
 import {
   budgetFor,
   childLevel,
   childSpans,
+  cloneTree,
   findNode,
   labelOf,
   layout,
@@ -16,10 +18,13 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
+import type { Material } from "@/lib/schemas/material";
 import { unitListSchema, type UnitDraft } from "@/lib/schemas/plan";
 import { buildGenerationLogRow, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
 import { buildUnitsPrompt, type UnitsPromptInput } from "./planPrompt";
+import type { ResearchArm } from "./research/agent";
+import { researchMaterials, type ResearchMaterialsInput } from "./research/pipeline";
 
 /** Whether units at `level` are leaves on a plan of this granularity (days always; weeks on week-granularity plans). */
 export function unitsAreLeaves(level: PlanLevel, granularity: Granularity): boolean {
@@ -27,9 +32,9 @@ export function unitsAreLeaves(level: PlanLevel, granularity: Granularity): bool
 }
 
 /** Builds a node for a drafted unit: leaves get a time budget when they are week-sized. */
-export function nodeFor(unit: UnitDraft, level: PlanLevel, len: number, granularity: Granularity): PlanNode {
+export function nodeFor(unit: UnitDraft, level: PlanLevel, len: number, granularity: Granularity, aliases?: MaterialAliases): PlanNode {
   const leaf = unitsAreLeaves(level, granularity);
-  return makeNode({
+  const node = makeNode({
     level,
     title: unit.title,
     summary: unit.summary,
@@ -37,6 +42,25 @@ export function nodeFor(unit: UnitDraft, level: PlanLevel, len: number, granular
     budgetHours: leaf && level !== "day" ? budgetFor(len) : null,
     children: null,
   });
+  if (aliases) applyUnitRefs(node, unit, leaf, aliases);
+  return node;
+}
+
+/**
+ * Puts what the model wrote for references onto the node: leaves keep `materials` (their Read table), headings keep
+ * `covers` (their reservation). Returns the ids that are not in the list; they are dropped.
+ */
+export function applyUnitRefs(node: PlanNode, unit: UnitDraft, leaf: boolean, aliases: MaterialAliases): string[] {
+  delete node.covers;
+  delete node.materials;
+  if (leaf) {
+    const { refs, unknown } = resolveMaterialRefs(unit.materials, aliases);
+    if (refs.length > 0) node.materials = refs;
+    return unknown;
+  }
+  const { refs, unknown } = resolveCoverRefs(unit.covers, aliases);
+  if (refs.length > 0) node.covers = refs;
+  return unknown;
 }
 
 /**
@@ -56,6 +80,8 @@ interface StreamUnitsInput {
   label: string;
   /** How many units the prompt asked for. */
   expected: number;
+  /** Runs on the validated units before the call is reported; returns the checks to show beside the response. */
+  check?: (units: UnitDraft[]) => string[];
   log?: GenerationLogContext;
 }
 
@@ -79,7 +105,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
       const unit = units[sent];
       if (typeof unit.title !== "string" || typeof unit.summary !== "string") break;
       sent += 1;
-      yield { type: "unit", unit: { title: unit.title, summary: unit.summary } };
+      yield { type: "unit", unit: unit as UnitDraft };
     }
   }
   const [object, usage, finishReason] = await Promise.all([result.object, result.usage, result.finishReason]);
@@ -92,6 +118,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     userId: input.log?.userId,
   });
   await emitGenerationLog(input.log?.onLog, row);
+  const checks = input.check?.(object.units) ?? [];
   input.log?.onCall?.({
     ...row,
     label: input.label,
@@ -99,13 +126,13 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     prompt: input.prompt,
     response: JSON.stringify(object, null, 2),
     finishReason: finishReason ?? null,
-    facts: unitFacts(object.units.length, input.expected),
+    facts: [...unitFacts(object.units.length, input.expected), ...checks],
   });
   yield { type: "done", units: object.units, costUsd: row.costUsd };
 }
 
 interface DraftLevelInput {
-  ctx: PlanDraftRequest;
+  ctx: { topic: string; instructions?: string; materials: Material[]; granularity: Granularity };
   level: PlanLevel;
   spans: number[];
   startDay: number;
@@ -115,13 +142,31 @@ interface DraftLevelInput {
   log?: GenerationLogContext;
 }
 
+/** The level's final nodes placed in a copy of the tree, so checks can name them by label. */
+function placeForChecks(tree: PlanNode | undefined, parentId: string | undefined, nodes: PlanNode[]): { root: PlanNode; placed: PlanNode[] } {
+  const copies = nodes.map((n) => cloneTree(n));
+  if (!tree || !parentId) {
+    const root = makeRoot(copies);
+    return { root, placed: copies };
+  }
+  const root = cloneTree(tree);
+  const parent = findNode(root, parentId);
+  if (!parent) return { root, placed: [] };
+  parent.children = copies;
+  layout(root);
+  return { root, placed: copies };
+}
+
 /** Drafts one level of units under `parentId` (or the top level), yielding each node as it lands. */
 async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; costUsd: number }> {
   const { ctx, level } = input;
+  const leaf = unitsAreLeaves(level, ctx.granularity);
+  const aliases = ctx.materials.length > 0 ? aliasMaterials(ctx.materials) : undefined;
+  const backboneId = ctx.materials.find((m) => m.backbone)?.id ?? null;
   const promptInput: UnitsPromptInput = {
     topic: ctx.topic,
     instructions: ctx.instructions,
-    sources: ctx.sources,
+    materials: ctx.materials,
     granularity: ctx.granularity,
     level,
     spans: input.spans,
@@ -129,37 +174,49 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     totalDays: input.totalDays,
     tree: input.tree,
     parentId: input.parentId,
-    unitsAreLeaves: unitsAreLeaves(level, ctx.granularity),
+    unitsAreLeaves: leaf,
   };
   const parentNode = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
   const where = input.tree && parentNode ? labelOf(input.tree, parentNode) : "Top level";
   const n = input.spans.length;
   const label = `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
   const nodes: PlanNode[] = [];
-  for await (const event of streamUnits({ prompt: buildUnitsPrompt(promptInput), label, expected: n, log: input.log })) {
+  let final: PlanNode[] = [];
+
+  // Reconciles spans and references once the whole level has validated, and states the checks in code.
+  const check = (units: UnitDraft[]): string[] => {
+    const spans = reconcileSpans(input.spans, units.length, level);
+    const unknown: string[] = [];
+    final = units.map((unit, i) => {
+      const node = nodes[i] ?? nodeFor(unit, level, spans[i], ctx.granularity);
+      node.title = unit.title;
+      node.summary = unit.summary;
+      node.len = spans[i];
+      node.end = node.start + node.len - 1;
+      if (node.budgetHours !== null) node.budgetHours = budgetFor(node.len);
+      if (aliases) unknown.push(...applyUnitRefs(node, unit, leaf, aliases));
+      return node;
+    });
+    if (!aliases) return [];
+    const { root, placed } = placeForChecks(input.tree, input.parentId, final);
+    return levelFacts({ root, nodes: placed, leaves: leaf, top: !input.parentId, backboneId, unknownIds: unknown });
+  };
+
+  for await (const event of streamUnits({ prompt: buildUnitsPrompt(promptInput), label, expected: n, check, log: input.log })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
-      const node = nodeFor(event.unit, level, len, ctx.granularity);
+      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases);
       nodes.push(node);
       yield { type: "node", node };
     } else {
-      const spans = reconcileSpans(input.spans, event.units.length, level);
-      const final = event.units.map((unit, i) => {
-        const existing = nodes[i];
-        const node = existing ?? nodeFor(unit, level, spans[i], ctx.granularity);
-        node.title = unit.title;
-        node.summary = unit.summary;
-        node.len = spans[i];
-        node.end = node.start + node.len - 1;
-        if (node.budgetHours !== null) node.budgetHours = budgetFor(node.len);
-        return node;
-      });
       yield { type: "done", nodes: final, costUsd: event.costUsd };
     }
   }
 }
 
-export interface StreamPlanDraftInput extends PlanDraftRequest {
+export interface StreamPlanDraftInput extends Omit<PlanDraftRequest, "materials"> {
+  /** The materials list research produced (the learner's own included). */
+  materials: Material[];
   log?: GenerationLogContext;
 }
 
@@ -234,5 +291,32 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
     } else {
       yield { type: "finish", children: event.nodes, costUsd: event.costUsd };
     }
+  }
+}
+
+export interface StreamResearchedDraftInput extends PlanDraftRequest {
+  /** The research arm; null when no search provider is configured. */
+  arm: ResearchArm | null;
+  signal?: AbortSignal;
+  log?: GenerationLogContext;
+  /** Tests and the eval inject these; the app uses the defaults. */
+  research?: Pick<ResearchMaterialsInput, "fetcher" | "books" | "caps">;
+}
+
+/**
+ * One request, research then drafting: the research events stream first and end with the materials list, then the
+ * plan drafts against it. The finish event's cost includes research.
+ */
+export async function* streamResearchedPlanDraft(input: StreamResearchedDraftInput): AsyncGenerator<PlanDraftEvent> {
+  const outcome = yield* researchMaterials({
+    brief: { topic: input.topic, instructions: input.instructions, days: input.days, sources: input.materials },
+    arm: input.arm,
+    signal: input.signal,
+    log: input.log,
+    ...input.research,
+  });
+  for await (const event of streamPlanDraft({ ...input, materials: outcome.materials })) {
+    if (event.type === "finish") yield { ...event, costUsd: event.costUsd + outcome.costUsd };
+    else yield event;
   }
 }

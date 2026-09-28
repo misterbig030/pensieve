@@ -4,6 +4,8 @@
  * leaf with a time budget. Spans (`start`/`end`) are derived by `layout`, never stored.
  */
 
+import type { CoverRef, MaterialRef } from "@/lib/schemas/material";
+
 export type PlanLevel = "month" | "week" | "day";
 export type NodeStatus = "pending" | "generated" | "completed";
 export type Granularity = "day" | "week";
@@ -23,6 +25,10 @@ export interface PlanNode {
   manualSplit: boolean;
   /** `null` means the node has not been planned in detail yet (a heading). */
   children: PlanNode[] | null;
+  /** Headings: material the units inside will read, reserved in order (no tier or minutes). */
+  covers?: CoverRef[];
+  /** Leaves: the Read table. */
+  materials?: MaterialRef[];
   /** Track pages attach the sessions logged against a week leaf. */
   sessions?: { count: number; hours: number };
   /** 1-based day index of the first day, set by `layout`. */
@@ -223,6 +229,8 @@ export interface NewNodeInput {
   manualSplit?: boolean;
   children?: PlanNode[] | null;
   status?: NodeStatus;
+  covers?: CoverRef[];
+  materials?: MaterialRef[];
 }
 
 export function makeNode(input: NewNodeInput): PlanNode {
@@ -236,6 +244,8 @@ export function makeNode(input: NewNodeInput): PlanNode {
     budgetHours: input.budgetHours ?? null,
     manualSplit: input.manualSplit ?? false,
     children: input.children ?? null,
+    ...(input.covers && input.covers.length > 0 ? { covers: input.covers } : {}),
+    ...(input.materials && input.materials.length > 0 ? { materials: input.materials } : {}),
     start: 1,
     end: input.len,
   };

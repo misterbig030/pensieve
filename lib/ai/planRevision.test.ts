@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { aliasMaterials } from "@/lib/materials";
 import { layout, makeNode, makeRoot } from "@/lib/planTree";
 import { assignRefs } from "./planPrompt";
 import { applyRevision, LockedNodeError } from "./planRevision";
@@ -113,5 +114,57 @@ describe("reconcileSpans", () => {
   });
   it("honours the count for days", () => {
     expect(reconcileSpans([1, 1, 1, 1, 1, 1, 1], 6, "day")).toEqual([1, 1, 1, 1, 1, 1]);
+  });
+});
+
+describe("applyRevision with materials", () => {
+  const aliases = aliasMaterials([{ id: "uuid-book" }, { id: "uuid-talk" }]);
+  function withRefs() {
+    return layout(
+      makeRoot([
+        makeNode({ id: "d1", level: "day", title: "Intro", summary: "a", len: 1, materials: [{ id: "uuid-talk", tier: "must", minutes: 20, note: null }] }),
+        makeNode({ id: "d2", level: "day", title: "Metrics", summary: "b", len: 1, materials: [{ id: "uuid-book", tier: "must", minutes: 40, note: "ch. 1" }] }),
+      ]),
+    );
+  }
+
+  it("edits an assignment without touching the others", () => {
+    const original = withRefs();
+    const refs = assignRefs(original);
+    const result = applyRevision(
+      original,
+      refs,
+      {
+        units: [
+          { ref: "n1", title: "Intro", summary: "a", days: 1, materials: [{ id: "M2", tier: "should", minutes: 20 }] },
+          { ref: "n2", title: "Metrics", summary: "b", days: 1 },
+        ],
+      },
+      0,
+      "day",
+      aliases,
+    );
+    expect(result.children![0].materials).toEqual([{ id: "uuid-talk", tier: "should", minutes: 20, note: null }]);
+    // Left out: the kept node keeps its references.
+    expect(result.children![1].materials).toEqual([{ id: "uuid-book", tier: "must", minutes: 40, note: "ch. 1" }]);
+  });
+
+  it("drops unknown ids and keeps covers only on headings", () => {
+    const original = withRefs();
+    const result = applyRevision(
+      original,
+      assignRefs(original),
+      {
+        units: [
+          { ref: "n1", title: "Intro", summary: "a", days: 1, materials: [{ id: "M7", tier: "must", minutes: 5 }], covers: [{ id: "M1" }] },
+          { ref: "n2", title: "Metrics", summary: "b", days: 1 },
+        ],
+      },
+      0,
+      "day",
+      aliases,
+    );
+    expect(result.children![0].materials).toBeUndefined();
+    expect(result.children![0].covers).toBeUndefined();
   });
 });

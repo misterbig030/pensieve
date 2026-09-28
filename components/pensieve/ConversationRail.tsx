@@ -25,6 +25,8 @@ interface ConversationRailProps {
   open: boolean;
   unread: boolean;
   busy: boolean;
+  /** Shown in the input while it is disabled for a reason other than a reply in progress. */
+  disabledHint?: string;
   input: string;
   suggestions: string[];
   onToggle: () => void;
@@ -39,6 +41,7 @@ export function ConversationRail({
   open,
   unread,
   busy,
+  disabledHint,
   input,
   suggestions,
   onToggle,
@@ -63,7 +66,9 @@ export function ConversationRail({
     }
   }
 
-  const placeholder = busy
+  const placeholder = disabledHint
+    ? disabledHint
+    : busy
     ? "Pensieve is thinking…"
     : mode === "adjust"
       ? "e.g. add two more days on caching"

@@ -3,7 +3,7 @@
 import { PlanWorkspace } from "@/components/pensieve/PlanWorkspace";
 import { toTreeInput } from "@/lib/planInput";
 import type { Granularity, PlanNode } from "@/lib/planTree";
-import type { SourceInput } from "@/lib/schemas/source";
+import type { Material } from "@/lib/schemas/material";
 import { confirmRevisionAction } from "../actions";
 
 interface AdjustPlanProps {
@@ -11,12 +11,12 @@ interface AdjustPlanProps {
   trackTitle: string;
   granularity: Granularity;
   instructions?: string;
-  sources: SourceInput[];
+  materials: Material[];
   root: PlanNode;
   lockBefore: number;
 }
 
-export function AdjustPlan({ trackId, trackTitle, granularity, instructions, sources, root, lockBefore }: AdjustPlanProps) {
+export function AdjustPlan({ trackId, trackTitle, granularity, instructions, materials, root, lockBefore }: AdjustPlanProps) {
   return (
     <PlanWorkspace
       mode="adjust"
@@ -24,7 +24,8 @@ export function AdjustPlan({ trackId, trackTitle, granularity, instructions, sou
       days={root.len}
       granularity={granularity}
       instructions={instructions}
-      sources={sources}
+      sources={[]}
+      initialMaterials={materials}
       initialTree={root}
       lockBefore={lockBefore}
       trackId={trackId}
@@ -32,7 +33,7 @@ export function AdjustPlan({ trackId, trackTitle, granularity, instructions, sou
       backLabel={trackTitle}
       heading="Adjust your plan"
       subtext="Only the days you haven't finished will change."
-      onConfirm={(tree) => confirmRevisionAction({ trackId, tree: toTreeInput(tree) })}
+      onConfirm={(tree, _summary, kept) => confirmRevisionAction({ trackId, tree: toTreeInput(tree), materialIds: kept.map((m) => m.id) })}
     />
   );
 }

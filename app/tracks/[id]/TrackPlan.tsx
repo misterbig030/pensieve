@@ -4,16 +4,18 @@ import { useState, useTransition } from "react";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { formatCostUsd } from "@/lib/formatCost";
 import { childLevel, childSpans, currentLeaf, doneDays, findNode, type Granularity, type PlanNode } from "@/lib/planTree";
+import type { Material } from "@/lib/schemas/material";
 import { expandNodeAction } from "./actions";
 
 interface TrackPlanProps {
   trackId: string;
   root: PlanNode;
   granularity: Granularity;
+  materials: Material[];
 }
 
 /** The saved plan as a tree. Expanding or splitting runs on the server and the page refreshes with the new rows. */
-export function TrackPlan({ trackId, root, granularity }: TrackPlanProps) {
+export function TrackPlan({ trackId, root, granularity, materials }: TrackPlanProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     // Finished groups start folded so the current work is what you see first.
     const done = new Set<string>();
@@ -58,6 +60,7 @@ export function TrackPlan({ trackId, root, granularity }: TrackPlanProps) {
       <TreeLabel>{label}</TreeLabel>
       <PlanTree
         root={root}
+        materials={materials}
         mode="track"
         highlight={new Set()}
         lockBefore={0}

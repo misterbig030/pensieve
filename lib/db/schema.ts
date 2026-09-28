@@ -7,11 +7,14 @@ import {
   jsonb,
   boolean,
   index,
+  uniqueIndex,
+  primaryKey,
   doublePrecision,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { SOURCE_TYPES } from "@/lib/schemas/source";
+import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS } from "@/lib/schemas/material";
 
 export const tracks = pgTable("tracks", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -28,15 +31,39 @@ export const tracks = pgTable("tracks", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const sources = pgTable("sources", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  trackId: uuid("track_id")
-    .notNull()
-    .references(() => tracks.id, { onDelete: "cascade" }),
-  type: text("type", { enum: SOURCE_TYPES }).notNull(),
-  url: text("url").notNull(),
-  title: text("title"),
-});
+/**
+ * A track's materials: the sources the learner attached (`origin: "learner"`) and the ones research found and
+ * verified (`origin: "research"`), in one list. `type` drives link/YouTube/file/note handling; `kind` drives display.
+ */
+export const sources = pgTable(
+  "sources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    trackId: uuid("track_id")
+      .notNull()
+      .references(() => tracks.id, { onDelete: "cascade" }),
+    type: text("type", { enum: SOURCE_TYPES }).notNull(),
+    url: text("url").notNull(),
+    title: text("title"),
+    origin: text("origin", { enum: MATERIAL_ORIGINS }).notNull().default("learner"),
+    kind: text("kind", { enum: MATERIAL_KINDS }).notNull().default("note"),
+    /** The textbook the plan follows in order. At most one per track. */
+    backbone: boolean("backbone").notNull().default(false),
+    author: text("author"),
+    year: integer("year"),
+    /** One line: why this material, what it covers that others don't. */
+    why: text("why"),
+    /** Order within the list. */
+    position: integer("position").notNull().default(0),
+    /** When the gate fetched the page and its title matched. Null for learner notes and files. */
+    verifiedAt: timestamp("verified_at"),
+    /** The title the gate saw on the page. */
+    fetchedTitle: text("fetched_title"),
+    /** Pages that recommended it (backbone evidence). */
+    recommendedBy: jsonb("recommended_by").$type<string[]>().notNull().default([]),
+  },
+  (t) => [uniqueIndex("sources_one_backbone_idx").on(t.trackId).where(sql`${t.backbone}`)],
+);
 
 export const PLAN_LEVELS = ["month", "week", "day"] as const;
 export const NODE_STATUSES = ["pending", "generated", "completed"] as const;
@@ -68,6 +95,32 @@ export const planNodes = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("plan_nodes_track_idx").on(t.trackId), index("plan_nodes_parent_idx").on(t.parentId)],
+);
+
+export const MATERIAL_ROLES = ["covers", "assigned"] as const;
+
+/**
+ * Which materials a node uses. Headings reserve coverage (`covers`, no tier or minutes); leaves assign (`assigned`,
+ * a row in their Read table). Removing a material or a node removes its rows.
+ */
+export const nodeMaterials = pgTable(
+  "node_materials",
+  {
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => planNodes.id, { onDelete: "cascade" }),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    role: text("role", { enum: MATERIAL_ROLES }).notNull(),
+    tier: text("tier", { enum: MATERIAL_TIERS }),
+    minutes: integer("minutes"),
+    /** "Ch. 4 §2", "evals and guardrails sections only". */
+    note: text("note"),
+    /** Row order in the Read table. */
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.nodeId, t.sourceId] }), index("node_materials_source_idx").on(t.sourceId)],
 );
 
 export const dailyContent = pgTable("daily_content", {
@@ -116,6 +169,8 @@ export type Track = typeof tracks.$inferSelect;
 export type NewTrack = typeof tracks.$inferInsert;
 export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
+export type NodeMaterialRow = typeof nodeMaterials.$inferSelect;
+export type NewNodeMaterialRow = typeof nodeMaterials.$inferInsert;
 export type PlanNodeRow = typeof planNodes.$inferSelect;
 export type NewPlanNodeRow = typeof planNodes.$inferInsert;
 export type DailyContent = typeof dailyContent.$inferSelect;

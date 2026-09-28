@@ -61,6 +61,8 @@ export interface LoggedGenerateObjectOptions<T> {
   label?: string;
   /** Short checks shown beside the raw response in the admin panel. */
   facts?: string[];
+  /** More checks computed from the validated object, appended to `facts`. */
+  check?: (object: T) => string[];
   abortSignal?: AbortSignal;
 }
 
@@ -140,7 +142,7 @@ export async function loggedGenerateObject<T>(
     prompt: opts.prompt,
     response: JSON.stringify(object, null, 2),
     finishReason: finishReason ?? null,
-    facts: opts.facts ?? [],
+    facts: [...(opts.facts ?? []), ...(opts.check?.(object as T) ?? [])],
   });
   const costUsd = row.costUsd;
 

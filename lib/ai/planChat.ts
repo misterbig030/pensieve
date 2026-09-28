@@ -49,7 +49,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
       const result = await revisePlanTree({
         topic: req.topic,
         instructions: req.instructions,
-        sources: req.sources,
+        materials: req.materials,
         granularity: req.granularity,
         tree,
         lockBefore,
@@ -73,7 +73,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
     mode: req.mode,
     topic: req.topic,
     instructions: req.instructions,
-    sources: req.sources,
+    materials: req.materials,
     granularity: req.granularity,
     tree,
     lockBefore,
