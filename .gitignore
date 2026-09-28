@@ -47,3 +47,6 @@ next-env.d.ts
 # claude code local/personal state (not shared with the team)
 .claude/settings.local.json
 .claude/worktrees/
+
+# research eval output
+/evals/results/

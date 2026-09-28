@@ -58,12 +58,18 @@ export function briefLines(brief: ResearchBrief): string[] {
   return lines;
 }
 
-export function buildResearchInstructions(caps: ResearchCaps): string {
+/** The tool names each arm gives the model; the strategy is the same for both. */
+export interface ResearchToolNames {
+  search: string;
+  fetch: string;
+}
+
+export function buildResearchInstructions(caps: ResearchCaps, names: ResearchToolNames = { search: "webSearch", fetch: "fetchSource" }): string {
   return [
     `You gather the reading list for a self-study plan: one well-recommended backbone textbook the plan follows in order, and the canonical and current materials around it.`,
-    `You have two tools. webSearch returns titles, URLs and snippets. fetchSource reads one https page and returns its own title, headings and text. Budget: ${caps.searches} searches, ${caps.fetches} page reads and ${caps.steps} steps in all; calls past a cap are refused.`,
+    `You have two tools. ${names.search} returns titles, URLs and snippets. ${names.fetch} reads one https page and returns its own title, headings and text. Budget: ${caps.searches} searches, ${caps.fetches} page reads and ${caps.steps} steps in all; calls past a cap are refused.`,
     `Work in this order:`,
-    `1. Read each link the learner provided with fetchSource and note what it is. These are always kept.`,
+    `1. Read each link the learner provided with ${names.fetch} and note what it is. These are always kept.`,
     `2. Backbone. Search from several angles (best book for the topic, university course syllabi, reading lists) and note which pages recommend each book. Independent agreement across different sites beats a single listicle. Read the leading book's own page (publisher, O'Reilly, the author's site) so its title can be checked.`,
     `3. Canonical materials: official documentation, the well-known courses and talks, the standard papers.`,
     `4. Currency: if the field moves fast, material from the last two years that covers what the backbone predates.`,

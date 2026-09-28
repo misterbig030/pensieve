@@ -29,6 +29,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@ai-sdk/anthropic": "4.0.36",
     "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
