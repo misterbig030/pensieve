@@ -92,7 +92,7 @@ export const checkIns = pgTable("check_ins", {
   completedAt: timestamp("completed_at").notNull().defaultNow(),
 });
 
-export const GENERATION_CALLERS = ["outline", "outline_revision", "daily", "judge", "chat"] as const;
+export const GENERATION_CALLERS = ["outline", "outline_revision", "daily", "judge", "chat", "research"] as const;
 export type GenerationCaller = (typeof GENERATION_CALLERS)[number];
 
 /** One row per model call. Written by the app's server actions; read by cost reporting and the eval harness. */
