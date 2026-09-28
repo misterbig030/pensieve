@@ -4,7 +4,7 @@ import { tracks, sources, planNodes, checkIns, type NewSource, type Source } fro
 import { getTrackNodeMaterials, insertPlanTree, rowsToTree } from "./planQueries";
 import { remapTreeRefs } from "@/lib/materials";
 import { doneDays, type Granularity, type PlanNode } from "@/lib/planTree";
-import type { Material } from "@/lib/schemas/material";
+import { clip, type Material } from "@/lib/schemas/material";
 
 export async function getTracksForUser(userId: string) {
   return db.query.tracks.findMany({
@@ -61,15 +61,18 @@ export async function getTrackDetail(trackId: string, userId: string) {
   return { track, root: rowsToTree(nodeRows, materialRows), materials: trackSources.map(sourceToMaterial) };
 }
 
-/** A saved source as the browser's material shape. Its id is the row's uuid; saved rows need no signature. */
+/**
+ * A saved source as the browser's material shape. Its id is the row's uuid; saved rows need no signature. Text is
+ * clipped to the wire limits: notes saved before materials existed kept free text of any length in `url`.
+ */
 export function sourceToMaterial(row: Source): Material {
   return {
     id: row.id,
     origin: row.origin,
     type: row.type,
     kind: row.kind,
-    url: row.url,
-    title: row.title ?? row.url,
+    url: row.url.length > 2000 ? row.url.slice(0, 2000) : row.url,
+    title: clip(row.title, 300) ?? clip(row.url, 300) ?? "Untitled",
     author: row.author,
     year: row.year,
     why: row.why,

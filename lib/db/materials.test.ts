@@ -91,6 +91,15 @@ describe("persistence of materials", () => {
     expect(week1.children![1].materials).toEqual([{ id: evals.id, tier: "must", minutes: 30, note: null }]);
   });
 
+  it("clips legacy notes to the wire limits when reading them back", async () => {
+    const [row] = await db.insert(sources).values({ trackId, type: "note", url: "n".repeat(3000), position: 9 }).returning();
+    const detail = (await getTrackDetail(trackId, "u1"))!;
+    const legacy = detail.materials.find((m) => m.id === row.id)!;
+    expect(legacy.title.length).toBeLessThanOrEqual(300);
+    expect(legacy.url.length).toBe(2000);
+    await db.delete(sources).where(eq(sources.id, row.id));
+  });
+
   it("allows only one backbone per track", async () => {
     await expect(db.update(sources).set({ backbone: true }).where(eq(sources.trackId, trackId))).rejects.toThrow();
   });

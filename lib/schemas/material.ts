@@ -47,7 +47,8 @@ export const materialSchema = z.object({
   sig: z.string().max(200).nullable(),
 });
 export type Material = z.infer<typeof materialSchema>;
-export const materialListSchema = z.array(materialSchema).max(60);
+/** Up to 50 of the learner's own plus what research adds (at most 25 are asked for). */
+export const materialListSchema = z.array(materialSchema).max(100);
 
 /** A leaf's assignment: a row in its Read table. */
 export const materialRefSchema = z.object({

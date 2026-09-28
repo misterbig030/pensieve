@@ -33,7 +33,7 @@ export async function confirmTrackAction(input: {
   const { materials, dropped } = await vetMaterials(materialListSchema.parse(input.materials));
   for (const m of dropped) root = removeMaterialRefs(root, m.id);
 
-  const { trackId } = await createTrackWithPlan({
+  const { trackId, droppedRefs } = await createTrackWithPlan({
     userId,
     title: topic,
     instructions: input.instructions,
@@ -42,6 +42,10 @@ export async function confirmTrackAction(input: {
     materials,
     root,
   });
+
+  if (dropped.length > 0 || droppedRefs > 0) {
+    console.info(`[materials] saved track ${trackId}: ${dropped.length} material(s) failed re-verification, ${droppedRefs} reference(s) to unknown ids dropped`);
+  }
 
   revalidatePath("/dashboard");
   redirect(`/tracks/${trackId}`);

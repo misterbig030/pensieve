@@ -1,7 +1,7 @@
 import type { Material } from "@/lib/schemas/material";
 import { signingSecret, verifyMaterialSig } from "./signature";
 import { SourceFetcher } from "./tools";
-import { createOpenLibraryLookup, reverifyMaterial, type BookLookup } from "./verify";
+import { createOpenLibraryLookup, reverifyMaterial, titleMatches, type BookLookup } from "./verify";
 
 export interface VetResult {
   materials: Material[];
@@ -19,9 +19,10 @@ export interface VetOptions {
 }
 
 /**
- * Runs on confirm, before a plan is saved. A researched material with a bad or missing signature goes back
- * through the gate and is dropped if it fails. A learner's own material is always kept, but a "verified" claim it
- * cannot back with a signature is cleared. At most one backbone, and only a book, survives.
+ * Runs on confirm, before a plan is saved. A researched material with a bad or missing signature, or a title that
+ * no longer matches the page title it was signed with, goes back through the gate and is dropped if it fails. A
+ * learner's own material is always kept, but a "verified" claim it cannot back with a signature is cleared. At most
+ * one backbone, and only a book, survives.
  */
 export async function vetMaterials(materials: Material[], options: VetOptions = {}): Promise<VetResult> {
   const secret = options.secret ?? signingSecret();
@@ -36,7 +37,8 @@ export async function vetMaterials(materials: Material[], options: VetOptions = 
         if (m.verifiedAt && !verifyMaterialSig(m, m.sig, secret)) return { ...m, verifiedAt: null, fetchedTitle: null, sig: null };
         return m;
       }
-      if (verifyMaterialSig(m, m.sig, secret)) return m;
+      // The signature covers the page's title, not the one shown: that must still be the page's.
+      if (verifyMaterialSig(m, m.sig, secret) && titleMatches(m.title, [m.fetchedTitle]).ok) return m;
       reverified += 1;
       const again = await reverifyMaterial(m, fetcher, books, secret, options.signal);
       if (!again) dropped.push(m);

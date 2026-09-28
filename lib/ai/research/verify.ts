@@ -316,6 +316,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
   const threshold = input.titleThreshold ?? TITLE_MATCH_THRESHOLD;
   const dropped: DroppedMaterial[] = [];
   const drop = (title: string, reason: string, url?: string) => {
+    if (process.env.NODE_ENV !== "test") console.info(`[research] dropped "${title}"${url ? ` <${url}>` : ""}: ${reason}`);
     dropped.push({ title, url, reason });
     input.emit({ type: "research.dropped", title, url, reason });
   };

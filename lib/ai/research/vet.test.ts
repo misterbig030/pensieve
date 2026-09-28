@@ -48,6 +48,14 @@ describe("vetMaterials", () => {
     expect(result.materials[1].sig).not.toBe("forged");
   });
 
+  it("re-verifies a signed material whose title was changed in the browser", async () => {
+    const fetchPage = vi.fn<PageFetcher>(async (url) => ({ finalUrl: url, title: "Signed guide", ogTitle: null, h1: null, author: null, published: null, text: "" }));
+    const renamed = { ...researched("M1", "https://example.com/signed", "Signed guide"), title: "A much better book" };
+    const result = await vetMaterials([renamed], { fetcher: new SourceFetcher(fetchPage), books: { find: async () => null }, secret: SECRET });
+    expect(result.dropped.map((m) => m.id)).toEqual(["M1"]);
+    expect(fetchPage).toHaveBeenCalledOnce();
+  });
+
   it("keeps a learner's material but clears a verified claim it cannot back", async () => {
     const mine: Material = { ...researched("M1", "https://example.com/mine", "Mine"), origin: "learner", sig: "forged" };
     const result = await vetMaterials([mine], { fetcher: new SourceFetcher(async () => { throw new Error("no fetch expected"); }), books: { find: async () => null }, secret: SECRET });
@@ -55,9 +63,9 @@ describe("vetMaterials", () => {
   });
 
   it("keeps at most one backbone, and only a book", async () => {
-    const a = researched("M1", "https://example.com/a", "A", { kind: "docs", backbone: true });
-    const b = researched("M2", "https://example.com/b", "B", { kind: "book", backbone: true });
-    const c = researched("M3", "https://example.com/c", "C", { kind: "book", backbone: true });
+    const a = researched("M1", "https://example.com/a", "Guide Alpha", { kind: "docs", backbone: true });
+    const b = researched("M2", "https://example.com/b", "Book Beta", { kind: "book", backbone: true });
+    const c = researched("M3", "https://example.com/c", "Book Gamma", { kind: "book", backbone: true });
     const result = await vetMaterials([a, b, c], { fetcher: new SourceFetcher(), books: { find: async () => null }, secret: SECRET });
     expect(result.materials.map((m) => m.backbone)).toEqual([false, true, false]);
   });
