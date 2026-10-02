@@ -13,7 +13,11 @@ import { findNode, lockBoundary, type PlanNode } from "@/lib/planTree";
 import { planTreeInputSchema, type PlanTreeInput } from "@/lib/schemas/plan";
 import { z } from "zod";
 
-export async function confirmRevisionAction(input: { trackId: string; tree: PlanTreeInput }): Promise<void> {
+/**
+ * Saves the adjusted plan. `materialIds` is the list the learner kept: saved materials left out of it are removed,
+ * with their references.
+ */
+export async function confirmRevisionAction(input: { trackId: string; tree: PlanTreeInput; materialIds: string[] }): Promise<void> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
@@ -26,7 +30,8 @@ export async function confirmRevisionAction(input: { trackId: string; tree: Plan
   const missingLocked = lockedIds(detail.root, lockBefore).filter((id) => !findNode(root, id));
   if (missingLocked.length > 0) throw new Error("The revised plan drops days you have already completed");
 
-  await replacePlanTree(input.trackId, userId, root);
+  const materialIds = z.array(z.string().uuid()).max(200).parse(input.materialIds);
+  await replacePlanTree(input.trackId, userId, root, materialIds);
   const fresh = await getTrackDetail(input.trackId, userId);
   await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title));
   revalidatePath(`/tracks/${input.trackId}`);
@@ -60,7 +65,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
     days: detail.root.len,
     granularity: detail.track.granularity,
     instructions: detail.track.instructions ?? undefined,
-    sources: detail.sources.map((s) => ({ url: s.url, title: s.title ?? undefined, type: s.type })),
+    materials: detail.materials,
     tree: detail.root,
     nodeId: input.nodeId,
     reason: input.reason,

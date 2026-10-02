@@ -4,8 +4,9 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { sources } from "@/lib/db/schema";
-import { getTrackDetail } from "@/lib/db/queries";
-import { getLeafWithContent } from "@/lib/db/planQueries";
+import { getTrackDetail, sourceToMaterial } from "@/lib/db/queries";
+import { getLeafWithContent, getNodeReadList } from "@/lib/db/planQueries";
+import { budgetMinutes } from "@/lib/materials";
 import { budgetFor, findNode, labelOf, spanOf } from "@/lib/planTree";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { LeafView } from "./LeafView";
@@ -21,6 +22,8 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
     db.query.sources.findMany({ where: eq(sources.trackId, id) }),
   ]);
   if (!detail || !leaf || leaf.node.trackId !== id) notFound();
+  const readList = await getNodeReadList(nodeId);
+  const readRows = readList.map((r) => ({ material: sourceToMaterial(r.source), tier: r.tier ?? "should", minutes: r.minutes, note: r.note }));
 
   const node = findNode(detail.root, nodeId);
   if (!node || node.children !== null) notFound();
@@ -29,7 +32,11 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
   const kicker = node.level === "day" ? label : `${label} · ${spanOf(node)}`;
   const isWeek = node.level !== "day";
   const sessions = leaf.sessions.filter((s) => s.hours !== null);
-  const youtubeSources = trackSources.filter((s) => s.type === "youtube");
+  // The lesson's videos are the leaf's own when it has a Read table; older plans fall back to every video on the track.
+  const youtubeSources =
+    readRows.length > 0
+      ? readRows.filter((r) => r.material.type === "youtube").map((r) => ({ title: r.material.title, url: r.material.url }))
+      : trackSources.filter((s) => s.type === "youtube").map((s) => ({ title: s.title, url: s.url }));
 
   return (
     <PageShell>
@@ -55,7 +62,9 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
               ? { contentMarkdown: leaf.content.contentMarkdown, citations: leaf.content.citations as { title: string; url: string }[] }
               : null
           }
-          youtubeSources={youtubeSources.map((s) => ({ title: s.title, url: s.url }))}
+          youtubeSources={youtubeSources}
+          readRows={readRows}
+          budgetMinutes={budgetMinutes({ level: node.level, budgetHours: isWeek ? (node.budgetHours ?? budgetFor(node.len)) : null })}
           isCompleted={node.status === "completed"}
         />
       </div>

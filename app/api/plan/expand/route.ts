@@ -7,13 +7,13 @@ import { insertGenerationLog } from "@/lib/db/generationLog";
 import { ndjsonResponse } from "@/lib/ndjson";
 import { fromTreeInput } from "@/lib/planInput";
 import { granularitySchema, planTreeInputSchema } from "@/lib/schemas/plan";
-import { sourceInputSchema } from "@/lib/schemas/source";
+import { materialListSchema } from "@/lib/schemas/material";
 
 const bodySchema = z.object({
   topic: z.string().trim().min(1).max(200),
   granularity: granularitySchema,
   instructions: z.string().trim().max(2000).optional(),
-  sources: z.array(sourceInputSchema).max(50),
+  materials: materialListSchema,
   tree: planTreeInputSchema,
   nodeId: z.string().min(1),
   reason: z.enum(["expand", "split"]),
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
         days: tree.len,
         granularity: body.granularity,
         instructions: body.instructions || undefined,
-        sources: body.sources,
+        materials: body.materials,
         tree,
         nodeId: body.nodeId,
         reason: body.reason,

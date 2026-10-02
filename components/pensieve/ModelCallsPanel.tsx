@@ -284,7 +284,9 @@ function CallerBadge({ caller, large = false }: { caller: ModelCall["caller"]; l
       ? "bg-accent-700 text-accent-100"
       : caller === "outline" || caller === "outline_revision"
         ? "bg-accent-2-700 text-accent-2-100"
-        : "bg-neutral-700 text-neutral-100";
+        : caller === "research"
+          ? "bg-accent-500 text-accent-900"
+          : "bg-neutral-700 text-neutral-100";
   return (
     <span className={cn("shrink-0 rounded-full font-sans font-semibold", tone, large ? "px-2.5 py-1 text-[11.5px]" : "px-2 py-px text-[11px]")}>
       {caller}

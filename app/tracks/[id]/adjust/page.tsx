@@ -20,7 +20,7 @@ export default async function AdjustTrackPage({ params }: { params: Promise<{ id
         trackTitle={detail.track.title}
         granularity={detail.track.granularity}
         instructions={detail.track.instructions ?? undefined}
-        sources={detail.sources.map((s) => ({ url: s.url, title: s.title ?? undefined, type: s.type }))}
+        materials={detail.materials}
         root={detail.root}
         lockBefore={lockBoundary(detail.root)}
       />

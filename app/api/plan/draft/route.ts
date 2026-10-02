@@ -2,18 +2,22 @@ import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { isAdminUserId } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
-import { streamPlanDraft } from "@/lib/ai/planDraft";
+import { streamResearchedPlanDraft } from "@/lib/ai/planDraft";
+import { defaultArm } from "@/lib/ai/research/pipeline";
 import { insertGenerationLog } from "@/lib/db/generationLog";
 import { ndjsonResponse } from "@/lib/ndjson";
 import { granularitySchema } from "@/lib/schemas/plan";
 import { sourceInputSchema } from "@/lib/schemas/source";
+
+// Research (about a minute at most) runs before drafting in the same request.
+export const maxDuration = 300;
 
 const bodySchema = z.object({
   topic: z.string().trim().min(1).max(200),
   days: z.number().int().min(1).max(365),
   granularity: granularitySchema,
   instructions: z.string().trim().max(2000).optional(),
-  sources: z.array(sourceInputSchema).max(50),
+  materials: z.array(sourceInputSchema).max(50),
   debug: z.boolean().optional(),
 });
 
@@ -28,12 +32,15 @@ export async function POST(request: Request) {
 
   return ndjsonResponse(
     withCallEvents(debug, { userId, onLog: insertGenerationLog }, (log) =>
-      streamPlanDraft({
+      streamResearchedPlanDraft({
         topic: body.topic,
         days: body.days,
         granularity: body.granularity,
         instructions: body.instructions || undefined,
-        sources: body.sources,
+        materials: body.materials,
+        arm: defaultArm(),
+        // A client that disconnects stops research: the signal reaches search and fetch.
+        signal: request.signal,
         log,
       }),
     ),

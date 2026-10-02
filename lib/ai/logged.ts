@@ -1,4 +1,4 @@
-import { generateObject, type FlexibleSchema, type LanguageModelUsage } from "ai";
+import { generateObject, type FlexibleSchema, type LanguageModel, type LanguageModelUsage } from "ai";
 import type { GenerationCaller } from "@/lib/db/schema";
 import { estimateCostUsd, type AiModelId } from "./models";
 
@@ -53,10 +53,17 @@ export type GenerationLogContext = Omit<GenerationLogMeta, "caller">;
 
 export interface LoggedGenerateObjectOptions<T> {
   model: AiModelId;
+  /** Runs the call on this model instance instead of `model` through the gateway; `model` still names it in the log. */
+  languageModel?: LanguageModel;
   schema: FlexibleSchema<T>;
   prompt: string;
   /** Shown in the admin panel's call list; defaults to the caller name. */
   label?: string;
+  /** Short checks shown beside the raw response in the admin panel. */
+  facts?: string[];
+  /** More checks computed from the validated object, appended to `facts`. */
+  check?: (object: T) => string[];
+  abortSignal?: AbortSignal;
 }
 
 export interface LoggedGenerateObjectResult<T> {
@@ -113,9 +120,10 @@ export async function loggedGenerateObject<T>(
 ): Promise<LoggedGenerateObjectResult<T>> {
   const startedAt = performance.now();
   const { object, usage, finishReason } = await generateObject({
-    model: opts.model,
+    model: opts.languageModel ?? opts.model,
     schema: opts.schema,
     prompt: opts.prompt,
+    ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
   });
   const latencyMs = Math.round(performance.now() - startedAt);
   const row = buildGenerationLogRow({
@@ -134,7 +142,7 @@ export async function loggedGenerateObject<T>(
     prompt: opts.prompt,
     response: JSON.stringify(object, null, 2),
     finishReason: finishReason ?? null,
-    facts: [],
+    facts: [...(opts.facts ?? []), ...(opts.check?.(object as T) ?? [])],
   });
   const costUsd = row.costUsd;
 

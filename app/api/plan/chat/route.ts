@@ -10,14 +10,14 @@ import { tracks } from "@/lib/db/schema";
 import { ndjsonResponse } from "@/lib/ndjson";
 import { fromTreeInput } from "@/lib/planInput";
 import { granularitySchema, planTreeInputSchema } from "@/lib/schemas/plan";
-import { sourceInputSchema } from "@/lib/schemas/source";
+import { materialListSchema } from "@/lib/schemas/material";
 
 const bodySchema = z.object({
   mode: z.enum(["create", "adjust"]),
   topic: z.string().trim().min(1).max(200),
   granularity: granularitySchema,
   instructions: z.string().trim().max(2000).optional(),
-  sources: z.array(sourceInputSchema).max(50),
+  materials: materialListSchema,
   tree: planTreeInputSchema,
   lockBefore: z.number().int().min(0).optional(),
   trackId: z.string().uuid().optional(),

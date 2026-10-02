@@ -31,12 +31,12 @@ export function NewTrackForm() {
         backLabel="Dashboard"
         heading={`Here's the plan for "${topic}"`}
         subtext="Skim the plan, expand what you want to see, then confirm — or talk it over on the right."
-        onConfirm={(tree, summary) =>
+        onConfirm={(tree, summary, materials) =>
           confirmTrackAction({
             topic,
             instructions,
             granularity,
-            sources: brief.sources,
+            materials,
             tree: toTreeInput(tree),
             summary,
           })
