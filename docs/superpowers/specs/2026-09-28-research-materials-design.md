@@ -128,6 +128,8 @@ migrations.
 - Redirects are followed by hand, at most 3, and every hop is re-checked.
 - 5 s timeout, 2 MB body cap (streamed; stop reading at the cap), and only `text/html`, `application/pdf` and
   `text/plain` are accepted.
+- `gzip` and `br` are requested and decoded (`deflate` too if a site sends it); the cap counts decoded bytes, and
+  any other content encoding is refused.
 - No cookies, no auth headers, and a fixed user agent that names Pensieve.
 
 **Rule of Two.** The agent handles [A] untrusted input (fetched pages). It holds no [B] private data beyond the
@@ -144,7 +146,8 @@ notes gathered so far.
 
 1. Fetch each learner source and describe it. These are always kept.
 2. **Backbone.** Search from several angles (best book for X, course syllabi, reading lists) and record which pages
-   recommend each candidate. Independent agreement beats a single listicle.
+   recommend each candidate. Independent agreement beats a single listicle. A book's link is its publisher's or
+   author's page, never a shop listing.
 3. **Canonical materials.** Official docs, the well-known courses, the standard papers.
 4. **Currency.** For fast-moving topics, material from the last two years that covers what the backbone predates.
 5. **Final step.** Emit 12–25 candidates:
@@ -156,7 +159,8 @@ notes gathered so far.
 |---|---|
 | Fetched | A 2xx through the guarded fetch in this run (cache hit or new fetch) |
 | Title | Normalized token overlap between the claimed title and the fetched `title`, `og:title` or `h1` clears a threshold (tuned on the eval). A mismatch drops the candidate; titles are never auto-corrected. |
-| Kind | Plausible for the host (YouTube → video, GitHub → repo, …). A `book` must also match Open Library search by title and author, which supplies `year`. |
+| Kind | Plausible for the host (YouTube → video, GitHub → repo, …). |
+| Book | A `book` is verified by Open Library instead: a search match by title and author, which supplies `year`. Books are rarely readable online and publishers often refuse automated readers, so a page is not required. If the book's own page passes the three checks above it is the link; otherwise the link is the book's Open Library entry (this needs an author on both sides). No match drops the book. |
 | Dedupe | By canonical final URL |
 | Backbone | A verified `book` whose `recommendedBy` spans at least 2 distinct registrable domains. If none qualifies, the plan has no backbone, which is allowed and gets flagged. |
 
@@ -252,7 +256,8 @@ Vitest, with no live network in any test.
 
 - **Egress guard**, as a table: `127.0.0.1`, `10.0.0.1`, `169.254.169.254`, `::1`, `fc00::1`, `2130706433`,
   `0x7f.1`, an `http:` URL, a redirect into a private range, a rebinding resolver (public then private), an
-  oversized body, a wrong content type.
+  oversized body, a wrong content type, a compressed body (decoded, capped after decoding, refused when the encoding
+  is unknown).
 - **Pure functions:** title matcher, kind rules, dedupe, backbone rule, HMAC sign and verify, short id to uuid
   mapping with unknown-id dropping, minutes against budget, chapter-order parser.
 - **Agent loop,** with the AI SDK mock model and fake search and fetch: event order; each failure-handling path;
@@ -335,7 +340,39 @@ The owner's weekly plan puts the tools and guards in W6 and citation verificatio
 
 - Tavily plan and rate limits, and whether its `raw_content` can stand in for a separate fetch on search hits (the
   gate still fetches; this is only a latency question).
-- Open Library rate limits, and a fallback when it is down (keep the book, mark it unmatched, and never make it the
-  backbone).
+- Open Library rate limits, and a fallback when it is down (the book's own page decides; a book kept that way is
+  marked unmatched and is never the backbone).
 - The readable-text extractor (Readability plus a DOM shim, or a lighter HTML-to-text) and PDF text extraction.
 - The title-match threshold, tuned on the first eval run.
+
+## Known issues, deferred
+
+Found in browser testing of the branch on 2026-10-02 and judged minor; none blocks shipping.
+
+Research quality
+- A material the gate drops can still be named by others: their `why` lines and the plan's reading notes may point
+  at it (seen when the backbone book was dropped; the companion repo then got the book's chapter assignments).
+- Non-book titles are the page's raw title ("Redirecting to LangGraph Documentation", "… - Model Context Protocol").
+- Thin metadata: most researched materials have no `recommendedBy`, and about half have no `year`.
+- Reading lists and course directories get kind `note`.
+- The agent can spend half its searches hunting for a publisher page that refuses automated readers (O'Reilly),
+  despite the prompt saying to try once.
+- GitHub sometimes misses the 5 s fetch timeout, which drops a repo.
+
+Research card
+- It says "usually about a minute"; runs take about 1:50 to 2:20 because the final candidates step has no time cap
+  of its own.
+- The live log lists searches only: page reads are not shown, and the verified and dropped lines never appear before
+  the list replaces the card.
+- "Only pages Pensieve could open and check make the list" is no longer true for books checked by Open Library.
+
+Drafting and plan
+- A material listed twice in one unit is dropped silently (`lib/materials.ts`, `resolveMaterialRefs`) instead of
+  being reported as a fact.
+- Revisions add "Week N:" / "Day N:" to titles: the revision prompt lacks the drafting prompt's no-prefix rule (also
+  on `main`).
+- The drafting prompt says materials "were found and checked by research" even when research did not run.
+- The "Expand week N" suggestion chip stays after the week has been expanded.
+
+Not yet exercised in a browser: arm C and the eval runner, the `thin` notice, "Research again" with a search key,
+and confirming a plan whose book links to Open Library (covered by unit tests only).
