@@ -1,3 +1,4 @@
+import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 import {
   EgressError,
@@ -217,6 +218,71 @@ describe("guardedFetch", () => {
     expect(res.truncated).toBe(true);
     expect(pulled).toBe(5);
     expect(destroyed).toContain("https://example.com/big");
+  });
+
+  it("asks for gzip or brotli and decodes whichever comes back", async () => {
+    const page = "<title>AI Engineering</title>";
+    const { transport, requests } = transportFor({
+      "https://example.com/gzip": { headers: { "content-encoding": "gzip" }, body: body(gzipSync(page)) },
+      "https://example.com/x-gzip": { headers: { "content-encoding": "X-GZIP" }, body: body(gzipSync(page)) },
+      "https://example.com/br": { headers: { "content-encoding": "br" }, body: body(brotliCompressSync(page)) },
+      "https://example.com/deflate": { headers: { "content-encoding": "deflate" }, body: body(deflateSync(page)) },
+      "https://example.com/identity": { headers: { "content-encoding": "identity" }, body: body(page) },
+    });
+    const resolver = resolverFor({ "example.com": [PUBLIC] });
+    for (const path of ["gzip", "x-gzip", "br", "deflate", "identity"]) {
+      const res = await guardedFetch(`https://example.com/${path}`, { resolver, transport });
+      expect(new TextDecoder().decode(res.body), path).toBe(page);
+      expect(res.truncated, path).toBe(false);
+    }
+    expect(requests[0].headers["accept-encoding"]).toBe("gzip, br");
+  });
+
+  it("decodes a compressed body that arrives in pieces", async () => {
+    const page = `<title>ok</title>${"<p>text</p>".repeat(2000)}`;
+    const packed = gzipSync(page);
+    const pieces = [packed.subarray(0, 10), packed.subarray(10, 11), packed.subarray(11)];
+    const { transport } = transportFor({ "https://example.com/": { headers: { "content-encoding": "gzip" }, body: body(...pieces) } });
+    const res = await guardedFetch("https://example.com/", { resolver: resolverFor({ "example.com": [PUBLIC] }), transport });
+    expect(new TextDecoder().decode(res.body)).toBe(page);
+  });
+
+  it("applies the cap to the decoded bytes, so a small compressed body cannot expand past it", async () => {
+    const packed = gzipSync(new Uint8Array(8 * 1024 * 1024).fill(97));
+    expect(packed.byteLength).toBeLessThan(16 * 1024);
+    const { transport, destroyed } = transportFor({ "https://example.com/bomb": { headers: { "content-encoding": "gzip" }, body: body(packed) } });
+    const res = await guardedFetch("https://example.com/bomb", {
+      resolver: resolverFor({ "example.com": [PUBLIC] }),
+      transport,
+      maxBytes: 4 * 1024 + 10,
+    });
+    expect(res.body.byteLength).toBe(4 * 1024 + 10);
+    expect(res.body.every((b) => b === 97)).toBe(true);
+    expect(res.truncated).toBe(true);
+    expect(destroyed).toContain("https://example.com/bomb");
+  });
+
+  it("reports a body that is not what its content encoding says", async () => {
+    const { transport, destroyed } = transportFor({
+      "https://example.com/": { headers: { "content-encoding": "gzip" }, body: body("<title>not gzip</title>") },
+    });
+    expect(await reason(guardedFetch("https://example.com/", { resolver: resolverFor({ "example.com": [PUBLIC] }), transport }))).toBe("network");
+    expect(destroyed).toContain("https://example.com/");
+  });
+
+  it("refuses a content encoding it cannot decode without reading the body", async () => {
+    const resolver = resolverFor({ "example.com": [PUBLIC] });
+    for (const encoding of ["zstd", "gzip, br"]) {
+      let read = false;
+      const lazy = (async function* () {
+        read = true;
+        yield new Uint8Array(1);
+      })();
+      const { transport, destroyed } = transportFor({ "https://example.com/": { headers: { "content-encoding": encoding }, body: lazy } });
+      expect(await reason(guardedFetch("https://example.com/", { resolver, transport })), encoding).toBe("content-encoding");
+      expect(read, encoding).toBe(false);
+      expect(destroyed, encoding).toContain("https://example.com/");
+    }
   });
 
   it("refuses a content type other than HTML, PDF or plain text without reading the body", async () => {

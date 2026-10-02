@@ -1,6 +1,8 @@
 import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
+import { Readable, pipeline } from "node:stream";
+import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 
 /**
  * The only way research code reaches an arbitrary URL. Every hop is checked before a socket opens: https on the
@@ -13,6 +15,7 @@ export const EGRESS_USER_AGENT = "PensieveResearch/1.0 (study-plan source checke
 export const MAX_REDIRECTS = 3;
 export const FETCH_TIMEOUT_MS = 5_000;
 export const MAX_BODY_BYTES = 2 * 1024 * 1024;
+export const ACCEPTED_ENCODINGS = "gzip, br";
 export const ACCEPTED_CONTENT_TYPES = ["text/html", "application/pdf", "text/plain"] as const;
 export type AcceptedContentType = (typeof ACCEPTED_CONTENT_TYPES)[number];
 
@@ -29,6 +32,7 @@ export type EgressReason =
   | "aborted"
   | "status"
   | "content-type"
+  | "content-encoding"
   | "network";
 
 export class EgressError extends Error {
@@ -244,6 +248,27 @@ function parseContentType(header: string | undefined): { type: string; charset: 
   return { type: type.toLowerCase(), charset };
 }
 
+/**
+ * Undoes the response's content coding, or returns null for one it cannot read. Node's https client hands over the
+ * bytes as sent, and some sites compress whether or not they were asked to, so the header decides, not the request.
+ */
+function decodedBody(body: AsyncIterable<Uint8Array>, header: string | undefined): AsyncIterable<Uint8Array> | null {
+  const coding = (header ?? "").trim().toLowerCase();
+  if (coding === "" || coding === "identity") return body;
+  const decoder =
+    coding === "gzip" || coding === "x-gzip"
+      ? createGunzip()
+      : coding === "br"
+        ? createBrotliDecompress()
+        : coding === "deflate"
+          ? createInflate()
+          : null;
+  if (!decoder) return null;
+  // A failure on either side reaches whoever iterates the decoder; the callback only keeps it from going unhandled.
+  pipeline(Readable.from(body), decoder, () => {});
+  return decoder;
+}
+
 async function readCapped(body: AsyncIterable<Uint8Array>, maxBytes: number, destroy: () => void): Promise<{ bytes: Uint8Array; truncated: boolean }> {
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -276,7 +301,8 @@ function isRedirect(status: number): boolean {
 
 /**
  * GETs a URL under the egress rules. Redirects are followed by hand (at most three) and every hop is re-checked.
- * Five seconds for the whole chain, a 2 MB body cap, and only HTML, PDF and plain text are read.
+ * Five seconds for the whole chain, a 2 MB body cap counted after decompression, and only HTML, PDF and plain text
+ * are read.
  */
 export async function guardedFetch(raw: string, options: GuardedFetchOptions = {}): Promise<GuardedResponse> {
   const resolver = options.resolver ?? systemResolver;
@@ -302,6 +328,7 @@ export async function guardedFetch(raw: string, options: GuardedFetchOptions = {
         headers: {
           "user-agent": EGRESS_USER_AGENT,
           accept: "text/html,application/pdf,text/plain;q=0.9",
+          "accept-encoding": ACCEPTED_ENCODINGS,
           "accept-language": "en;q=0.9,*;q=0.5",
         },
       });
@@ -327,8 +354,13 @@ export async function guardedFetch(raw: string, options: GuardedFetchOptions = {
       res.destroy();
       throw new EgressError("content-type", `Unsupported content type ${type || "(none)"}`);
     }
+    const body = decodedBody(res.body, res.headers["content-encoding"]);
+    if (!body) {
+      res.destroy();
+      throw new EgressError("content-encoding", `Unsupported content encoding ${res.headers["content-encoding"]}`);
+    }
     try {
-      const { bytes, truncated } = await readCapped(res.body, maxBytes, res.destroy);
+      const { bytes, truncated } = await readCapped(body, maxBytes, res.destroy);
       return { finalUrl: url.href, status: res.status, contentType: type as AcceptedContentType, charset, body: bytes, truncated };
     } catch (error) {
       res.destroy();
