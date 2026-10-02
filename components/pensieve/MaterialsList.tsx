@@ -249,6 +249,8 @@ export function VerifiedButton({ material: m, prominent = false }: { material: M
   }
   const opened = new Date(m.verifiedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   const host = hostOf(m.url);
+  // A researched book whose own page could not be used links to its Open Library entry instead.
+  const catalogued = m.kind === "book" && m.origin === "research" && host === "openlibrary.org";
   return (
     <div ref={ref} className="relative">
       <button
@@ -269,11 +271,21 @@ export function VerifiedButton({ material: m, prominent = false }: { material: M
           aria-label={`How ${m.title} was checked`}
           className="absolute top-10 right-0 z-20 flex w-[340px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-neutral-900 px-4 py-3.5 text-[12.5px] leading-normal text-neutral-100 shadow-md"
         >
-          <span className="font-semibold">Opened {opened}</span>
-          {m.fetchedTitle && <span>Page title: “{m.fetchedTitle}”</span>}
+          <span className="font-semibold">{catalogued ? "Found on Open Library" : "Opened"} {opened}</span>
+          {m.fetchedTitle && (
+            <span>
+              {catalogued ? "Catalogue title" : "Page title"}: “{m.fetchedTitle}”
+            </span>
+          )}
           <span>
             {host}
-            {m.kind === "book" && m.origin === "research" ? (m.year ? " · matched on Open Library by title and author" : " · Open Library was unavailable, so not matched") : ""}
+            {catalogued
+              ? " · matched by title and author"
+              : m.kind === "book" && m.origin === "research"
+                ? m.year
+                  ? " · matched on Open Library by title and author"
+                  : " · Open Library was unavailable, so not matched"
+                : ""}
           </span>
           {m.recommendedBy.length > 0 && (
             <span className="text-neutral-300">

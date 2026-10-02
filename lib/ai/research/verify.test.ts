@@ -94,10 +94,15 @@ describe("Open Library match", () => {
   it("picks a doc whose title and author agree", () => {
     const docs = [
       { title: "Unrelated", author_name: ["X"] },
-      { title: "AI Engineering", author_name: ["Chip Huyen"], first_publish_year: 2024 },
+      { key: "/works/OL1W", title: "AI Engineering", author_name: ["Chip Huyen"], first_publish_year: 2024 },
     ];
-    expect(pickBookMatch("AI Engineering: Building Applications", "Chip Huyen", docs)).toEqual({ title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 });
+    expect(pickBookMatch("AI Engineering: Building Applications", "Chip Huyen", docs)).toEqual({ key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 });
     expect(pickBookMatch("AI Engineering", "Someone Else", docs)).toBeNull();
+  });
+  it("keeps only a key that is an Open Library work", () => {
+    const doc = { title: "AI Engineering", author_name: ["Chip Huyen"] };
+    expect(pickBookMatch("AI Engineering", null, [{ ...doc, key: "//evil.example/works/OL1W" }])?.key).toBeNull();
+    expect(pickBookMatch("AI Engineering", null, [doc])?.key).toBeNull();
   });
 });
 
@@ -135,7 +140,9 @@ function gateFixture(pages: Record<string, PageInfo | Error>, books: BookLookup 
 describe("runGate", () => {
   const book = "https://www.oreilly.com/library/view/ai-engineering/9781098166298";
   const recs = ["https://news.ycombinator.com/item?id=1", "https://eugeneyan.com/writing/books"];
-  const bookLookup: BookLookup = { find: async () => ({ title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 }) };
+  const bookLookup: BookLookup = { find: async () => ({ key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 }) };
+  const catalogue = "https://openlibrary.org/works/OL1W";
+  const now = () => new Date("2026-09-28T11:00:00Z");
 
   it("keeps verified candidates, drops mismatches with a reason, and picks a backbone", async () => {
     const f = gateFixture(
@@ -210,6 +217,68 @@ describe("runGate", () => {
     expect(b.materials[0]).toMatchObject({ year: null, backbone: false });
   });
 
+  it("keeps a book Open Library matches when its own page cannot be used, and links to the catalogue entry", async () => {
+    const author = "https://huyenchip.com/books";
+    const f = gateFixture({ [book]: new Error("403"), [author]: info(author, "Books") }, bookLookup);
+    const result = await runGate({
+      candidates: [
+        candidate({ url: book, title: "AI Engineering: Building Applications with Foundation Models", kind: "book", backbone: true, author: "Chip Huyen", recommendedBy: recs }),
+        candidate({ url: author, title: "AI Engineering", kind: "book", author: "Chip Huyen", recommendedBy: [recs[0]] }),
+        candidate({ url: "none", title: "AI Engineering", kind: "book", author: "Chip Huyen" }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(recs),
+      emit: f.emit,
+      secret: SECRET,
+      now,
+    });
+    // All three are the same book, so they end as one material.
+    expect(result.dropped).toEqual([]);
+    expect(result.materials).toHaveLength(1);
+    const kept = result.materials[0];
+    expect(kept).toMatchObject({
+      url: catalogue,
+      title: "AI Engineering: Building Applications with Foundation Models",
+      kind: "book",
+      type: "link",
+      year: 2024,
+      backbone: true,
+      fetchedTitle: "AI Engineering",
+      verifiedAt: "2026-09-28T11:00:00.000Z",
+      recommendedBy: recs,
+    });
+    expect(verifyMaterialSig(kept, kept.sig, SECRET)).toBe(true);
+    // The unusable address is never fetched.
+    expect(f.fetchPage.mock.calls.map(([url]) => url)).toEqual([book, author]);
+  });
+
+  it("does not let the catalogue stand in for a book with no author, an unknown book, or while Open Library is down", async () => {
+    const run = (cand: Candidate, books: BookLookup) => {
+      const f = gateFixture({ [book]: new Error("403") }, books);
+      return runGate({ candidates: [cand], learner: [], learnerNotes: [], fetcher: f.fetcher, books: f.books, seenUrls: new Set(recs), emit: f.emit, secret: SECRET, now });
+    };
+    const withAuthor = candidate({ url: book, title: "AI Engineering", kind: "book", author: "Chip Huyen" });
+
+    const noAuthor = await run(candidate({ url: book, title: "AI Engineering", kind: "book" }), bookLookup);
+    expect(noAuthor.materials).toHaveLength(0);
+    expect(noAuthor.dropped[0].reason).toBe("could not be opened");
+
+    const unknown = await run(withAuthor, { find: async () => null });
+    expect(unknown.materials).toHaveLength(0);
+    expect(unknown.dropped[0].reason).toMatch(/no matching book on Open Library/);
+
+    const down = await run(withAuthor, { find: async () => { throw new BookLookupUnavailable("503"); } });
+    expect(down.materials).toHaveLength(0);
+    expect(down.dropped[0].reason).toBe("could not be opened; Open Library was unavailable");
+
+    // Only books get this: anything else still needs its page.
+    const essay = await run(candidate({ url: book, title: "AI Engineering", kind: "essay", author: "Chip Huyen" }), bookLookup);
+    expect(essay.materials).toHaveLength(0);
+  });
+
   it("dedupes by canonical final URL and merges recommendations", async () => {
     const f = gateFixture({
       "https://example.com/a": info("https://example.com/guide", "The guide"),
@@ -281,5 +350,31 @@ describe("reverifyMaterial", () => {
     expect(ok?.fetchedTitle).toBe("The guide");
     expect(verifyMaterialSig(ok!, ok!.sig, SECRET)).toBe(true);
     expect(await reverifyMaterial({ ...base, url: "https://example.com/gone" }, f.fetcher, f.books, SECRET)).toBeNull();
+  });
+
+  it("keeps a researched book Open Library still matches, even when its page is gone", async () => {
+    const f = gateFixture({ "https://example.com/gone": new Error("404") });
+    const book = {
+      id: "M1",
+      origin: "research" as const,
+      type: "link" as const,
+      kind: "book" as const,
+      url: "https://example.com/gone",
+      title: "AI Engineering",
+      author: "Chip Huyen",
+      year: null,
+      why: null,
+      backbone: true,
+      verifiedAt: "2020-01-01T00:00:00.000Z",
+      fetchedTitle: "Forged",
+      recommendedBy: [],
+      sig: "forged",
+    };
+    const found: BookLookup = { find: async () => ({ key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 }) };
+    const ok = await reverifyMaterial(book, f.fetcher, found, SECRET, undefined, () => new Date("2026-09-28T11:00:00Z"));
+    expect(ok).toMatchObject({ url: "https://openlibrary.org/works/OL1W", fetchedTitle: "AI Engineering", year: 2024, backbone: true, verifiedAt: "2026-09-28T11:00:00.000Z" });
+    expect(verifyMaterialSig(ok!, ok!.sig, SECRET)).toBe(true);
+    expect(await reverifyMaterial(book, f.fetcher, { find: async () => null }, SECRET)).toBeNull();
+    expect(await reverifyMaterial(book, f.fetcher, { find: async () => { throw new BookLookupUnavailable("503"); } }, SECRET)).toBeNull();
   });
 });

@@ -8,6 +8,8 @@ import type { FetchOutcome, SourceFetcher } from "./tools";
 /**
  * The verification gate, shared by both research arms. A material enters the plan only if code fetched it in this
  * run and the page is what the candidate claims to be. Titles are never corrected: a mismatch drops the candidate.
+ * A book is the exception: it is rarely readable online, so Open Library vouches for it by title and author, and
+ * its own page is only the link when that page happens to pass.
  */
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -15,7 +17,7 @@ import type { FetchOutcome, SourceFetcher } from "./tools";
 
 export const candidateSchema = z.object({
   url: z.string().describe("The page for this material: its own page, not a page that mentions it"),
-  title: z.string().describe("The material's title exactly as its own page gives it"),
+  title: z.string().describe("The material's title exactly as its own page gives it; for a book, its title as published"),
   kind: z.enum(MATERIAL_KINDS),
   author: z.string().nullable().optional(),
   year: z.number().nullable().optional(),
@@ -178,6 +180,8 @@ export const BACKBONE_MIN_DOMAINS = 2;
 // Open Library
 
 export interface BookMatch {
+  /** The work's path on Open Library (`/works/OL…W`), or null when the catalogue gave none. */
+  key: string | null;
   title: string;
   authors: string[];
   year: number | null;
@@ -191,6 +195,7 @@ export interface BookLookup {
 export class BookLookupUnavailable extends Error {}
 
 interface OpenLibraryDoc {
+  key?: string;
   title?: string;
   author_name?: string[];
   first_publish_year?: number;
@@ -207,7 +212,8 @@ export function pickBookMatch(title: string, author: string | null, docs: OpenLi
     if (!doc.title) continue;
     const matched = titleMatches(title, [doc.title]).ok || titleMatches(doc.title, [title]).ok;
     if (!matched || !authorsOverlap(author, doc.author_name ?? [])) continue;
-    return { title: doc.title, authors: doc.author_name ?? [], year: doc.first_publish_year ?? null };
+    const key = typeof doc.key === "string" && /^\/works\/OL\d+W$/.test(doc.key) ? doc.key : null;
+    return { key, title: doc.title, authors: doc.author_name ?? [], year: doc.first_publish_year ?? null };
   }
   return null;
 }
@@ -217,7 +223,7 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLo
     const url = new URL("https://openlibrary.org/search.json");
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     url.searchParams.set("limit", "5");
-    url.searchParams.set("fields", "title,author_name,first_publish_year");
+    url.searchParams.set("fields", "key,title,author_name,first_publish_year");
     const timeout = AbortSignal.timeout(5_000);
     let res: Response;
     try {
@@ -260,6 +266,7 @@ export interface GateInput {
   secret?: string;
   titleThreshold?: number;
   concurrency?: number;
+  now?: () => Date;
 }
 
 export interface GateResult {
@@ -291,6 +298,34 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out;
 }
 
+/** What a candidate's own page turned out to be, or why it cannot be used. */
+type PageCheck =
+  | { ok: true; url: string; fetchedTitle: string | null; verifiedAt: string; author: string | null }
+  | { ok: false; reason: string };
+
+/** The page must have opened, carry the claimed title, and live where its kind plausibly lives (`kind: null` skips that). */
+function checkPage(claim: { url: string; title: string; kind: MaterialKind | null }, outcome: FetchOutcome, threshold: number): PageCheck {
+  if (!outcome.ok) return { ok: false, reason: outcome.reason };
+  const match = titleMatches(claim.title, [outcome.page.title, outcome.page.ogTitle, outcome.page.h1], threshold);
+  if (!match.ok) {
+    const saw = match.matched ? `the page is titled “${clip(match.matched, 80)}”` : "the page has no title";
+    return { ok: false, reason: `title doesn't match: ${saw}` };
+  }
+  const url = canonicalUrl(outcome.page.finalUrl) ?? canonicalUrl(claim.url) ?? claim.url;
+  const kindIssue = claim.kind ? kindProblem(claim.kind, url) : null;
+  if (kindIssue) return { ok: false, reason: kindIssue };
+  return { ok: true, url, fetchedTitle: clip(match.matched, 300), verifiedAt: outcome.fetchedAt, author: outcome.page.author };
+}
+
+/**
+ * A matched book's Open Library entry, standing in for a page of its own. With no page to confirm the claim, the
+ * match has to rest on the author as well as the title, so both sides must name one.
+ */
+function catalogueEntry(match: BookMatch, claimedAuthor: string | null | undefined, now: () => Date): PageCheck | null {
+  if (!match.key || !claimedAuthor?.trim() || match.authors.length === 0) return null;
+  return { ok: true, url: `https://openlibrary.org${match.key}`, fetchedTitle: clip(match.title, 300), verifiedAt: now().toISOString(), author: null };
+}
+
 function pageTitle(outcome: FetchOutcome & { ok: true }): string | null {
   return outcome.page.ogTitle ?? outcome.page.title ?? outcome.page.h1;
 }
@@ -314,6 +349,7 @@ function learnerTitle(source: SourceInput, fetched: string | null): string {
 export async function runGate(input: GateInput): Promise<GateResult> {
   const secret = input.secret ?? signingSecret();
   const threshold = input.titleThreshold ?? TITLE_MATCH_THRESHOLD;
+  const now = input.now ?? (() => new Date());
   const dropped: DroppedMaterial[] = [];
   const drop = (title: string, reason: string, url?: string) => {
     if (process.env.NODE_ENV !== "test") console.info(`[research] dropped "${title}"${url ? ` <${url}>` : ""}: ${reason}`);
@@ -364,14 +400,18 @@ export async function runGate(input: GateInput): Promise<GateResult> {
 
   // 2. Researched candidates: read every one (the arm's reads are reused), then check what came back.
   const seen = new Set([...input.seenUrls].map((u) => canonicalUrl(u) ?? u));
+  const readable = (c: Candidate) => !!canonicalUrl(c.url) && c.url.trim().toLowerCase().startsWith("https://");
   const valid = input.candidates.filter((c) => {
-    if (canonicalUrl(c.url) && c.url.trim().toLowerCase().startsWith("https://")) return true;
+    // A book goes on without an address of its own: Open Library is what vouches for it.
+    if (readable(c) || c.kind === "book") return true;
     drop(c.title, "not an https address", c.url);
     return false;
   });
-  const outcomes = await mapLimit(valid, input.concurrency ?? 6, (c) => fetchAnnounced(input, c.url.trim()));
-  const bookChecks = await mapLimit(valid.map((c, i) => ({ c, i })), 4, async ({ c, i }) => {
-    if (c.kind !== "book" || !outcomes[i].ok) return null;
+  const outcomes = await mapLimit(valid, input.concurrency ?? 6, async (c): Promise<FetchOutcome> =>
+    readable(c) ? fetchAnnounced(input, c.url.trim()) : { ok: false, url: c.url, reason: "not an https address" },
+  );
+  const bookChecks = await mapLimit(valid, 4, async (c) => {
+    if (c.kind !== "book") return null;
     try {
       return { match: await input.books.find(c.title, c.author ?? null, input.signal), unavailable: false };
     } catch {
@@ -382,18 +422,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
   const accepted: Accepted[] = [];
   const byFinalUrl = new Map<string, Accepted>();
   valid.forEach((c, i) => {
-    const outcome = outcomes[i];
-    if (!outcome.ok) return drop(c.title, outcome.reason, c.url);
-    const titles = [outcome.page.title, outcome.page.ogTitle, outcome.page.h1];
-    const match = titleMatches(c.title, titles, threshold);
-    if (!match.ok) {
-      const saw = match.matched ? `the page is titled “${clip(match.matched, 80)}”` : "the page has no title";
-      return drop(c.title, `title doesn't match: ${saw}`, c.url);
-    }
-    const finalUrl = canonicalUrl(outcome.page.finalUrl) ?? canonicalUrl(c.url)!;
-    const kindIssue = kindProblem(c.kind, finalUrl);
-    if (kindIssue) return drop(c.title, kindIssue, c.url);
-
+    let page = checkPage(c, outcomes[i], threshold);
     let year = validYear(c.year);
     let bookMatched = false;
     if (c.kind === "book") {
@@ -401,27 +430,30 @@ export async function runGate(input: GateInput): Promise<GateResult> {
       if (check?.match) {
         bookMatched = true;
         year = check.match.year ?? year;
+        // The book is real. If its own page cannot be used, its Open Library entry is the link.
+        if (!page.ok) page = catalogueEntry(check.match, c.author, now) ?? page;
       } else if (check?.unavailable) {
-        // Keep the book but unmatched: no Open Library year, and it can never be the backbone.
+        // With a page that passes, keep the book but unmatched: no Open Library year, and never the backbone.
         year = null;
+        if (!page.ok) page = { ok: false, reason: `${page.reason}; Open Library was unavailable` };
       } else {
         return drop(c.title, "no matching book on Open Library", c.url);
       }
     }
+    if (!page.ok) return drop(c.title, page.reason, c.url);
 
     const recommendedBy = [...new Set(c.recommendedBy.map((r) => canonicalUrl(r)).filter((r): r is string => !!r && seen.has(r)))].slice(0, 10);
-    const fetchedTitle = clip(match.matched, 300);
-    const verifiedAt = outcome.fetchedAt;
+    const { url: finalUrl, fetchedTitle, verifiedAt } = page;
     const fields = {
       kind: c.kind,
-      author: clip(c.author ?? outcome.page.author, 200),
+      author: clip(c.author ?? page.author, 200),
       year,
       why: clip(c.why, 400),
       recommendedBy,
     };
 
     // A candidate that is one of the learner's own sources enriches it instead of duplicating it.
-    const mine = learnerByUrl.get(finalUrl) ?? learnerByUrl.get(canonicalUrl(c.url)!);
+    const mine = learnerByUrl.get(finalUrl) ?? learnerByUrl.get(canonicalUrl(c.url) ?? c.url);
     if (mine) {
       Object.assign(mine.material, { ...fields, why: mine.material.why ?? fields.why });
       mine.bookMatched = bookMatched;
@@ -482,7 +514,8 @@ function validYear(year: number | null | undefined): number | null {
 
 /**
  * Re-checks one researched material whose signature failed on save: the page must still open and still carry the
- * title the material claims. Returns the re-signed material, or null to drop it.
+ * title the material claims, or, for a book, Open Library must still match it. Returns the re-signed material, or
+ * null to drop it.
  */
 export async function reverifyMaterial(
   material: Material,
@@ -490,26 +523,25 @@ export async function reverifyMaterial(
   books: BookLookup,
   secret: string = signingSecret(),
   signal?: AbortSignal,
+  now: () => Date = () => new Date(),
 ): Promise<Material | null> {
-  const outcome = await fetcher.fetch(material.url, signal);
-  if (!outcome.ok) return null;
-  const match = titleMatches(material.title, [outcome.page.title, outcome.page.ogTitle, outcome.page.h1]);
-  if (!match.ok) return null;
-  const url = canonicalUrl(outcome.page.finalUrl) ?? material.url;
-  if (material.origin === "research" && kindProblem(material.kind, url)) return null;
+  const researched = material.origin === "research";
+  const claim = { url: material.url, title: material.title, kind: researched ? material.kind : null };
+  let page = checkPage(claim, await fetcher.fetch(material.url, signal), TITLE_MATCH_THRESHOLD);
   let year = material.year;
   let backbone = material.backbone;
-  if (material.origin === "research" && material.kind === "book") {
+  if (researched && material.kind === "book") {
     try {
       const hit = await books.find(material.title, material.author, signal);
       if (!hit) return null;
       year = hit.year ?? year;
+      if (!page.ok) page = catalogueEntry(hit, material.author, now) ?? page;
     } catch {
       year = null;
       backbone = false;
     }
   }
-  const fetchedTitle = clip(match.matched, 300);
-  const verifiedAt = outcome.fetchedAt;
+  if (!page.ok) return null;
+  const { url, fetchedTitle, verifiedAt } = page;
   return { ...material, url, year, backbone, fetchedTitle, verifiedAt, sig: signMaterial({ url, fetchedTitle, verifiedAt }, secret) };
 }

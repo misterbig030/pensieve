@@ -81,7 +81,7 @@ function fetcherFor(pages: Record<string, PageInfo> = PAGES) {
   return { fetcher: new SourceFetcher(fetchPage), fetchPage };
 }
 
-const books: BookLookup = { find: async () => ({ title: "Core Textbook", authors: ["A. Author"], year: 2023 }) };
+const books: BookLookup = { find: async () => ({ key: "/works/OL1W", title: "Core Textbook", authors: ["A. Author"], year: 2023 }) };
 
 const LIST: CandidateList = {
   learner: [{ url: "https://learner.example.com/mine", kind: "essay", why: "Where the learner started" }],
