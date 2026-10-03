@@ -229,3 +229,8 @@
 .caret-blink {
   animation: caret-blink 0.8s ease-in-out infinite;
 }
+
+/* The admin model-calls dock pins to the window's right edge and asks the page to make room for it. */
+body {
+  padding-right: var(--admin-dock, 0px);
+}

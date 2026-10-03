@@ -20,6 +20,15 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment
+
+Besides the database, Clerk and AI Gateway keys:
+
+- `TAVILY_API_KEY`: web search for the research step. Without it, plans draft from the learner's own sources and say
+  research was unavailable.
+- `MATERIALS_SIGNING_SECRET`: signs verified materials so a forged "verified" badge cannot be saved. Without it a
+  random per-process secret is used, and plans confirmed on another instance re-verify their materials.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

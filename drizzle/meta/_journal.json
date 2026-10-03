@@ -50,6 +50,13 @@
       "when": 1789597879488,
       "tag": "0006_drop_outline_items",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790562380992,
+      "tag": "0007_materials",
+      "breakpoints": true
     }
   ]
 }

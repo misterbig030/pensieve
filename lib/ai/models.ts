@@ -18,6 +18,8 @@ export type AiModelId = (typeof AVAILABLE_MODELS)[number]["id"];
 
 export const DEFAULT_OUTLINE_MODEL: AiModelId = "anthropic/claude-haiku-4.5";
 export const DEFAULT_CONTENT_MODEL: AiModelId = "anthropic/claude-sonnet-5";
+/** Research judges which sources agree, which needs more than the outline model. Arm C in the eval uses the same. */
+export const DEFAULT_RESEARCH_MODEL: AiModelId = "anthropic/claude-sonnet-5";
 
 interface TokenUsage {
   inputTokens?: number;

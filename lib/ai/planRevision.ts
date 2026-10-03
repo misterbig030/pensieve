@@ -13,6 +13,8 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
+import { aliasMaterials, resolveCoverRefs, resolveMaterialRefs, type MaterialAliases } from "@/lib/materials";
+import type { CoverRefDraft, MaterialRefDraft } from "@/lib/schemas/material";
 import { revisedTreeSchema, type RevisedTree } from "@/lib/schemas/plan";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
@@ -30,12 +32,16 @@ interface RevisedUnit {
   title: string;
   summary: string;
   days: number;
+  covers?: CoverRefDraft[];
+  materials?: MaterialRefDraft[];
   children?: RevisedUnit[];
 }
 
 /**
  * Turns the model's revised tree back into `PlanNode`s. Kept nodes (by ref) keep their id and status; locked nodes
  * are restored verbatim from the original tree; new nodes get temporary ids. Throws when a locked node went missing.
+ * With `aliases`, material references come back too: a field the model left out keeps the node's old references,
+ * headings keep `covers`, leaves keep `materials`, and ids not in the list are dropped.
  */
 export function applyRevision(
   original: PlanNode,
@@ -43,6 +49,7 @@ export function applyRevision(
   revised: RevisedTree,
   lockBefore: number,
   granularity: Granularity,
+  aliases?: MaterialAliases,
 ): PlanNode {
   const byRef = new Map<string, PlanNode>();
   for (const [id, ref] of refs) {
@@ -60,6 +67,9 @@ export function applyRevision(
     const children = unit.children && below ? unit.children.map((c) => convert(c, below)) : null;
     const len = level === "day" ? 1 : Math.max(1, Math.round(unit.days));
     const leafWeek = children === null && level !== "day" && granularity === "week";
+    const leaf = children === null && (level === "day" || leafWeek);
+    const covers = aliases && unit.covers !== undefined ? resolveCoverRefs(unit.covers, aliases).refs : kept?.covers;
+    const materials = aliases && unit.materials !== undefined ? resolveMaterialRefs(unit.materials, aliases).refs : kept?.materials;
     return makeNode({
       id: kept?.id,
       level,
@@ -70,6 +80,8 @@ export function applyRevision(
       budgetHours: leafWeek ? (kept?.budgetHours ?? budgetFor(len)) : null,
       manualSplit: kept?.manualSplit ?? false,
       children,
+      covers: leaf ? undefined : covers,
+      materials: leaf ? materials : undefined,
     });
   };
 
@@ -108,8 +120,10 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       model: DEFAULT_OUTLINE_MODEL,
       schema: revisedTreeSchema,
       prompt: buildRevisionPrompt({ ...input, tree, refs }),
+      label: `Revision · ${input.changeRequest.length > 60 ? `${input.changeRequest.slice(0, 57)}…` : input.changeRequest}`,
     },
     { ...input.log, caller: "outline_revision" },
   );
-  return { tree: applyRevision(tree, refs, object, input.lockBefore, input.granularity), costUsd };
+  const aliases = input.materials.length > 0 ? aliasMaterials(input.materials) : undefined;
+  return { tree: applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases), costUsd };
 }

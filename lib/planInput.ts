@@ -1,5 +1,6 @@
 import { layout, makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { PlanNodeInput, PlanTreeInput } from "@/lib/schemas/plan";
+import type { CoverRef, MaterialRef } from "@/lib/schemas/material";
 
 interface NodeInputLike {
   id: string;
@@ -10,6 +11,8 @@ interface NodeInputLike {
   status?: PlanNodeInput["status"];
   budgetHours?: number | null;
   manualSplit?: boolean;
+  covers?: CoverRef[];
+  materials?: MaterialRef[];
   children?: NodeInputLike[] | null;
 }
 
@@ -23,6 +26,8 @@ function fromInput(input: NodeInputLike): PlanNode {
     status: input.status,
     budgetHours: input.budgetHours ?? null,
     manualSplit: input.manualSplit ?? false,
+    covers: input.covers,
+    materials: input.materials,
     children: input.children ? input.children.map(fromInput) : null,
   });
 }
@@ -43,6 +48,8 @@ export function toTreeInput(root: PlanNode): PlanTreeInput {
     status: node.status,
     budgetHours: node.budgetHours,
     manualSplit: node.manualSplit,
+    ...(node.covers?.length ? { covers: node.covers } : {}),
+    ...(node.materials?.length ? { materials: node.materials } : {}),
     children: node.children ? (node.children.map(strip) as PlanNodeInput["children"]) : null,
   });
   return (root.children ?? []).map(strip);

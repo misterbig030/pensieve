@@ -10,7 +10,7 @@ export interface SourceInput {
 }
 
 export const sourceInputSchema = z.object({
-  url: z.string().trim().min(1),
+  url: z.string().trim().min(1).max(2000),
   title: z.string().trim().optional(),
   type: z.enum(SOURCE_TYPES),
 });

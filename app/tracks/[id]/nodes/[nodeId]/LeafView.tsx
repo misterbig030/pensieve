@@ -5,6 +5,8 @@ import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { ReadTable, type ReadRow } from "@/components/pensieve/ReadTable";
+import { ShieldCheck } from "lucide-react";
 import { formatCostUsd } from "@/lib/formatCost";
 import { generateLeafContentAction } from "./actions";
 import { logSessionAction, markCompleteAction } from "../../actions";
@@ -24,9 +26,12 @@ interface Props {
   initialContent: { contentMarkdown: string; citations: { title: string; url: string }[] } | null;
   youtubeSources: Source[];
   isCompleted: boolean;
+  /** The leaf's Read table; empty for plans saved before materials were assigned. */
+  readRows: ReadRow[];
+  budgetMinutes: number;
 }
 
-export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, initialContent, youtubeSources, isCompleted }: Props) {
+export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, initialContent, youtubeSources, isCompleted, readRows, budgetMinutes }: Props) {
   const [content, setContent] = useState(initialContent);
   const [sessions, setSessions] = useState(initialSessions);
   const [hoursInput, setHoursInput] = useState("1");
@@ -107,27 +112,35 @@ export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, 
     </div>
   );
 
+  const readTable = readRows.length > 0 && <ReadTable rows={readRows} budgetMinutes={budgetMinutes} />;
+  const provenance = readRows.length > 0 && <WhereTheseComeFrom rows={readRows} />;
+
   if (!content) {
     return (
       <div className="space-y-5">
+        {readTable}
         {sessionCard}
         <div className="elev-sm flex flex-col items-center gap-3.5 rounded-[32px] bg-secondary px-6 py-12 text-center">
           <div className="size-11 rounded-full bg-accent-100" />
           <h3 className="m-0">{isWeek ? "This week's material isn't written yet" : "Today's lesson isn't written yet"}</h3>
           <p className="m-0 max-w-[38ch] text-muted-foreground">
-            Generate it now — Pensieve will pull in your sources and cite what it uses.
+            {readRows.length > 0
+              ? `Written from the ${readRows.length === 1 ? "material" : `${readRows.length} materials`} above, and citing only ${readRows.length === 1 ? "it" : "them"}. Generate it when you start.`
+              : "Generate it now — Pensieve will pull in your sources and cite what it uses."}
           </p>
           <Button onClick={handleGenerate} disabled={isPending}>
             {isWeek ? "Generate this week's material" : "Generate today's lesson"}
           </Button>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
+        {provenance}
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
+      {readTable}
       {sessionCard}
       <div className="elev-sm space-y-4 rounded-[32px] bg-card p-8">
         <div className="space-y-4">
@@ -181,7 +194,37 @@ export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, 
       </div>
       {costUsd !== null && <p className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(costUsd)}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {provenance}
     </div>
+  );
+}
+
+/** "Where these come from": when the pages were opened and checked, and how the textbook was chosen. */
+function WhereTheseComeFrom({ rows }: { rows: ReadRow[] }) {
+  const checked = rows.filter((r) => r.material.verifiedAt);
+  const unchecked = rows.length - checked.length;
+  const latest = checked.map((r) => r.material.verifiedAt!).sort().at(-1);
+  const backbone = rows.find((r) => r.material.backbone)?.material;
+  const parts: string[] = [];
+  if (latest) {
+    const date = new Date(latest).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    parts.push(
+      `Pensieve opened ${checked.length === rows.length ? (rows.length === 1 ? "this page" : "each page") : `${checked.length} of these pages`} on ${date} and checked ${checked.length === 1 ? "it is" : "each is"} what it claims to be.`,
+    );
+  }
+  if (unchecked > 0) parts.push(`${unchecked === 1 ? "One is" : `${unchecked} are`} your own, listed as you gave ${unchecked === 1 ? "it" : "them"}.`);
+  if (backbone && backbone.recommendedBy.length > 0) {
+    parts.push(`The textbook was recommended by ${backbone.recommendedBy.length} independent source${backbone.recommendedBy.length === 1 ? "" : "s"}.`);
+  }
+  if (parts.length === 0) return null;
+  return (
+    <section aria-labelledby="src-h" className="flex flex-col gap-2 rounded-[28px] bg-foreground/4 px-[22px] py-[18px]">
+      <h2 id="src-h" className="m-0 flex items-center gap-2 font-sans text-[13px] font-semibold">
+        <ShieldCheck className="size-[15px] text-accent-2-700" strokeWidth={2.5} />
+        Where these come from
+      </h2>
+      <p className="m-0 text-[12.5px] leading-normal text-neutral-800">{parts.join(" ")}</p>
+    </section>
   );
 }
 

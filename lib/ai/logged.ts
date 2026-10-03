@@ -1,4 +1,4 @@
-import { generateObject, type FlexibleSchema, type LanguageModelUsage } from "ai";
+import { generateObject, type FlexibleSchema, type LanguageModel, type LanguageModelUsage } from "ai";
 import type { GenerationCaller } from "@/lib/db/schema";
 import { estimateCostUsd, type AiModelId } from "./models";
 
@@ -21,12 +21,31 @@ export interface GenerationLogRow {
 
 export type OnGenerationLog = (row: GenerationLogRow) => void | Promise<void>;
 
+/** A whole model call as the admin panel shows it: the log row plus what went in and what came back. Never stored. */
+export interface ModelCall extends GenerationLogRow {
+  /** What the call was for, in the app's words ("Top level · 4 weeks", "Revision", "Answer"). */
+  label: string;
+  /** The system prompt when the call has one (chat); null for single-prompt calls. */
+  system: string | null;
+  /** The user-side prompt: the single prompt for object calls, the transcript for chat. */
+  prompt: string;
+  /** The raw model output before the app reconciled it: JSON for object calls, text plus tool calls for chat. */
+  response: string;
+  finishReason: string | null;
+  /** Short checks the generator can state about the response ("4 of 4 units", "spans kept"). */
+  facts: string[];
+}
+
+export type OnModelCall = (call: ModelCall) => void;
+
 /** Who is calling and where to send the log row. `onLog` omitted means no side effect (eval harness, tests). */
 export interface GenerationLogMeta {
   caller: GenerationCaller;
   trackId?: string;
   userId?: string;
   onLog?: OnGenerationLog;
+  /** Receives the full call (prompt and raw response) for the admin panel. Omitted means nothing is captured. */
+  onCall?: OnModelCall;
 }
 
 /** The subset of `GenerationLogMeta` that callers of the generators supply; the generator fills in `caller`. */
@@ -34,8 +53,17 @@ export type GenerationLogContext = Omit<GenerationLogMeta, "caller">;
 
 export interface LoggedGenerateObjectOptions<T> {
   model: AiModelId;
+  /** Runs the call on this model instance instead of `model` through the gateway; `model` still names it in the log. */
+  languageModel?: LanguageModel;
   schema: FlexibleSchema<T>;
   prompt: string;
+  /** Shown in the admin panel's call list; defaults to the caller name. */
+  label?: string;
+  /** Short checks shown beside the raw response in the admin panel. */
+  facts?: string[];
+  /** More checks computed from the validated object, appended to `facts`. */
+  check?: (object: T) => string[];
+  abortSignal?: AbortSignal;
 }
 
 export interface LoggedGenerateObjectResult<T> {
@@ -91,10 +119,11 @@ export async function loggedGenerateObject<T>(
   meta: GenerationLogMeta,
 ): Promise<LoggedGenerateObjectResult<T>> {
   const startedAt = performance.now();
-  const { object, usage } = await generateObject({
-    model: opts.model,
+  const { object, usage, finishReason } = await generateObject({
+    model: opts.languageModel ?? opts.model,
     schema: opts.schema,
     prompt: opts.prompt,
+    ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
   });
   const latencyMs = Math.round(performance.now() - startedAt);
   const row = buildGenerationLogRow({
@@ -106,6 +135,15 @@ export async function loggedGenerateObject<T>(
     userId: meta.userId,
   });
   await emitGenerationLog(meta.onLog, row);
+  meta.onCall?.({
+    ...row,
+    label: opts.label ?? meta.caller,
+    system: null,
+    prompt: opts.prompt,
+    response: JSON.stringify(object, null, 2),
+    finishReason: finishReason ?? null,
+    facts: [...(opts.facts ?? []), ...(opts.check?.(object as T) ?? [])],
+  });
   const costUsd = row.costUsd;
 
   return { object: object as T, usage, latencyMs, costUsd };

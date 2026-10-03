@@ -1,6 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { isAdminUserId } from "@/lib/admin";
+import { withCallEvents } from "@/lib/ai/callEvents";
 import { runPlanChat } from "@/lib/ai/planChat";
 import { db } from "@/lib/db/client";
 import { insertGenerationLog } from "@/lib/db/generationLog";
@@ -8,14 +10,14 @@ import { tracks } from "@/lib/db/schema";
 import { ndjsonResponse } from "@/lib/ndjson";
 import { fromTreeInput } from "@/lib/planInput";
 import { granularitySchema, planTreeInputSchema } from "@/lib/schemas/plan";
-import { sourceInputSchema } from "@/lib/schemas/source";
+import { materialListSchema } from "@/lib/schemas/material";
 
 const bodySchema = z.object({
   mode: z.enum(["create", "adjust"]),
   topic: z.string().trim().min(1).max(200),
   granularity: granularitySchema,
   instructions: z.string().trim().max(2000).optional(),
-  sources: z.array(sourceInputSchema).max(50),
+  materials: materialListSchema,
   tree: planTreeInputSchema,
   lockBefore: z.number().int().min(0).optional(),
   trackId: z.string().uuid().optional(),
@@ -23,6 +25,7 @@ const bodySchema = z.object({
     .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().max(8000) }))
     .min(1)
     .max(60),
+  debug: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -45,10 +48,10 @@ export async function POST(request: Request) {
   }
 
   const tree = fromTreeInput(body.tree);
+  const debug = body.debug === true && isAdminUserId(userId);
   return ndjsonResponse(
-    runPlanChat(
-      { ...body, days: tree.len, instructions: body.instructions || undefined, tree },
-      { log: { userId, trackId: body.trackId, onLog: insertGenerationLog } },
+    withCallEvents(debug, { userId, trackId: body.trackId, onLog: insertGenerationLog }, (log) =>
+      runPlanChat({ ...body, days: tree.len, instructions: body.instructions || undefined, tree }, { log }),
     ),
   );
 }

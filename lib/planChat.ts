@@ -1,7 +1,15 @@
+import type { ModelCall } from "@/lib/ai/logged";
+import type { ResearchEvent } from "@/lib/ai/research/events";
 import type { Granularity, PlanLevel, PlanNode } from "@/lib/planTree";
 import type { ChangedNodes } from "@/lib/planSummary";
+import type { Material } from "@/lib/schemas/material";
 import type { PlanTreeInput } from "@/lib/schemas/plan";
 import type { SourceInput } from "@/lib/schemas/source";
+
+export type { ModelCall, ResearchEvent };
+
+/** Admins only: one model call with its exact prompt and raw response. Sent when the request set `debug` and the server agrees. */
+export type CallEvent = { type: "call"; call: ModelCall };
 
 /** Messages shown in the conversation rail. Kept as plain data so the rail is a pure render of this list. */
 export type ChatMessage =
@@ -33,20 +41,31 @@ interface PlanContext {
   days: number;
   granularity: Granularity;
   instructions?: string;
-  sources: SourceInput[];
+  /** Ask for a `call` event per model call. Honoured only for admins; ignored for everyone else. */
+  debug?: boolean;
 }
 
-/** Request body for POST /api/plan/draft. */
-export type PlanDraftRequest = PlanContext;
+/** Request body for POST /api/plan/draft. Research runs first and adds to the learner's own materials. */
+export interface PlanDraftRequest extends PlanContext {
+  /** The learner's own sources, as they typed them. */
+  materials: SourceInput[];
+}
 
-/** Events streamed back from POST /api/plan/draft. Nodes arrive one at a time, each placed under `parentId`. */
+/**
+ * Events streamed back from POST /api/plan/draft: the research events first, ending with `research.done` and the
+ * materials list, then nodes one at a time, each placed under `parentId`.
+ */
 export type PlanDraftEvent =
+  | ResearchEvent
   | { type: "node"; parentId: string; node: PlanNode }
   | { type: "finish"; root: PlanNode; costUsd: number }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | CallEvent;
 
 /** Request body for POST /api/plan/expand: plan the children of one node of the draft. */
 export interface PlanExpandRequest extends PlanContext {
+  /** The plan's materials list; node references point into it. */
+  materials: Material[];
   /** The draft as `planTreeInputSchema` (top-level units, derived fields stripped). */
   tree: PlanTreeInput;
   nodeId: string;
@@ -57,10 +76,12 @@ export interface PlanExpandRequest extends PlanContext {
 export type PlanExpandEvent =
   | { type: "child"; node: PlanNode }
   | { type: "finish"; children: PlanNode[]; costUsd: number }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | CallEvent;
 
 /** Request body for POST /api/plan/chat. */
 export interface PlanChatRequest extends PlanContext {
+  materials: Material[];
   mode: "create" | "adjust";
   tree: PlanTreeInput;
   /** Adjust mode only: the last completed day; nothing on or before it may change. */
@@ -76,7 +97,8 @@ export type PlanChatEvent =
   | { type: "revising" }
   | { type: "revised"; tree: PlanNode; changed: ChangedNodes; costUsd: number }
   | { type: "finish"; costUsd: number }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | CallEvent;
 
 let counter = 0;
 export function nextMessageId(): string {

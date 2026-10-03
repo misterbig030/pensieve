@@ -5,14 +5,22 @@ import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConversationRail } from "@/components/pensieve/ConversationRail";
+import { MaterialsList } from "@/components/pensieve/MaterialsList";
+import { ModelCallsPanel } from "@/components/pensieve/ModelCallsPanel";
+import { ResearchProgress } from "@/components/pensieve/ResearchProgress";
+import type { DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
+import { assignmentsOf, removeMaterialRefs } from "@/lib/materials";
+import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
+import { useAdminMode, writeAdminMode } from "@/lib/adminMode";
 import { formatCostUsd } from "@/lib/formatCost";
 import { readNdjson } from "@/lib/ndjson";
 import {
   nextMessageId,
   toTranscript,
   type ChatMessage,
+  type ModelCall,
   type PlanChatEvent,
   type PlanChatRequest,
   type PlanDraftEvent,
@@ -24,6 +32,7 @@ import { toTreeInput } from "@/lib/planInput";
 import { latestChangeNote, summarizePlan } from "@/lib/planSummary";
 import {
   childLevel,
+  capitalize,
   childSpans,
   cloneTree,
   currentLeaf,
@@ -39,6 +48,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
+import type { Material } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +58,10 @@ export interface PlanWorkspaceProps {
   days: number;
   granularity: Granularity;
   instructions?: string;
+  /** Create mode: the learner's own sources, as typed. Research adds to them. */
   sources: SourceInput[];
+  /** Adjust mode: the saved materials list. */
+  initialMaterials?: Material[];
   /** Adjust mode: the plan as it stands. Create mode: omit and the draft streams in. */
   initialTree?: PlanNode;
   lockBefore?: number;
@@ -57,7 +70,7 @@ export interface PlanWorkspaceProps {
   backLabel: string;
   heading: string;
   subtext: string;
-  onConfirm: (tree: PlanNode, summary: string) => Promise<void>;
+  onConfirm: (tree: PlanNode, summary: string, materials: Material[]) => Promise<void>;
 }
 
 function leafLevel(level: PlanLevel, granularity: Granularity): boolean {
@@ -94,6 +107,14 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // Admin panel: the switch lives in the top nav; calls arrive as `call` events (admins only) and live only in this tab.
+  const adminOn = useAdminMode();
+  const [calls, setCalls] = useState<ModelCall[]>([]);
+  // Research runs first in create mode; its list is what every unit references.
+  const [materials, setMaterials] = useState<Material[]>(() => props.initialMaterials ?? []);
+  const [dropped, setDropped] = useState<DroppedMaterial[]>([]);
+  const [notice, setNotice] = useState<ResearchNotice | undefined>(undefined);
+  const [research, setResearch] = useState<ResearchProgressState | null>(null);
 
   const railOpenRef = useRef(railOpen);
   const draftStarted = useRef(false);
@@ -111,12 +132,19 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setDrafting(true);
     setError(null);
     setTree(makeRoot([]));
+    setMaterials([]);
+    setDropped([]);
+    setNotice(undefined);
+    setResearch(initialResearch());
     const topLevel = topLevelFor(days);
-    const body: PlanDraftRequest = { topic, days, granularity, instructions, sources };
+    // `debug` is always requested; the server only honours it for admins, so the switch is purely a view toggle.
+    const body: PlanDraftRequest = { topic, days, granularity, instructions, materials: sources, debug: true };
+    const learnerUrls = new Set(sources.map((s) => s.url));
     // The stream is the source of truth while drafting; React state is a snapshot of these two.
     const draftRoot = makeRoot([]);
     draftRoot.len = days;
     const slots: Record<string, PendingSlots> = { root: { count: topSpans(days).length, groups: !leafLevel(topLevel, granularity) } };
+    let researched: Material[] = [];
     const publish = () => {
       setTree(cloneTree(layout(draftRoot, 1, new Set(Object.keys(slots)))));
       setPending({ ...slots });
@@ -129,7 +157,19 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       });
       let finished = false;
       await readNdjson<PlanDraftEvent>(response, (event) => {
-        if (event.type === "node") {
+        if (event.type === "call") {
+          setCalls((cs) => [...cs, event.call]);
+        } else if (event.type.startsWith("research.")) {
+          const researchEvent = event as Extract<PlanDraftEvent, { type: `research.${string}` }>;
+          setResearch((r) => reduceResearch(r ?? initialResearch(), researchEvent, learnerUrls));
+          if (researchEvent.type === "research.done") {
+            researched = researchEvent.materials;
+            setMaterials(researchEvent.materials);
+            setDropped(researchEvent.dropped);
+            setNotice(researchEvent.notice);
+            publish();
+          }
+        } else if (event.type === "node") {
           const parent = findNode(draftRoot, event.parentId);
           if (!parent) return;
           const firstChild = !parent.children || parent.children.length === 0;
@@ -151,7 +191,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           setPending({});
           setCostUsd((c) => c + event.costUsd);
           setDrafting(false);
-          pushAssistant(draftedText(layout(event.root)));
+          pushAssistant(draftedText(layout(event.root), researched));
         } else if (event.type === "error") {
           throw new Error(event.message);
         }
@@ -160,6 +200,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     } catch (err) {
       setDrafting(false);
       setPending({});
+      setResearch((r) => (r ? { ...r, running: false, reading: null } : r));
       setError(err instanceof Error ? err.message : "Drafting failed. Try again.");
     }
   }, [topic, days, granularity, instructions, sources, pushAssistant]);
@@ -187,7 +228,17 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       next.delete(nodeId);
       return next;
     });
-    const body: PlanExpandRequest = { topic, days: tree.len, granularity, instructions, sources, tree: toTreeInput(tree), nodeId, reason };
+    const body: PlanExpandRequest = {
+      topic,
+      days: tree.len,
+      granularity,
+      instructions,
+      materials,
+      tree: toTreeInput(tree),
+      nodeId,
+      reason,
+      debug: true,
+    };
     const label = labelOf(tree, node);
     try {
       const response = await fetch("/api/plan/expand", {
@@ -197,16 +248,15 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       });
       let finished = false;
       await readNdjson<PlanExpandEvent>(response, (event) => {
-        if (event.type === "child") {
+        if (event.type === "call") {
+          setCalls((cs) => [...cs, event.call]);
+        } else if (event.type === "child") {
           setTree((t) => {
             const next = cloneTree(t);
             const parent = findNode(next, nodeId);
             if (!parent) return t;
             parent.children = [...(parent.children ?? []), event.node];
-            if (reason === "split") {
-              parent.manualSplit = true;
-              parent.budgetHours = null;
-            }
+            if (reason === "split") splitWeek(parent);
             return layout(next, 1, new Set([nodeId]));
           });
           setPending((p) => {
@@ -225,10 +275,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             const parent = findNode(next, nodeId);
             if (!parent) return t;
             parent.children = event.children;
-            if (reason === "split") {
-              parent.manualSplit = true;
-              parent.budgetHours = null;
-            }
+            if (reason === "split") splitWeek(parent);
             return layout(next);
           });
           setPending((p) => {
@@ -277,11 +324,12 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       days: tree.len,
       granularity,
       instructions,
-      sources,
+      materials,
       tree: toTreeInput(tree),
       lockBefore: isAdjust ? lockBefore : undefined,
       trackId,
       transcript: toTranscript(history),
+      debug: true,
     };
 
     let activeId: string | null = null;
@@ -313,6 +361,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       });
       await readNdjson<PlanChatEvent>(response, (event) => {
         switch (event.type) {
+          case "call":
+            setCalls((cs) => [...cs, event.call]);
+            break;
           case "text":
             appendText(event.text);
             break;
@@ -379,6 +430,13 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     }
   }
 
+  function removeMaterial(id: string) {
+    const removed = materials.find((m) => m.id === id);
+    setMaterials((ms) => ms.filter((m) => m.id !== id));
+    setTree((t) => layout(removeMaterialRefs(t, id)));
+    if (removed) setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: `Removed ${removed.title} from the materials and from the units that used it.` }]);
+  }
+
   function undo(messageId: string) {
     const target = messages.find((m) => m.id === messageId);
     if (!target || target.kind !== "change" || target.undone) return;
@@ -392,7 +450,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setConfirming(true);
     setError(null);
     try {
-      await props.onConfirm(tree, summary);
+      await props.onConfirm(tree, summary, materials);
     } catch (err) {
       unstable_rethrow(err);
       setError(err instanceof Error ? err.message : "Could not save the plan. Try again.");
@@ -410,9 +468,12 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         ? ["Why is month 2 before month 3?", "Last month should be 2 weeks", "Swap months 3 and 4"]
         : ["Why is week 2 before week 3?", "Expand week 2", "Swap weeks 3 and 4"];
   const streaming = drafting || expanding;
+  const researching = drafting && !!research?.running;
   const canConfirm = !streaming && !revising && !busy && !confirming && tops.length > 0;
   const current = isAdjust ? currentLeaf(tree) : null;
-  const draftingText = drafting
+  const draftingText = researching
+    ? "Finding materials…"
+    : drafting
     ? `Drafting ${countArrived(tree)} of ${countExpected(tree, pending)} units…`
     : expanding
       ? "Planning in detail…"
@@ -441,9 +502,33 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         )}
       >
         <div className="flex min-w-0 flex-col gap-5 max-[900px]:pb-[72px]">
+          {researching && research ? (
+            <>
+              <ResearchProgress state={research} />
+              <div className="flex flex-col gap-2.5">
+                <TreeLabel>Plan</TreeLabel>
+                <div className="flex h-16 items-center rounded-[28px] bg-foreground/5 px-[22px] text-[13px] text-muted-foreground">
+                  {capitalize(topLevel)}s start drafting as soon as the materials list is set.
+                </div>
+                <div className="h-16 rounded-[28px] bg-foreground/4" />
+                <div className="h-16 rounded-[28px] bg-foreground/3" />
+              </div>
+            </>
+          ) : (
+            <>
           <PlanSummaryCard summary={summary} loading={drafting} changed={highlight.length > 0} />
+          <MaterialsList
+            topic={topic}
+            materials={materials}
+            dropped={dropped}
+            notice={notice}
+            usesOf={(id) => assignmentsOf(tree, id).map(({ label, role }) => ({ label, role }))}
+            onRemove={streaming || busy || confirming ? undefined : removeMaterial}
+            onResearchAgain={isAdjust || streaming || busy || confirming ? undefined : () => void streamDraft()}
+          />
           <TreeLabel>{topLevel === "day" ? "Plan at a glance" : "Plan"}</TreeLabel>
           <PlanTree
+            materials={materials}
             root={tree}
             mode={mode}
             highlight={new Set(highlight)}
@@ -472,6 +557,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             onExpand={(id) => void expand(id, "expand")}
             onSplit={(id) => void expand(id, "split")}
           />
+            </>
+          )}
           <div className="flex flex-wrap items-center gap-3.5 pt-2">
             <Button onClick={confirm} disabled={!canConfirm}>
               Confirm plan
@@ -498,6 +585,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           open={railOpen}
           unread={unread}
           busy={busy || streaming}
+          disabledHint={drafting ? "Available once the plan is drafted" : undefined}
           input={input}
           suggestions={suggestions}
           onToggle={() => {
@@ -509,6 +597,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           onUndo={undo}
         />
       </div>
+      {adminOn && <ModelCallsPanel calls={calls} onClear={() => setCalls([])} onClose={() => writeAdminMode(false)} />}
     </div>
   );
 }
@@ -542,15 +631,38 @@ function countExpected(root: PlanNode, pending: Record<string, PendingSlots>): n
   return countArrived(root) + Object.values(pending).reduce((sum, s) => sum + s.count, 0);
 }
 
-function draftedText(root: PlanNode): string {
+/** A week split into days by hand: its Read table becomes the reservation its days were planned from. */
+function splitWeek(week: PlanNode): void {
+  week.manualSplit = true;
+  week.budgetHours = null;
+  if (week.materials) {
+    week.covers = week.materials.map((r) => ({ id: r.id, note: r.note }));
+    delete week.materials;
+  }
+}
+
+function materialsText(materials: Material[]): string {
+  const backbone = materials.find((m) => m.backbone);
+  const researched = materials.filter((m) => m.origin === "research").length;
+  if (backbone) {
+    const by = [backbone.author, backbone.year].filter(Boolean).join(", ");
+    const others = materials.length - 1;
+    return `Built the plan around ${backbone.title}${by ? ` (${by})` : ""}, with ${others} more material${others === 1 ? "" : "s"} listed above. `;
+  }
+  if (researched > 0) return `No textbook stood out, so units draw on the ${materials.length} materials above directly. `;
+  return "";
+}
+
+function draftedText(root: PlanNode, materials: Material[] = []): string {
   const tops = root.children ?? [];
   if (tops.length === 0) return "Nothing was drafted. Try again.";
+  const lead = materialsText(materials);
   const level = tops[0].level;
-  if (level === "day") return `Drafted ${root.len} days, one topic each. Ask me why something sits where it does, or tell me what to change.`;
+  if (level === "day") return `${lead}Drafted ${root.len} days, one topic each. Ask me why something sits where it does, or tell me what to change.`;
   const first = tops[0];
   const firstKid = first.children?.[0];
   const deeper = firstKid && firstKid.children ? ` and ${labelOf(root, firstKid)} of it into days` : firstKid && firstKid.level === "day" ? " day by day" : firstKid ? " into weeks" : "";
-  return `Drafted ${root.len} days as ${tops.length} ${level}s and planned ${labelOf(root, first)}${deeper}. Later ${level}s stay as headings until you reach them — they get planned with what you actually learned. Ask why something sits where it does, or tell me what to change.`;
+  return `${lead}Drafted ${root.len} days as ${tops.length} ${level}s and planned ${labelOf(root, first)}${deeper}. Later ${level}s stay as headings until you reach them — they get planned with what you actually learned. Ask why something sits where it does, or tell me what to change.`;
 }
 
 const NARROW_QUERY = "(max-width: 900px)";

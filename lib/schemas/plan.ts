@@ -1,14 +1,20 @@
 import { z } from "zod";
+import { coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema } from "./material";
 
 export const PLAN_LEVELS = ["month", "week", "day"] as const;
 export const planLevelSchema = z.enum(PLAN_LEVELS);
 export const granularityChoiceSchema = z.enum(["day", "week", "auto"]);
 export const granularitySchema = z.enum(["day", "week"]);
 
-/** What the model writes for one unit whose span the server already decided. */
+/**
+ * What the model writes for one unit whose span the server already decided. Headings reserve materials (`covers`);
+ * leaves assign them (`materials`). Both are left out when the plan has no materials.
+ */
 export const unitDraftSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
+  covers: z.array(coverRefDraftSchema).optional().describe("Headings only: materials this unit reserves, by id"),
+  materials: z.array(materialRefDraftSchema).optional().describe("Leaves only: this unit's Read table"),
 });
 export const unitListSchema = z.object({
   units: z.array(unitDraftSchema).min(1).max(40),
@@ -24,6 +30,8 @@ const revisedLeafSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
   days: z.number().int().min(1),
+  covers: z.array(coverRefDraftSchema).optional(),
+  materials: z.array(materialRefDraftSchema).optional(),
 });
 const revisedMidSchema = revisedLeafSchema.extend({
   children: z.array(revisedLeafSchema).min(1).max(40).optional(),
@@ -47,6 +55,8 @@ const nodeInputBase = z.object({
   status: z.enum(["pending", "generated", "completed"]).optional(),
   budgetHours: z.number().int().min(1).max(500).nullable().optional(),
   manualSplit: z.boolean().optional(),
+  covers: z.array(coverRefSchema).max(40).optional(),
+  materials: z.array(materialRefSchema).max(40).optional(),
 });
 const leafInputSchema = nodeInputBase.extend({ children: z.null().optional() });
 const midInputSchema = nodeInputBase.extend({ children: z.array(leafInputSchema).max(60).nullable().optional() });

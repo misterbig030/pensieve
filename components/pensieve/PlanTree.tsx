@@ -5,6 +5,10 @@ import type { MouseEvent, ReactNode } from "react";
 import { ChevronDown, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BudgetBar, ReadRows, readRowsFor, sumMinutes } from "@/components/pensieve/ReadTable";
+import { budgetMinutes } from "@/lib/materials";
+import { formatDuration } from "@/lib/researchProgress";
+import type { Material } from "@/lib/schemas/material";
 import {
   capitalize,
   childLevel,
@@ -42,14 +46,18 @@ export interface PlanTreeProps {
   onExpand: (id: string) => void;
   onSplit: (id: string) => void;
   leafHref?: (node: PlanNode) => string;
+  /** The plan's materials; node references resolve against them. */
+  materials?: Material[];
 }
 
-type Ctx = Omit<PlanTreeProps, "root"> & { root: PlanNode };
+type Ctx = Omit<PlanTreeProps, "root"> & { root: PlanNode; byId: ReadonlyMap<string, Material> };
 
 function gridClass(children: PlanNode[], pending?: PendingSlots): string {
   const groups = children.length > 0 ? children.every((c) => c.children !== null || childLevel(c.level) !== null && c.budgetHours === null) : !!pending?.groups;
   if (groups) return "grid-cols-[minmax(0,1fr)] gap-3.5";
   const weeks = children.some((c) => c.children === null && c.level !== "day");
+  // Planned weeks show their whole Read list, which needs the full width.
+  if (weeks && children.some((c) => (c.materials?.length ?? 0) > 0)) return "grid-cols-[minmax(0,1fr)] gap-2.5";
   return weeks ? "grid-cols-[repeat(auto-fill,minmax(215px,1fr))] gap-2.5" : "grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2.5";
 }
 
@@ -62,10 +70,11 @@ export function PlanTree(props: PlanTreeProps) {
   const { root, pending } = props;
   const children = root.children ?? [];
   const slots = pending[root.id];
+  const ctx: Ctx = { ...props, byId: new Map((props.materials ?? []).map((m) => [m.id, m])) };
   return (
     <div className={cn("grid", gridClass(children, slots))}>
       {children.map((child) => (
-        <NodeView key={child.id} node={child} depth={0} ctx={props} />
+        <NodeView key={child.id} node={child} depth={0} ctx={ctx} />
       ))}
       {slots && <Skeletons count={slots.count} groups={slots.groups} />}
     </div>
@@ -113,7 +122,9 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
   const sessions = node.sessions;
   const hasSessions = mode === "track" && !!sessions && sessions.count > 0;
   const canSplit = node.len > 1 && !locked && !done && !hasSessions && !ctx.busy;
-  const hasMeta = node.budgetHours !== null || showStatus || hasSessions || canSplit;
+  const rows = readRowsFor(node.materials, ctx.byId);
+  const isWeek = node.level !== "day";
+  const hasMeta = (node.budgetHours !== null && rows.length === 0) || showStatus || hasSessions || canSplit;
   const href = mode === "track" && ctx.leafHref ? ctx.leafHref(node) : undefined;
 
   const classes = cn(
@@ -156,11 +167,27 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
           </span>
         </span>
       </span>
-      <span className="text-[13px] leading-snug">{node.title}</span>
+      <span className="flex items-baseline gap-2">
+        <span className={cn("leading-snug", isWeek && rows.length > 0 ? "text-sm font-semibold" : "text-[13px]")}>{node.title}</span>
+        {isWeek && rows.length > 0 && node.budgetHours !== null && (
+          <span className="ml-auto shrink-0 text-xs whitespace-nowrap text-muted-foreground">{node.budgetHours} h budget</span>
+        )}
+      </span>
       {open && <span className="min-w-0 text-[12px] leading-snug opacity-80">{node.summary}</span>}
+      {rows.length > 0 &&
+        (isWeek ? (
+          <span className="mt-1 flex flex-col gap-2">
+            <ReadRows rows={rows} link={!href} />
+            <BudgetBar rows={rows} budgetMinutes={budgetMinutes(node)} />
+          </span>
+        ) : (
+          <span className="text-[11.5px] text-muted-foreground">
+            {rows.length} material{rows.length === 1 ? "" : "s"} · {formatDuration(sumMinutes(rows).must + sumMinutes(rows).should)}
+          </span>
+        ))}
       {hasMeta && (
         <span className="mt-[3px] flex flex-wrap items-center gap-1.5">
-          {node.budgetHours !== null && (
+          {node.budgetHours !== null && rows.length === 0 && (
             <Badge variant="neutral" className="text-[11px]">
               about {node.budgetHours} hours
             </Badge>
@@ -260,6 +287,7 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
         )}
       </div>
       <p className="m-0 text-[13px] leading-normal opacity-65">{node.summary}</p>
+      <CoversRow node={node} byId={ctx.byId} />
       {open && (
         <div className={cn("grid", gridClass(kids, slots))}>
           {kids.map((child) => (
@@ -273,7 +301,9 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
           <span className="flex-[1_1_220px] opacity-70">
             {locked
               ? `This ${node.level} is behind you.`
-              : `${capitalize(unit)}s here will be planned when you reach ${label.toLowerCase()}, using how the earlier ${node.level}s actually went.`}
+              : node.covers?.some((r) => ctx.byId.get(r.id)?.backbone)
+                ? `${capitalize(unit)}s here are planned when you reach ${label.toLowerCase()}. Their chapters are already reserved.`
+                : `${capitalize(unit)}s here will be planned when you reach ${label.toLowerCase()}, using how the earlier ${node.level}s actually went.`}
           </span>
           {canExpand && (
             <Button
@@ -290,6 +320,34 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+const SHOWN_COVERS = 3;
+
+/** A heading's reservation as chips: the backbone's chapters first, then the rest, "+ N more" past three. */
+function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, Material> }) {
+  const refs = (node.covers ?? []).flatMap((r) => {
+    const m = byId.get(r.id);
+    return m ? [{ m, note: r.note }] : [];
+  });
+  if (refs.length === 0) return null;
+  const sorted = [...refs].sort((a, b) => Number(b.m.backbone) - Number(a.m.backbone));
+  const shown = sorted.slice(0, SHOWN_COVERS);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="mr-0.5 text-muted-foreground">Covers</span>
+      {shown.map(({ m, note }) => (
+        <span
+          key={m.id}
+          title={note ? `${m.title} · ${note}` : m.title}
+          className={cn("max-w-[260px] truncate rounded-full px-[9px] py-[3px]", m.backbone ? "bg-accent-2-200 font-semibold text-accent-2-800" : "bg-background")}
+        >
+          {m.backbone && note ? `${m.title} ${note}` : m.title}
+        </span>
+      ))}
+      {sorted.length > SHOWN_COVERS && <span className="rounded-full bg-background px-[9px] py-[3px]">+ {sorted.length - SHOWN_COVERS} more</span>}
     </div>
   );
 }
