@@ -12,13 +12,21 @@ import type { SourceInput } from "@/lib/schemas/source";
 
 export type GoldenTag = "capability" | "regression";
 
+/**
+ * Records give the learner's sources as the learner typed them. The generators now take a materials list instead;
+ * the sampler builds one offline with `learnerMaterials`, so drafting is measured on its own and no run touches the
+ * network. (Type-only change, Oct 2: the records themselves are unchanged.)
+ */
+export type DraftInput = Omit<PlanDraftRequest, "materials"> & { sources: SourceInput[] };
+export type ReviseInput = Omit<RevisePlanInput, "log" | "materials"> & { sources: SourceInput[] };
+
 export interface DraftRecord {
   id: string;
   kind: "draft";
   tag: GoldenTag;
   /** One line: what this record is here to catch. */
   why: string;
-  input: PlanDraftRequest;
+  input: DraftInput;
   expect: {
     /** At least one appears in some title or summary (case-insensitive). */
     mustMentionAny?: string[];
@@ -34,7 +42,7 @@ export interface ReviseRecord {
   kind: "revise";
   tag: GoldenTag;
   why: string;
-  input: Omit<RevisePlanInput, "log">;
+  input: ReviseInput;
   expect: {
     /** What diffChangedNodes should report. Omitted when the request should be refused. */
     changedLevel?: PlanLevel;

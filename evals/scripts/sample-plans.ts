@@ -6,17 +6,23 @@
  * Output: evals/samples/<record-id>-<trial>.json (tree, rendered text, log rows) and evals/samples/_all-t<start>.md,
  * the rendered plans in one file for reading. `--start` numbers the first trial, so later runs add trials instead
  * of overwriting the ones already read. Nothing here scores an output; that is Task 4.
+ *
+ * Drafting only: the learner's sources become materials offline (`learnerMaterials`), research never runs and no
+ * run touches the network. The research step has its own eval in `evals/research/`.
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { config } from "dotenv";
-import type { GenerationLogRow } from "@/lib/ai/logged";
+import type { GenerationLogRow, ModelCall } from "@/lib/ai/logged";
 import { DEFAULT_OUTLINE_MODEL } from "@/lib/ai/models";
 import { streamPlanDraft } from "@/lib/ai/planDraft";
-import { renderTree } from "@/lib/ai/planPrompt";
+import { renderMaterials, renderTree } from "@/lib/ai/planPrompt";
 import { LockedNodeError, revisePlanTree } from "@/lib/ai/planRevision";
+import { aliasMaterials, learnerMaterials } from "@/lib/materials";
 import { diffChangedNodes } from "@/lib/planSummary";
 import { childSpans, layout, leavesOf, topSpans, type PlanNode } from "@/lib/planTree";
+import type { Material } from "@/lib/schemas/material";
+import type { SourceInput } from "@/lib/schemas/source";
 import { GOLDEN_V1, isMandarin, type GoldenRecord } from "../golden/plan.v1";
 
 config({ path: ".env.local", quiet: true });
@@ -34,12 +40,17 @@ interface Sample {
   error: { name: string; message: string } | null;
   input: GoldenRecord["input"];
   expect: GoldenRecord["expect"];
+  /** The materials list the model drafted against: the learner's sources, unverified, as `M1…Mn`. */
+  materials: Material[];
   tree: PlanNode | null;
+  /** The tree as the judge reads it, with each unit's material references. */
   text: string;
   /** Revise records only: the input tree as the model saw it, and what `diffChangedNodes` reports. */
   before?: string;
   changed?: { level: string | null; tags: string[] };
   calls: GenerationLogRow[];
+  /** What the generators' own checks reported per call (unknown ids, over-budget leaves, chapter order, …). */
+  checkFacts: string[];
   costUsd: number;
   latencyMs: number;
   /** One-line facts for the stdout summary; not a verdict. */
@@ -89,9 +100,22 @@ function draftFacts(root: PlanNode, days: number): string {
   return parts.join(" · ");
 }
 
+/** The record's input as the generators take it: `sources` replaced by the materials list built from them. */
+function withMaterials<T extends { sources: SourceInput[] }>(input: T, materials: Material[]): Omit<T, "sources"> & { materials: Material[] } {
+  const rest = { ...input } as Omit<T, "sources"> & { sources?: SourceInput[] };
+  delete rest.sources;
+  return { ...rest, materials };
+}
+
 async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
   const calls: GenerationLogRow[] = [];
-  const log = { onLog: (row: GenerationLogRow) => void calls.push(row) };
+  const checkFacts: string[] = [];
+  const log = {
+    onLog: (row: GenerationLogRow) => void calls.push(row),
+    onCall: (call: ModelCall) => checkFacts.push(...call.facts.map((f) => `${call.label}: ${f}`)),
+  };
+  const materials = learnerMaterials(record.input.sources);
+  const aliases = aliasMaterials(materials);
   const startedAt = performance.now();
   const base = {
     id: record.id,
@@ -101,6 +125,7 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
     ranAt: new Date().toISOString(),
     input: record.input,
     expect: record.expect,
+    materials,
   };
   let tree: PlanNode | null = null;
   let error: Sample["error"] = null;
@@ -110,7 +135,7 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
 
   try {
     if (record.kind === "draft") {
-      for await (const event of streamPlanDraft({ ...record.input, log })) {
+      for await (const event of streamPlanDraft({ ...withMaterials(record.input, materials), log })) {
         if (event.type === "finish") tree = event.root;
         if (event.type === "error") throw new Error(event.message);
       }
@@ -119,8 +144,8 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
       if (isMandarin(record)) facts += ` · cjk ${Math.round(cjkShare(tree) * 100)}%`;
     } else {
       const original = layout(record.input.tree);
-      before = renderTree(original, { lockBefore: record.input.lockBefore });
-      const result = await revisePlanTree({ ...record.input, log });
+      before = renderTree(original, { lockBefore: record.input.lockBefore, aliases });
+      const result = await revisePlanTree({ ...withMaterials(record.input, materials), log });
       tree = result.tree;
       const diff = diffChangedNodes(original, tree);
       changed = { level: diff.level, tags: diff.tags };
@@ -133,33 +158,39 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
     error = { name: err instanceof LockedNodeError ? "LockedNodeError" : err.name, message: err.message };
     facts = `${error.name}: ${error.message.slice(0, 100)}`;
   }
+  if (checkFacts.length > 0) facts += ` · checks ${checkFacts.length}`;
 
   return {
     ...base,
     ok: error === null,
     error,
     tree,
-    text: tree ? renderTree(tree, record.kind === "revise" ? { lockBefore: record.input.lockBefore } : {}) : "",
+    text: tree ? renderTree(tree, { aliases, ...(record.kind === "revise" ? { lockBefore: record.input.lockBefore } : {}) }) : "",
     before,
     changed,
     calls,
+    checkFacts,
     costUsd: calls.reduce((sum, c) => sum + c.costUsd, 0),
     latencyMs: Math.round(performance.now() - startedAt),
     facts,
   };
 }
 
-function describeInput(record: GoldenRecord): string {
-  if (record.kind === "revise") return `Request: ${record.input.changeRequest} (lockBefore ${record.input.lockBefore})`;
-  const { topic, days, granularity, instructions, sources } = record.input;
-  const lines = [`Topic: ${topic} · ${days} days · unit ${granularity}`];
-  if (instructions) lines.push(`Instructions: ${instructions}`);
-  for (const s of sources) lines.push(`Source (${s.type}): ${s.title ?? ""} ${s.url ?? ""}`.trimEnd());
+function describeInput(record: GoldenRecord, materials: Material[]): string {
+  const lines: string[] = [];
+  if (record.kind === "revise") lines.push(`Request: ${record.input.changeRequest} (lockBefore ${record.input.lockBefore})`);
+  else {
+    const { topic, days, granularity, instructions } = record.input;
+    lines.push(`Topic: ${topic} · ${days} days · unit ${granularity}`);
+    if (instructions) lines.push(`Instructions: ${instructions}`);
+  }
+  if (materials.length > 0) lines.push("Materials (as the model saw them):", renderMaterials(materials));
   return lines.join("\n");
 }
 
 function toMarkdown(record: GoldenRecord, sample: Sample): string {
-  const parts = [`## ${sample.id} · trial ${sample.trial}`, "", `> ${record.why}`, "", describeInput(record), "", `Facts: ${sample.facts} · $${sample.costUsd.toFixed(4)} · ${(sample.latencyMs / 1000).toFixed(1)}s`];
+  const parts = [`## ${sample.id} · trial ${sample.trial}`, "", `> ${record.why}`, "", describeInput(record, sample.materials), "", `Facts: ${sample.facts} · $${sample.costUsd.toFixed(4)} · ${(sample.latencyMs / 1000).toFixed(1)}s`];
+  if (sample.checkFacts.length > 0) parts.push("", "Checks:", ...sample.checkFacts.map((f) => `- ${f}`));
   if (sample.before) parts.push("", "Before:", "```", sample.before, "```", "After:");
   parts.push("```", sample.text || "(no tree)", "```", "");
   return parts.join("\n");

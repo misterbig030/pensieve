@@ -1,3 +1,4 @@
+import { learnerKind } from "@/lib/ai/research/verify";
 import { cloneTree, labelOf, walk, type PlanNode } from "@/lib/planTree";
 import {
   normalizeCoverRef,
@@ -7,7 +8,11 @@ import {
   type Material,
   type MaterialRef,
   type MaterialRefDraft,
+  clip,
+  hostOf,
+  shortId,
 } from "@/lib/schemas/material";
+import type { SourceInput } from "@/lib/schemas/source";
 
 /**
  * Prompts always call materials `M1…Mn` in list order, whatever their real ids are (short ids while drafting, uuids
@@ -270,4 +275,33 @@ export function recencyShare(materials: Pick<Material, "year" | "origin">[], now
   if (researched.length === 0) return 0;
   const recent = researched.filter((m) => m.year !== null && m.year >= now.getFullYear() - 2).length;
   return recent / researched.length;
+}
+
+/**
+ * The learner's sources as materials without reading them: what the gate produces when every link is unreachable.
+ * For the drafting eval and tests, where drafting is measured on its own and nothing may touch the network. Ids are
+ * `M1…Mn` in list order, titles fall back to the host or the text itself, and nothing carries a verified badge.
+ */
+export function learnerMaterials(sources: SourceInput[]): Material[] {
+  const unique = sources.filter((s, i, all) => all.findIndex((o) => o.url === s.url) === i);
+  return unique.map((source, i) => {
+    const type = source.type;
+    const fallback = type === "note" || type === "file" ? source.url.trim() : (hostOf(source.url) ?? source.url);
+    return {
+      id: shortId(i),
+      origin: "learner",
+      type,
+      kind: learnerKind(type, source.url),
+      url: source.url,
+      title: clip(source.title?.trim() || fallback, 300)!,
+      author: null,
+      year: null,
+      why: null,
+      backbone: false,
+      verifiedAt: null,
+      fetchedTitle: null,
+      recommendedBy: [],
+      sig: null,
+    };
+  });
 }
