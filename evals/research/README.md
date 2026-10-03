@@ -10,7 +10,7 @@ code and judges. Spec: `docs/superpowers/specs/2026-09-28-research-materials-des
 | `providerArm.ts` | Arm C. `route: "gateway"` by default; `--route direct` calls Anthropic with `ANTHROPIC_API_KEY`. |
 | `metrics.ts` | Verified rate, backbone hit, `mustInclude` recall, recency, code-check counts, cost, latency, tool calls, and the decision rule. |
 | `compare.ts` | The runner. |
-| `materials-fit.md` | The new rubric dimension for the judges. |
+| `../rubric.md` §8 | "Materials fit", the rubric dimension the research build adds for the judges. |
 
 ## Running
 

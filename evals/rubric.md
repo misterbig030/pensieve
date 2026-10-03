@@ -1,17 +1,23 @@
-# Plan rubric — draft 1
+# Plan rubric — draft 2
 
-For the W5 judge. Seven dimensions, each **pass / fail** with a one-sentence reason. They come from the failure
-clusters in `evals/analysis/2026-09-16-open-coding.md`; every example below is a real output from that run.
+For the W5 judge. Eight dimensions, each **pass / fail** with a one-sentence reason. Dimensions 1–7 come from the
+failure clusters in `evals/analysis/2026-09-16-open-coding.md`; every example there is a real output from that run,
+made before plans carried materials. Dimension 8 comes with the research build
+(`docs/superpowers/specs/2026-09-28-research-materials-design.md`).
 
 Scope: **draft** plans. Revisions are not judged yet, because every revision failure seen so far can be checked
 in code (wrong order, locked nodes moved, duplicate ids, length drift).
 
-What the judge sees: the topic, days, working unit, instructions, source titles, and the plan as `renderTree`
-text. Units marked `[not yet planned in detail]` have only a title and summary; that is by design and is never a
-reason to fail. Judge a Chinese plan by the same lines; do not fail it for keeping English technical terms.
+What the judge sees: the topic, days, working unit, instructions, the materials list as the model saw it
+(`renderMaterials`: id, kind, title, author, year, `why` line, and whether it is the learner's own or research found
+it), and the plan as `renderTree` text with each unit's material references after its summary (`covers M1 (ch. 1–2)`
+on a heading, `reads M1 must 90 min (ch. 1); M3 should 20 min` on a leaf). Units marked `[not yet planned in detail]`
+have only a title and summary; that is by design and is never a reason to fail. Judge a Chinese plan by the same
+lines; do not fail it for keeping English technical terms.
 
 Not in this rubric because code checks them: unit counts and spans, plan length, output language, labels inside
-titles, injected strings, title and summary length.
+titles, injected strings, title and summary length, and the materials checks in `lib/materials.ts` (`levelFacts`:
+unknown material ids, leaves without a must or over budget, backbone chapters out of order or not reserved).
 
 ---
 
@@ -67,8 +73,11 @@ unit that is filler ("significance and evaluation", "integration") standing in f
 
 ## 6. Source fidelity
 
-**Pass when** sources are used in proportion to how much of the topic they cover, off-topic sources are ignored,
-and the plan does not claim to follow content it has not seen (only titles and URLs are given to the model).
+**Pass when** materials are used in proportion to how much of the topic they cover, off-topic materials are
+ignored, and no unit claims content the model has not seen. The model sees each material's id, kind, title, author,
+year and `why` line, never the page text; a researched material's title and `why` come from the page and the pages
+that recommended it, a learner's own source has only what the learner typed. So a unit may say what a material is
+for ("Ch. 4 on serving") and may not invent what it says inside.
 
 - **Fail** — Personal finance basics, 30 days, sources *The Psychology of Money* and a Bogleheads link. All seven
   days of Week 1 are money psychology: one source title took a quarter of the plan.
@@ -85,6 +94,29 @@ flag for a human to confirm.
   estar are the standard examples of *irregular* verbs.
 - **Pass** — Rust ownership and borrowing. "one owner per value, ownership transfer on move, and drop on scope
   exit" states the three rules correctly.
+
+## 8. Materials fit
+
+Scored only on plans whose leaves have Read tables (the drafting eval with the learner's materials, and the research
+eval in `evals/research/`). Leaves with no Read table are not scored here; the code checks count them.
+
+**Pass when**, for every leaf that has a Read table, every `must` row is about the leaf's topic as its title and
+summary state it (a `should` row may be adjacent), and where a row is the backbone and its note names chapters,
+those chapters cover the leaf's topic.
+
+**Fail when** any leaf has a `must` row that teaches something else, or a backbone chapter that does not match the
+leaf's ground.
+
+What the judge gets for this line: the leaf's label, title and summary; its rows as `tier · title · minutes · note`;
+each material's `why` line and kind; for the backbone, its title and author. Never fetched page text.
+
+- **Pass** — Week 3 "Evaluation methodology" reads *AI Engineering* (must, ch. 3) and *Your AI Product Needs Evals*
+  (must, whole essay).
+- **Fail** — Week 3 "Evaluation methodology" reads *AI Engineering* (must, ch. 7 on finetuning).
+- **Fail** — Day 4 "Window functions: ROW_NUMBER and RANK" has a must row for a video on database indexing.
+
+Why it exists: accuracy, coverage and source fidelity judge the plan's text; this line judges whether the reading
+behind each unit is the right reading.
 
 ---
 

@@ -151,8 +151,28 @@ Revision outputs (the reconciled tree, or the thrown error):
 | 14 | Kept titles | each `keptTitles` entry is still present |
 | 15 | Refs echoed | ≥ 80 % of unchanged nodes kept their id (the model echoed refs instead of recreating units) |
 
-Difficulty ordering stays deferred to the W5 judge. Implement as pure functions in `evals/checks/plan.ts` with
-vitest unit tests on hand-written trees (`evals/checks/plan.test.ts`), so the checks are verified without a model call.
+Materials (already shipped with the research build on Oct 2; count, do not reimplement):
+
+| # | Check | Where it runs |
+|---|---|---|
+| 16 | Unknown material ids dropped | `lib/materials.ts` `levelFacts`, after each drafted level |
+| 17 | Leaf without a `must` row | same |
+| 18 | Leaf over budget (must + should minutes > budget) | same |
+| 19 | Backbone chapters out of order across units | same |
+| 20 | Backbone chapters no top-level heading reserves | same |
+
+These are emitted as `facts` on every `ModelCall` (`onCall`), shown in the admin panel, and recorded per sample by
+`evals/scripts/sample-plans.ts` as `checkFacts`. The harness reads them off the sample; a check fails when a fact
+with its prefix appears.
+
+Inputs since the research build: the generators take a materials list, not sources. The sampler builds it offline
+with `learnerMaterials` (the learner's sources as unverified `M1…Mn`), so these runs measure drafting alone and never
+touch the network. Research has its own eval (`evals/research/`, golden v3), and the rubric's dimension 8
+(materials fit) applies to both.
+
+Difficulty ordering stays deferred to the W5 judge. Implement checks 1–15 as pure functions in `evals/checks/plan.ts`
+with vitest unit tests on hand-written trees (`evals/checks/plan.test.ts`), so the checks are verified without a
+model call.
 
 ### N trials and pass-rate gating
 
