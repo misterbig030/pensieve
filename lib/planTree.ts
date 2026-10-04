@@ -90,9 +90,12 @@ export function topSpans(days: number): number[] {
   return splitSpans(days, MONTH_DAYS);
 }
 
-/** Hours a week-sized leaf is budgeted for: about six hours per seven days. */
-export function budgetFor(len: number): number {
-  return Math.max(1, Math.round((len * 6) / 7));
+/** What a learner who has not said otherwise is assumed to study: six hours a week. */
+export const DEFAULT_HOURS_PER_WEEK = 6;
+
+/** Hours a week-sized leaf is budgeted for: the learner's weekly hours, scaled to the leaf's span. */
+export function budgetFor(len: number, hoursPerWeek: number = DEFAULT_HOURS_PER_WEEK): number {
+  return Math.max(1, Math.round((len * hoursPerWeek) / 7));
 }
 
 export function isLeaf(node: PlanNode): boolean {

@@ -1,4 +1,5 @@
 import { cloneTree, labelOf, walk, type PlanNode } from "@/lib/planTree";
+import { dayMinutes } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
   normalizeMaterialRef,
@@ -100,10 +101,14 @@ export function tierMinutes(refs: MaterialRef[] | undefined): { must: number; sh
   return { must, should };
 }
 
-/** The leaf's time budget in minutes: a week leaf's hours, or about an hour for a day. */
-export function budgetMinutes(node: Pick<PlanNode, "level" | "budgetHours">): number {
+/**
+ * The leaf's time budget in minutes: a week leaf's hours, or a day's share of the learner's weekly hours (about an
+ * hour when the hours are not known).
+ */
+export function budgetMinutes(node: Pick<PlanNode, "level" | "budgetHours">, hoursPerWeek?: number): number {
   if (node.budgetHours !== null) return node.budgetHours * 60;
-  return node.level === "day" ? 60 : 0;
+  if (node.level !== "day") return 0;
+  return hoursPerWeek === undefined ? 60 : dayMinutes(hoursPerWeek);
 }
 
 /** The share of a leaf's budget its `must` reading should take: the rest is building. */
