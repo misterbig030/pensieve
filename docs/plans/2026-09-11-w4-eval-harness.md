@@ -160,6 +160,8 @@ Materials (already shipped with the research build on Oct 2; count, do not reimp
 | 18 | Leaf over budget (must + should minutes > budget) | same |
 | 19 | Backbone chapters out of order across units | same |
 | 20 | Backbone chapters no top-level heading reserves | same |
+| 21 | Must-reading well past the plan's own reading share (added Oct 4) | same, once the plan has a split |
+| 22 | A split was returned with the top level (added Oct 4) | the top-level call's facts: `split N% reading · …` or `no split returned` |
 
 These are emitted as `facts` on every `ModelCall` (`onCall`), shown in the admin panel, and recorded per sample by
 `evals/scripts/sample-plans.ts` as `checkFacts`. The harness reads them off the sample; a check fails when a fact
@@ -169,6 +171,11 @@ Inputs since the research build: the generators take a materials list, not sourc
 with `learnerMaterials` (the learner's sources as unverified `M1…Mn`), so these runs measure drafting alone and never
 touch the network. Research has its own eval (`evals/research/`, golden v3), and the rubric's dimension 8
 (materials fit) applies to both.
+
+Since the study-hours build (Oct 4) the drafter decides a time split with the top level of every new plan, so the
+top-level prompt is a paragraph longer than it was for the Sep 16 samples. v1 records state no weekly hours: prompts
+say nothing about time and budgets assume six, as before. The sampler records each draft's split for the judge
+(rubric dimension 5). Do not pool samples from before and after Oct 4 in one pass-rate.
 
 Difficulty ordering stays deferred to the W5 judge. Implement checks 1–15 as pure functions in `evals/checks/plan.ts`
 with vitest unit tests on hand-written trees (`evals/checks/plan.test.ts`), so the checks are verified without a

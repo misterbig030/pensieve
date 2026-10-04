@@ -1,4 +1,4 @@
-# Plan rubric — draft 2
+# Plan rubric — draft 3
 
 For the W5 judge. Eight dimensions, each **pass / fail** with a one-sentence reason. Dimensions 1–7 come from the
 failure clusters in `evals/analysis/2026-09-16-open-coding.md`; every example there is a real output from that run,
@@ -11,13 +11,15 @@ in code (wrong order, locked nodes moved, duplicate ids, length drift).
 What the judge sees: the topic, days, working unit, instructions, the materials list as the model saw it
 (`renderMaterials`: id, kind, title, author, year, `why` line, and whether it is the learner's own or research found
 it), and the plan as `renderTree` text with each unit's material references after its summary (`covers M1 (ch. 1–2)`
-on a heading, `reads M1 must 90 min (ch. 1); M3 should 20 min` on a leaf). Units marked `[not yet planned in detail]`
+on a heading, `reads M1 must 90 min (ch. 1); M3 should 20 min` on a leaf), and the plan's time split: the share of
+study time for reading or watching, what the rest is spent on, and the drafter's one-sentence reason. Units marked `[not yet planned in detail]`
 have only a title and summary; that is by design and is never a reason to fail. Judge a Chinese plan by the same
 lines; do not fail it for keeping English technical terms.
 
 Not in this rubric because code checks them: unit counts and spans, plan length, output language, labels inside
 titles, injected strings, title and summary length, and the materials checks in `lib/materials.ts` (`levelFacts`:
-unknown material ids, leaves without a must or over budget, backbone chapters out of order or not reserved).
+unknown material ids, leaves without a must or over budget, must-reading well past the plan's own reading share,
+backbone chapters out of order or not reserved).
 
 ---
 
@@ -66,10 +68,19 @@ unit that is filler ("significance and evaluation", "integration") standing in f
 **Pass when** the units are the right kind of work. A skill needs practice units, training needs stated load
 (what a session is, how many), an exam needs timed mocks near the end, a knowledge topic needs neither.
 
+Since the study-hours build the drafter states this as a time split, and the split is judged here: the reading
+share and the named practice must suit the topic and the learner's instructions. Mostly reading is right for a
+knowledge topic and wrong for a skill; "building" as the practice is wrong where there is nothing to build. A
+sensible split that the units then ignore is still a fail.
+
 - **Fail** — Public speaking, 7 days. "Foundations of Effective Speaking — Explore core principles…",
   "Understanding Your Audience — Learn how to identify…". Seven days of reading about speaking; nobody speaks.
 - **Pass** — 烹饪基础, 30 days. "蔬菜处理与初级刀工 — 通过处理各类蔬菜实践基础刀工", "刀工速度与效率训练 —
   通过反复练习…建立肌肉记忆". The days are things to do at a chopping board.
+- **Pass** — The French Revolution, 30 days. Split: 75% reading, the rest on writing summaries, "history requires
+  sustained reading to build chronological and causal understanding". Weeks read two or three chapters and end in
+  a written summary.
+- **Pass** — Couch to 5K, 7 days at 3 hours a week. Split: 20% reading, the rest on running sessions.
 
 ## 6. Source fidelity
 

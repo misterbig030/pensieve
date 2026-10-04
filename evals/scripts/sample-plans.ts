@@ -9,6 +9,10 @@
  *
  * Drafting only: the learner's sources become materials offline (`learnerMaterials`), research never runs and no
  * run touches the network. The research step has its own eval in `evals/research/`.
+ *
+ * Records state no weekly hours, so prompts say nothing about time and budgets assume six, as before. Since the
+ * study-hours build the drafter also decides a time split with the top level; each draft sample records it. Samples
+ * from before Oct 4 have none and used a slightly shorter top-level prompt, so do not pool them with newer ones.
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -23,6 +27,7 @@ import { diffChangedNodes } from "@/lib/planSummary";
 import { childSpans, layout, leavesOf, topSpans, type PlanNode } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
+import type { PlanSplit } from "@/lib/studyTime";
 import { GOLDEN_V1, isMandarin, type GoldenRecord } from "../golden/plan.v1";
 
 config({ path: ".env.local", quiet: true });
@@ -42,6 +47,8 @@ interface Sample {
   expect: GoldenRecord["expect"];
   /** The materials list the model drafted against: the learner's sources, unverified, as `M1…Mn`. */
   materials: Material[];
+  /** Draft records: how the drafter divided the learner's time (rubric dimension 5). Null when it returned none. */
+  split?: PlanSplit | null;
   tree: PlanNode | null;
   /** The tree as the judge reads it, with each unit's material references. */
   text: string;
@@ -132,15 +139,19 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
   let before: string | undefined;
   let changed: Sample["changed"];
   let facts = "";
+  let split: PlanSplit | null | undefined;
 
   try {
     if (record.kind === "draft") {
       for await (const event of streamPlanDraft({ ...withMaterials(record.input, materials), log })) {
         if (event.type === "finish") tree = event.root;
+        if (event.type === "split") split = event.split;
         if (event.type === "error") throw new Error(event.message);
       }
       if (!tree) throw new Error("streamPlanDraft ended without a finish event");
+      split ??= null;
       facts = draftFacts(tree, record.input.days);
+      facts += split ? ` · split ${split.readingShare}% reading / ${split.practice}` : " · NO SPLIT";
       if (isMandarin(record)) facts += ` · cjk ${Math.round(cjkShare(tree) * 100)}%`;
     } else {
       const original = layout(record.input.tree);
@@ -164,6 +175,7 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
     ...base,
     ok: error === null,
     error,
+    split,
     tree,
     text: tree ? renderTree(tree, { aliases, ...(record.kind === "revise" ? { lockBefore: record.input.lockBefore } : {}) }) : "",
     before,
@@ -190,6 +202,7 @@ function describeInput(record: GoldenRecord, materials: Material[]): string {
 
 function toMarkdown(record: GoldenRecord, sample: Sample): string {
   const parts = [`## ${sample.id} · trial ${sample.trial}`, "", `> ${record.why}`, "", describeInput(record, sample.materials), "", `Facts: ${sample.facts} · $${sample.costUsd.toFixed(4)} · ${(sample.latencyMs / 1000).toFixed(1)}s`];
+  if (sample.split) parts.push("", `Time split: ${sample.split.readingShare}% reading or watching, the rest on ${sample.split.practice}. ${sample.split.reason}`);
   if (sample.checkFacts.length > 0) parts.push("", "Checks:", ...sample.checkFacts.map((f) => `- ${f}`));
   if (sample.before) parts.push("", "Before:", "```", sample.before, "```", "After:");
   parts.push("```", sample.text || "(no tree)", "```", "");
