@@ -77,7 +77,7 @@ export function TimeSplitCard({ days, hoursPerWeek, split, deciding = false, onC
         <p className="m-0 text-[13px] leading-normal text-neutral-800">
           {deciding
             ? "The plan decides how to divide this between reading and practice as it drafts the first units."
-            : "This plan was drafted before plans divided time between reading and practice. Units are budgeted from the weekly hours alone."}
+            : "This plan does not divide its time between reading and practice. Units are budgeted from the weekly hours alone."}
         </p>
       )}
 
@@ -137,6 +137,17 @@ export function TimeSplitCard({ days, hoursPerWeek, split, deciding = false, onC
                 className="h-11 w-full max-w-[420px] accent-(--color-accent-700)"
               />
             </div>
+          )}
+          {onChangeSplit && !split && (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="min-h-10 self-start border border-border bg-transparent px-4 text-[12.5px]"
+              disabled={disabled}
+              onClick={() => onChangeSplit({ readingShare: 50, practice: "practice", reason: "Set by you." })}
+            >
+              Divide the time between reading and practice
+            </Button>
           )}
           <p className="m-0 text-xs leading-normal text-muted-foreground">
             Open weeks take the new hours at once. Reading lists already planned stay as they are; units planned from here on use the new numbers.

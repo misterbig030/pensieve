@@ -27,7 +27,8 @@ export type UnitDraft = z.infer<typeof unitDraftSchema>;
  * units. `split` comes first so it is settled before any unit is written.
  */
 export const topUnitListSchema = z.object({
-  split: planSplitDraftSchema.optional(),
+  // Required: left optional, the model skips it and writes only the units.
+  split: planSplitDraftSchema,
   units: z.array(unitDraftSchema).min(1).max(40),
 });
 
