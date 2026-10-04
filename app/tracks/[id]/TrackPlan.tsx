@@ -12,10 +12,12 @@ interface TrackPlanProps {
   root: PlanNode;
   granularity: Granularity;
   materials: Material[];
+  hoursPerWeek: number;
+  practice?: string;
 }
 
 /** The saved plan as a tree. Expanding or splitting runs on the server and the page refreshes with the new rows. */
-export function TrackPlan({ trackId, root, granularity, materials }: TrackPlanProps) {
+export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek, practice }: TrackPlanProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     // Finished groups start folded so the current work is what you see first.
     const done = new Set<string>();
@@ -61,6 +63,8 @@ export function TrackPlan({ trackId, root, granularity, materials }: TrackPlanPr
       <PlanTree
         root={root}
         materials={materials}
+        hoursPerWeek={hoursPerWeek}
+        practice={practice}
         mode="track"
         highlight={new Set()}
         lockBefore={0}

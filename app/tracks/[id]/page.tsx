@@ -13,6 +13,7 @@ import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { StreakChip } from "@/components/pensieve/StreakChip";
+import { TimeSplitCard } from "@/components/pensieve/TimeSplitCard";
 import { Progress } from "@/components/ui/progress";
 import { TrackPlan } from "./TrackPlan";
 
@@ -70,12 +71,15 @@ export default async function TrackDetailPage({ params }: { params: Promise<{ id
       </div>
       <Progress value={total > 0 ? (done / total) * 100 : 0} className="mb-6 max-w-[320px]" />
       <PlanSummaryCard summary={summary} className="mb-6" />
+      <div className="mb-6">
+        <TimeSplitCard days={root.len} hoursPerWeek={track.hoursPerWeek} split={track.split} />
+      </div>
       {materials.length > 0 && (
         <div className="mb-6">
           <MaterialsList topic={track.title} materials={materials} initialShown={4} />
         </div>
       )}
-      <TrackPlan trackId={track.id} root={root} granularity={track.granularity} materials={materials} />
+      <TrackPlan trackId={track.id} root={root} granularity={track.granularity} materials={materials} hoursPerWeek={track.hoursPerWeek} practice={track.split?.practice} />
     </PageShell>
   );
 }

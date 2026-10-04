@@ -29,9 +29,11 @@ interface Props {
   /** The leaf's Read table; empty for plans saved before materials were assigned. */
   readRows: ReadRow[];
   budgetMinutes: number;
+  /** What the plan spends non-reading time on, for the budget line. */
+  practice?: string;
 }
 
-export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, initialContent, youtubeSources, isCompleted, readRows, budgetMinutes }: Props) {
+export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, initialContent, youtubeSources, isCompleted, readRows, budgetMinutes, practice }: Props) {
   const [content, setContent] = useState(initialContent);
   const [sessions, setSessions] = useState(initialSessions);
   const [hoursInput, setHoursInput] = useState("1");
@@ -112,7 +114,7 @@ export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, 
     </div>
   );
 
-  const readTable = readRows.length > 0 && <ReadTable rows={readRows} budgetMinutes={budgetMinutes} />;
+  const readTable = readRows.length > 0 && <ReadTable rows={readRows} budgetMinutes={budgetMinutes} practice={practice} />;
   const provenance = readRows.length > 0 && <WhereTheseComeFrom rows={readRows} />;
 
   if (!content) {

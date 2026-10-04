@@ -208,6 +208,7 @@ function MessageView({
             <BriefRow label="Length">
               {m.days} days · {m.granularity} units
             </BriefRow>
+            {m.hoursPerWeek && <BriefRow label="Time">{m.hoursPerWeek} h a week</BriefRow>}
             {m.focus?.trim() && <BriefRow label="Focus">{m.focus}</BriefRow>}
             {m.materials.length > 0 && (
               <BriefRow label="Materials">

@@ -48,6 +48,10 @@ export interface PlanTreeProps {
   leafHref?: (node: PlanNode) => string;
   /** The plan's materials; node references resolve against them. */
   materials?: Material[];
+  /** The learner's weekly hours: a day's budget is its share of them. */
+  hoursPerWeek?: number;
+  /** What the plan spends non-reading time on, for the budget lines. */
+  practice?: string;
 }
 
 type Ctx = Omit<PlanTreeProps, "root"> & { root: PlanNode; byId: ReadonlyMap<string, Material> };
@@ -178,7 +182,7 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
         (isWeek ? (
           <span className="mt-1 flex flex-col gap-2">
             <ReadRows rows={rows} link={!href} />
-            <BudgetBar rows={rows} budgetMinutes={budgetMinutes(node)} />
+            <BudgetBar rows={rows} budgetMinutes={budgetMinutes(node, ctx.hoursPerWeek)} practice={ctx.practice} />
           </span>
         ) : (
           <span className="text-[11.5px] text-muted-foreground">

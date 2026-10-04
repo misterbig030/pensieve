@@ -19,6 +19,8 @@ export default async function AdjustTrackPage({ params }: { params: Promise<{ id
         trackId={id}
         trackTitle={detail.track.title}
         granularity={detail.track.granularity}
+        hoursPerWeek={detail.track.hoursPerWeek}
+        split={detail.track.split}
         instructions={detail.track.instructions ?? undefined}
         materials={detail.materials}
         root={detail.root}
