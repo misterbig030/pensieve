@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { capitalize } from "@/lib/planTree";
-import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, clampHours, presetFor, totalHours, type PlanSplit } from "@/lib/studyTime";
+import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, SPLIT_SET_BY_LEARNER, clampHours, presetFor, totalHours, type PlanSplit } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 export interface TimeSplitCardProps {
@@ -37,7 +37,11 @@ export function TimeSplitCard({ days, hoursPerWeek, split, deciding = false, onC
         <h2 id="time-h" className="m-0 text-[11px] font-normal tracking-wide text-muted-foreground uppercase">
           How this plan spends your {total} h
         </h2>
-        {split && <span className="inline-flex rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-semibold">The plan&apos;s call</span>}
+        {split && (
+          <span className="inline-flex rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-semibold">
+            {split.reason === SPLIT_SET_BY_LEARNER ? "Your call" : "The plan\u2019s call"}
+          </span>
+        )}
         <span className="ml-auto text-[12.5px] text-muted-foreground max-[640px]:ml-0">
           {hoursPerWeek} h a week{preset ? ` · ${preset.label.toLowerCase()}` : ""}
         </span>
@@ -71,7 +75,7 @@ export function TimeSplitCard({ days, hoursPerWeek, split, deciding = false, onC
               {capitalize(split.practice)} · about {total - reading} h
             </span>
           </div>
-          {split.reason && <p className="m-0 text-[12.5px] leading-normal text-neutral-800">Why: {split.reason}</p>}
+          {split.reason && split.reason !== SPLIT_SET_BY_LEARNER && <p className="m-0 text-[12.5px] leading-normal text-neutral-800">Why: {split.reason}</p>}
         </>
       ) : (
         <p className="m-0 text-[13px] leading-normal text-neutral-800">
@@ -133,7 +137,7 @@ export function TimeSplitCard({ days, hoursPerWeek, split, deciding = false, onC
                 step={5}
                 disabled={disabled}
                 value={split.readingShare}
-                onChange={(e) => onChangeSplit({ ...split, readingShare: Number(e.target.value), reason: "Set by you." })}
+                onChange={(e) => onChangeSplit({ ...split, readingShare: Number(e.target.value), reason: SPLIT_SET_BY_LEARNER })}
                 className="h-11 w-full max-w-[420px] accent-(--color-accent-700)"
               />
             </div>
@@ -144,7 +148,7 @@ export function TimeSplitCard({ days, hoursPerWeek, split, deciding = false, onC
               size="sm"
               className="min-h-10 self-start border border-border bg-transparent px-4 text-[12.5px]"
               disabled={disabled}
-              onClick={() => onChangeSplit({ readingShare: 50, practice: "practice", reason: "Set by you." })}
+              onClick={() => onChangeSplit({ readingShare: 50, practice: "practice", reason: SPLIT_SET_BY_LEARNER })}
             >
               Divide the time between reading and practice
             </Button>

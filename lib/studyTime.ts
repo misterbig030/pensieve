@@ -71,6 +71,9 @@ export const planSplitSchema = z.object({
 });
 export type PlanSplit = z.infer<typeof planSplitSchema>;
 
+/** The reason recorded when the learner sets the split by hand, which is how the card tells whose call it was. */
+export const SPLIT_SET_BY_LEARNER = "Set by you.";
+
 /** What the model writes: looser, so a share of 62.5 or a long reason never fails the whole level. */
 export const planSplitDraftSchema = z.object({
   readingShare: z.number().describe("Percent of study time spent reading or watching the materials, 0 to 100"),
