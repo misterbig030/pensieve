@@ -31,6 +31,7 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
   const label = labelOf(detail.root, node);
   const kicker = node.level === "day" ? label : `${label} · ${spanOf(node)}`;
   const isWeek = node.level !== "day";
+  const hours = detail.track.hoursPerWeek;
   const sessions = leaf.sessions.filter((s) => s.hours !== null);
   // The lesson's videos are the leaf's own when it has a Read table; older plans fall back to every video on the track.
   const youtubeSources =
@@ -55,7 +56,7 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
           trackId={id}
           nodeId={nodeId}
           unit={isWeek ? "week" : "day"}
-          budgetHours={isWeek ? (node.budgetHours ?? budgetFor(node.len)) : null}
+          budgetHours={isWeek ? (node.budgetHours ?? budgetFor(node.len, hours)) : null}
           initialSessions={sessions.map((s) => ({ hours: s.hours as number }))}
           initialContent={
             leaf.content
@@ -64,7 +65,8 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
           }
           youtubeSources={youtubeSources}
           readRows={readRows}
-          budgetMinutes={budgetMinutes({ level: node.level, budgetHours: isWeek ? (node.budgetHours ?? budgetFor(node.len)) : null })}
+          budgetMinutes={budgetMinutes({ level: node.level, budgetHours: isWeek ? (node.budgetHours ?? budgetFor(node.len, hours)) : null }, hours)}
+          practice={detail.track.split?.practice}
           isCompleted={node.status === "completed"}
         />
       </div>

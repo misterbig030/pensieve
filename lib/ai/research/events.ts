@@ -1,7 +1,13 @@
-import type { Material, MaterialKind } from "@/lib/schemas/material";
+import type { Material, MaterialKind, MinutesBasis } from "@/lib/schemas/material";
 
-/** Why the list is short: research found too little (`thin`), or could not run at all (`unavailable`). */
+/** Why the list is short: research left much of the topic uncovered (`thin`), or could not run at all (`unavailable`). */
 export type ResearchNotice = "thin" | "unavailable";
+
+/** The topic's main areas, as research named them: the ones the list covers and the ones nothing on it covers. */
+export interface Coverage {
+  covered: string[];
+  open: string[];
+}
 
 export interface ResearchCounts {
   searches: number;
@@ -17,9 +23,19 @@ export type ResearchEvent =
   | { type: "research.search"; query: string; results: number }
   | { type: "research.reading"; url: string }
   | { type: "research.fetch"; url: string; ok: boolean; reason?: string }
-  | { type: "research.verified"; id: string; title: string; kind: MaterialKind; backbone: boolean }
+  | { type: "research.verified"; id: string; title: string; kind: MaterialKind; backbone: boolean; minutes?: number | null; basis?: MinutesBasis | null }
   | { type: "research.dropped"; title: string; url?: string; reason: string }
-  | { type: "research.done"; materials: Material[]; dropped: DroppedMaterial[]; notice?: ResearchNotice; counts: ResearchCounts };
+  | {
+      type: "research.done";
+      materials: Material[];
+      dropped: DroppedMaterial[];
+      notice?: ResearchNotice;
+      counts: ResearchCounts;
+      /** Null when research did not run or named no areas. */
+      coverage?: Coverage | null;
+      /** Minutes of material on the list, summed over the materials that have a size. */
+      sizedMinutes?: number;
+    };
 
 /** A candidate the gate refused, kept so the learner can see what was considered and why it is not in the plan. */
 export interface DroppedMaterial {

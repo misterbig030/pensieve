@@ -1,5 +1,9 @@
 # Research-backed plans: a verified materials list — design
 
+> Amended on 2026-10-04 by `2026-10-04-study-hours-design.md`: the 12-to-25 count, the fixed six hours a week and the
+> fixed 60% must-reading share described below are replaced by the learner's hours, sized materials and a split the
+> drafter decides.
+
 Date: 2026-09-28
 Status: approved in brainstorming, awaiting spec review
 Mock: https://claude.ai/artifact/Vu3XTUXieRgR9D4NcmMVsp (four artboards: drafting, plan with materials, week leaf,

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const SHOWN_LOG = 8;
 
 /** The card shown while research runs: counters against the caps, a live log, and what has been found so far. */
-export function ResearchProgress({ state }: { state: ResearchProgressState }) {
+export function ResearchProgress({ state, totalHours }: { state: ResearchProgressState; totalHours?: number }) {
   const elapsed = useElapsed(state.startedAt, state.running);
   const log = state.log.slice(-SHOWN_LOG);
   const readCap = Math.max(state.caps.fetches, state.reads);
@@ -26,11 +26,11 @@ export function ResearchProgress({ state }: { state: ResearchProgressState }) {
           <h2 className="m-0 font-heading text-lg font-normal">{state.running ? "Finding materials" : "Materials found"}</h2>
           <span className="ml-auto text-[12.5px] text-muted-foreground">
             {formatElapsed(elapsed)}
-            {state.running ? " · usually about a minute" : ""}
+            {state.running ? " · usually a minute or two" : ""}
           </span>
         </div>
         <p className="m-0 text-[13.5px] leading-normal text-neutral-800">
-          Looking for a textbook to build the plan around, plus current, well-regarded material to go with it. Only pages Pensieve could open and check make the list.
+          {totalHours ? `Your plan has about ${totalHours} hours in all. ` : ""}Looking for a textbook to build the plan around, plus current, well-regarded material to go with it, and working out how long each takes. How much of it is required reading is the plan&apos;s call, not research&apos;s.
         </p>
 
         <div className="grid grid-cols-3 gap-3 max-[640px]:grid-cols-1">

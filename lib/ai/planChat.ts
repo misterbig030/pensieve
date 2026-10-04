@@ -51,6 +51,8 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
         instructions: req.instructions,
         materials: req.materials,
         granularity: req.granularity,
+        hoursPerWeek: req.hoursPerWeek,
+        split: req.split,
         tree,
         lockBefore,
         changeRequest,
@@ -75,6 +77,8 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
     instructions: req.instructions,
     materials: req.materials,
     granularity: req.granularity,
+    hoursPerWeek: req.hoursPerWeek,
+    split: req.split,
     tree,
     lockBefore,
   });

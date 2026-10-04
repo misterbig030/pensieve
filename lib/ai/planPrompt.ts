@@ -11,6 +11,7 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import type { CoverRef, Material, MaterialRef } from "@/lib/schemas/material";
+import { dayMinutes, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 
 export interface PlanPromptContext {
   topic: string;
@@ -18,6 +19,10 @@ export interface PlanPromptContext {
   /** The plan's materials list: the learner's sources and what research verified. */
   materials: Material[];
   granularity: Granularity;
+  /** Hours a week the learner can give. Left out, prompts say nothing about time and budgets assume six. */
+  hoursPerWeek?: number;
+  /** How the plan divides the learner's time, once decided. */
+  split?: PlanSplit | null;
 }
 
 export interface RenderTreeOptions {
@@ -97,14 +102,20 @@ export function assignRefs(root: PlanNode): Map<string, string> {
   return refs;
 }
 
-/** One line per material: `M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024. Why: …`. */
+/** " · ch. 1, 7–9, about 5 h (estimated)" for a sized material; empty when its size is not known. */
+function sizeNote(m: Material): string {
+  if (!m.minutes) return m.uses ? ` · ${m.uses}` : "";
+  return ` · ${m.uses ? `${m.uses}, ` : ""}about ${formatMinutes(m.minutes)}${m.minutesBasis === "estimated" ? " (estimated)" : ""}`;
+}
+
+/** One line per material: `M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024 · about 22 h. Why: …`. */
 export function renderMaterials(materials: Material[], aliases: MaterialAliases = aliasMaterials(materials)): string {
   return materials
     .map((m) => {
       const tags = [m.kind, m.backbone ? "backbone" : null, m.origin === "learner" ? "the learner's own" : null].filter(Boolean).join(" · ");
       const byline = [m.author, m.year].filter(Boolean).join(", ");
       const where = m.type === "note" || m.type === "file" ? "" : ` <${m.url}>`;
-      return `${aliases.alias(m.id)} [${tags}] "${m.title}"${byline ? ` — ${byline}` : ""}${where}${m.why ? `. ${m.why}` : ""}`;
+      return `${aliases.alias(m.id)} [${tags}] "${m.title}"${byline ? ` — ${byline}` : ""}${where}${sizeNote(m)}${m.why ? `. ${m.why}` : ""}`;
     })
     .join("\n");
 }
@@ -113,11 +124,20 @@ function contextLines(ctx: PlanPromptContext): string[] {
   const parts: string[] = [];
   parts.push(`Topic: ${ctx.topic}`);
   if (ctx.instructions?.trim()) parts.push(`The learner's focus & instructions: "${ctx.instructions.trim()}"`);
+  parts.push(...timeLines(ctx));
   if (ctx.materials.length > 0) {
     parts.push(`The plan's materials. The learner's own are always part of it; the rest were found and checked by research. Refer to them by id:`);
     parts.push(renderMaterials(ctx.materials));
   }
   return parts;
+}
+
+/** What the prompt says about the learner's time: the weekly hours, and the plan's split once it is decided. */
+function timeLines(ctx: Pick<PlanPromptContext, "hoursPerWeek" | "split">): string[] {
+  const lines: string[] = [];
+  if (ctx.hoursPerWeek !== undefined) lines.push(`The learner's time: about ${ctx.hoursPerWeek} hour${ctx.hoursPerWeek === 1 ? "" : "s"} a week. This setting is what the plan is budgeted from, whatever the instructions say about time.`);
+  if (ctx.split) lines.push(`How this plan spends that time: about ${ctx.split.readingShare}% reading or watching the materials, the rest on ${ctx.split.practice}.`);
+  return lines;
 }
 
 const UNIT_NOUN: Record<PlanLevel, string> = { month: "month", week: "week", day: "day" };
@@ -136,6 +156,8 @@ export interface UnitsPromptInput extends PlanPromptContext {
   parentId?: string;
   /** True when the units are the finest level the learner will work at (they get content and check-ins). */
   unitsAreLeaves: boolean;
+  /** True for the top level of a new plan: the drafter decides the time split before writing the units. */
+  decideSplit?: boolean;
 }
 
 /** Asks for titles and summaries for exactly `spans.length` units whose spans the server already decided. */
@@ -148,6 +170,8 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   parts.push(`You are designing a self-study curriculum, one unit at a time.`);
   parts.push(...contextLines(input));
   parts.push(`The whole plan is ${input.totalDays} days long.`);
+  // While the split is being decided in this same call there is no share to state yet.
+  const share = input.decideSplit ? null : (readingShareOf(input.split) ?? MUST_SHARE);
 
   if (input.tree && input.parentId) {
     parts.push(`Here is the plan so far. Lines marked done are behind the learner; use what they covered to plan what comes next.${hasMaterials ? " Braces show the materials each unit reserves or reads." : ""}`);
@@ -160,8 +184,9 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   let day = input.startDay;
   input.spans.forEach((len, i) => {
     const end = day + len - 1;
-    const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, len) : null;
-    const budget = hasMaterials && minutes !== null ? ` — budget about ${formatMinutes(minutes)}, so about ${formatMinutes(Math.round((minutes * MUST_SHARE) / 5) * 5)} of must-reading` : "";
+    const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, len, input.hoursPerWeek) : null;
+    const must = share === null || minutes === null ? "" : `, so about ${formatMinutes(Math.round((minutes * share) / 5) * 5)} of must-reading`;
+    const budget = hasMaterials && minutes !== null ? ` — budget about ${formatMinutes(minutes)}${must}` : "";
     parts.push(`${i + 1}. ${len === 1 ? `Day ${day}` : `Days ${day}–${end} (${len} days)`}${budget}`);
     day = end + 1;
   });
@@ -169,11 +194,21 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   if (input.unitsAreLeaves) {
     parts.push(
       input.level === "day"
-        ? `Each day is one focused lesson of roughly 45–60 minutes.`
+        ? input.hoursPerWeek === undefined
+          ? `Each day is one focused lesson of roughly 45–60 minutes.`
+          : `Each day is one focused session of about ${formatMinutes(dayMinutes(input.hoursPerWeek))}.`
         : `Each ${noun} is a goal the learner works toward across several sessions of their own choosing; describe the whole ${noun}'s ground, not a day-by-day list.`,
     );
   } else {
     parts.push(`Each ${noun} is a heading that will be planned in detail later, when the learner reaches it. Make the headings distinct and progressive.`);
+  }
+  if (input.decideSplit) {
+    parts.push(
+      [
+        `First decide how this learner's time divides, as "split". readingShare is the percentage of study time spent reading or watching the materials (0 to 100). practice names what the rest is spent on, in two or three words that fit this topic ("building projects", "writing summaries", "practice problems", "running sessions", "speaking aloud"). reason is one sentence.`,
+        `Judge it from the kind of topic and the learner's instructions, not from a habit: a knowledge topic such as history is mostly reading with some writing or recall; a craft or engineering skill is half or more doing; physical training is nearly all sessions; exam preparation leans on timed practice near the end.`,
+      ].join("\n"),
+    );
   }
   parts.push(
     `Return exactly ${n} units in that order. Title: a short noun phrase (at most 8 words) with no "Week 1:" or "Day 3:" prefix. Summary: one sentence on what it covers and why it comes here.`,
@@ -182,8 +217,9 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   return parts.join("\n");
 }
 
-function leafBudgetMinutes(level: PlanLevel, len: number): number {
-  return level === "day" ? 60 : budgetFor(len) * 60;
+function leafBudgetMinutes(level: PlanLevel, len: number, hoursPerWeek?: number): number {
+  if (level === "day") return hoursPerWeek === undefined ? 60 : dayMinutes(hoursPerWeek);
+  return budgetFor(len, hoursPerWeek) * 60;
 }
 
 function formatMinutes(minutes: number): string {
@@ -213,8 +249,13 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     reserved.length > 0
       ? `Take them first from what the unit marked ">>" reserved: ${reserved.map((r) => `${aliases.alias(r.id)}${refNote(r.note)}`).join(", ")}. Use the rest of the list only to fill a gap.`
       : `Take them from the list above, matching each unit's ground.`,
-    `Rules: at least one must per unit; must minutes stay within about ${Math.round(MUST_SHARE * 100)}% of the unit's budget, because the rest of the time is for building and practice; should items are optional extras.`,
+    input.decideSplit
+      ? `Rules: at least one must per unit where the list has material for it; must minutes stay within your readingShare of the unit's budget, because the rest of the time is for the practice you named; should items are optional extras.`
+      : input.split
+        ? `Rules: at least one must per unit where the list has material for it; must minutes stay within about ${input.split.readingShare}% of the unit's budget, because the rest of the time is for ${input.split.practice}; should items are optional extras.`
+        : `Rules: at least one must per unit; must minutes stay within about ${Math.round(MUST_SHARE * 100)}% of the unit's budget, because the rest of the time is for building and practice; should items are optional extras.`,
   ];
+  if (input.materials.some((m) => m.minutes)) lines.push(`Each material's size is in the list. Across all units a material's minutes should add up to about that size; never assign more of it than it has.`);
   if (backbone >= 0) lines.push(`M${backbone + 1} is the backbone textbook: its chapters run in order across the units, continuing from where earlier units stopped. Name the chapter in the note.`);
   lines.push(`Use only ids from the list.`);
   return lines.join("\n");
@@ -268,6 +309,7 @@ export function buildPlanChatSystemPrompt(input: ChatPromptInput): string {
     `You are Pensieve, a study planner helping a learner shape a self-study plan on "${input.topic}". The plan is shown beside this conversation as a tree: months contain weeks, weeks contain days. A unit with no children is either a heading that gets planned in detail when the learner reaches it, or (on week-sized plans) a week the learner works through in sessions of their own choosing.`,
   );
   if (input.instructions?.trim()) parts.push(`The learner's focus & instructions: "${input.instructions.trim()}"`);
+  parts.push(...timeLines(input));
   const hasMaterials = input.materials.length > 0;
   if (hasMaterials) {
     parts.push(`The plan's materials (the learner's own, plus what research found and checked):`);

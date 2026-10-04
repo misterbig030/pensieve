@@ -50,6 +50,7 @@ export function applyRevision(
   lockBefore: number,
   granularity: Granularity,
   aliases?: MaterialAliases,
+  hoursPerWeek?: number,
 ): PlanNode {
   const byRef = new Map<string, PlanNode>();
   for (const [id, ref] of refs) {
@@ -77,7 +78,7 @@ export function applyRevision(
       summary: unit.summary,
       len,
       status: kept?.status ?? "pending",
-      budgetHours: leafWeek ? (kept?.budgetHours ?? budgetFor(len)) : null,
+      budgetHours: leafWeek ? (kept?.budgetHours ?? budgetFor(len, hoursPerWeek)) : null,
       manualSplit: kept?.manualSplit ?? false,
       children,
       covers: leaf ? undefined : covers,
@@ -125,5 +126,5 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
     { ...input.log, caller: "outline_revision" },
   );
   const aliases = input.materials.length > 0 ? aliasMaterials(input.materials) : undefined;
-  return { tree: applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases), costUsd };
+  return { tree: applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek), costUsd };
 }

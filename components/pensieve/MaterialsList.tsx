@@ -18,7 +18,8 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
+import type { Coverage, DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
+import { approxDuration } from "@/lib/researchProgress";
 import { KIND_LABEL, KIND_ORDER, hostOf, type Material, type MaterialKind } from "@/lib/schemas/material";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +46,10 @@ export interface MaterialsListProps {
   /** Candidates the gate refused, shown struck through with the reason. */
   dropped?: DroppedMaterial[];
   notice?: ResearchNotice;
+  /** The topic's main areas research covered and left open. Known only right after research. */
+  coverage?: Coverage | null;
+  /** The plan's study hours in all, to set the list's size against. */
+  totalHours?: number;
   /** Where each material is used, for the remove confirmation. Omit with `onRemove` for a read-only list. */
   usesOf?: (id: string) => MaterialUse[];
   onRemove?: (id: string) => void;
@@ -56,7 +61,7 @@ export interface MaterialsListProps {
 
 /** The plan-level materials list: the backbone pinned first, the rest grouped by kind. */
 export function MaterialsList(props: MaterialsListProps) {
-  const { materials, dropped = [], notice, initialShown = 6 } = props;
+  const { materials, dropped = [], notice, coverage, initialShown = 6 } = props;
   const [showAll, setShowAll] = useState(false);
   const [removing, setRemoving] = useState<Material | null>(null);
 
@@ -66,10 +71,14 @@ export function MaterialsList(props: MaterialsListProps) {
   const shown = showAll ? ordered : ordered.slice(0, initialShown);
   const researched = materials.filter((m) => m.origin === "research").length;
   const yours = materials.length - researched;
+  const sized = materials.reduce((sum, m) => sum + (m.minutes ?? 0), 0);
+  const unsized = materials.filter((m) => !m.minutes).length;
 
   return (
     <div className="flex flex-col gap-3">
-      {notice && <ResearchNoticeBanner notice={notice} topic={props.topic} researched={researched} hasBackbone={!!backbone} onResearchAgain={props.onResearchAgain} />}
+      {notice && (
+        <ResearchNoticeBanner notice={notice} topic={props.topic} researched={researched} sizedMinutes={sized} coverage={coverage} hasBackbone={!!backbone} onResearchAgain={props.onResearchAgain} />
+      )}
 
       {materials.length > 0 && (
         <section aria-labelledby="materials-h" className="flex flex-col gap-3.5 rounded-[28px] bg-secondary px-[22px] pt-5 pb-[18px]">
@@ -83,6 +92,15 @@ export function MaterialsList(props: MaterialsListProps) {
             </span>
             <span className="ml-auto text-[12.5px] text-muted-foreground max-[640px]:ml-0 max-[640px]:basis-full">Gather these up front. Each week assigns a slice.</span>
           </div>
+
+          {sized > 0 && (
+            <p className="m-0 text-[13px] leading-normal text-neutral-800">
+              <strong className="font-semibold">{approxDuration(sized)} of material</strong>
+              {props.totalHours ? ` for a plan of about ${props.totalHours} hours` : ""}
+              {unsized > 0 ? `, not counting ${unsized} with no size` : ""}. Sizes are for the part the plan uses. How much of it is required is the plan&apos;s call, week by week.
+            </p>
+          )}
+          {coverage && (coverage.covered.length > 0 || coverage.open.length > 0) && <CoverageChips coverage={coverage} />}
 
           {backbone ? (
             <BackboneCard material={backbone} onRemove={props.onRemove ? () => setRemoving(backbone) : undefined} />
@@ -169,6 +187,7 @@ function BackboneCard({ material: m, onRemove }: { material: Material; onRemove?
         </div>
         <span className="text-[12.5px] text-muted-foreground">{byline(m, true)}</span>
         {m.why && <p className="m-0 text-[13px] leading-normal text-neutral-800">{m.why}</p>}
+        <SizeLine material={m} />
       </div>
       <div className="flex shrink-0 items-start gap-1 self-start">
         <VerifiedButton material={m} prominent />
@@ -196,11 +215,42 @@ function MaterialRow({ material: m, onRemove }: { material: Material; onRemove?:
           )}
         </span>
         {m.why && <span className="text-neutral-800">{m.why}</span>}
+        <SizeLine material={m} />
       </div>
       <div className="flex items-center gap-1 justify-self-end max-[640px]:col-start-2 max-[640px]:-ml-2.5 max-[640px]:justify-self-start">
         <VerifiedButton material={m} />
         {onRemove && <RemoveButton title={m.title} onClick={onRemove} />}
       </div>
+    </div>
+  );
+}
+
+/** "≈ 5 h · ch. 1, 7–9 · estimated": the size of the part the plan uses, and whether code measured it. */
+function SizeLine({ material: m }: { material: Material }) {
+  if (!m.minutes && !m.uses) return null;
+  const parts = [m.minutes ? approxDuration(m.minutes) : null, m.uses, m.minutes ? (m.minutesBasis === "measured" ? "measured" : "estimated") : null].filter(Boolean);
+  return (
+    <span className="text-xs text-muted-foreground" title={m.minutesBasis === "measured" ? "Counted from a page count, a runtime or the page's own length" : "A judgement, so treat it as rough"}>
+      {parts.join(" · ")}
+    </span>
+  );
+}
+
+function CoverageChips({ coverage }: { coverage: Coverage }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      {coverage.covered.length > 0 && <span className="text-muted-foreground">Covered</span>}
+      {coverage.covered.map((area) => (
+        <span key={`c-${area}`} className="rounded-full bg-accent-2-200 px-2.5 py-1 font-semibold text-accent-2-800">
+          {area}
+        </span>
+      ))}
+      {coverage.open.length > 0 && <span className={cn("text-muted-foreground", coverage.covered.length > 0 && "ml-2")}>Not covered</span>}
+      {coverage.open.map((area) => (
+        <span key={`o-${area}`} className="rounded-full border border-dashed border-neutral-600 px-2.5 py-1 text-neutral-800">
+          {area}
+        </span>
+      ))}
     </div>
   );
 }
@@ -316,12 +366,16 @@ function ResearchNoticeBanner({
   notice,
   topic,
   researched,
+  sizedMinutes,
+  coverage,
   hasBackbone,
   onResearchAgain,
 }: {
   notice: ResearchNotice;
   topic: string;
   researched: number;
+  sizedMinutes: number;
+  coverage?: Coverage | null;
   hasBackbone: boolean;
   onResearchAgain?: () => void;
 }) {
@@ -343,12 +397,21 @@ function ResearchNoticeBanner({
     <div role="status" className="flex gap-3 rounded-[20px] bg-accent-200 px-4 py-3.5 text-[13px] leading-normal text-accent-900">
       <CircleAlert className="mt-px size-[18px] shrink-0 text-accent-700" strokeWidth={2.5} />
       <span>
-        {researched === 0 ? "No materials could be checked" : `Only ${researched} material${researched === 1 ? "" : "s"} could be checked`} for{" "}
-        <strong className="font-semibold">{topic}</strong>
-        {hasBackbone ? "" : ", and no textbook stood out"}. The plan uses {researched === 0 ? "your own sources" : researched === 1 ? "that one plus your own sources" : "those plus your own sources"}.
+        {thinText({ researched, sizedMinutes, open: coverage?.open ?? [], hasBackbone })} for <strong className="font-semibold">{topic}</strong>.{" "}
+        {researched === 0 ? "The plan uses your own sources" : "The plan uses what was found plus your own sources"} and leans on practice where there is nothing to read. Paste links in the
+        conversation to have them checked the same way.
       </span>
     </div>
   );
+}
+
+/** "Pensieve could check only 3 materials, about 9 h, and found nothing on advanced stitches or finishing" */
+export function thinText(input: { researched: number; sizedMinutes: number; open: string[]; hasBackbone: boolean }): string {
+  const { researched, sizedMinutes, open } = input;
+  const count = researched === 0 ? "Pensieve could not check any materials" : `Pensieve could check ${researched < 5 ? "only " : ""}${researched} material${researched === 1 ? "" : "s"}`;
+  const size = researched > 0 && sizedMinutes > 0 ? `, ${approxDuration(sizedMinutes).replace("≈", "about")},` : "";
+  const gaps = open.length > 0 ? ` and found nothing on ${joinAnd(open.map((a) => a.toLowerCase()))}` : input.hasBackbone ? "" : " and no textbook stood out";
+  return `${count}${gaps ? size : size.replace(/,$/, "")}${gaps}`;
 }
 
 function RemoveDialog({ material, uses, onCancel, onConfirm }: { material: Material; uses: MaterialUse[]; onCancel: () => void; onConfirm: () => void }) {

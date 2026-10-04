@@ -5,6 +5,7 @@ import type { ChangedNodes } from "@/lib/planSummary";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanTreeInput } from "@/lib/schemas/plan";
 import type { SourceInput } from "@/lib/schemas/source";
+import type { PlanSplit } from "@/lib/studyTime";
 
 export type { ModelCall, ResearchEvent };
 
@@ -14,7 +15,7 @@ export type CallEvent = { type: "call"; call: ModelCall };
 /** Messages shown in the conversation rail. Kept as plain data so the rail is a pure render of this list. */
 export type ChatMessage =
   | { id: string; kind: "sys"; text: string }
-  | { id: string; kind: "brief"; topic: string; days: number; granularity: Granularity; focus?: string; materials: SourceInput[] }
+  | { id: string; kind: "brief"; topic: string; days: number; granularity: Granularity; hoursPerWeek?: number; focus?: string; materials: SourceInput[] }
   | { id: string; kind: "user"; text: string }
   | { id: string; kind: "answer"; text: string; streaming: boolean }
   | {
@@ -41,6 +42,10 @@ interface PlanContext {
   days: number;
   granularity: Granularity;
   instructions?: string;
+  /** Hours a week the learner can give; six when not stated. Every unit's budget derives from it. */
+  hoursPerWeek?: number;
+  /** How the plan divides that time. Null or absent on a new draft: the drafter decides it with the top level. */
+  split?: PlanSplit | null;
   /** Ask for a `call` event per model call. Honoured only for admins; ignored for everyone else. */
   debug?: boolean;
 }
@@ -58,6 +63,8 @@ export interface PlanDraftRequest extends PlanContext {
 export type PlanDraftEvent =
   | ResearchEvent
   | { type: "node"; parentId: string; node: PlanNode }
+  /** Sent once the top level has validated: how the drafter divides the learner's time. */
+  | { type: "split"; split: PlanSplit }
   | { type: "finish"; root: PlanNode; costUsd: number }
   | { type: "error"; message: string }
   | CallEvent;
@@ -108,6 +115,7 @@ export function nextMessageId(): string {
 
 export function describeBrief(m: Extract<ChatMessage, { kind: "brief" }>): string {
   const lines = [`Topic: ${m.topic}`, `Length: ${m.days} days, planned in ${m.granularity} units`];
+  if (m.hoursPerWeek) lines.push(`Time: about ${m.hoursPerWeek} hours a week`);
   if (m.focus?.trim()) lines.push(`Focus: ${m.focus.trim()}`);
   if (m.materials.length > 0) lines.push(`Materials: ${m.materials.map((s) => s.title ?? s.url).join("; ")}`);
   return lines.join("\n");

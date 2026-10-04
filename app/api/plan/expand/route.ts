@@ -8,12 +8,15 @@ import { ndjsonResponse } from "@/lib/ndjson";
 import { fromTreeInput } from "@/lib/planInput";
 import { granularitySchema, planTreeInputSchema } from "@/lib/schemas/plan";
 import { materialListSchema } from "@/lib/schemas/material";
+import { DEFAULT_HOURS_PER_WEEK, hoursPerWeekSchema, planSplitSchema } from "@/lib/studyTime";
 
 const bodySchema = z.object({
   topic: z.string().trim().min(1).max(200),
   granularity: granularitySchema,
   instructions: z.string().trim().max(2000).optional(),
   materials: materialListSchema,
+  hoursPerWeek: hoursPerWeekSchema.optional(),
+  split: planSplitSchema.nullable().optional(),
   tree: planTreeInputSchema,
   nodeId: z.string().min(1),
   reason: z.enum(["expand", "split"]),
@@ -38,6 +41,8 @@ export async function POST(request: Request) {
         granularity: body.granularity,
         instructions: body.instructions || undefined,
         materials: body.materials,
+        hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
+        split: body.split ?? null,
         tree,
         nodeId: body.nodeId,
         reason: body.reason,
