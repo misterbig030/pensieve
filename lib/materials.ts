@@ -154,7 +154,14 @@ export interface LevelCheckInput {
   top: boolean;
   backboneId: string | null;
   unknownIds: string[];
+  /** The learner's weekly hours. With them, day leaves are checked against a day's share of the week. */
+  hoursPerWeek?: number;
+  /** The plan's reading share (0–1). With it, a leaf whose must-reading runs well past that share is reported. */
+  readingShare?: number | null;
 }
+
+/** How far must-reading may run past the plan's reading share before it is worth a fact. */
+export const SHARE_TOLERANCE = 1.25;
 
 /**
  * The checks in code that run after each drafted level. They never change the plan; they become facts in the
@@ -172,9 +179,15 @@ export function levelFacts(input: LevelCheckInput): string[] {
       const noMust = input.nodes.filter((n) => !(n.materials ?? []).some((r) => r.tier === "must"));
       if (noMust.length > 0) facts.push(`no must: ${noMust.map(label).join(", ")}`);
       for (const n of input.nodes) {
-        if (n.budgetHours === null) continue;
-        const total = (n.materials ?? []).reduce((sum, r) => sum + (r.minutes ?? 0), 0);
-        if (total > n.budgetHours * 60) facts.push(`${label(n)} over budget: ${total} of ${n.budgetHours * 60} min`);
+        // Without the learner's hours only week leaves carry a budget; with them, days do too.
+        if (n.budgetHours === null && input.hoursPerWeek === undefined) continue;
+        const budget = budgetMinutes(n, input.hoursPerWeek);
+        if (budget <= 0) continue;
+        const { must, should } = tierMinutes(n.materials);
+        if (must + should > budget) facts.push(`${label(n)} over budget: ${must + should} of ${budget} min`);
+        else if (typeof input.readingShare === "number" && must > budget * input.readingShare * SHARE_TOLERANCE + 10) {
+          facts.push(`${label(n)} must-reading over the plan's share: ${must} of about ${Math.round(budget * input.readingShare)} min`);
+        }
       }
     }
   }

@@ -19,7 +19,8 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
-import { unitListSchema, type UnitDraft } from "@/lib/schemas/plan";
+import { topUnitListSchema, unitListSchema, type UnitDraft } from "@/lib/schemas/plan";
+import { normalizeSplit, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
 import { buildUnitsPrompt, type UnitsPromptInput } from "./planPrompt";
@@ -32,14 +33,14 @@ export function unitsAreLeaves(level: PlanLevel, granularity: Granularity): bool
 }
 
 /** Builds a node for a drafted unit: leaves get a time budget when they are week-sized. */
-export function nodeFor(unit: UnitDraft, level: PlanLevel, len: number, granularity: Granularity, aliases?: MaterialAliases): PlanNode {
+export function nodeFor(unit: UnitDraft, level: PlanLevel, len: number, granularity: Granularity, aliases?: MaterialAliases, hoursPerWeek?: number): PlanNode {
   const leaf = unitsAreLeaves(level, granularity);
   const node = makeNode({
     level,
     title: unit.title,
     summary: unit.summary,
     len,
-    budgetHours: leaf && level !== "day" ? budgetFor(len) : null,
+    budgetHours: leaf && level !== "day" ? budgetFor(len, hoursPerWeek) : null,
     children: null,
   });
   if (aliases) applyUnitRefs(node, unit, leaf, aliases);
@@ -82,6 +83,8 @@ interface StreamUnitsInput {
   expected: number;
   /** Runs on the validated units before the call is reported; returns the checks to show beside the response. */
   check?: (units: UnitDraft[]) => string[];
+  /** Ask for the plan's time split along with the units (the top level of a new plan). */
+  wantSplit?: boolean;
   log?: GenerationLogContext;
 }
 
@@ -91,12 +94,12 @@ export function unitFacts(returned: number, expected: number): string[] {
   return returned === expected ? [count, "spans kept"] : [count, "spans re-split"];
 }
 
-type UnitEvent = { type: "unit"; unit: UnitDraft } | { type: "done"; units: UnitDraft[]; costUsd: number };
+type UnitEvent = { type: "unit"; unit: UnitDraft } | { type: "done"; units: UnitDraft[]; costUsd: number; split: PlanSplit | null };
 
 /** Streams units as they fully arrive (the in-progress one is withheld), then the validated list with its cost. */
 async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> {
   const startedAt = performance.now();
-  const result = streamObject({ model: DEFAULT_OUTLINE_MODEL, schema: unitListSchema, prompt: input.prompt });
+  const result = streamObject({ model: DEFAULT_OUTLINE_MODEL, schema: input.wantSplit ? topUnitListSchema : unitListSchema, prompt: input.prompt });
   let sent = 0;
   for await (const partial of result.partialObjectStream) {
     const units = (partial.units ?? []).filter((u): u is Partial<UnitDraft> => u != null);
@@ -118,7 +121,9 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     userId: input.log?.userId,
   });
   await emitGenerationLog(input.log?.onLog, row);
+  const split = input.wantSplit ? normalizeSplit((object as { split?: Parameters<typeof normalizeSplit>[0] }).split) : null;
   const checks = input.check?.(object.units) ?? [];
+  if (input.wantSplit) checks.unshift(split ? `split ${split.readingShare}% reading · ${split.practice}` : "no split returned");
   input.log?.onCall?.({
     ...row,
     label: input.label,
@@ -128,11 +133,13 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     finishReason: finishReason ?? null,
     facts: [...unitFacts(object.units.length, input.expected), ...checks],
   });
-  yield { type: "done", units: object.units, costUsd: row.costUsd };
+  yield { type: "done", units: object.units, costUsd: row.costUsd, split };
 }
 
 interface DraftLevelInput {
-  ctx: { topic: string; instructions?: string; materials: Material[]; granularity: Granularity };
+  ctx: { topic: string; instructions?: string; materials: Material[]; granularity: Granularity; hoursPerWeek?: number; split?: PlanSplit | null };
+  /** The top level of a new plan: the drafter decides the time split in this call. */
+  decideSplit?: boolean;
   level: PlanLevel;
   spans: number[];
   startDay: number;
@@ -158,7 +165,7 @@ function placeForChecks(tree: PlanNode | undefined, parentId: string | undefined
 }
 
 /** Drafts one level of units under `parentId` (or the top level), yielding each node as it lands. */
-async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; costUsd: number }> {
+async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; costUsd: number; split: PlanSplit | null }> {
   const { ctx, level } = input;
   const leaf = unitsAreLeaves(level, ctx.granularity);
   const aliases = ctx.materials.length > 0 ? aliasMaterials(ctx.materials) : undefined;
@@ -168,6 +175,9 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     instructions: ctx.instructions,
     materials: ctx.materials,
     granularity: ctx.granularity,
+    hoursPerWeek: ctx.hoursPerWeek,
+    split: ctx.split,
+    decideSplit: input.decideSplit,
     level,
     spans: input.spans,
     startDay: input.startDay,
@@ -188,28 +198,29 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     const spans = reconcileSpans(input.spans, units.length, level);
     const unknown: string[] = [];
     final = units.map((unit, i) => {
-      const node = nodes[i] ?? nodeFor(unit, level, spans[i], ctx.granularity);
+      const node = nodes[i] ?? nodeFor(unit, level, spans[i], ctx.granularity, undefined, ctx.hoursPerWeek);
       node.title = unit.title;
       node.summary = unit.summary;
       node.len = spans[i];
       node.end = node.start + node.len - 1;
-      if (node.budgetHours !== null) node.budgetHours = budgetFor(node.len);
+      if (node.budgetHours !== null) node.budgetHours = budgetFor(node.len, ctx.hoursPerWeek);
       if (aliases) unknown.push(...applyUnitRefs(node, unit, leaf, aliases));
       return node;
     });
     if (!aliases) return [];
     const { root, placed } = placeForChecks(input.tree, input.parentId, final);
-    return levelFacts({ root, nodes: placed, leaves: leaf, top: !input.parentId, backboneId, unknownIds: unknown });
+    // While the split is decided in this same call, there is no share to hold the units to yet.
+    return levelFacts({ root, nodes: placed, leaves: leaf, top: !input.parentId, backboneId, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, readingShare: input.decideSplit ? null : readingShareOf(ctx.split) });
   };
 
-  for await (const event of streamUnits({ prompt: buildUnitsPrompt(promptInput), label, expected: n, check, log: input.log })) {
+  for await (const event of streamUnits({ prompt: buildUnitsPrompt(promptInput), label, expected: n, check, wantSplit: input.decideSplit, log: input.log })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
-      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases);
+      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek);
       nodes.push(node);
       yield { type: "node", node };
     } else {
-      yield { type: "done", nodes: final, costUsd: event.costUsd };
+      yield { type: "done", nodes: final, costUsd: event.costUsd, split: event.split };
     }
   }
 }
@@ -230,8 +241,12 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
   const root = makeRoot([]);
   let costUsd = 0;
 
+  // A plan drafted against a given split keeps it; otherwise the drafter decides one with the top level.
+  let split: PlanSplit | null = input.split ?? null;
+  const decideSplit = split === null;
+
   const tops: PlanNode[] = [];
-  for await (const event of draftLevel({ ctx: input, level: topLevel, spans: topSpans(total), startDay: 1, totalDays: total, log: input.log })) {
+  for await (const event of draftLevel({ ctx: input, decideSplit, level: topLevel, spans: topSpans(total), startDay: 1, totalDays: total, log: input.log })) {
     if (event.type === "node") {
       tops.push(event.node);
       root.children = tops;
@@ -241,15 +256,20 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
       root.children = event.nodes;
       layout(root);
       costUsd += event.costUsd;
+      if (decideSplit && event.split) {
+        split = event.split;
+        yield { type: "split", split };
+      }
     }
   }
 
+  const ctx = { ...input, split };
   let parent: PlanNode | undefined = root.children?.[0];
   while (parent && !unitsAreLeaves(parent.level, input.granularity)) {
     const level = childLevel(parent.level)!;
     const spans = childSpans(parent);
     const kids: PlanNode[] = [];
-    for await (const event of draftLevel({ ctx: input, level, spans, startDay: parent.start, totalDays: root.len, tree: root, parentId: parent.id, log: input.log })) {
+    for await (const event of draftLevel({ ctx, level, spans, startDay: parent.start, totalDays: root.len, tree: root, parentId: parent.id, log: input.log })) {
       if (event.type === "node") {
         kids.push(event.node);
         parent.children = kids;
@@ -309,7 +329,7 @@ export interface StreamResearchedDraftInput extends PlanDraftRequest {
  */
 export async function* streamResearchedPlanDraft(input: StreamResearchedDraftInput): AsyncGenerator<PlanDraftEvent> {
   const outcome = yield* researchMaterials({
-    brief: { topic: input.topic, instructions: input.instructions, days: input.days, sources: input.materials },
+    brief: { topic: input.topic, instructions: input.instructions, days: input.days, hoursPerWeek: input.hoursPerWeek, sources: input.materials },
     arm: input.arm,
     signal: input.signal,
     log: input.log,

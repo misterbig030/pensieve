@@ -8,8 +8,9 @@ import { insertGenerationLog } from "@/lib/db/generationLog";
 import { ndjsonResponse } from "@/lib/ndjson";
 import { granularitySchema } from "@/lib/schemas/plan";
 import { sourceInputSchema } from "@/lib/schemas/source";
+import { DEFAULT_HOURS_PER_WEEK, hoursPerWeekSchema } from "@/lib/studyTime";
 
-// Research (about a minute at most) runs before drafting in the same request.
+// Research (a minute or two at most) runs before drafting in the same request.
 export const maxDuration = 300;
 
 const bodySchema = z.object({
@@ -18,6 +19,7 @@ const bodySchema = z.object({
   granularity: granularitySchema,
   instructions: z.string().trim().max(2000).optional(),
   materials: z.array(sourceInputSchema).max(50),
+  hoursPerWeek: hoursPerWeekSchema.optional(),
   debug: z.boolean().optional(),
 });
 
@@ -38,6 +40,7 @@ export async function POST(request: Request) {
         granularity: body.granularity,
         instructions: body.instructions || undefined,
         materials: body.materials,
+        hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
         arm: defaultArm(),
         // A client that disconnects stops research: the signal reaches search and fetch.
         signal: request.signal,

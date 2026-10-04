@@ -5,19 +5,27 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { streamExpandNode } from "@/lib/ai/planDraft";
 import { insertGenerationLog } from "@/lib/db/generationLog";
-import { getTrackDetail, updateTrackSummary } from "@/lib/db/queries";
+import { getTrackDetail, updateTrackStudyTime, updateTrackSummary } from "@/lib/db/queries";
 import { insertChildren, logSession, markLeafComplete, replacePlanTree } from "@/lib/db/planQueries";
 import { fromTreeInput } from "@/lib/planInput";
 import { summarizePlan } from "@/lib/planSummary";
 import { findNode, lockBoundary, type PlanNode } from "@/lib/planTree";
 import { planTreeInputSchema, type PlanTreeInput } from "@/lib/schemas/plan";
+import { hoursPerWeekSchema, planSplitSchema, type PlanSplit } from "@/lib/studyTime";
 import { z } from "zod";
 
 /**
  * Saves the adjusted plan. `materialIds` is the list the learner kept: saved materials left out of it are removed,
  * with their references.
  */
-export async function confirmRevisionAction(input: { trackId: string; tree: PlanTreeInput; materialIds: string[] }): Promise<void> {
+export async function confirmRevisionAction(input: {
+  trackId: string;
+  tree: PlanTreeInput;
+  materialIds: string[];
+  /** The learner's weekly hours and the plan's split as the adjust page left them; left out, both stay as saved. */
+  hoursPerWeek?: number;
+  split?: PlanSplit | null;
+}): Promise<void> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
@@ -32,6 +40,12 @@ export async function confirmRevisionAction(input: { trackId: string; tree: Plan
 
   const materialIds = z.array(z.string().uuid()).max(200).parse(input.materialIds);
   await replacePlanTree(input.trackId, userId, root, materialIds);
+  if (input.hoursPerWeek !== undefined) {
+    await updateTrackStudyTime(input.trackId, userId, {
+      hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek),
+      split: input.split === undefined ? detail.track.split : planSplitSchema.nullable().parse(input.split),
+    });
+  }
   const fresh = await getTrackDetail(input.trackId, userId);
   await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title));
   revalidatePath(`/tracks/${input.trackId}`);
@@ -66,6 +80,8 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
     granularity: detail.track.granularity,
     instructions: detail.track.instructions ?? undefined,
     materials: detail.materials,
+    hoursPerWeek: detail.track.hoursPerWeek,
+    split: detail.track.split,
     tree: detail.root,
     nodeId: input.nodeId,
     reason: input.reason,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { planSplitDraftSchema } from "@/lib/studyTime";
 import { coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema } from "./material";
 
 export const PLAN_LEVELS = ["month", "week", "day"] as const;
@@ -20,6 +21,15 @@ export const unitListSchema = z.object({
   units: z.array(unitDraftSchema).min(1).max(40),
 });
 export type UnitDraft = z.infer<typeof unitDraftSchema>;
+
+/**
+ * The top level of a new plan: the drafter first decides how the learner's time divides (`split`), then writes the
+ * units. `split` comes first so it is settled before any unit is written.
+ */
+export const topUnitListSchema = z.object({
+  split: planSplitDraftSchema.optional(),
+  units: z.array(unitDraftSchema).min(1).max(40),
+});
 
 /**
  * The revised tree the model returns from a change request. Depth is fixed at three levels (month → week → day) so

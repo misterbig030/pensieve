@@ -161,3 +161,62 @@ describe("materials in prompts", () => {
     expect(chat).toContain("{reads M2 must 15 min}");
   });
 });
+
+describe("time and the split in prompts", () => {
+  const sized: Material[] = [
+    { ...MATERIALS[0], minutes: 1320, minutesBasis: "measured" },
+    { ...MATERIALS[1], minutes: 300, minutesBasis: "estimated", uses: "units 1–4" },
+  ];
+  const base = { topic: "AI engineering", materials: sized, granularity: "week" as const, level: "week" as const, spans: [7, 7], startDay: 1, totalDays: 14, unitsAreLeaves: true };
+
+  it("shows each material's size and the part the plan uses", () => {
+    expect(renderMaterials(sized)).toBe(
+      [
+        'M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024 <https://example.com/aie> · about 22 h. The backbone.',
+        `M2 [video · the learner's own] "Intro talk" <https://youtu.be/x> · units 1–4, about 5 h (estimated)`,
+      ].join("\n"),
+    );
+  });
+
+  it("asks the top level of a new plan to decide the split, and states no share yet", () => {
+    const prompt = buildUnitsPrompt({ ...base, hoursPerWeek: 10, decideSplit: true });
+    expect(prompt).toContain("The learner's time: about 10 hours a week.");
+    expect(prompt).toContain('First decide how this learner\'s time divides, as "split".');
+    expect(prompt).toContain("1. Days 1–7 (7 days) — budget about 10 h\n");
+    expect(prompt).toContain("must minutes stay within your readingShare of the unit's budget");
+    expect(prompt).not.toContain("building and practice");
+    expect(prompt).toContain("never assign more of it than it has");
+  });
+
+  it("budgets later levels from the decided split and names the practice", () => {
+    const split = { readingShare: 85, practice: "writing summaries", reason: "A knowledge topic." };
+    const prompt = buildUnitsPrompt({ ...base, hoursPerWeek: 6, split });
+    expect(prompt).toContain("How this plan spends that time: about 85% reading or watching the materials, the rest on writing summaries.");
+    expect(prompt).toContain("— budget about 6 h, so about 5.1 h of must-reading");
+    expect(prompt).toContain("must minutes stay within about 85% of the unit's budget, because the rest of the time is for writing summaries");
+    expect(prompt).not.toContain('as "split"');
+  });
+
+  it("gives a day its share of the week", () => {
+    const prompt = buildUnitsPrompt({ ...base, granularity: "day", level: "day", spans: [1, 1], totalDays: 2, hoursPerWeek: 30, split: { readingShare: 50, practice: "building", reason: "" } });
+    expect(prompt).toContain("1. Day 1 — budget about 4.3 h, so about 2.2 h of must-reading");
+    expect(prompt).toContain("Each day is one focused session of about 4.3 h.");
+  });
+
+  it("keeps the old wording and the fixed share when no hours or split are given", () => {
+    const prompt = buildUnitsPrompt({ ...base, materials: MATERIALS });
+    expect(prompt).not.toContain("The learner's time");
+    expect(prompt).toContain("— budget about 6 h, so about 3.6 h of must-reading");
+    expect(prompt).toContain("because the rest of the time is for building and practice");
+  });
+
+  it("tells the conversation and revisions about the time and the split", () => {
+    const split = { readingShare: 10, practice: "running sessions", reason: "Training." };
+    const tree = makeRoot([makeNode({ id: "w1", level: "week", title: "Base", summary: "s", len: 7, budgetHours: 3 })]);
+    const chat = buildPlanChatSystemPrompt({ mode: "create", topic: "Couch to 5K", materials: [], granularity: "week", hoursPerWeek: 3, split, tree, lockBefore: 0 });
+    expect(chat).toContain("The learner's time: about 3 hours a week.");
+    expect(chat).toContain("the rest on running sessions");
+    const revision = buildRevisionPrompt({ topic: "Couch to 5K", materials: [], granularity: "week", hoursPerWeek: 3, split, tree, refs: assignRefs(tree), lockBefore: 0, changeRequest: "x" });
+    expect(revision).toContain("about 10% reading or watching the materials");
+  });
+});

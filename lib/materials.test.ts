@@ -75,6 +75,22 @@ describe("levelFacts", () => {
       "backbone ch. 2 after ch. 3 (Week 2)",
     ]);
   });
+  it("checks days against the learner's hours and must-reading against the plan's share", () => {
+    const d1 = makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, materials: [{ id: "X", tier: "must", minutes: 45, note: null }] });
+    const d2 = makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1, materials: [{ id: "X", tier: "must", minutes: 20, note: null }, { id: "Y", tier: "should", minutes: 40, note: null }] });
+    const d3 = makeNode({ id: "d3", level: "day", title: "C", summary: "c", len: 1, materials: [{ id: "X", tier: "must", minutes: 15, note: null }] });
+    const root = makeRoot([d1, d2, d3]);
+    const base = { root, nodes: [d1, d2, d3], leaves: true, top: true, backboneId: null, unknownIds: [] };
+    // Without hours, a day has no budget to check.
+    expect(levelFacts(base)).toEqual([]);
+    // Six hours a week is 50 minutes a day; a 30% reading share is about 15 of them.
+    expect(levelFacts({ ...base, hoursPerWeek: 6, readingShare: 0.3 })).toEqual([
+      "Day 1 must-reading over the plan's share: 45 of about 15 min",
+      "Day 2 over budget: 60 of 50 min",
+    ]);
+    expect(levelFacts({ ...base, hoursPerWeek: 6, readingShare: null })).toEqual(["Day 2 over budget: 60 of 50 min"]);
+  });
+
   it("reports backbone chapters no top-level heading reserves", () => {
     const m1 = makeNode({ id: "m1", level: "month", title: "A", summary: "a", len: 28, covers: [{ id: "B", note: "ch. 1–2" }] });
     const m2 = makeNode({ id: "m2", level: "month", title: "B", summary: "b", len: 28, covers: [{ id: "B", note: "ch. 5" }] });
