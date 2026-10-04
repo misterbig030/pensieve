@@ -14,7 +14,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { SOURCE_TYPES } from "@/lib/schemas/source";
-import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS } from "@/lib/schemas/material";
+import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS, MINUTES_BASES } from "@/lib/schemas/material";
+import type { PlanSplit } from "@/lib/studyTime";
 
 export const tracks = pgTable("tracks", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -25,6 +26,10 @@ export const tracks = pgTable("tracks", {
   summary: text("summary"),
   /** Whether the finest planned unit is a day or a week. Resolved from the learner's Day/Week/Auto choice. */
   granularity: text("granularity", { enum: ["day", "week"] }).notNull().default("day"),
+  /** How many hours a week the learner said they can give. Every unit's budget derives from it. */
+  hoursPerWeek: integer("hours_per_week").notNull().default(6),
+  /** How the plan divides that time between reading and practice. Null on plans drafted before it existed. */
+  split: jsonb("split").$type<PlanSplit>(),
   status: text("status", { enum: ["active", "completed", "archived"] })
     .notNull()
     .default("active"),
@@ -61,6 +66,12 @@ export const sources = pgTable(
     fetchedTitle: text("fetched_title"),
     /** Pages that recommended it (backbone evidence). */
     recommendedBy: jsonb("recommended_by").$type<string[]>().notNull().default([]),
+    /** Minutes to read or watch the part the plan uses. */
+    minutes: integer("minutes"),
+    /** Whether code measured the size (page count, runtime, page length) or the model estimated it. */
+    minutesBasis: text("minutes_basis", { enum: MINUTES_BASES }),
+    /** The part the plan uses when that is not the whole work: "ch. 1, 7–9". */
+    uses: text("uses"),
   },
   (t) => [uniqueIndex("sources_one_backbone_idx").on(t.trackId).where(sql`${t.backbone}`)],
 );

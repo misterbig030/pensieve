@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { GranularityChoice } from "@/lib/planTree";
 import { detectSourceType, type SourceInput, type SourceType } from "@/lib/schemas/source";
+import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, clampHours, hoursInText, presetFor, totalHours } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 const DAY_PRESETS = [7, 30, 90, 180];
@@ -39,8 +40,15 @@ export interface TrackFormValue {
   topic: string;
   days: number | "";
   granularity: GranularityChoice;
+  /** Hours a week the learner can give; empty while the custom field is being typed. */
+  hoursPerWeek: number | "";
   instructions: string;
   sources: SourceInput[];
+}
+
+/** "12 weeks" for whole weeks, otherwise "30 days". */
+function lengthLabel(days: number): string {
+  return days % 7 === 0 && days >= 14 ? `${days / 7} weeks` : `${days} day${days === 1 ? "" : "s"}`;
 }
 
 interface TrackFormFieldsProps {
@@ -63,6 +71,11 @@ export function TrackFormFields({ value, onChange, topicPlaceholder }: TrackForm
   function removeSource(url: string) {
     onChange({ ...value, sources: value.sources.filter((s) => s.url !== url) });
   }
+
+  const hours = value.hoursPerWeek;
+  const customHours = hours !== "" && !presetFor(hours);
+  // A brief that names its own number of hours is flagged, never silently followed: the setting is what counts.
+  const stated = hoursInText(value.instructions);
 
   return (
     <div className="flex flex-col gap-[22px]">
@@ -135,6 +148,53 @@ export function TrackFormFields({ value, onChange, topicPlaceholder }: TrackForm
         </div>
       </div>
 
+      <div className="flex flex-col gap-2.5 rounded-[22px] bg-secondary px-5 pt-[18px] pb-5">
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+          <span id="hours-label" className="text-[11px] tracking-wide text-muted-foreground uppercase">
+            Time you can give
+          </span>
+          <span className="text-xs text-muted-foreground">Be honest: you can change it later.</span>
+        </div>
+        <div role="group" aria-labelledby="hours-label" className="flex flex-wrap items-stretch gap-2">
+          {HOURS_PRESETS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              aria-pressed={hours === p.hours}
+              onClick={() => onChange({ ...value, hoursPerWeek: p.hours })}
+              className={cn(
+                "flex min-h-14 flex-col items-start justify-center gap-0.5 rounded-[18px] border px-[18px] py-2 text-left",
+                hours === p.hours ? "border-primary bg-primary text-primary-foreground" : "border-border bg-transparent text-foreground hover:bg-accent-100",
+              )}
+            >
+              <span className="text-[13.5px] font-semibold">{p.label}</span>
+              <span className="text-xs opacity-85">about {p.hours} h a week</span>
+            </button>
+          ))}
+          <label className={cn("flex min-h-14 items-center gap-2 rounded-[18px] border px-3.5", customHours ? "border-primary" : "border-border")}>
+            <span className="text-[13.5px] font-semibold">Custom</span>
+            <Input
+              type="number"
+              min={MIN_HOURS_PER_WEEK}
+              max={MAX_HOURS_PER_WEEK}
+              placeholder="e.g. 10"
+              className="w-[76px] bg-background"
+              value={hours !== "" && presetFor(hours) ? "" : hours}
+              onChange={(e) => onChange({ ...value, hoursPerWeek: e.target.value ? clampHours(Number(e.target.value)) : "" })}
+            />
+            <span className="text-[13px] text-muted-foreground">hours a week</span>
+          </label>
+        </div>
+        {hours !== "" && value.days !== "" && (
+          <p role="status" className="m-0 text-[13.5px] leading-normal text-neutral-800">
+            <strong className="font-semibold">
+              {capitalizeFirst(lengthLabel(value.days))} at {hours} h a week is about {totalHours(value.days, hours)} hours.
+            </strong>{" "}
+            Pensieve finds and sizes material for the topic, then the plan decides how those hours are spent: reading, practice, or whatever the topic calls for.
+          </p>
+        )}
+      </div>
+
       <div className="flex flex-col gap-1.5">
         <label className="text-[11px] tracking-wide text-muted-foreground uppercase">
           Focus & instructions <span className="opacity-70 normal-case">(optional)</span>
@@ -145,6 +205,16 @@ export function TrackFormFields({ value, onChange, topicPlaceholder }: TrackForm
           value={value.instructions}
           onChange={(e) => onChange({ ...value, instructions: e.target.value })}
         />
+        {stated !== null && hours !== "" && stated !== hours && (
+          <div role="status" className="flex flex-wrap items-center gap-3 rounded-2xl bg-neutral-200 py-2.5 pr-2.5 pl-3.5 text-[13px] leading-normal">
+            <span className="min-w-[200px] flex-1">
+              Your notes say about {stated} hour{stated === 1 ? "" : "s"} a week, and the time setting is {hours}. The plan uses the setting.
+            </span>
+            <Button type="button" variant="secondary" size="sm" className="min-h-10 border border-border bg-background px-4 text-[12.5px]" onClick={() => onChange({ ...value, hoursPerWeek: stated })}>
+              Use {stated} h a week
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -183,4 +253,8 @@ export function TrackFormFields({ value, onChange, topicPlaceholder }: TrackForm
       </div>
     </div>
   );
+}
+
+function capitalizeFirst(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

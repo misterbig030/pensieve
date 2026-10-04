@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { describeUses } from "@/components/pensieve/MaterialsList";
+import { describeUses, thinText } from "@/components/pensieve/MaterialsList";
 import type { ResearchEvent } from "@/lib/ai/research/events";
-import { formatDuration, initialResearch, reduceResearch } from "./researchProgress";
+import { approxDuration, formatDuration, initialResearch, reduceResearch } from "./researchProgress";
 
 describe("reduceResearch", () => {
   it("folds the stream into counters, a log and the found list", () => {
@@ -56,4 +56,32 @@ describe("formatDuration", () => {
     [60, "1 h"],
     [90, "1 h 30"],
   ])("%i", (m, text) => expect(formatDuration(m)).toBe(text));
+});
+
+describe("sizes in the research card and list", () => {
+  it("rounds sizes the way a reader says them", () => {
+    expect(approxDuration(25)).toBe("≈ 25 min");
+    expect(approxDuration(72)).toBe("≈ 1 h 10");
+    expect(approxDuration(300)).toBe("≈ 5 h");
+    expect(approxDuration(1320)).toBe("≈ 22 h");
+  });
+
+  it("logs a verified material with its size and whether it was estimated", () => {
+    const base = initialResearch(0);
+    const measured = reduceResearch(base, { type: "research.verified", id: "M1", title: "AI Engineering", kind: "book", backbone: true, minutes: 1320, basis: "measured" }, new Set());
+    expect(measured.log.at(-1)?.detail).toBe("book · ≈ 22 h");
+    const estimated = reduceResearch(base, { type: "research.verified", id: "M2", title: "Course", kind: "course", backbone: false, minutes: 480, basis: "estimated" }, new Set());
+    expect(estimated.log.at(-1)?.detail).toBe("course · ≈ 8 h, estimated");
+    const unsized = reduceResearch(base, { type: "research.verified", id: "M3", title: "Repo", kind: "repo", backbone: false }, new Set());
+    expect(unsized.log.at(-1)?.detail).toBe("repo");
+  });
+
+  it("describes thin research by what it could not cover", () => {
+    expect(thinText({ researched: 3, sizedMinutes: 540, open: ["Advanced stitches", "Finishing"], hasBackbone: false })).toBe(
+      "Pensieve could check only 3 materials, about 9 h, and found nothing on advanced stitches and finishing",
+    );
+    expect(thinText({ researched: 0, sizedMinutes: 0, open: [], hasBackbone: false })).toBe("Pensieve could not check any materials and no textbook stood out");
+    expect(thinText({ researched: 2, sizedMinutes: 90, open: [], hasBackbone: true })).toBe("Pensieve could check only 2 materials, about 1 h 30");
+    expect(thinText({ researched: 8, sizedMinutes: 0, open: ["Evals"], hasBackbone: true })).toBe("Pensieve could check 8 materials and found nothing on evals");
+  });
 });

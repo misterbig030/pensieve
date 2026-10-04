@@ -39,7 +39,18 @@ function ItemLink({ material: m, className, link = true }: { material: Material;
 }
 
 /** Must and should minutes against the budget, as a two-part bar and one line of text. */
-export function BudgetBar({ rows, budgetMinutes, variant = "compact" }: { rows: ReadRow[]; budgetMinutes: number; variant?: "compact" | "full" }) {
+export function BudgetBar({
+  rows,
+  budgetMinutes,
+  variant = "compact",
+  practice = "practice",
+}: {
+  rows: ReadRow[];
+  budgetMinutes: number;
+  variant?: "compact" | "full";
+  /** What the rest of the time goes to, in the plan's words ("building projects"). */
+  practice?: string;
+}) {
   const { must, should } = sumMinutes(rows);
   const budget = Math.max(budgetMinutes, 1);
   const left = Math.max(0, budgetMinutes - must - should);
@@ -58,7 +69,7 @@ export function BudgetBar({ rows, budgetMinutes, variant = "compact" }: { rows: 
           <strong className="font-semibold">{formatDuration(must)}</strong> must · <strong className="font-semibold">{formatDuration(should)}</strong> should · of {formatDuration(budgetMinutes)}
         </span>
         <span className={cn("ml-auto text-muted-foreground", over && "text-accent-800")}>
-          {over ? `${formatDuration(must + should - budgetMinutes)} over the budget` : `Leaves ${formatDuration(left)} for the build`}
+          {over ? `${formatDuration(must + should - budgetMinutes)} over the budget` : `Leaves ${formatDuration(left)} for ${practice}`}
         </span>
       </div>
     );
@@ -67,7 +78,7 @@ export function BudgetBar({ rows, budgetMinutes, variant = "compact" }: { rows: 
     <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
       {bar}
       <span>
-        {formatDuration(must)} must-read{should > 0 ? ` · ${formatDuration(should)} optional` : ""} · {over ? `${formatDuration(must + should - budgetMinutes)} over budget` : `${formatDuration(left)} left to build`}
+        {formatDuration(must)} must-read{should > 0 ? ` · ${formatDuration(should)} optional` : ""} · {over ? `${formatDuration(must + should - budgetMinutes)} over budget` : `${formatDuration(left)} left for ${practice}`}
       </span>
     </div>
   );
@@ -92,7 +103,7 @@ export function ReadRows({ rows, link = true }: { rows: ReadRow[]; link?: boolea
 }
 
 /** The leaf page's Read table: Tier | Item | Min | Note, with a budget footer. */
-export function ReadTable({ rows, budgetMinutes }: { rows: ReadRow[]; budgetMinutes: number }) {
+export function ReadTable({ rows, budgetMinutes, practice }: { rows: ReadRow[]; budgetMinutes: number; practice?: string }) {
   return (
     <section aria-labelledby="read-h" className="flex flex-col gap-3 rounded-[28px] bg-secondary px-[22px] py-5">
       <div className="flex items-center gap-2.5">
@@ -145,7 +156,7 @@ export function ReadTable({ rows, budgetMinutes }: { rows: ReadRow[]; budgetMinu
           </tbody>
         </table>
       </div>
-      <BudgetBar rows={rows} budgetMinutes={budgetMinutes} variant="full" />
+      <BudgetBar rows={rows} budgetMinutes={budgetMinutes} variant="full" practice={practice} />
     </section>
   );
 }

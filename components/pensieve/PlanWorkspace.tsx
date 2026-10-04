@@ -8,7 +8,8 @@ import { ConversationRail } from "@/components/pensieve/ConversationRail";
 import { MaterialsList } from "@/components/pensieve/MaterialsList";
 import { ModelCallsPanel } from "@/components/pensieve/ModelCallsPanel";
 import { ResearchProgress } from "@/components/pensieve/ResearchProgress";
-import type { DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
+import { TimeSplitCard } from "@/components/pensieve/TimeSplitCard";
+import type { Coverage, DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
 import { assignmentsOf, removeMaterialRefs } from "@/lib/materials";
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
@@ -50,6 +51,7 @@ import {
 } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
+import { DEFAULT_HOURS_PER_WEEK, rebudget, totalHours, type PlanSplit } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 export interface PlanWorkspaceProps {
@@ -57,6 +59,10 @@ export interface PlanWorkspaceProps {
   topic: string;
   days: number;
   granularity: Granularity;
+  /** Hours a week the learner can give; six on plans that never asked. */
+  hoursPerWeek?: number;
+  /** Adjust mode: the plan's saved time split. Create mode: omit and the drafter decides it. */
+  initialSplit?: PlanSplit | null;
   instructions?: string;
   /** Create mode: the learner's own sources, as typed. Research adds to them. */
   sources: SourceInput[];
@@ -70,7 +76,7 @@ export interface PlanWorkspaceProps {
   backLabel: string;
   heading: string;
   subtext: string;
-  onConfirm: (tree: PlanNode, summary: string, materials: Material[]) => Promise<void>;
+  onConfirm: (tree: PlanNode, summary: string, materials: Material[], time: { hoursPerWeek: number; split: PlanSplit | null }) => Promise<void>;
 }
 
 function leafLevel(level: PlanLevel, granularity: Granularity): boolean {
@@ -115,6 +121,11 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [dropped, setDropped] = useState<DroppedMaterial[]>([]);
   const [notice, setNotice] = useState<ResearchNotice | undefined>(undefined);
   const [research, setResearch] = useState<ResearchProgressState | null>(null);
+  const [coverage, setCoverage] = useState<Coverage | null>(null);
+  // The learner's hours and the plan's split: both can be changed here, and both are sent with every later request.
+  const [hoursPerWeek, setHoursPerWeek] = useState<number>(props.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK);
+  const [split, setSplit] = useState<PlanSplit | null>(props.initialSplit ?? null);
+  const hoursRef = useRef(hoursPerWeek);
 
   const railOpenRef = useRef(railOpen);
   const draftStarted = useRef(false);
@@ -122,6 +133,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   useEffect(() => {
     railOpenRef.current = railOpen;
   }, [railOpen]);
+  useEffect(() => {
+    hoursRef.current = hoursPerWeek;
+  }, [hoursPerWeek]);
 
   const pushAssistant = useCallback((text: string) => {
     setMessages((ms) => [...ms, { id: nextMessageId(), kind: "answer", text, streaming: false }]);
@@ -135,16 +149,19 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setMaterials([]);
     setDropped([]);
     setNotice(undefined);
+    setCoverage(null);
+    setSplit(null);
     setResearch(initialResearch());
     const topLevel = topLevelFor(days);
     // `debug` is always requested; the server only honours it for admins, so the switch is purely a view toggle.
-    const body: PlanDraftRequest = { topic, days, granularity, instructions, materials: sources, debug: true };
+    const body: PlanDraftRequest = { topic, days, granularity, instructions, materials: sources, hoursPerWeek: hoursRef.current, debug: true };
     const learnerUrls = new Set(sources.map((s) => s.url));
     // The stream is the source of truth while drafting; React state is a snapshot of these two.
     const draftRoot = makeRoot([]);
     draftRoot.len = days;
     const slots: Record<string, PendingSlots> = { root: { count: topSpans(days).length, groups: !leafLevel(topLevel, granularity) } };
     let researched: Material[] = [];
+    let decided: PlanSplit | null = null;
     const publish = () => {
       setTree(cloneTree(layout(draftRoot, 1, new Set(Object.keys(slots)))));
       setPending({ ...slots });
@@ -167,8 +184,12 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             setMaterials(researchEvent.materials);
             setDropped(researchEvent.dropped);
             setNotice(researchEvent.notice);
+            setCoverage(researchEvent.coverage ?? null);
             publish();
           }
+        } else if (event.type === "split") {
+          decided = event.split;
+          setSplit(event.split);
         } else if (event.type === "node") {
           const parent = findNode(draftRoot, event.parentId);
           if (!parent) return;
@@ -191,7 +212,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           setPending({});
           setCostUsd((c) => c + event.costUsd);
           setDrafting(false);
-          pushAssistant(draftedText(layout(event.root), researched));
+          pushAssistant(draftedText(layout(event.root), researched, decided));
         } else if (event.type === "error") {
           throw new Error(event.message);
         }
@@ -234,6 +255,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       granularity,
       instructions,
       materials,
+      hoursPerWeek,
+      split,
       tree: toTreeInput(tree),
       nodeId,
       reason,
@@ -325,6 +348,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       granularity,
       instructions,
       materials,
+      hoursPerWeek,
+      split,
       tree: toTreeInput(tree),
       lockBefore: isAdjust ? lockBefore : undefined,
       trackId,
@@ -437,6 +462,28 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     if (removed) setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: `Removed ${removed.title} from the materials and from the units that used it.` }]);
   }
 
+  function changeHours(hours: number) {
+    if (hours === hoursPerWeek) return;
+    setHoursPerWeek(hours);
+    // Open weeks take the new budget at once; reading lists already planned are left as they are.
+    setTree((t) => layout(rebudget(t, hours, isAdjust ? lockBefore : 0)));
+    setTimeNote(`Time set to ${hours} h a week, about ${totalHours(tree.len || days, hours)} hours in all. Open weeks are budgeted from it now; units planned from here on use it.`);
+  }
+
+  function changeSplit(next: PlanSplit) {
+    setSplit(next);
+    setTimeNote(`The plan now spends about ${next.readingShare}% of your time reading and the rest on ${next.practice}. Units planned from here on follow it.`);
+  }
+
+  /** One sys line for time changes, replaced as the learner keeps adjusting, so the rail is not flooded. */
+  function setTimeNote(text: string) {
+    setMessages((ms) => {
+      const last = ms[ms.length - 1];
+      if (last && last.kind === "sys" && last.id.startsWith("time-")) return [...ms.slice(0, -1), { ...last, text }];
+      return [...ms, { id: `time-${nextMessageId()}`, kind: "sys", text }];
+    });
+  }
+
   function undo(messageId: string) {
     const target = messages.find((m) => m.id === messageId);
     if (!target || target.kind !== "change" || target.undone) return;
@@ -450,7 +497,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setConfirming(true);
     setError(null);
     try {
-      await props.onConfirm(tree, summary, materials);
+      await props.onConfirm(tree, summary, materials, { hoursPerWeek, split });
     } catch (err) {
       unstable_rethrow(err);
       setError(err instanceof Error ? err.message : "Could not save the plan. Try again.");
@@ -504,7 +551,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         <div className="flex min-w-0 flex-col gap-5 max-[900px]:pb-[72px]">
           {researching && research ? (
             <>
-              <ResearchProgress state={research} />
+              <ResearchProgress state={research} totalHours={totalHours(days, hoursPerWeek)} />
               <div className="flex flex-col gap-2.5">
                 <TreeLabel>Plan</TreeLabel>
                 <div className="flex h-16 items-center rounded-[28px] bg-foreground/5 px-[22px] text-[13px] text-muted-foreground">
@@ -517,11 +564,22 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           ) : (
             <>
           <PlanSummaryCard summary={summary} loading={drafting} changed={highlight.length > 0} />
+          <TimeSplitCard
+            days={tree.len || days}
+            hoursPerWeek={hoursPerWeek}
+            split={split}
+            deciding={drafting && !split}
+            onChangeHours={changeHours}
+            onChangeSplit={changeSplit}
+            disabled={streaming || busy || confirming}
+          />
           <MaterialsList
             topic={topic}
             materials={materials}
             dropped={dropped}
             notice={notice}
+            coverage={coverage}
+            totalHours={totalHours(tree.len || days, hoursPerWeek)}
             usesOf={(id) => assignmentsOf(tree, id).map(({ label, role }) => ({ label, role }))}
             onRemove={streaming || busy || confirming ? undefined : removeMaterial}
             onResearchAgain={isAdjust || streaming || busy || confirming ? undefined : () => void streamDraft()}
@@ -529,6 +587,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           <TreeLabel>{topLevel === "day" ? "Plan at a glance" : "Plan"}</TreeLabel>
           <PlanTree
             materials={materials}
+            hoursPerWeek={hoursPerWeek}
+            practice={split?.practice}
             root={tree}
             mode={mode}
             highlight={new Set(highlight)}
@@ -653,10 +713,11 @@ function materialsText(materials: Material[]): string {
   return "";
 }
 
-function draftedText(root: PlanNode, materials: Material[] = []): string {
+function draftedText(root: PlanNode, materials: Material[] = [], split: PlanSplit | null = null): string {
   const tops = root.children ?? [];
   if (tops.length === 0) return "Nothing was drafted. Try again.";
-  const lead = materialsText(materials);
+  const time = split ? `I planned about ${split.readingShare}% of your time for reading and the rest for ${split.practice}; change that above if it is off. ` : "";
+  const lead = `${materialsText(materials)}${time}`;
   const level = tops[0].level;
   if (level === "day") return `${lead}Drafted ${root.len} days, one topic each. Ask me why something sits where it does, or tell me what to change.`;
   const first = tops[0];
@@ -711,6 +772,7 @@ function initialMessages(props: PlanWorkspaceProps): ChatMessage[] {
       topic: props.topic,
       days: props.days,
       granularity: props.granularity,
+      hoursPerWeek: props.hoursPerWeek,
       focus: props.instructions,
       materials: props.sources,
     },

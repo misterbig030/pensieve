@@ -10,6 +10,10 @@ export interface PageInfo {
   published: string | null;
   /** Readable text, cut to roughly 4k tokens. */
   text: string;
+  /** Words in the whole readable text, before the cut: how long the page is to read. Null when the body was not read. */
+  words?: number | null;
+  /** A video page's stated runtime in minutes. */
+  durationMinutes?: number | null;
 }
 
 /** About 4k tokens of English. */
@@ -78,8 +82,33 @@ function firstMeta(meta: Map<string, string>, keys: string[]): string | null {
   return null;
 }
 
+const CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/g;
+
+/** Words as a reader counts them: space-separated tokens, with unspaced CJK text counted at two characters a word. */
+export function countWords(text: string): number {
+  const cjk = text.match(CJK)?.length ?? 0;
+  const spaced = text.replace(CJK, " ").match(/\S+/g)?.length ?? 0;
+  return spaced + Math.round(cjk / 2);
+}
+
+/** "PT1H2M30S" → 63; a bare number is seconds. Null when it is neither. */
+export function parseDurationMinutes(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const v = value.trim();
+  if (/^\d+$/.test(v)) return Math.max(1, Math.round(Number(v) / 60));
+  const m = v.match(/^P(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/i);
+  if (!m || (!m[1] && !m[2] && !m[3] && !m[4])) return null;
+  const minutes = Number(m[1] ?? 0) * 1440 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) + Number(m[4] ?? 0) / 60;
+  return minutes > 0 ? Math.max(1, Math.round(minutes)) : null;
+}
+
 /** Strips everything that is not reading matter, then tags; keeps paragraph breaks as newlines. */
 export function htmlToText(html: string): string {
+  return readableText(html).slice(0, MAX_TEXT_CHARS);
+}
+
+/** The page's whole readable text, uncut. */
+export function readableText(html: string): string {
   let body = html;
   const main = html.match(/<(main|article)\b[^>]*>([\s\S]*?)<\/\1>/i);
   if (main && main[2].length > 500) body = main[2];
@@ -93,8 +122,7 @@ export function htmlToText(html: string): string {
     .split("\n")
     .map((line) => line.replace(/[ \t\f\v ]+/g, " ").trim())
     .filter(Boolean)
-    .join("\n")
-    .slice(0, MAX_TEXT_CHARS);
+    .join("\n");
 }
 
 /** Removes markup that can hold tag-like text (scripts, styles, comments) so it is never mistaken for the page. */
@@ -107,6 +135,7 @@ export function extractHtml(raw: string, finalUrl: string): PageInfo {
   const meta = metaTags(html);
   const title = clean(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]);
   const h1 = clean(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1]);
+  const full = readableText(html);
   return {
     finalUrl,
     title,
@@ -121,7 +150,9 @@ export function extractHtml(raw: string, finalUrl: string): PageInfo {
       "date",
       "book:release_date",
     ]),
-    text: htmlToText(html),
+    text: full.slice(0, MAX_TEXT_CHARS),
+    words: countWords(full),
+    durationMinutes: parseDurationMinutes(meta.get("duration") ?? meta.get("video:duration") ?? meta.get("og:video:duration")),
   };
 }
 
@@ -156,6 +187,7 @@ export function extractText(text: string, finalUrl: string): PageInfo {
     author: null,
     published: null,
     text: text.slice(0, MAX_TEXT_CHARS),
+    words: countWords(text),
   };
 }
 

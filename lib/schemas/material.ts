@@ -10,6 +10,10 @@ export type MaterialKind = (typeof MATERIAL_KINDS)[number];
 export const MATERIAL_TIERS = ["must", "should"] as const;
 export type MaterialTier = (typeof MATERIAL_TIERS)[number];
 
+/** Where a material's size came from: counted by code (pages, runtime, page length) or estimated by the model. */
+export const MINUTES_BASES = ["measured", "estimated"] as const;
+export type MinutesBasis = (typeof MINUTES_BASES)[number];
+
 /** How materials are grouped in the list, backbone aside. */
 export const KIND_ORDER: MaterialKind[] = ["book", "course", "video", "docs", "essay", "paper", "repo", "tool", "note"];
 
@@ -45,6 +49,11 @@ export const materialSchema = z.object({
   fetchedTitle: z.string().max(300).nullable(),
   recommendedBy: z.array(z.string().max(2000)).max(20),
   sig: z.string().max(200).nullable(),
+  /** Minutes to read or watch the part the plan uses. Optional: materials saved before sizing have none. */
+  minutes: z.number().int().min(1).max(60000).nullable().optional(),
+  minutesBasis: z.enum(MINUTES_BASES).nullable().optional(),
+  /** The part the plan uses when that is not the whole work. */
+  uses: z.string().trim().max(120).nullable().optional(),
 });
 export type Material = z.infer<typeof materialSchema>;
 /** Up to 50 of the learner's own plus what research adds (at most 25 are asked for). */

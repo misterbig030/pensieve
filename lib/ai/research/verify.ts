@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { detectSourceType, type SourceInput, type SourceType } from "@/lib/schemas/source";
-import { MATERIAL_KINDS, clip, hostOf, shortId, type Material, type MaterialKind } from "@/lib/schemas/material";
-import type { DroppedMaterial, ResearchEvent } from "./events";
+import { MATERIAL_KINDS, clip, hostOf, shortId, type Material, type MaterialKind, type MinutesBasis } from "@/lib/schemas/material";
+import type { Coverage, DroppedMaterial, ResearchEvent } from "./events";
 import { signMaterial, signingSecret } from "./signature";
 import type { FetchOutcome, SourceFetcher } from "./tools";
 
@@ -24,6 +24,8 @@ export const candidateSchema = z.object({
   backbone: z.boolean().describe("True only for the one textbook the plan should follow in order"),
   why: z.string().describe("One line: why this material, what it covers that the others don't"),
   recommendedBy: z.array(z.string()).describe("URLs of pages you saw that recommend it"),
+  minutes: z.number().nullable().optional().describe("Minutes to read or watch the part of it this plan would use; null when you cannot tell"),
+  uses: z.string().nullable().optional().describe('The part this plan would use when that is not the whole work, e.g. "ch. 1, 7–9"; null for the whole'),
 });
 export type Candidate = z.infer<typeof candidateSchema>;
 
@@ -35,12 +37,19 @@ export const learnerNoteSchema = z.object({
   author: z.string().nullable().optional(),
   year: z.number().nullable().optional(),
   why: z.string(),
+  minutes: z.number().nullable().optional().describe("Minutes to read or watch it; null when you cannot tell"),
 });
 export type LearnerNote = z.infer<typeof learnerNoteSchema>;
 
 export const candidateListSchema = z.object({
   learner: z.array(learnerNoteSchema).describe("One entry per source the learner provided, in their order"),
-  candidates: z.array(candidateSchema).describe("12 to 25 materials, the backbone first"),
+  candidates: z.array(candidateSchema).describe("The researched materials, the backbone first"),
+  coverage: z
+    .object({
+      covered: z.array(z.string()).describe("The topic's main areas that the list covers, one to three words each"),
+      open: z.array(z.string()).describe("Main areas of the topic that nothing on the list covers"),
+    })
+    .optional(),
 });
 export type CandidateList = z.infer<typeof candidateListSchema>;
 
@@ -185,6 +194,8 @@ export interface BookMatch {
   title: string;
   authors: string[];
   year: number | null;
+  /** The median page count across editions, when the catalogue has one. */
+  pages?: number | null;
 }
 
 /** Finds a book by title and author. Throws when the service is unavailable; resolves null when there is no match. */
@@ -199,6 +210,7 @@ interface OpenLibraryDoc {
   title?: string;
   author_name?: string[];
   first_publish_year?: number;
+  number_of_pages_median?: number;
 }
 
 function authorsOverlap(claimed: string | null, authors: string[]): boolean {
@@ -213,7 +225,8 @@ export function pickBookMatch(title: string, author: string | null, docs: OpenLi
     const matched = titleMatches(title, [doc.title]).ok || titleMatches(doc.title, [title]).ok;
     if (!matched || !authorsOverlap(author, doc.author_name ?? [])) continue;
     const key = typeof doc.key === "string" && /^\/works\/OL\d+W$/.test(doc.key) ? doc.key : null;
-    return { key, title: doc.title, authors: doc.author_name ?? [], year: doc.first_publish_year ?? null };
+    const pages = typeof doc.number_of_pages_median === "number" && doc.number_of_pages_median > 0 ? doc.number_of_pages_median : null;
+    return { key, title: doc.title, authors: doc.author_name ?? [], year: doc.first_publish_year ?? null, pages };
   }
   return null;
 }
@@ -223,7 +236,7 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLo
     const url = new URL("https://openlibrary.org/search.json");
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     url.searchParams.set("limit", "5");
-    url.searchParams.set("fields", "key,title,author_name,first_publish_year");
+    url.searchParams.set("fields", "key,title,author_name,first_publish_year,number_of_pages_median");
     const timeout = AbortSignal.timeout(5_000);
     let res: Response;
     try {
@@ -248,6 +261,64 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLo
       return pickBookMatch(title, author, await query({ title: main }, signal));
     },
   };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Sizes
+
+/** Reading speeds used to turn what code can count into minutes. Deliberately unhurried: this is study, not skimming. */
+export const WORDS_PER_MINUTE = 230;
+export const MINUTES_PER_PAGE = 2.5;
+/** A page shorter than this is a landing page or an abstract, not the essay itself. */
+export const MIN_MEASURED_WORDS = 600;
+const MAX_MINUTES = 60_000;
+
+function validMinutes(minutes: number | null | undefined): number | null {
+  if (typeof minutes !== "number" || !Number.isFinite(minutes) || minutes <= 0) return null;
+  return Math.min(MAX_MINUTES, Math.max(1, Math.round(minutes)));
+}
+
+export interface SizeInput {
+  kind: MaterialKind;
+  /** The part the plan uses, when not the whole work. */
+  uses: string | null;
+  /** What the model said it takes. */
+  claimedMinutes: number | null | undefined;
+  /** What the material's own page showed, when it was read. */
+  words?: number | null;
+  durationMinutes?: number | null;
+  /** A matched book's page count from the catalogue. */
+  bookPages?: number | null;
+}
+
+/**
+ * How long a material takes, and whether code measured it. A video's runtime, a book's page count and an essay's
+ * own length are counted; everything else (courses, docs sites, repos, a part of a larger work) is the model's
+ * estimate. An estimate for part of a measured work never exceeds the whole.
+ */
+export function sizeMaterial(input: SizeInput): { minutes: number | null; basis: MinutesBasis | null } {
+  const claimed = validMinutes(input.claimedMinutes);
+  let whole: number | null = null;
+  if (input.kind === "video") whole = validMinutes(input.durationMinutes);
+  else if (input.kind === "book" && input.bookPages) whole = validMinutes(input.bookPages * MINUTES_PER_PAGE);
+  else if (input.kind === "essay" && (input.words ?? 0) >= MIN_MEASURED_WORDS) whole = validMinutes((input.words ?? 0) / WORDS_PER_MINUTE);
+
+  if (whole !== null && !input.uses) return { minutes: whole, basis: "measured" };
+  if (whole !== null) return { minutes: claimed ? Math.min(claimed, whole) : whole, basis: "estimated" };
+  return claimed ? { minutes: claimed, basis: "estimated" } : { minutes: null, basis: null };
+}
+
+/** Minutes of material on a list, over the materials that have a size. */
+export function sizedMinutes(materials: Pick<Material, "minutes">[]): number {
+  return materials.reduce((sum, m) => sum + (m.minutes ?? 0), 0);
+}
+
+/** Trims the areas research named and drops repeats; null when it named none. */
+export function normalizeCoverage(coverage: { covered?: string[]; open?: string[] } | null | undefined): Coverage | null {
+  const tidy = (items: string[] | undefined) => [...new Set((items ?? []).map((a) => clip(a, 40)).filter((a): a is string => !!a))].slice(0, 10);
+  const covered = tidy(coverage?.covered);
+  const open = tidy(coverage?.open).filter((a) => !covered.includes(a));
+  return covered.length + open.length > 0 ? { covered, open } : null;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -374,11 +445,12 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     const fetchedTitle = fetched ? clip(pageTitle(fetched), 300) : null;
     const verifiedAt = fetched ? fetched.fetchedAt : null;
     const type = source.type ?? detectSourceType(source.url);
+    const kind = note?.kind ?? learnerKind(type, source.url);
     const entry: Accepted = {
       material: {
         origin: "learner",
         type,
-        kind: note?.kind ?? learnerKind(type, source.url),
+        kind,
         url,
         title: clip(learnerTitle(source, fetchedTitle ?? note?.title ?? null), 300)!,
         author: clip(note?.author, 200),
@@ -389,6 +461,8 @@ export async function runGate(input: GateInput): Promise<GateResult> {
         fetchedTitle,
         recommendedBy: [],
         sig: verifiedAt ? signMaterial({ url, fetchedTitle, verifiedAt }, secret) : null,
+        ...sizeFields({ kind, uses: null, claimedMinutes: note?.minutes, words: fetched?.page.words, durationMinutes: fetched?.page.durationMinutes }),
+        uses: null,
       },
       bookMatched: false,
       wantsBackbone: false,
@@ -425,11 +499,13 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     let page = checkPage(c, outcomes[i], threshold);
     let year = validYear(c.year);
     let bookMatched = false;
+    let bookPages: number | null = null;
     if (c.kind === "book") {
       const check = bookChecks[i];
       if (check?.match) {
         bookMatched = true;
         year = check.match.year ?? year;
+        bookPages = check.match.pages ?? null;
         // The book is real. If its own page cannot be used, its Open Library entry is the link.
         if (!page.ok) page = catalogueEntry(check.match, c.author, now) ?? page;
       } else if (check?.unavailable) {
@@ -451,11 +527,16 @@ export async function runGate(input: GateInput): Promise<GateResult> {
       why: clip(c.why, 400),
       recommendedBy,
     };
+    const outcome = outcomes[i];
+    const uses = clip(c.uses, 120);
+    // The page's own length counts only when the candidate's own page was read, not its catalogue entry.
+    const ownPage = outcome.ok && checkPage(c, outcome, threshold).ok ? outcome.page : null;
+    const size = { ...sizeFields({ kind: c.kind, uses, claimedMinutes: c.minutes, words: ownPage?.words, durationMinutes: ownPage?.durationMinutes, bookPages }), uses };
 
     // A candidate that is one of the learner's own sources enriches it instead of duplicating it.
     const mine = learnerByUrl.get(finalUrl) ?? learnerByUrl.get(canonicalUrl(c.url) ?? c.url);
     if (mine) {
-      Object.assign(mine.material, { ...fields, why: mine.material.why ?? fields.why });
+      Object.assign(mine.material, { ...fields, why: mine.material.why ?? fields.why, ...(mine.material.minutes ? {} : size) });
       mine.bookMatched = bookMatched;
       mine.wantsBackbone = c.backbone;
       return;
@@ -477,6 +558,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
         verifiedAt,
         fetchedTitle,
         sig: signMaterial({ url: finalUrl, fetchedTitle, verifiedAt }, secret),
+        ...size,
       },
       bookMatched,
       wantsBackbone: c.backbone,
@@ -501,9 +583,16 @@ export async function runGate(input: GateInput): Promise<GateResult> {
   const ordered = [...(backbone ? [backbone] : []), ...learner.filter((a) => a !== backbone), ...accepted.filter((a) => a !== backbone)];
   const materials: Material[] = ordered.map((a, i) => ({ id: shortId(i), ...a.material }));
   for (const m of materials) {
-    if (m.origin === "research") input.emit({ type: "research.verified", id: m.id, title: m.title, kind: m.kind, backbone: m.backbone });
+    if (m.origin === "research") {
+      input.emit({ type: "research.verified", id: m.id, title: m.title, kind: m.kind, backbone: m.backbone, minutes: m.minutes ?? null, basis: m.minutesBasis ?? null });
+    }
   }
   return { materials, dropped, verified: accepted.length, proposed: valid.length };
+}
+
+function sizeFields(input: SizeInput): { minutes: number | null; minutesBasis: MinutesBasis | null } {
+  const { minutes, basis } = sizeMaterial(input);
+  return { minutes, minutesBasis: basis };
 }
 
 function validYear(year: number | null | undefined): number | null {

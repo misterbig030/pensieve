@@ -81,7 +81,7 @@ export function reduceResearch(state: ResearchProgressState, event: ResearchEven
       return {
         ...state,
         verified: state.verified + 1,
-        log: push(state, { kind: "verified", text: event.title, detail: event.kind, backbone: event.backbone }),
+        log: push(state, { kind: "verified", text: event.title, detail: event.minutes ? `${event.kind} · ${approxDuration(event.minutes)}${event.basis === "estimated" ? ", estimated" : ""}` : event.kind, backbone: event.backbone }),
         found: [...state.found.filter((f) => f.id !== event.id), { id: event.id, title: event.title, kind: event.kind, backbone: event.backbone, yours: false }],
       };
     case "research.dropped":
@@ -109,4 +109,10 @@ export function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m === 0 ? `${h} h` : `${h} h ${m}`;
+}
+
+/** A size as a reader says it: "≈ 25 min", "≈ 1 h 10", "≈ 22 h". Long sizes round to the hour. */
+export function approxDuration(minutes: number): string {
+  if (minutes >= 600) return `≈ ${Math.round(minutes / 60)} h`;
+  return `≈ ${formatDuration(minutes < 60 ? minutes : Math.round(minutes / 5) * 5)}`;
 }

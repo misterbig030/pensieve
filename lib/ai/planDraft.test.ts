@@ -77,3 +77,47 @@ describe("streamPlanDraft with materials", () => {
     expect(secondPrompt.prompt).toContain("reserved: M1 (ch. 1–2)");
   });
 });
+
+describe("streamPlanDraft and the time split", () => {
+  beforeEach(() => mockedStreamObject.mockReset());
+
+  function fakeTop(units: UnitDraft[], split: unknown) {
+    const stream = fakeStream(units) as unknown as { object: Promise<unknown> };
+    stream.object = Promise.resolve({ split, units });
+    return stream as unknown as ReturnType<typeof streamObject>;
+  }
+  const weeks = (n: number): UnitDraft[] => Array.from({ length: n }, (_, i) => ({ title: `W${i + 1}`, summary: "s" }));
+
+  it("takes the split from the top level, announces it, and budgets weeks from the learner's hours", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeTop(weeks(4), { readingShare: 84.6, practice: "writing summaries.", reason: "A knowledge topic." }));
+    const calls: ModelCall[] = [];
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "The French Revolution", days: 28, granularity: "week", hoursPerWeek: 10, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+
+    expect(events.find((e) => e.type === "split")).toEqual({ type: "split", split: { readingShare: 85, practice: "writing summaries", reason: "A knowledge topic." } });
+    const finish = events.at(-1);
+    expect(finish?.type === "finish" && finish.root.children!.map((n) => n.budgetHours)).toEqual([10, 10, 10, 10]);
+    expect(calls[0].prompt).toContain('as "split"');
+    expect(calls[0].facts).toContain("split 85% reading · writing summaries");
+  });
+
+  it("drafts on without a split when the model returns none", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeTop(weeks(4), undefined));
+    const calls: ModelCall[] = [];
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "T", days: 28, granularity: "week", materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+    expect(events.some((e) => e.type === "split")).toBe(false);
+    expect(events.at(-1)?.type).toBe("finish");
+    expect(calls[0].facts).toContain("no split returned");
+  });
+
+  it("keeps a split it is given and does not ask for another", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const calls: ModelCall[] = [];
+    const split = { readingShare: 50, practice: "building", reason: "" };
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "T", days: 28, granularity: "week", split, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+    expect(events.some((e) => e.type === "split")).toBe(false);
+    expect(calls[0].prompt).not.toContain('as "split"');
+  });
+});

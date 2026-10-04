@@ -1,12 +1,21 @@
 import type { Material } from "@/lib/schemas/material";
 import type { GenerationLogContext } from "../logged";
-import { createAgentArm, type ArmResult, type ResearchArm, type ResearchBrief } from "./agent";
-import type { DroppedMaterial, ResearchEvent, ResearchNotice } from "./events";
-import { RESEARCH_CAPS, SourceFetcher, searchProviderFromEnv, type ResearchCaps } from "./tools";
-import { createOpenLibraryLookup, runGate, type BookLookup } from "./verify";
+import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type ResearchBrief } from "./agent";
+import type { Coverage, DroppedMaterial, ResearchEvent, ResearchNotice } from "./events";
+import { SourceFetcher, capsFor, searchProviderFromEnv, type ResearchCaps } from "./tools";
+import { createOpenLibraryLookup, runGate, sizedMinutes, type BookLookup } from "./verify";
 
-/** Fewer researched materials than this and the plan carries the "thin" notice. */
-export const THIN_BELOW = 5;
+/** Fewer researched materials than this and the plan carries the "thin" notice, whatever they cover. */
+export const THIN_BELOW = 3;
+
+/**
+ * Research is thin when it verified almost nothing, or when it left at least as many of the topic's main areas
+ * open as it covered. A short list that covers the topic is not thin: a week-long plan needs only a handful.
+ */
+export function isThin(verified: number, coverage: Coverage | null | undefined): boolean {
+  if (verified < THIN_BELOW) return true;
+  return !!coverage && coverage.open.length > 0 && coverage.open.length >= coverage.covered.length;
+}
 
 export interface ResearchOutcome {
   materials: Material[];
@@ -17,6 +26,9 @@ export interface ResearchOutcome {
   /** Candidates proposed and candidates verified, for the eval's verified rate. */
   proposed: number;
   verified: number;
+  coverage: Coverage | null;
+  /** Minutes of material on the list, over the materials that have a size. */
+  sizedMinutes: number;
 }
 
 /**
@@ -79,7 +91,7 @@ export function defaultArm(): ResearchArm | null {
  * or a candidate step that never validates all end in a shorter list with a notice, never an error.
  */
 export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGenerator<ResearchEvent, ResearchOutcome> {
-  const caps = input.caps ?? RESEARCH_CAPS;
+  const caps = input.caps ?? capsFor(briefHours(input.brief));
   const fetcher = input.fetcher ?? new SourceFetcher();
   const books = input.books ?? createOpenLibraryLookup();
   yield { type: "research.start", caps: { searches: caps.searches, fetches: caps.fetches, steps: caps.steps } };
@@ -89,7 +101,7 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
     const runArm = input.arm;
     try {
       arm = yield* streamWhile<ResearchEvent, ArmResult>((emit) =>
-        runArm({ brief: input.brief, signal: input.signal, fetcher, emit, log: input.log }),
+        runArm({ brief: input.brief, signal: input.signal, fetcher, emit, log: input.log, caps }),
       );
     } catch (error) {
       console.error("[research] arm failed", error);
@@ -111,9 +123,11 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
   );
 
   const unavailable = !arm || arm.stoppedBy === "cancelled" || (arm.stoppedBy === "search-error" && arm.searchesOk === 0);
-  const notice: ResearchNotice | undefined = unavailable ? "unavailable" : gate.verified < THIN_BELOW ? "thin" : undefined;
+  const coverage = arm?.coverage ?? null;
+  const notice: ResearchNotice | undefined = unavailable ? "unavailable" : isThin(gate.verified, coverage) ? "thin" : undefined;
   const counts = { searches: arm?.counts.searches ?? 0, fetches: arm?.counts.fetches ?? 0 };
-  yield { type: "research.done", materials: gate.materials, dropped: gate.dropped, ...(notice ? { notice } : {}), counts };
+  const sized = sizedMinutes(gate.materials);
+  yield { type: "research.done", materials: gate.materials, dropped: gate.dropped, ...(notice ? { notice } : {}), counts, coverage, sizedMinutes: sized };
 
   const armSummary = arm ? { counts: arm.counts, searchesOk: arm.searchesOk, stoppedBy: arm.stoppedBy, costUsd: arm.costUsd } : null;
   return {
@@ -124,5 +138,7 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
     arm: armSummary,
     proposed: gate.proposed,
     verified: gate.verified,
+    coverage,
+    sizedMinutes: sized,
   };
 }
