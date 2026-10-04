@@ -12,7 +12,7 @@ import {
   type StopReason,
 } from "@/lib/ai/research/agent";
 import { RESEARCH_CAPS, ResearchNotes, type ResearchCaps, type SearchResult } from "@/lib/ai/research/tools";
-import { candidateListSchema, type Candidate, type LearnerNote } from "@/lib/ai/research/verify";
+import { candidateListSchema, normalizeCoverage, type Candidate, type CandidateList, type LearnerNote } from "@/lib/ai/research/verify";
 
 /**
  * Arm C, eval only: the same Claude model with Anthropic's server-side `web_search` and `web_fetch` tools, prompted
@@ -50,12 +50,12 @@ interface WebFetchOutput {
 }
 
 export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm {
-  const caps = options.caps ?? RESEARCH_CAPS;
   const modelId = DEFAULT_RESEARCH_MODEL;
   const provider = options.route === "direct" ? createAnthropic() : anthropic;
   const model: LanguageModel = options.model ?? (options.route === "direct" ? provider(modelId.replace(/^anthropic\//, "")) : modelId);
 
-  return async function research({ brief, signal, emit, log }: ArmInput): Promise<ArmResult> {
+  return async function research({ brief, signal, emit, log, caps: runCaps }: ArmInput): Promise<ArmResult> {
+    const caps = options.caps ?? runCaps ?? RESEARCH_CAPS;
     const notes = new ResearchNotes();
     const loop = new AbortController();
     const clockTimer = setTimeout(() => loop.abort(new Error("clock")), caps.wallMs);
@@ -150,7 +150,7 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
     }
     const searchesOk = notes.searches.length;
 
-    let list: { candidates: Candidate[]; learner: LearnerNote[] } = { candidates: [], learner: [] };
+    let list: Pick<CandidateList, "coverage"> & { candidates: Candidate[]; learner: LearnerNote[] } = { candidates: [], learner: [] };
     if (stoppedBy !== "cancelled") {
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
@@ -183,6 +183,7 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
       searchesOk,
       stoppedBy,
       costUsd: costUsd + searches * WEB_SEARCH_USD,
+      coverage: normalizeCoverage(list.coverage),
     };
   };
 }

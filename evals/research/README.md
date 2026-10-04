@@ -32,3 +32,19 @@ code-check facts, ready for the rubric judges.
   "search-error"`, rerun with `--route direct`.
 - The title-match threshold (`TITLE_MATCH_THRESHOLD` in `lib/ai/research/verify.ts`, 0.6 for now): read the
   dropped candidates whose reason starts "title doesn't match" and move it if good pages are being refused.
+
+## Study hours and the time split (Oct 4)
+
+Records may set `hoursPerWeek`; left out, a record runs at six, as the app does. Research is given the plan's total
+hours as a ceiling and returns each material with a size, and the drafter decides how time divides between reading
+and practice. Each run now records:
+
+- `sizedHours` against `totalHours`, `measuredShare` (sizes code measured from a runtime, a page count or the
+  page's own length, against the model's estimates) and `unsizedShare`;
+- `coverage`: how many of the topic's main areas research named as covered and as left open;
+- `split`: the drafter's reading share, what the rest is spent on, and its reason, for the judges to score under
+  rubric dimension 5 (fit to the kind of topic);
+- `overShareLeaves`: units whose must-reading ran well past the plan's own share.
+
+Four records at the end of `golden.v3.ts` exist for this: three hours a week, thirty hours a week, a history topic
+with nothing to build, and physical training.
