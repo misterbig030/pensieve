@@ -8,11 +8,14 @@ import {
   canonicalUrl,
   kindProblem,
   mainTitle,
+  normalizeCoverage,
   pickBookMatch,
   recommendingDomains,
   registrableDomain,
   reverifyMaterial,
   runGate,
+  sizeMaterial,
+  sizedMinutes,
   titleMatches,
   titleTokens,
   type BookLookup,
@@ -96,7 +99,8 @@ describe("Open Library match", () => {
       { title: "Unrelated", author_name: ["X"] },
       { key: "/works/OL1W", title: "AI Engineering", author_name: ["Chip Huyen"], first_publish_year: 2024 },
     ];
-    expect(pickBookMatch("AI Engineering: Building Applications", "Chip Huyen", docs)).toEqual({ key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 });
+    expect(pickBookMatch("AI Engineering: Building Applications", "Chip Huyen", docs)).toEqual({ key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024, pages: null });
+    expect(pickBookMatch("AI Engineering", "Chip Huyen", [{ ...docs[1], number_of_pages_median: 532 }])?.pages).toBe(532);
     expect(pickBookMatch("AI Engineering", "Someone Else", docs)).toBeNull();
   });
   it("keeps only a key that is an Open Library work", () => {
@@ -376,5 +380,77 @@ describe("reverifyMaterial", () => {
     expect(verifyMaterialSig(ok!, ok!.sig, SECRET)).toBe(true);
     expect(await reverifyMaterial(book, f.fetcher, { find: async () => null }, SECRET)).toBeNull();
     expect(await reverifyMaterial(book, f.fetcher, { find: async () => { throw new BookLookupUnavailable("503"); } }, SECRET)).toBeNull();
+  });
+});
+
+describe("sizeMaterial", () => {
+  it("measures a video by its runtime, a book by its pages and an essay by its length", () => {
+    expect(sizeMaterial({ kind: "video", uses: null, claimedMinutes: 45, durationMinutes: 60 })).toEqual({ minutes: 60, basis: "measured" });
+    expect(sizeMaterial({ kind: "book", uses: null, claimedMinutes: 600, bookPages: 532 })).toEqual({ minutes: 1330, basis: "measured" });
+    expect(sizeMaterial({ kind: "essay", uses: null, claimedMinutes: 5, words: 4600 })).toEqual({ minutes: 20, basis: "measured" });
+  });
+
+  it("keeps the model's estimate where code cannot count", () => {
+    expect(sizeMaterial({ kind: "course", uses: null, claimedMinutes: 480, words: 900 })).toEqual({ minutes: 480, basis: "estimated" });
+    expect(sizeMaterial({ kind: "docs", uses: null, claimedMinutes: 240.4, words: 5000 })).toEqual({ minutes: 240, basis: "estimated" });
+    // A short page is a landing page or an abstract, not the essay.
+    expect(sizeMaterial({ kind: "essay", uses: null, claimedMinutes: 30, words: 200 })).toEqual({ minutes: 30, basis: "estimated" });
+    expect(sizeMaterial({ kind: "repo", uses: null, claimedMinutes: null })).toEqual({ minutes: null, basis: null });
+    expect(sizeMaterial({ kind: "repo", uses: null, claimedMinutes: -5 })).toEqual({ minutes: null, basis: null });
+  });
+
+  it("treats part of a measured work as an estimate that never exceeds the whole", () => {
+    expect(sizeMaterial({ kind: "book", uses: "ch. 1, 7–9", claimedMinutes: 300, bookPages: 400 })).toEqual({ minutes: 300, basis: "estimated" });
+    expect(sizeMaterial({ kind: "book", uses: "ch. 1", claimedMinutes: 5000, bookPages: 400 })).toEqual({ minutes: 1000, basis: "estimated" });
+    expect(sizeMaterial({ kind: "book", uses: "ch. 1", claimedMinutes: null, bookPages: 400 })).toEqual({ minutes: 1000, basis: "estimated" });
+  });
+});
+
+describe("normalizeCoverage", () => {
+  it("trims, drops repeats and keeps an area on one side only", () => {
+    expect(normalizeCoverage({ covered: [" Agents ", "Agents", "Evals"], open: ["Evals", "Retrieval", ""] })).toEqual({ covered: ["Agents", "Evals"], open: ["Retrieval"] });
+    expect(normalizeCoverage({ covered: [], open: [] })).toBeNull();
+    expect(normalizeCoverage(undefined)).toBeNull();
+  });
+});
+
+describe("sizes through the gate", () => {
+  it("sizes the learner's source, a matched book, an essay and a part of a work", async () => {
+    const book = "https://publisher.example.com/ai-engineering";
+    const essay = "https://blog.example.com/evals";
+    const course = "https://course.example.com/llm";
+    const mine = "https://www.youtube.com/watch?v=abc";
+    const f = gateFixture(
+      {
+        [book]: info(book, "AI Engineering", { words: 300 }),
+        [essay]: info(essay, "Evals guide", { words: 2300 }),
+        [course]: info(course, "LLM Course", { words: 800 }),
+        [mine]: info(mine, "Intro talk", { durationMinutes: 59 }),
+      },
+      { find: async () => ({ key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024, pages: 500 }) },
+    );
+    const result = await runGate({
+      candidates: [
+        candidate({ url: book, title: "AI Engineering", kind: "book", author: "Chip Huyen", minutes: 900 }),
+        candidate({ url: essay, title: "Evals guide", kind: "essay", minutes: 5 }),
+        candidate({ url: course, title: "LLM Course", kind: "course", minutes: 480, uses: "units 1–4" }),
+      ],
+      learner: [{ url: mine, type: "youtube" }],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+    });
+    expect(result.materials.map((m) => [m.title, m.minutes, m.minutesBasis, m.uses])).toEqual([
+      ["Intro talk", 59, "measured", null],
+      ["AI Engineering", 1250, "measured", null],
+      ["Evals guide", 10, "measured", null],
+      ["LLM Course", 480, "estimated", "units 1–4"],
+    ]);
+    expect(sizedMinutes(result.materials)).toBe(1799);
+    const verified = f.events.filter((e) => e.type === "research.verified");
+    expect(verified.map((e) => (e.type === "research.verified" ? [e.minutes, e.basis] : null))).toEqual([[1250, "measured"], [10, "measured"], [480, "estimated"]]);
   });
 });

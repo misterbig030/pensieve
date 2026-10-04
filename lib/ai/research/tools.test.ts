@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { extractHtml, extractPdf, htmlToText } from "./extract";
+import { countWords, extractHtml, extractPdf, htmlToText, parseDurationMinutes } from "./extract";
 import type { ResearchEvent } from "./events";
 import {
   ResearchBudget,
@@ -165,5 +165,28 @@ describe("research tools", () => {
     const result = await tools.webSearch.execute!({ query: "q" }, execOpts);
     expect(result).toMatchObject({ error: expect.stringMatching(/unavailable/) });
     expect(onSearchError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("page size", () => {
+  it("counts the words of the whole page, past the 4k-token cut", () => {
+    const html = `<title>Long</title><article>${"<p>one two three four five</p>".repeat(4000)}</article>`;
+    const info = extractHtml(html, "https://example.com/long");
+    expect(info.words).toBe(20000);
+    expect(info.text.length).toBeLessThanOrEqual(16_000);
+  });
+
+  it("counts unspaced CJK text at two characters a word", () => {
+    expect(countWords("深入理解计算机系统 third edition")).toBe(7);
+  });
+
+  it("reads a video's runtime from its page", () => {
+    expect(parseDurationMinutes("PT59M48S")).toBe(60);
+    expect(parseDurationMinutes("PT1H2M")).toBe(62);
+    expect(parseDurationMinutes("3588")).toBe(60);
+    expect(parseDurationMinutes("soon")).toBeNull();
+    expect(parseDurationMinutes(null)).toBeNull();
+    const info = extractHtml(`<title>Talk</title><meta itemprop="duration" content="PT1H2M30S"><p>x</p>`, "https://www.youtube.com/watch?v=x");
+    expect(info.durationMinutes).toBe(63);
   });
 });

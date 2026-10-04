@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
 import type { ModelCall } from "../logged";
-import { createAgentArm } from "./agent";
+import { briefLines, buildFinalPrompt, createAgentArm } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
-import { researchMaterials, streamWhile } from "./pipeline";
-import { SourceFetcher, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
+import { isThin, researchMaterials, streamWhile } from "./pipeline";
+import { RESEARCH_CAPS, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
 import type { BookLookup, CandidateList } from "./verify";
 
 const usage = {
@@ -169,7 +169,9 @@ describe("arm A through the pipeline", () => {
       ["M3", "Guide A", "research", false],
       ["M4", "Guide B", "research", false],
     ]);
-    expect(outcome.notice).toBe("thin");
+    // Three verified materials and no named gaps: a short list, not a thin one.
+    expect(outcome.notice).toBeUndefined();
+    expect(outcome.coverage).toBeNull();
     expect(outcome.arm?.stoppedBy).toBe("model");
     // Each loop step and the structured step reach the admin panel.
     expect(calls.map((c) => c.label)).toEqual([
@@ -274,5 +276,52 @@ describe("arm A through the pipeline", () => {
     expect(events.map((e) => e.type)).toEqual(["research.start", "research.reading", "research.fetch", "research.done"]);
     expect(outcome.notice).toBe("unavailable");
     expect(outcome.materials).toHaveLength(1);
+  });
+});
+
+describe("thin research", () => {
+  it("is thin with almost nothing verified, or with as much of the topic open as covered", () => {
+    expect(isThin(2, null)).toBe(true);
+    expect(isThin(3, null)).toBe(false);
+    expect(isThin(8, { covered: ["History", "Basic stitches"], open: ["Advanced stitches", "Finishing"] })).toBe(true);
+    expect(isThin(8, { covered: ["Foundations", "Agents", "Evals"], open: ["Retrieval"] })).toBe(false);
+    expect(isThin(8, { covered: ["Foundations"], open: [] })).toBe(false);
+  });
+
+  it("carries the arm's coverage and the list's size to the done event", async () => {
+    const withCoverage: CandidateList = {
+      ...LIST,
+      candidates: LIST.candidates.map((c) => ({ ...c, minutes: 120 })),
+      coverage: { covered: ["Foundations"], open: ["Evals", "Agents"] },
+    };
+    const { model } = scriptedModel([{ text: "Done." }], [withCoverage]);
+    const { fetcher } = fetcherFor();
+    const { events, outcome } = await collect(researchMaterials({ brief, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
+    expect(outcome.notice).toBe("thin");
+    expect(outcome.coverage).toEqual({ covered: ["Foundations"], open: ["Evals", "Agents"] });
+    expect(outcome.sizedMinutes).toBe(360);
+    const done = events.at(-1);
+    expect(done).toMatchObject({ type: "research.done", notice: "thin", coverage: { covered: ["Foundations"], open: ["Evals", "Agents"] }, sizedMinutes: 360 });
+  });
+});
+
+describe("research prompts", () => {
+  it("states the learner's total hours and asks for sizes and coverage, not a count", () => {
+    expect(briefLines({ topic: "T", days: 84, hoursPerWeek: 6, sources: [] })[1]).toBe("Plan length: 84 days at about 6 hours a week: 72 hours of study in all");
+    expect(briefLines({ topic: "T", days: 7, sources: [] })[1]).toContain("6 hours of study in all");
+    const prompt = buildFinalPrompt({ topic: "T", days: 84, hoursPerWeek: 30, sources: [] }, "notes");
+    expect(prompt).not.toMatch(/12 to 25/);
+    expect(prompt).toContain("must not exceed 360 hours");
+    expect(prompt).toContain('"coverage"');
+    expect(prompt).toContain("- minutes:");
+  });
+
+  it("scales the caps to the plan's hours unless the arm was given its own", async () => {
+    const { model } = scriptedModel([{ text: "Done." }], [LIST]);
+    const { fetcher } = fetcherFor();
+    const { events } = await collect(researchMaterials({ brief: { ...brief, days: 7, hoursPerWeek: 3 }, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
+    expect(events[0]).toEqual({ type: "research.start", caps: { searches: 3, fetches: 6, steps: 8 } });
+    expect(capsFor(72)).toEqual(RESEARCH_CAPS);
+    expect(capsFor(360).fetches).toBe(16);
   });
 });

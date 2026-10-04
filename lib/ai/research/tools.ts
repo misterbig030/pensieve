@@ -151,6 +151,17 @@ export interface ResearchCaps {
 
 export const RESEARCH_CAPS: ResearchCaps = { steps: 12, searches: 6, fetches: 12, wallMs: 60_000 };
 
+/**
+ * Caps for a plan with this many study hours in all: a week of evenings needs a handful of materials and little
+ * searching, half a year of full-time study needs more of both.
+ */
+export function capsFor(totalHours: number): ResearchCaps {
+  if (totalHours <= 10) return { steps: 8, searches: 3, fetches: 6, wallMs: 45_000 };
+  if (totalHours <= 40) return { steps: 10, searches: 5, fetches: 10, wallMs: 60_000 };
+  if (totalHours <= 100) return RESEARCH_CAPS;
+  return { steps: 14, searches: 8, fetches: 16, wallMs: 90_000 };
+}
+
 /** Counts tool calls against the caps. A call past its cap is refused here, whatever the model asked for. */
 export class ResearchBudget {
   searches = 0;
@@ -199,6 +210,9 @@ export interface FetchNote {
   finalUrl: string | null;
   reason?: string;
   excerpt: string;
+  /** The page's length, when the read measured it. */
+  words?: number | null;
+  durationMinutes?: number | null;
 }
 
 export class ResearchNotes {
@@ -228,7 +242,10 @@ export class ResearchNotes {
       if (s.results.length === 0) parts.push(`  (no results)`);
     }
     for (const f of this.fetches) {
-      if (f.ok) parts.push(`Read <${f.url}>${f.finalUrl && f.finalUrl !== f.url ? ` → <${f.finalUrl}>` : ""}: title "${f.title ?? "(none)"}"\n  ${f.excerpt}`);
+      if (f.ok) {
+        const size = f.durationMinutes ? ` (runtime ${f.durationMinutes} min)` : f.words ? ` (${f.words} words)` : "";
+        parts.push(`Read <${f.url}>${f.finalUrl && f.finalUrl !== f.url ? ` → <${f.finalUrl}>` : ""}: title "${f.title ?? "(none)"}"${size}\n  ${f.excerpt}`);
+      }
       else parts.push(`Could not read <${f.url}>: ${f.reason}`);
     }
     if (this.remarks.length > 0) parts.push(`Your notes while researching:\n${this.remarks.join("\n")}`);
@@ -292,6 +309,8 @@ export function createResearchTools(opts: ResearchToolsOptions) {
         title: page.ogTitle ?? page.title ?? page.h1,
         finalUrl: page.finalUrl,
         excerpt: page.text.slice(0, 400).replace(/\s+/g, " "),
+        words: page.words ?? null,
+        durationMinutes: page.durationMinutes ?? null,
       });
       emit({ type: "research.fetch", url, ok: true });
       return page;
