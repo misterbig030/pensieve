@@ -10,7 +10,7 @@ vi.mock("./client", async () => {
 });
 
 import { db } from "./client";
-import { createTrackWithPlan, getTrackDetail } from "./queries";
+import { createTrackWithPlan, getTrackDetail, updateTrackStudyTime } from "./queries";
 import { insertChildren, replacePlanTree } from "./planQueries";
 import { nodeMaterials, sources } from "./schema";
 
@@ -35,9 +35,9 @@ function material(id: string, title: string, extra: Partial<Material> = {}): Mat
 }
 
 const MATERIALS: Material[] = [
-  material("M1", "AI Engineering", { kind: "book", backbone: true, year: 2024, recommendedBy: ["https://a.example/", "https://b.example/"] }),
+  material("M1", "AI Engineering", { kind: "book", backbone: true, year: 2024, recommendedBy: ["https://a.example/", "https://b.example/"], minutes: 1320, minutesBasis: "measured" }),
   material("M2", "My notes", { origin: "learner", type: "note", kind: "note", url: "My notes", verifiedAt: null, fetchedTitle: null, sig: null }),
-  material("M3", "Evals guide"),
+  material("M3", "Evals guide", { minutes: 300, uses: "units 1–4" }),
 ];
 
 function plan(): PlanNode {
@@ -61,7 +61,15 @@ let trackId: string;
 
 describe("persistence of materials", () => {
   beforeAll(async () => {
-    const created = await createTrackWithPlan({ userId: "u1", title: "LLM engineering", granularity: "day", materials: MATERIALS, root: plan() });
+    const created = await createTrackWithPlan({
+      userId: "u1",
+      title: "LLM engineering",
+      granularity: "day",
+      hoursPerWeek: 10,
+      split: { readingShare: 50, practice: "building projects", reason: "A skill learned by shipping." },
+      materials: MATERIALS,
+      root: plan(),
+    });
     trackId = created.trackId;
     expect(created.droppedRefs).toBe(1); // the M9 reference
   });
@@ -76,6 +84,21 @@ describe("persistence of materials", () => {
     expect(detail.materials.every((m) => /^[0-9a-f-]{36}$/.test(m.id))).toBe(true);
     expect(detail.materials[0].recommendedBy).toEqual(["https://a.example/", "https://b.example/"]);
     expect(detail.materials[0].verifiedAt).toBe("2026-09-28T10:00:00.000Z");
+  });
+
+  it("keeps the learner's hours, the plan's split and each material's size", async () => {
+    const detail = (await getTrackDetail(trackId, "u1"))!;
+    expect(detail.track.hoursPerWeek).toBe(10);
+    expect(detail.track.split).toEqual({ readingShare: 50, practice: "building projects", reason: "A skill learned by shipping." });
+    expect(detail.materials.map((m) => [m.minutes, m.minutesBasis, m.uses])).toEqual([
+      [1320, "measured", null],
+      [null, null, null],
+      [300, "estimated", "units 1–4"],
+    ]);
+    await updateTrackStudyTime(trackId, "u1", { hoursPerWeek: 200, split: null });
+    const after = (await getTrackDetail(trackId, "u1"))!;
+    expect(after.track.hoursPerWeek).toBe(80);
+    expect(after.track.split).toBeNull();
   });
 
   it("writes node_materials from short ids: covers on headings, the Read table on leaves", async () => {

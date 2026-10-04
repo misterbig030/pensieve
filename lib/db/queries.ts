@@ -5,6 +5,7 @@ import { getTrackNodeMaterials, insertPlanTree, rowsToTree } from "./planQueries
 import { remapTreeRefs } from "@/lib/materials";
 import { doneDays, type Granularity, type PlanNode } from "@/lib/planTree";
 import { clip, type Material } from "@/lib/schemas/material";
+import { DEFAULT_HOURS_PER_WEEK, clampHours, type PlanSplit } from "@/lib/studyTime";
 
 export async function getTracksForUser(userId: string) {
   return db.query.tracks.findMany({
@@ -81,6 +82,9 @@ export function sourceToMaterial(row: Source): Material {
     fetchedTitle: row.fetchedTitle,
     recommendedBy: row.recommendedBy ?? [],
     sig: null,
+    minutes: row.minutes,
+    minutesBasis: row.minutesBasis,
+    uses: row.uses,
   };
 }
 
@@ -112,6 +116,9 @@ export function materialsToRows(trackId: string, materials: Material[]): { rows:
       verifiedAt: m.verifiedAt ? new Date(m.verifiedAt) : null,
       fetchedTitle: m.fetchedTitle,
       recommendedBy: m.recommendedBy,
+      minutes: m.minutes ?? null,
+      minutesBasis: m.minutes ? (m.minutesBasis ?? "estimated") : null,
+      uses: m.uses ?? null,
     };
   });
   return { rows, ids };
@@ -144,6 +151,8 @@ export async function createTrackWithPlan(input: {
   instructions?: string;
   summary?: string;
   granularity: Granularity;
+  hoursPerWeek?: number;
+  split?: PlanSplit | null;
   /** Already vetted (signatures checked). Node references use these materials' ids. */
   materials: Material[];
   root: PlanNode;
@@ -158,6 +167,8 @@ export async function createTrackWithPlan(input: {
         instructions: input.instructions,
         summary: input.summary,
         granularity: input.granularity,
+        hoursPerWeek: clampHours(input.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK),
+        split: input.split ?? null,
         status: "active",
       })
       .returning({ id: tracks.id });
@@ -178,5 +189,13 @@ export async function updateTrackSummary(trackId: string, userId: string, summar
   await db
     .update(tracks)
     .set({ summary })
+    .where(and(eq(tracks.id, trackId), eq(tracks.userId, userId)));
+}
+
+/** Saves the learner's weekly hours and the plan's time split, as the adjust page left them. */
+export async function updateTrackStudyTime(trackId: string, userId: string, time: { hoursPerWeek: number; split: PlanSplit | null }): Promise<void> {
+  await db
+    .update(tracks)
+    .set({ hoursPerWeek: clampHours(time.hoursPerWeek), split: time.split })
     .where(and(eq(tracks.id, trackId), eq(tracks.userId, userId)));
 }

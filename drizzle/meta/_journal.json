@@ -57,6 +57,13 @@
       "when": 1790562380992,
       "tag": "0007_materials",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791154223997,
+      "tag": "0008_study_hours",
+      "breakpoints": true
     }
   ]
 }
