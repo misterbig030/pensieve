@@ -34,6 +34,12 @@ export interface ProviderArmOptions {
 /** Arm C's extra cost: Anthropic bills server-side searches on top of tokens ($10 per 1,000 at the time of writing). */
 export const WEB_SEARCH_USD = 0.01;
 
+/**
+ * Arm C does its whole search inside one model turn, where arm A takes one short step per tool call. Its clock is
+ * therefore a multiple of arm A's, scaled the same way with the plan's hours.
+ */
+export const PROVIDER_CLOCK_FACTOR = 3;
+
 const TOOL_NAMES = { search: "web_search", fetch: "web_fetch" };
 
 interface WebSearchHit {
@@ -58,7 +64,7 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
     const caps = options.caps ?? runCaps ?? RESEARCH_CAPS;
     const notes = new ResearchNotes();
     const loop = new AbortController();
-    const clockTimer = setTimeout(() => loop.abort(new Error("clock")), caps.wallMs);
+    const clockTimer = setTimeout(() => loop.abort(new Error("clock")), caps.wallMs * PROVIDER_CLOCK_FACTOR);
     const onOuterAbort = () => loop.abort(new Error("cancelled"));
     signal?.addEventListener("abort", onOuterAbort, { once: true });
     let stoppedBy: StopReason = "model";
@@ -67,7 +73,7 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
     let fetches = 0;
     let costUsd = 0;
 
-    const instructions = buildResearchInstructions(caps, TOOL_NAMES);
+    const instructions = buildResearchInstructions(caps, TOOL_NAMES, "tool");
     const prompt = briefLines(brief).join("\n");
     const agent = new ToolLoopAgent({
       model,
@@ -77,72 +83,101 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
         web_fetch: provider.tools.webFetch_20260209({ maxUses: caps.fetches, maxContentTokens: 4000 }),
       },
       stopWhen: isStepCount(caps.steps),
-      onStepEnd: async (step) => {
-        steps += 1;
-        if (step.text.trim()) notes.remarks.push(step.text.trim());
-        const queries = new Map<string, string>();
-        for (const part of step.content) {
-          if (part.type === "tool-call") {
-            const input = part.input as { query?: string; url?: string };
-            if (part.toolName === "web_search" && input.query) queries.set(part.toolCallId, input.query);
-          }
-          if (part.type === "tool-result" && part.toolName === "web_search") {
-            searches += 1;
-            const hits = (Array.isArray(part.output) ? part.output : []) as WebSearchHit[];
-            const results: SearchResult[] = hits
-              .filter((h): h is WebSearchHit & { url: string } => typeof h.url === "string")
-              .map((h) => ({ title: h.title ?? h.url, url: h.url, snippet: "", publishedDate: h.pageAge ?? null }));
-            const query = queries.get(part.toolCallId) ?? (part.input as { query?: string })?.query ?? "";
-            notes.searches.push({ query, results });
-            emit({ type: "research.search", query, results: results.length });
-          }
-          if (part.type === "tool-result" && part.toolName === "web_fetch") {
-            fetches += 1;
-            const out = (part.output ?? {}) as WebFetchOutput;
-            const url = out.url ?? (part.input as { url?: string })?.url ?? "";
-            const ok = out.type === "web_fetch_result";
-            const text = out.content?.source?.type === "text" ? (out.content.source.data ?? "") : "";
-            notes.fetches.push({ url, ok, title: out.content?.title ?? null, finalUrl: ok ? url : null, reason: ok ? undefined : (out.errorCode ?? "error"), excerpt: text.slice(0, 400).replace(/\s+/g, " ") });
-            emit({ type: "research.fetch", url, ok, ...(ok ? {} : { reason: out.errorCode ?? "error" }) });
-          }
-          if (part.type === "tool-error") {
-            if (part.toolName === "web_fetch") fetches += 1;
-            if (part.toolName === "web_search") searches += 1;
-          }
-        }
-        const row = buildGenerationLogRow({
-          caller: "research",
-          model: modelId,
-          usage: step.usage,
-          latencyMs: Math.round(step.performance?.stepTimeMs ?? 0),
-          trackId: log?.trackId,
-          userId: log?.userId,
-        });
-        costUsd += row.costUsd;
-        await emitGenerationLog(log?.onLog, row);
-        log?.onCall?.({
-          ...row,
-          label: `Research C · step ${steps}`,
-          system: steps === 1 ? instructions : null,
-          prompt: steps === 1 ? prompt : `(step ${steps})`,
-          response: [step.text, ...step.toolCalls.map((c) => `[tool call] ${c.toolName} ${JSON.stringify(c.input)}`)].filter(Boolean).join("\n\n"),
-          finishReason: step.finishReason ?? null,
-          facts: [`${searches} searches`, `${fetches} reads`],
-        });
-      },
     });
 
+    // Tool results are recorded as they stream in, so a turn the clock cuts off still leaves its notes behind.
+    const queries = new Map<string, string>();
+    let stepText = "";
+    let stepCalls: string[] = [];
+    const onToolResult = (toolName: string, toolCallId: string, input: unknown, output: unknown) => {
+      if (toolName === "web_search") {
+        searches += 1;
+        const hits = (Array.isArray(output) ? output : []) as WebSearchHit[];
+        const results: SearchResult[] = hits
+          .filter((h): h is WebSearchHit & { url: string } => typeof h.url === "string")
+          .map((h) => ({ title: h.title ?? h.url, url: h.url, snippet: "", publishedDate: h.pageAge ?? null }));
+        const query = queries.get(toolCallId) ?? (input as { query?: string } | undefined)?.query ?? "";
+        notes.searches.push({ query, results });
+        emit({ type: "research.search", query, results: results.length });
+      } else if (toolName === "web_fetch") {
+        fetches += 1;
+        const out = (output ?? {}) as WebFetchOutput;
+        const url = out.url ?? (input as { url?: string } | undefined)?.url ?? "";
+        const ok = out.type === "web_fetch_result";
+        const text = out.content?.source?.type === "text" ? (out.content.source.data ?? "") : "";
+        notes.fetches.push({ url, ok, title: out.content?.title ?? null, finalUrl: ok ? url : null, reason: ok ? undefined : (out.errorCode ?? "error"), excerpt: text.slice(0, 400).replace(/\s+/g, " ") });
+        emit({ type: "research.fetch", url, ok, ...(ok ? {} : { reason: out.errorCode ?? "error" }) });
+      }
+    };
+
+    const abortedBy = (): StopReason => {
+      const reason = loop.signal.reason instanceof Error ? loop.signal.reason.message : "";
+      if (reason !== "clock") return "cancelled";
+      return searches + fetches === 0 ? "clock-idle" : "clock";
+    };
+
     try {
-      await agent.generate({ prompt, abortSignal: loop.signal });
-      if (steps >= caps.steps) stoppedBy = "steps";
+      const result = await agent.stream({ prompt, abortSignal: loop.signal });
+      for await (const part of result.fullStream) {
+        switch (part.type) {
+          case "text-delta":
+            stepText += part.text;
+            break;
+          case "tool-call": {
+            const input = part.input as { query?: string; url?: string } | undefined;
+            if (part.toolName === "web_search" && input?.query) queries.set(part.toolCallId, input.query);
+            stepCalls.push(`[tool call] ${part.toolName} ${JSON.stringify(part.input)}`);
+            break;
+          }
+          case "tool-result":
+            onToolResult(part.toolName, part.toolCallId, part.input, part.output);
+            break;
+          case "tool-error":
+            if (part.toolName === "web_fetch") fetches += 1;
+            if (part.toolName === "web_search") searches += 1;
+            break;
+          case "finish-step": {
+            steps += 1;
+            if (stepText.trim()) notes.remarks.push(stepText.trim());
+            const row = buildGenerationLogRow({
+              caller: "research",
+              model: modelId,
+              usage: part.usage,
+              latencyMs: Math.round(part.performance?.stepTimeMs ?? 0),
+              trackId: log?.trackId,
+              userId: log?.userId,
+            });
+            costUsd += row.costUsd;
+            await emitGenerationLog(log?.onLog, row);
+            log?.onCall?.({
+              ...row,
+              label: `Research C · step ${steps}`,
+              system: steps === 1 ? instructions : null,
+              prompt: steps === 1 ? prompt : `(step ${steps})`,
+              response: [stepText, ...stepCalls].filter(Boolean).join("\n\n"),
+              finishReason: part.finishReason ?? null,
+              facts: [`${searches} searches`, `${fetches} reads`],
+            });
+            stepText = "";
+            stepCalls = [];
+            break;
+          }
+          case "error":
+            throw part.error;
+          default:
+            break;
+        }
+      }
+      // An aborted stream ends with an `abort` part instead of throwing, so the reason is read off the signal here too.
+      if (loop.signal.aborted) stoppedBy = abortedBy();
+      else if (steps >= caps.steps) stoppedBy = "steps";
     } catch (error) {
       if (!loop.signal.aborted) {
         // A provider error (for example the gateway refusing provider-executed tools) ends research like a search outage.
         console.error("[arm C] research loop failed", error);
         stoppedBy = "search-error";
       } else {
-        const reason = loop.signal.reason instanceof Error ? loop.signal.reason.message : "";
-        stoppedBy = reason === "clock" ? "clock" : "cancelled";
+        stoppedBy = abortedBy();
       }
     } finally {
       clearTimeout(clockTimer);
