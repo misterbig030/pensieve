@@ -3,6 +3,7 @@ import type { ResearchOutcome } from "@/lib/ai/research/pipeline";
 import { titleMatches, titleTokens } from "@/lib/ai/research/verify";
 import { recencyShare } from "@/lib/materials";
 import type { Material } from "@/lib/schemas/material";
+import { totalHours } from "@/lib/studyTime";
 import type { ResearchGoldenRecord } from "./golden.v3";
 
 export type ArmName = "A" | "C";
@@ -26,6 +27,17 @@ export interface RunMetrics {
   overBudgetLeaves: number;
   chapterRegressions: number;
   unreservedChapters: number;
+  /** Leaves whose must-reading ran well past the plan's own reading share. */
+  overShareLeaves: number;
+  /** Hours of material on the list (over the materials that have a size) and the plan's study hours in all. */
+  sizedHours: number;
+  totalHours: number;
+  /** Share of sized materials whose size code measured; null when nothing was sized. */
+  measuredShare: number | null;
+  /** Share of materials with no size at all. */
+  unsizedShare: number;
+  /** Main areas research named as covered and as left open. */
+  coverage: { covered: number; open: number } | null;
   costUsd: number;
   latencyMs: number;
   toolCalls: { searches: number; fetches: number; steps: number };
@@ -55,21 +67,34 @@ export function mustIncludeRecall(materials: Material[], mustInclude: { title: s
 }
 
 /** The code checks' facts, counted across every drafting call of the run. */
-export function checkCounts(calls: ModelCall[]): Pick<RunMetrics, "unknownRefs" | "overBudgetLeaves" | "chapterRegressions" | "unreservedChapters"> {
+export function checkCounts(calls: ModelCall[]): Pick<RunMetrics, "unknownRefs" | "overBudgetLeaves" | "chapterRegressions" | "unreservedChapters" | "overShareLeaves"> {
   let unknownRefs = 0;
   let overBudgetLeaves = 0;
   let chapterRegressions = 0;
   let unreservedChapters = 0;
+  let overShareLeaves = 0;
   for (const call of calls) {
     for (const fact of call.facts) {
       const unknown = fact.match(/^dropped unknown (.+)$/);
       if (unknown) unknownRefs += unknown[1].split(",").length;
       else if (/ over budget: /.test(fact)) overBudgetLeaves += 1;
+      else if (/ must-reading over the plan's share: /.test(fact)) overShareLeaves += 1;
       else if (/^backbone ch\. \d+ after ch\./.test(fact)) chapterRegressions += 1;
       else if (/^backbone ch\. .* not reserved$/.test(fact)) unreservedChapters += 1;
     }
   }
-  return { unknownRefs, overBudgetLeaves, chapterRegressions, unreservedChapters };
+  return { unknownRefs, overBudgetLeaves, chapterRegressions, unreservedChapters, overShareLeaves };
+}
+
+/** How much of the list is sized, and how much of that code measured. */
+export function sizeMetrics(materials: Pick<Material, "minutes" | "minutesBasis">[]): Pick<RunMetrics, "sizedHours" | "measuredShare" | "unsizedShare"> {
+  const sized = materials.filter((m) => m.minutes);
+  const minutes = sized.reduce((sum, m) => sum + (m.minutes ?? 0), 0);
+  return {
+    sizedHours: Math.round((minutes / 60) * 10) / 10,
+    measuredShare: sized.length === 0 ? null : sized.filter((m) => m.minutesBasis === "measured").length / sized.length,
+    unsizedShare: materials.length === 0 ? 0 : (materials.length - sized.length) / materials.length,
+  };
 }
 
 export function runMetrics(input: {
@@ -96,6 +121,9 @@ export function runMetrics(input: {
     recency: recencyShare(outcome.materials),
     notice: outcome.notice ?? null,
     ...checkCounts(input.calls),
+    ...sizeMetrics(outcome.materials),
+    totalHours: totalHours(record.input.days, record.input.hoursPerWeek),
+    coverage: outcome.coverage ? { covered: outcome.coverage.covered.length, open: outcome.coverage.open.length } : null,
     costUsd: input.rows.reduce((sum, r) => sum + r.costUsd, 0) + (input.extraCostUsd ?? 0),
     latencyMs: input.latencyMs,
     toolCalls: outcome.arm?.counts ?? { searches: 0, fetches: 0, steps: 0 },
@@ -118,6 +146,9 @@ export interface ArmSummary {
   unknownRefs: number | null;
   overBudgetLeaves: number | null;
   chapterRegressions: number | null;
+  /** Sized hours over the plan's hours: 1 means the list would fill every hour with reading. */
+  sizedRatio: number | null;
+  measuredShare: number | null;
   costUsd: number | null;
   latencyMs: number | null;
   searches: number | null;
@@ -136,6 +167,8 @@ export function summarize(arm: ArmName, runs: RunMetrics[]): ArmSummary {
     unknownRefs: mean(mine.map((r) => r.unknownRefs)),
     overBudgetLeaves: mean(mine.map((r) => r.overBudgetLeaves)),
     chapterRegressions: mean(mine.map((r) => r.chapterRegressions)),
+    sizedRatio: mean(mine.map((r) => (r.totalHours > 0 ? r.sizedHours / r.totalHours : null))),
+    measuredShare: mean(mine.map((r) => r.measuredShare)),
     costUsd: mean(mine.map((r) => r.costUsd)),
     latencyMs: mean(mine.map((r) => r.latencyMs)),
     searches: mean(mine.map((r) => r.toolCalls.searches)),

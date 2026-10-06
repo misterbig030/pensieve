@@ -17,6 +17,8 @@ export interface ResearchGoldenRecord {
     topic: string;
     days: number;
     granularity: Granularity;
+    /** Hours a week the learner can give; six when left out, as in the app. */
+    hoursPerWeek?: number;
     instructions?: string;
     sources: SourceInput[];
   };
@@ -34,6 +36,7 @@ export const GOLDEN_V3: ResearchGoldenRecord[] = [
       topic: "AI engineering: building applications on foundation models",
       days: 84,
       granularity: "week",
+      hoursPerWeek: 6,
       instructions: "Backend engineer moving into LLM apps. About 6 hours a week, heavy on building.",
       sources: [{ url: "https://hamel.dev/blog/posts/evals/", type: "link", title: "Your AI Product Needs Evals" }],
     },
@@ -116,5 +119,26 @@ export const GOLDEN_V3: ResearchGoldenRecord[] = [
     id: "niche-21d-nosrc-whitework-01",
     why: "Deliberately thin: fewer than five verified materials and the thin notice, never an invented book.",
     input: { topic: "Victorian whitework embroidery", days: 21, granularity: "day", sources: [] },
+  },
+  // Study hours and the time split (added Oct 4 with the study-hours build). No labels: these are read, not scored by title.
+  {
+    id: "tech-28d-nosrc-casual-01",
+    why: "Three hours a week is 12 hours in all: research should stop at a handful of short materials, not a textbook.",
+    input: { topic: "SQL for data analysis", days: 28, granularity: "week", hoursPerWeek: 3, sources: [] },
+  },
+  {
+    id: "tech-84d-nosrc-fulltime-01",
+    why: "Thirty hours a week is 360 hours: the list should be long enough to fill them, and the split should lean on building.",
+    input: { topic: "Deep learning from the ground up", days: 84, granularity: "week", hoursPerWeek: 30, instructions: "Career change, studying full time. I want to implement things myself.", sources: [] },
+  },
+  {
+    id: "soft-30d-nosrc-frenchrev-01",
+    why: "A knowledge topic with nothing to build: the split should be mostly reading, with writing or recall for the rest.",
+    input: { topic: "The French Revolution, 1789 to 1799", days: 30, granularity: "day", sources: [] },
+  },
+  {
+    id: "soft-56d-nosrc-5k-01",
+    why: "Physical training: almost no reading. The split should be nearly all sessions and research should come back short.",
+    input: { topic: "Couch to 5K", days: 56, granularity: "week", hoursPerWeek: 3, sources: [] },
   },
 ];

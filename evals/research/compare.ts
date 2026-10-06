@@ -20,6 +20,7 @@ import { createAgentArm, type ResearchArm } from "@/lib/ai/research/agent";
 import { researchMaterials, type ResearchOutcome } from "@/lib/ai/research/pipeline";
 import { searchProviderFromEnv } from "@/lib/ai/research/tools";
 import type { PlanNode } from "@/lib/planTree";
+import type { PlanSplit } from "@/lib/studyTime";
 import { GOLDEN_V3, type ResearchGoldenRecord } from "./golden.v3";
 import { decide, pct, runMetrics, summarize, type ArmName, type RunMetrics } from "./metrics";
 import { WEB_SEARCH_USD, createProviderArm } from "./providerArm";
@@ -64,6 +65,9 @@ interface RunRecord {
   materials: ResearchOutcome["materials"];
   dropped: ResearchOutcome["dropped"];
   plan: PlanNode | null;
+  /** How the drafter divided the learner's time, for the judges (rubric dimension 5). */
+  split: PlanSplit | null;
+  coverage: ResearchOutcome["coverage"];
   facts: string[];
 }
 
@@ -79,8 +83,10 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
   const outcome = next.value;
 
   let plan: PlanNode | null = null;
+  let split: PlanSplit | null = null;
   for await (const event of streamPlanDraft({ ...record.input, materials: outcome.materials, log })) {
     if (event.type === "finish") plan = event.root;
+    if (event.type === "split") split = event.split;
   }
 
   const metrics = runMetrics({
@@ -93,7 +99,7 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
     latencyMs: Math.round(performance.now() - started),
     extraCostUsd: arm === "C" ? (outcome.arm?.counts.searches ?? 0) * WEB_SEARCH_USD : 0,
   });
-  return { metrics, materials: outcome.materials, dropped: outcome.dropped, plan, facts: calls.flatMap((c) => c.facts.map((f) => `${c.label}: ${f}`)) };
+  return { metrics, materials: outcome.materials, dropped: outcome.dropped, plan, split, coverage: outcome.coverage, facts: calls.flatMap((c) => c.facts.map((f) => `${c.label}: ${f}`)) };
 }
 
 async function main() {
@@ -112,7 +118,8 @@ async function main() {
           const result = await runOnce(record, arm, run);
           results.push(result);
           const m = result.metrics;
-          console.log(`verified ${m.verified}/${m.proposed}, backbone ${m.backboneHit ?? "—"}, $${m.costUsd.toFixed(3)}, ${(m.latencyMs / 1000).toFixed(0)} s`);
+          const time = result.split ? `, split ${result.split.readingShare}% reading / ${result.split.practice}` : "";
+          console.log(`verified ${m.verified}/${m.proposed}, backbone ${m.backboneHit ?? "—"}, sized ${m.sizedHours} of ${m.totalHours} h (${pct(m.measuredShare)} measured)${time}, $${m.costUsd.toFixed(3)}, ${(m.latencyMs / 1000).toFixed(0)} s`);
         } catch (error) {
           console.log(`failed: ${error instanceof Error ? error.message : String(error)}`);
         }

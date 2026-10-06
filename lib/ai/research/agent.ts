@@ -41,7 +41,8 @@ export interface ArmInput {
   caps?: ResearchCaps;
 }
 
-export type StopReason = "model" | "steps" | "clock" | "search-error" | "cancelled";
+/** `clock-idle`: the clock fired before a single tool result came back, so research never really started. */
+export type StopReason = "model" | "steps" | "clock" | "clock-idle" | "search-error" | "cancelled";
 
 export interface ArmResult {
   candidates: Candidate[];
@@ -77,10 +78,24 @@ export interface ResearchToolNames {
   fetch: string;
 }
 
-export function buildResearchInstructions(caps: ResearchCaps, names: ResearchToolNames = { search: "webSearch", fetch: "fetchSource" }): string {
+/**
+ * How the budget is held: `code` for arm A, whose tools refuse calls past the cap step by step; `tool` for arm C,
+ * whose provider-run tools stop on their own inside one turn.
+ */
+export type BudgetEnforcement = "code" | "tool";
+
+export function buildResearchInstructions(
+  caps: ResearchCaps,
+  names: ResearchToolNames = { search: "webSearch", fetch: "fetchSource" },
+  enforcement: BudgetEnforcement = "code",
+): string {
+  const budget =
+    enforcement === "code"
+      ? `Budget: ${caps.searches} searches, ${caps.fetches} page reads and ${caps.steps} steps in all; calls past a cap are refused.`
+      : `Budget: ${caps.searches} searches and ${caps.fetches} page reads; each tool stops on its own once its budget is used. There is no step limit: do the research in one pass, then write your notes.`;
   return [
     `You gather the materials for a self-study plan: one well-recommended backbone textbook the plan follows in order, where the topic has one, and the canonical and current materials around it. You find them and say how long each takes. How the learner's time divides between reading and practice is decided later, not by you.`,
-    `You have two tools. ${names.search} returns titles, URLs and snippets. ${names.fetch} reads one https page and returns its own title, headings and text. Budget: ${caps.searches} searches, ${caps.fetches} page reads and ${caps.steps} steps in all; calls past a cap are refused.`,
+    `You have two tools. ${names.search} returns titles, URLs and snippets. ${names.fetch} reads one https page and returns its own title, headings and text. ${budget}`,
     `Work in this order:`,
     `1. Read each link the learner provided with ${names.fetch} and note what it is. These are always kept.`,
     `2. Backbone. Search from several angles (best book for the topic, university course syllabi, reading lists) and note which pages recommend each book. Independent agreement across different sites beats a single listicle. Note the leading book's exact title and its author: a book is checked against a library catalogue by those two, not by a page. Try its publisher's or author's page once for a link; if that page cannot be read, move on.`,

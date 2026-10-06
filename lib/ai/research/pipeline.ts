@@ -122,7 +122,7 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
     }),
   );
 
-  const unavailable = !arm || arm.stoppedBy === "cancelled" || (arm.stoppedBy === "search-error" && arm.searchesOk === 0);
+  const unavailable = !arm || arm.stoppedBy === "cancelled" || arm.stoppedBy === "clock-idle" || (arm.stoppedBy === "search-error" && arm.searchesOk === 0);
   const coverage = arm?.coverage ?? null;
   const notice: ResearchNotice | undefined = unavailable ? "unavailable" : isThin(gate.verified, coverage) ? "thin" : undefined;
   const counts = { searches: arm?.counts.searches ?? 0, fetches: arm?.counts.fetches ?? 0 };

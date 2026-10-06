@@ -5,6 +5,7 @@ import {
   assignmentsOf,
   chapterGaps,
   chapterRegressions,
+  learnerMaterials,
   levelFacts,
   parseChapters,
   remapTreeRefs,
@@ -138,5 +139,31 @@ describe("tree edits", () => {
 
   it("sums minutes by tier", () => {
     expect(tierMinutes([{ id: "a", tier: "must", minutes: 30, note: null }, { id: "b", tier: "should", minutes: null, note: null }, { id: "c", tier: "should", minutes: 15, note: null }])).toEqual({ must: 30, should: 15 });
+  });
+});
+
+describe("learnerMaterials", () => {
+  it("turns the learner's sources into unverified materials with short ids", () => {
+    const out = learnerMaterials([
+      { url: "https://doc.rust-lang.org/book/", type: "link", title: "The Rust Book" },
+      { url: "https://www.youtube.com/watch?v=eIho2S0ZahI", type: "youtube" },
+      { url: "ml-course-notes.pdf", type: "file", title: "ml-course-notes.pdf" },
+      { url: "The Psychology of Money", type: "note" },
+      { url: "https://github.com/foo/bar", type: "link" },
+    ]);
+    expect(out.map((m) => m.id)).toEqual(["M1", "M2", "M3", "M4", "M5"]);
+    expect(out.map((m) => m.kind)).toEqual(["docs", "video", "note", "note", "repo"]);
+    expect(out.map((m) => m.title)).toEqual(["The Rust Book", "youtube.com", "ml-course-notes.pdf", "The Psychology of Money", "github.com"]);
+    for (const m of out) {
+      expect(m.origin).toBe("learner");
+      expect(m.verifiedAt).toBeNull();
+      expect(m.sig).toBeNull();
+      expect(m.backbone).toBe(false);
+    }
+  });
+
+  it("keeps one material per url", () => {
+    const out = learnerMaterials([{ url: "https://example.com/a", type: "link" }, { url: "https://example.com/a", type: "link", title: "Again" }]);
+    expect(out).toHaveLength(1);
   });
 });
