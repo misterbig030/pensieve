@@ -4,6 +4,7 @@ import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type Rese
 import type { Coverage, DroppedMaterial, ResearchEvent, ResearchNotice } from "./events";
 import { SourceFetcher, capsFor, searchProviderFromEnv, type ResearchCaps } from "./tools";
 import { createOpenLibraryLookup, runGate, sizedMinutes, type BookLookup } from "./verify";
+import { createWorkersArm } from "./workers";
 
 /** Fewer researched materials than this and the plan carries the "thin" notice, whatever they cover. */
 export const THIN_BELOW = 3;
@@ -80,10 +81,14 @@ export interface ResearchMaterialsInput {
   caps?: ResearchCaps;
 }
 
-/** The arm the app ships: arm A with Tavily, or null when `TAVILY_API_KEY` is unset. */
-export function defaultArm(): ResearchArm | null {
-  const provider = searchProviderFromEnv();
-  return provider ? createAgentArm({ provider }) : null;
+/**
+ * The arm the app ships: arm A with Tavily, or arm W (one worker per research direction) when `RESEARCH_ARM=workers`.
+ * Null when `TAVILY_API_KEY` is unset.
+ */
+export function defaultArm(env: Record<string, string | undefined> = process.env): ResearchArm | null {
+  const provider = searchProviderFromEnv(env);
+  if (!provider) return null;
+  return env.RESEARCH_ARM?.trim().toLowerCase() === "workers" ? createWorkersArm({ provider }) : createAgentArm({ provider });
 }
 
 /**

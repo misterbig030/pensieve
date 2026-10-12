@@ -6,7 +6,7 @@ import { initialResearch, reduceResearch } from "@/lib/researchProgress";
 import { RESEARCH_RULES, type StopReason } from "./agent";
 import type { ResearchEvent, WorkerDirection } from "./events";
 import type { PageInfo } from "./extract";
-import { researchMaterials } from "./pipeline";
+import { defaultArm, researchMaterials } from "./pipeline";
 import { ResearchNotes, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
 import type { BookLookup, CandidateList } from "./verify";
 import { DEADLINE_SHARE, buildWorkerInstructions, createWorkersArm, duplicateShare, foldStopReason, mergeNotes, splitCaps } from "./workers";
@@ -369,5 +369,15 @@ describe("folding the workers", () => {
     b.searches.push({ query: "y", results: [hit("https://two.example"), hit("https://three.example")] });
     expect(duplicateShare([{ notes: a }, { notes: b }])).toBeCloseTo(1 / 3);
     expect(duplicateShare([{ notes: new ResearchNotes() }])).toBeNull();
+  });
+});
+
+describe("defaultArm", () => {
+  it("ships arm A, or arm W behind RESEARCH_ARM=workers, and nothing without a search key", () => {
+    expect(defaultArm({ TAVILY_API_KEY: "k" })?.name).toBe("research");
+    expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: "workers" })?.name).toBe("researchWorkers");
+    expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: " Workers " })?.name).toBe("researchWorkers");
+    expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: "agent" })?.name).toBe("research");
+    expect(defaultArm({ RESEARCH_ARM: "workers" })).toBeNull();
   });
 });
