@@ -1,6 +1,6 @@
 # Research workers: one worker per direction (arm W) — design
 
-**Date:** 2026-10-09 · **Status:** proposed, not built · **Builds on:** `2026-09-28-research-materials-design.md`
+**Date:** 2026-10-09 · **Status:** built on 2026-10-12 behind `RESEARCH_ARM=workers` (plan: `docs/superpowers/plans/2026-10-12-research-workers.md`); the compare run is pending · **Builds on:** `2026-09-28-research-materials-design.md`
 (the research step, gate and eval) and `2026-10-04-study-hours-design.md` (caps by hours band).
 
 Arm W replaces the single research loop with a small fan-out that code orchestrates: the learner's links are read
@@ -60,6 +60,10 @@ case, against about 78 s today, with backbone hit rate and `mustInclude` recall 
    returning arm A otherwise.
 9. **Same model for every worker in the first measurement**, `DEFAULT_RESEARCH_MODEL`, so the comparison with arm A
    is about shape, not model. A cheaper model for the two-step workers is an open item for after.
+10. **The deadline's timer starts when the workers start**, after the learner reads, so research gets the full three
+    quarters of the clock; the learner reads are bounded by the fetch timeout on their own. (Decided in the build.)
+11. **A worker whose model call fails is recorded as `search-error`** with the notes it had, as arm C treats a provider
+    error; the other workers continue and the arm never throws. (Decided in the build.)
 
 ## Architecture
 
@@ -267,7 +271,7 @@ touching budgets.
 | `lib/ai/research/verify.ts` | Export `mapLimit`, or move it to a small shared helper, so the arm can read learner links with it. |
 | `lib/ai/research/workers.ts` | New: `createWorkersArm`, `splitCaps`, `buildWorkerInstructions`, `readLearnerLinks`, `mergeNotes`, `foldStopReason`. |
 | `lib/ai/research/workers.test.ts` | New, as above. |
-| `lib/ai/research/tools.ts` | No change to caps. `ResearchNotes.render` gains an optional heading argument. |
+| `lib/ai/research/tools.ts` | No change: `mergeNotes` adds the direction headings itself. |
 | `lib/ai/research/events.ts` | Optional `worker` on three events. |
 | `lib/ai/research/agent.ts` (`ArmResult`) | Optional `workers` summary. |
 | `lib/ai/research/pipeline.ts` | `defaultArm()` returns arm W when `RESEARCH_ARM=workers`. |
