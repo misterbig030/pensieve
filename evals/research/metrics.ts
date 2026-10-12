@@ -1,4 +1,5 @@
 import type { GenerationLogRow, ModelCall } from "@/lib/ai/logged";
+import type { WorkerSummary } from "@/lib/ai/research/agent";
 import type { ResearchOutcome } from "@/lib/ai/research/pipeline";
 import { titleMatches, titleTokens } from "@/lib/ai/research/verify";
 import { recencyShare } from "@/lib/materials";
@@ -6,7 +7,7 @@ import type { Material } from "@/lib/schemas/material";
 import { totalHours } from "@/lib/studyTime";
 import type { ResearchGoldenRecord } from "./golden.v3";
 
-export type ArmName = "A" | "C";
+export type ArmName = "A" | "C" | "W";
 
 /** One record through one arm, once. Rubric scores (accuracy, coverage, source fidelity, materials fit) come from the judges. */
 export interface RunMetrics {
@@ -42,6 +43,10 @@ export interface RunMetrics {
   latencyMs: number;
   toolCalls: { searches: number; fetches: number; steps: number };
   stoppedBy: string | null;
+  /** Arm W: how each worker ran; null for the other arms. */
+  workers: WorkerSummary[] | null;
+  /** Arm W: share of distinct search-result URLs more than one worker saw; null for the other arms. */
+  duplicateShare: number | null;
 }
 
 function authorMatches(expected: string, author: string | null): boolean {
@@ -128,12 +133,21 @@ export function runMetrics(input: {
     latencyMs: input.latencyMs,
     toolCalls: outcome.arm?.counts ?? { searches: 0, fetches: 0, steps: 0 },
     stoppedBy: outcome.arm?.stoppedBy ?? null,
+    workers: outcome.arm?.workers ?? null,
+    duplicateShare: outcome.arm?.duplicateShare ?? null,
   };
 }
 
 function mean(values: (number | null)[]): number | null {
   const xs = values.filter((v): v is number => v !== null);
   return xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length;
+}
+
+export function median(values: (number | null)[]): number | null {
+  const xs = values.filter((v): v is number => v !== null).sort((a, b) => a - b);
+  if (xs.length === 0) return null;
+  const mid = Math.floor(xs.length / 2);
+  return xs.length % 2 === 1 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
 }
 
 export interface ArmSummary {
@@ -151,6 +165,9 @@ export interface ArmSummary {
   measuredShare: number | null;
   costUsd: number | null;
   latencyMs: number | null;
+  latencyMedianMs: number | null;
+  /** Arm W: mean duplicate share across runs; null for the other arms. */
+  duplicateShare: number | null;
   searches: number | null;
   fetches: number | null;
 }
@@ -171,6 +188,8 @@ export function summarize(arm: ArmName, runs: RunMetrics[]): ArmSummary {
     measuredShare: mean(mine.map((r) => r.measuredShare)),
     costUsd: mean(mine.map((r) => r.costUsd)),
     latencyMs: mean(mine.map((r) => r.latencyMs)),
+    latencyMedianMs: median(mine.map((r) => r.latencyMs)),
+    duplicateShare: mean(mine.map((r) => r.duplicateShare)),
     searches: mean(mine.map((r) => r.toolCalls.searches)),
     fetches: mean(mine.map((r) => r.toolCalls.fetches)),
   };
@@ -194,6 +213,39 @@ export function decide(a: ArmSummary, c: ArmSummary): { keepA: boolean; reasons:
   }
   if (keepA) reasons.push("no worse on backbone hit, within 10 points on verified rate");
   return { keepA, reasons };
+}
+
+/**
+ * The pre-registered rule for arm W against arm A: adopt W if its median latency is at most 0.7 × A's, its backbone
+ * hit and mustInclude recall are each within five points of A's, and its cost per run is at most 1.8 × A's. When the
+ * answer is no, `reasons` lists only what blocked it; when yes, every check that passed.
+ */
+export function decideWorkers(a: ArmSummary, w: ArmSummary): { adoptW: boolean; reasons: string[] } {
+  const reasons: string[] = [];
+  let adoptW = true;
+  const secs = (ms: number | null) => `${((ms ?? 0) / 1000).toFixed(0)} s`;
+  if (a.latencyMedianMs !== null && w.latencyMedianMs !== null) {
+    if (w.latencyMedianMs <= 0.7 * a.latencyMedianMs) reasons.push(`median latency ${secs(w.latencyMedianMs)} is at most 0.7 × ${secs(a.latencyMedianMs)}`);
+    else {
+      adoptW = false;
+      reasons.push(`median latency ${secs(w.latencyMedianMs)} is more than 0.7 × ${secs(a.latencyMedianMs)}`);
+    }
+  }
+  const behind: string[] = [];
+  if (a.backboneHit !== null && w.backboneHit !== null && a.backboneHit - w.backboneHit > 0.05) behind.push(`backbone hit ${pct(w.backboneHit)} is more than five points below ${pct(a.backboneHit)}`);
+  if (a.mustIncludeRecall !== null && w.mustIncludeRecall !== null && a.mustIncludeRecall - w.mustIncludeRecall > 0.05) behind.push(`mustInclude recall ${pct(w.mustIncludeRecall)} is more than five points below ${pct(a.mustIncludeRecall)}`);
+  if (behind.length > 0) {
+    adoptW = false;
+    reasons.push(...behind);
+  } else reasons.push("backbone hit and mustInclude recall within five points");
+  if (a.costUsd !== null && w.costUsd !== null) {
+    if (w.costUsd <= 1.8 * a.costUsd) reasons.push(`cost $${w.costUsd.toFixed(3)} is at most 1.8 × $${a.costUsd.toFixed(3)}`);
+    else {
+      adoptW = false;
+      reasons.push(`cost $${w.costUsd.toFixed(3)} is more than 1.8 × $${a.costUsd.toFixed(3)}`);
+    }
+  }
+  return { adoptW, reasons: adoptW ? reasons : reasons.filter((r) => / is more than /.test(r)) };
 }
 
 export function pct(x: number | null): string {
