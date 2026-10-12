@@ -324,4 +324,12 @@ describe("research prompts", () => {
     expect(capsFor(72)).toEqual(RESEARCH_CAPS);
     expect(capsFor(360).fetches).toBe(16);
   });
+
+  it("says when the notes are grouped by direction, and only then", () => {
+    const plain = buildFinalPrompt({ topic: "T", days: 7, sources: [] }, "notes");
+    const grouped = buildFinalPrompt({ topic: "T", days: 7, sources: [] }, "notes", { grouped: true });
+    expect(plain).not.toContain("grouped by the research direction");
+    expect(grouped).toContain("Notes are grouped by the research direction that found them; a material found by more than one appears once in your list.");
+    expect(grouped.indexOf("Research notes")).toBeLessThan(grouped.indexOf("grouped by the research direction"));
+  });
 });
