@@ -62,8 +62,12 @@ case, against about 78 s today, with backbone hit rate and `mustInclude` recall 
    is about shape, not model. A cheaper model for the two-step workers is an open item for after.
 10. **The deadline's timer starts when the workers start**, after the learner reads, so research gets the full three
     quarters of the clock; the learner reads are bounded by the fetch timeout on their own. (Decided in the build.)
-11. **A worker whose model call fails is recorded as `search-error`** with the notes it had, as arm C treats a provider
+11. **A worker whose model call fails is recorded as `search-error`** with the notes it had and the steps, budget units
+    and cost it had spent (`runResearchLoop` throws a `ResearchLoopError` carrying them), as arm C treats a provider
     error; the other workers continue and the arm never throws. (Decided in the build.)
+12. **Briefs fit their steps.** The backbone brief at a three-step band reads the publisher page together with the
+    recommending pages, since the last step must be the notes; the two-step briefs ask for no notes at all. (From the
+    build's review.)
 
 ## Architecture
 
@@ -124,14 +128,15 @@ focus) and the learner-link lines are the prompt, shared by all three.
 - Strategy: search from several angles in the first turn (best book for the topic, university syllabi, reading
   lists). Read the two most independent recommending pages. Then try the publisher's or author's page for the
   leading book once. If the learner provided a book, decide first whether it is the backbone and look for its
-  recommenders rather than a rival.
+  recommenders rather than a rival. At a three-step band the publisher page is read in the same turn as the
+  recommenders, because the last step must be the notes.
 - Boundaries: books only. Do not collect courses, docs or videos. Never a shop listing as a book's page.
 - Output: a few lines of notes naming the leading book, its author, the recommending pages, and its page if found.
 
 **canonical** (two steps):
 - Objective: the official documentation, the well-known courses and talks, the standard papers and repositories.
-- Strategy: all searches in the first turn, all reads in the second. Note each material's length when its page
-  says so.
+- Strategy: all searches in the first turn, all reads in the second, and no notes: there is no turn for them. A
+  page's length reaches the candidate step through the read itself (`words`, `durationMinutes`).
 - Boundaries: no books. A material's URL is its own page.
 
 **current** (two steps):
@@ -192,8 +197,9 @@ Top-level fields fold the workers like this:
 - `searchesOk`: sum.
 - `stoppedBy`: `cancelled` if the outer signal fired; else `search-error` if every worker saw a search error and
   `searchesOk` is 0; else `clock-idle` if no worker got a single tool result before the deadline; else `clock` if
-  the backbone worker was cut by the deadline; else `steps` if the backbone worker hit its step cap; else `model`.
-  The backbone worker decides because it carries the loop and the plan's spine.
+  the backbone worker was cut by the deadline; else `steps` if the backbone worker hit its step cap; else
+  `search-error` if the backbone worker's own search failed (the other workers' results keep the run from being
+  "unavailable"); else `model`. The backbone worker decides because it carries the loop and the plan's spine.
 - `costUsd`: workers plus the candidate step.
 
 ## Streaming and UI
@@ -247,8 +253,9 @@ fetcher that `agent.test.ts` already uses:
 
 Arm W is added to the compare harness as `ArmName = "A" | "C" | "W"`, `armFor("W")` building it with the Tavily
 provider. `RunMetrics` gains `workers` (the per-worker summary above) and `duplicateShare`: distinct URLs that
-appeared in more than one worker's search results, over all distinct URLs seen. Latency is already measured over
-the whole run.
+appeared in more than one worker's search results, over all distinct URLs seen, and `researchMs`: the research
+stage alone, beside the whole run's `latencyMs`. The rule reads the research median, because the drafting time is
+the same for every arm and would dilute the ratio.
 
 Procedure, as the README has it: `--first` on one record for the cost, then `--full --runs 3 --arms A,W` once the
 cost is approved.
@@ -257,6 +264,7 @@ cost is approved.
 - median research latency is at most 0.7 × arm A's, and
 - `backboneHit` and `mustIncludeRecall` are each within five points of arm A, and
 - cost per run is at most 1.8 × arm A's.
+A check that cannot be made (no runs, or no labelled records on one side) blocks adoption and is named.
 
 If latency passes and quality does not, read the backbone worker's transcripts first: the likely causes are the
 publisher-page step being cut, or the brief's boundary dropping a recommending page because it also lists

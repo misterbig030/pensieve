@@ -16,12 +16,12 @@ const usage = {
   outputTokens: { total: 20, text: 20, reasoning: undefined },
 };
 
-type Step = { calls: { tool: "webSearch" | "fetchSource"; input: Record<string, string> }[] } | { text: string };
-/** A worker's script: its steps in order, or a model that hangs until aborted, or one that fails. */
+type Step = { calls: { tool: "webSearch" | "fetchSource"; input: Record<string, string> }[] } | { text: string } | "throw";
+/** A worker's script: its steps in order ("throw" fails that call), or a model that hangs until aborted, or one that fails at once. */
 type Script = Step[] | "hang" | "throw";
 
 let callSeq = 0;
-function stepResult(step: Step): LanguageModelV4GenerateResult {
+function stepResult(step: Exclude<Step, "throw">): LanguageModelV4GenerateResult {
   if ("text" in step) return { content: [{ type: "text", text: step.text }], finishReason: { unified: "stop", raw: undefined }, usage, warnings: [] };
   return {
     content: step.calls.map((c) => ({ type: "tool-call" as const, toolCallId: `call-${++callSeq}`, toolName: c.tool, input: JSON.stringify(c.input) })),
@@ -67,7 +67,9 @@ function directedModel(scripts: Partial<Record<WorkerDirection, Script>>, finals
       }
       if (script === "throw") throw new Error(`${direction} model is down`);
       if (!queues.has(direction)) queues.set(direction, [...script]);
-      return stepResult(queues.get(direction)!.shift() ?? { text: "Done." });
+      const step = queues.get(direction)!.shift() ?? { text: "Done." };
+      if (step === "throw") throw new Error(`${direction} model is down`);
+      return stepResult(step);
     },
   });
   return { model, calls };
@@ -168,11 +170,17 @@ describe("buildWorkerInstructions", () => {
     expect(b.startsWith("Direction: backbone.\n")).toBe(true);
     expect(b).toContain("Boundaries: books only.");
     expect(b).toContain("Budget: 3 searches, 5 page reads and 4 steps in all");
+    // Four steps: searches, the recommenders, the publisher page, then notes.
+    expect(b).toContain("you have 4 steps, and the last must be your notes");
+    expect(b).toContain("Then try the leading book's publisher's or author's page once");
     const c = buildWorkerInstructions(canonical);
     expect(c.startsWith("Direction: canonical.\n")).toBe(true);
     expect(c).toContain("Boundaries: no books");
     expect(c).toContain("Budget: 2 searches, 4 page reads and 2 steps in all");
     expect(c).not.toContain("last two years");
+    // A two-step worker has no turn to write anything after its reads.
+    expect(c).not.toContain("Note how long");
+    expect(c).toContain("Do not write notes");
     const r = buildWorkerInstructions(current);
     expect(r.startsWith("Direction: current.\n")).toBe(true);
     expect(r).toContain("Boundaries: published within the last two years. No books");
@@ -182,6 +190,13 @@ describe("buildWorkerInstructions", () => {
   it("asks the canonical worker for recent material too at the smallest band", () => {
     const [, combined] = splitCaps(capsFor(6));
     expect(buildWorkerInstructions(combined)).toContain("last two years");
+  });
+  it("fits the backbone strategy into three steps where the band gives three", () => {
+    const [backbone] = splitCaps(capsFor(30));
+    const b = buildWorkerInstructions(backbone);
+    expect(b).toContain("you have 3 steps, and the last must be your notes");
+    expect(b).toContain("the leading book's publisher's or author's page, all at once. Third, write your notes.");
+    expect(b).not.toContain("Then try the leading book's publisher's or author's page once");
   });
 });
 
@@ -319,15 +334,19 @@ describe("arm W through the pipeline", () => {
     expect(calls.some((c) => c.responseFormat?.type === "json")).toBe(false);
   });
 
-  it("keeps the other workers' notes when one worker's model fails", async () => {
-    const { model, calls } = directedModel({ backbone: SCRIPTS.backbone, canonical: SCRIPTS.canonical, current: "throw" }, [LIST]);
+  it("keeps the other workers' notes, and the failed worker's counts, when one worker's model fails", async () => {
+    // The current worker's model fails on its second call, after one search went through.
+    const { model, calls } = directedModel({ backbone: SCRIPTS.backbone, canonical: SCRIPTS.canonical, current: [SCRIPTS.current[0], "throw"] }, [LIST]);
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const { fetcher } = fetcherFor();
     const { outcome } = await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }));
     errors.mockRestore();
     expect(outcome.arm?.stoppedBy).toBe("model");
-    expect(outcome.arm?.workers?.find((w) => w.direction === "current")).toMatchObject({ stoppedBy: "search-error", steps: 0 });
+    expect(outcome.arm?.workers?.find((w) => w.direction === "current")).toMatchObject({ stoppedBy: "search-error", steps: 1, searches: 1 });
+    expect(outcome.arm?.counts).toEqual({ steps: 6, searches: 3, fetches: 4 });
+    expect(outcome.arm?.searchesOk).toBe(3);
     expect(candidatePrompt(calls)).toContain("Core Textbook");
+    expect(candidatePrompt(calls)).toContain('Search: "llm engineering 2026"');
     expect(outcome.materials).toHaveLength(4);
   });
 });

@@ -7,7 +7,7 @@
  *   npx tsx evals/research/compare.ts --full --runs 3 --arms A,W   the whole golden v3 set; only once that cost is approved
  *
  * Options: --records id,id  --arms A,C,W  --runs N  --route gateway|direct  --out path
- * Env (.env.local): AI_GATEWAY_API_KEY; TAVILY_API_KEY for arm A; ANTHROPIC_API_KEY with --route direct.
+ * Env (.env.local): AI_GATEWAY_API_KEY; TAVILY_API_KEY for arms A and W; ANTHROPIC_API_KEY with --route direct.
  * Output: a JSON file with every run's metrics, materials, dropped candidates and plan, ready for the rubric judges
  * (accuracy, coverage, source fidelity, materials fit), and a summary with the pre-registered decision rule.
  */
@@ -85,6 +85,7 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
   let next = await research.next();
   while (!next.done) next = await research.next();
   const outcome = next.value;
+  const researchMs = Math.round(performance.now() - started);
 
   let plan: PlanNode | null = null;
   let split: PlanSplit | null = null;
@@ -101,6 +102,7 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
     calls,
     rows,
     latencyMs: Math.round(performance.now() - started),
+    researchMs,
     extraCostUsd: arm === "C" ? (outcome.arm?.counts.searches ?? 0) * WEB_SEARCH_USD : 0,
   });
   return { metrics, materials: outcome.materials, dropped: outcome.dropped, plan, split, coverage: outcome.coverage, facts: calls.flatMap((c) => c.facts.map((f) => `${c.label}: ${f}`)) };
@@ -124,8 +126,8 @@ async function main() {
           results.push(result);
           const m = result.metrics;
           const time = result.split ? `, split ${result.split.readingShare}% reading / ${result.split.practice}` : "";
-          const who = m.workers ? `, workers ${m.workers.map((w) => `${w.direction[0]}:${w.steps}/${w.stoppedBy}`).join(" ")}` : "";
-          console.log(`verified ${m.verified}/${m.proposed}, backbone ${m.backboneHit ?? "—"}, sized ${m.sizedHours} of ${m.totalHours} h (${pct(m.measuredShare)} measured)${time}${who}, $${m.costUsd.toFixed(3)}, ${(m.latencyMs / 1000).toFixed(0)} s`);
+          const who = m.workers ? `, workers ${m.workers.map((w) => `${w.direction.slice(0, 3)}:${w.steps}/${w.stoppedBy}`).join(" ")}` : "";
+          console.log(`verified ${m.verified}/${m.proposed}, backbone ${m.backboneHit ?? "—"}, sized ${m.sizedHours} of ${m.totalHours} h (${pct(m.measuredShare)} measured)${time}${who}, $${m.costUsd.toFixed(3)}, ${(m.latencyMs / 1000).toFixed(0)} s (research ${(m.researchMs / 1000).toFixed(0)} s)`);
         } catch (error) {
           console.log(`failed: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -135,12 +137,12 @@ async function main() {
 
   const all = results.map((r) => r.metrics);
   const summaries = arms.map((arm) => summarize(arm, all));
-  console.log("\narm  runs  verified  backbone  mustInclude  recency  unknownRefs  overBudget  regressions  cost/run  latency  median  dup   searches  reads");
+  console.log("\narm  runs  verified  backbone  mustInclude  recency  unknownRefs  overBudget  regressions  cost/run  latency  research  dup   searches  reads");
   for (const s of summaries) {
     console.log(
       [s.arm.padEnd(4), String(s.runs).padEnd(5), pct(s.verifiedRate).padEnd(9), pct(s.backboneHit).padEnd(9), pct(s.mustIncludeRecall).padEnd(12), pct(s.recency).padEnd(8),
         (s.unknownRefs ?? 0).toFixed(1).padEnd(12), (s.overBudgetLeaves ?? 0).toFixed(1).padEnd(11), (s.chapterRegressions ?? 0).toFixed(1).padEnd(12),
-        `$${(s.costUsd ?? 0).toFixed(3)}`.padEnd(9), `${((s.latencyMs ?? 0) / 1000).toFixed(0)} s`.padEnd(8), `${((s.latencyMedianMs ?? 0) / 1000).toFixed(0)} s`.padEnd(7),
+        `$${(s.costUsd ?? 0).toFixed(3)}`.padEnd(9), `${((s.latencyMs ?? 0) / 1000).toFixed(0)} s`.padEnd(8), `${((s.researchMedianMs ?? 0) / 1000).toFixed(0)} s`.padEnd(9),
         (s.duplicateShare === null ? "—" : pct(s.duplicateShare)).padEnd(5), (s.searches ?? 0).toFixed(1).padEnd(9), (s.fetches ?? 0).toFixed(1)].join(" "),
     );
   }

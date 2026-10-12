@@ -23,7 +23,7 @@ npx tsx evals/research/compare.ts --first
 npx tsx evals/research/compare.ts --full --runs 3
 ```
 
-Environment (`.env.local`): `AI_GATEWAY_API_KEY`, `TAVILY_API_KEY` (arm A), and `ANTHROPIC_API_KEY` for
+Environment (`.env.local`): `AI_GATEWAY_API_KEY`, `TAVILY_API_KEY` (arms A and W), and `ANTHROPIC_API_KEY` for
 `--route direct`. Results go to `evals/results/` (gitignored) with each run's materials, dropped candidates, plan and
 code-check facts, ready for the rubric judges.
 
@@ -62,11 +62,14 @@ npx tsx evals/research/compare.ts --first --arms A,W          # cost and latency
 npx tsx evals/research/compare.ts --full --runs 3 --arms A,W  # the whole set, once that cost is approved
 ```
 
-Each run records `workers` (per worker: steps, searches, reads, how it stopped, duration, cost) and `duplicateShare`
-(distinct search-result URLs more than one worker saw, over all distinct ones). The summary adds the median latency.
+Each run records `workers` (per worker: steps, searches, reads, how it stopped, duration, cost), `duplicateShare`
+(distinct search-result URLs more than one worker saw, over all distinct ones) and `researchMs`, the research stage
+alone; the summary adds its median. The rule reads that, not the whole run's latency, because drafting time is the
+same for every arm and would dilute the ratio.
 
 **Pre-registered rule** (`decideWorkers` in `metrics.ts`): adopt arm W as the default if, over the full set, its median
-latency is at most 0.7 × arm A's, `backboneHit` and `mustIncludeRecall` are each within five points of arm A's, and
-cost per run is at most 1.8 × arm A's. If latency passes and quality does not, read the backbone worker's transcripts
+research latency is at most 0.7 × arm A's, `backboneHit` and `mustIncludeRecall` are each within five points of arm
+A's, and cost per run is at most 1.8 × arm A's. A check that cannot be made (no runs, or no labelled records on one
+side) blocks adoption and is named in the output. If latency passes and quality does not, read the backbone worker's transcripts
 first (the publisher-page step cut off, or a recommending page dropped by the books-only boundary) and adjust the
 brief, not the shape. If `duplicateShare` is high, tighten the boundaries before touching budgets.

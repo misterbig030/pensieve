@@ -196,10 +196,21 @@ export interface LoopResult {
   costUsd: number;
 }
 
+/** A model call inside the loop failed. Carries what the loop had done by then, so a caller that goes on can still count it. */
+export class ResearchLoopError extends Error {
+  constructor(
+    cause: unknown,
+    readonly partial: LoopResult,
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = "ResearchLoopError";
+  }
+}
+
 /**
  * One bounded tool loop over `webSearch` and `fetchSource`: the body of arm A, and of each arm W worker. Caps are
  * enforced in code: the budget refuses tool calls, the step count stops the loop, and the deadline aborts it. Returns
- * how it ended; what it found is in `notes`. Throws only when a model call itself fails.
+ * how it ended; what it found is in `notes`. Throws a `ResearchLoopError` only when a model call itself fails.
  */
 export async function runResearchLoop(input: LoopInput): Promise<LoopResult> {
   const { caps, notes, emit, log, label } = input;
@@ -275,7 +286,7 @@ export async function runResearchLoop(input: LoopInput): Promise<LoopResult> {
     await agent.generate({ prompt: input.prompt, abortSignal: loop.signal });
     if (steps >= caps.steps) stoppedBy = "steps";
   } catch (error) {
-    if (!loop.signal.aborted) throw error;
+    if (!loop.signal.aborted) throw new ResearchLoopError(error, { steps, searches: budget.searches, fetches: budget.fetches, searchesOk, stoppedBy, costUsd });
     const reason = loop.signal.reason instanceof Error ? loop.signal.reason.message : "";
     if (reason === "clock") stoppedBy = "clock";
     else if (reason === "cancelled") stoppedBy = "cancelled";
