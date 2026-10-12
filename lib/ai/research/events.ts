@@ -9,6 +9,9 @@ export interface Coverage {
   open: string[];
 }
 
+/** The research direction an arm W worker runs. Absent on arm A's and arm C's events. */
+export type WorkerDirection = "backbone" | "canonical" | "current";
+
 export interface ResearchCounts {
   searches: number;
   fetches: number;
@@ -20,9 +23,9 @@ export interface ResearchCounts {
  */
 export type ResearchEvent =
   | { type: "research.start"; caps: { searches: number; fetches: number; steps: number } }
-  | { type: "research.search"; query: string; results: number }
-  | { type: "research.reading"; url: string }
-  | { type: "research.fetch"; url: string; ok: boolean; reason?: string }
+  | { type: "research.search"; query: string; results: number; worker?: WorkerDirection }
+  | { type: "research.reading"; url: string; worker?: WorkerDirection }
+  | { type: "research.fetch"; url: string; ok: boolean; reason?: string; worker?: WorkerDirection }
   | { type: "research.verified"; id: string; title: string; kind: MaterialKind; backbone: boolean; minutes?: number | null; basis?: MinutesBasis | null }
   | { type: "research.dropped"; title: string; url?: string; reason: string }
   | {

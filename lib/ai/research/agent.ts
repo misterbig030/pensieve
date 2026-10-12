@@ -3,7 +3,7 @@ import type { SourceInput } from "@/lib/schemas/source";
 import { DEFAULT_HOURS_PER_WEEK, totalHours } from "@/lib/studyTime";
 import { buildGenerationLogRow, emitGenerationLog, loggedGenerateObject, type GenerationLogContext } from "../logged";
 import { DEFAULT_RESEARCH_MODEL, type AiModelId } from "../models";
-import type { Coverage, ResearchEvent } from "./events";
+import type { Coverage, ResearchEvent, WorkerDirection } from "./events";
 import {
   RESEARCH_CAPS,
   ResearchBudget,
@@ -44,6 +44,17 @@ export interface ArmInput {
 /** `clock-idle`: the clock fired before a single tool result came back, so research never really started. */
 export type StopReason = "model" | "steps" | "clock" | "clock-idle" | "search-error" | "cancelled";
 
+/** How one arm W worker ran, for the eval and the admin log. */
+export interface WorkerSummary {
+  direction: WorkerDirection;
+  steps: number;
+  searches: number;
+  fetches: number;
+  stoppedBy: StopReason;
+  durationMs: number;
+  costUsd: number;
+}
+
 export interface ArmResult {
   candidates: Candidate[];
   learnerNotes: LearnerNote[];
@@ -56,6 +67,10 @@ export interface ArmResult {
   costUsd: number;
   /** The topic's main areas the list covers and the ones it leaves open, as the arm named them. */
   coverage?: Coverage | null;
+  /** Arm W only: how each worker ran. */
+  workers?: WorkerSummary[];
+  /** Arm W only: distinct URLs more than one worker's searches returned, over all distinct URLs returned. Null when the searches returned nothing. */
+  duplicateShare?: number | null;
 }
 
 /** Both arms implement this; everything after it (gate, drafting, judges) is shared. */

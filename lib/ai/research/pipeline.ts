@@ -129,7 +129,9 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
   const sized = sizedMinutes(gate.materials);
   yield { type: "research.done", materials: gate.materials, dropped: gate.dropped, ...(notice ? { notice } : {}), counts, coverage, sizedMinutes: sized };
 
-  const armSummary = arm ? { counts: arm.counts, searchesOk: arm.searchesOk, stoppedBy: arm.stoppedBy, costUsd: arm.costUsd } : null;
+  const armSummary = arm
+    ? { counts: arm.counts, searchesOk: arm.searchesOk, stoppedBy: arm.stoppedBy, costUsd: arm.costUsd, ...(arm.workers ? { workers: arm.workers, duplicateShare: arm.duplicateShare ?? null } : {}) }
+    : null;
   return {
     materials: gate.materials,
     dropped: gate.dropped,
