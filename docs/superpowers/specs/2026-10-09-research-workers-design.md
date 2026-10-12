@@ -306,7 +306,29 @@ touching budgets.
 - Arm C.
 - The research card's layout.
 
+## Live run (2026-10-12, before the compare)
+
+One draft in the app with `RESEARCH_ARM=workers`: "LLM engineering", 30 days at 6 h a week (the 40-hour band), one
+learner link. The learner link was read first; the three workers ran side by side and their steps were logged as
+`Research · backbone · step 1` and so on; the backbone worker found *LLM Engineer's Handbook* with two independent
+recommenders and ended on its step cap; 5 of 5 searches and 8 of 10 reads were used; five materials verified. Cost
+of the research calls: about $0.16.
+
+| Stage | Measured |
+|---|---|
+| Workers, all three, wall time | about 27 s (longest: the current worker, 3.7 s + 19.0 s model time plus its reads) |
+| Candidate step | 57.6 s, 8,689 tokens in, 5,390 out, of which about 1,000 are the JSON |
+| Research in all | about 90 s, against about 78 s measured for arm A |
+
+The fan-out took the loop from about 60 s to under 30 s, and the candidate step gave it back: most of its output
+tokens were reasoning, four times the measured arm A step. One run is not a measurement, but it points at the
+structured step as the thing to look at next: a lower reasoning effort or no extended thinking on that call, or a
+cheaper model for it, would help every arm. The compare run will say whether this run was typical.
+
 ## Open items
+
+- **The candidate step's thinking time.** See the live run above. Measure it in the compare (per-call latency is in
+  the run records); if it holds, cap the reasoning effort on `runCandidateStep` before touching the workers.
 
 - **Current worker at ten hours or less.** The table folds it into canonical. If short plans on fast-moving topics
   come out stale in the eval, give the band a third worker with one search and accept four searches at that band.
