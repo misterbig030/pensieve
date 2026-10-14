@@ -10,6 +10,7 @@ code and judges. Spec: `docs/superpowers/specs/2026-09-28-research-materials-des
 | `providerArm.ts` | Arm C. `route: "gateway"` by default; `--route direct` calls Anthropic with `ANTHROPIC_API_KEY`. |
 | `metrics.ts` | Verified rate, backbone hit, `mustInclude` recall, recency, code-check counts, cost, latency, tool calls, and the decision rule. |
 | `compare.ts` | The runner. |
+| `candidates-bench.ts`, `bench.ts` | Replays one recorded candidate-step prompt on several models and effort levels; see the last section. |
 | `../../lib/ai/research/workers.ts` | Arm W, in the app, behind `RESEARCH_ARM=workers`. |
 | `../rubric.md` §8 | "Materials fit", the rubric dimension the research build adds for the judges. |
 
@@ -73,3 +74,21 @@ A's, and cost per run is at most 1.8 × arm A's. A check that cannot be made (no
 side) blocks adoption and is named in the output. If latency passes and quality does not, read the backbone worker's transcripts
 first (the publisher-page step cut off, or a recommending page dropped by the books-only boundary) and adjust the
 brief, not the shape. If `duplicateShare` is high, tighten the boundaries before touching budgets.
+
+## Candidate-step bench (Oct 13)
+
+The candidate step is one structured call. To measure it alone, replay a recorded prompt on several models at several
+effort levels, with the app's schema and route, so the numbers are the app's numbers:
+
+```bash
+npx tsx evals/research/candidates-bench.ts --export ~/Downloads/model-calls-<ts>.json --dry-run   # plan and cost bound, no calls
+npx tsx evals/research/candidates-bench.ts --export ~/Downloads/model-calls-<ts>.json             # the matrix
+```
+
+The export is the admin panel's model-calls JSON for one draft; the bench takes the "Research · candidates" call's
+prompt verbatim and never copies it into the repo. Defaults: Haiku 5.5, Sonnet 5.5, Opus 5.5 and Sonnet 5 at `low`,
+`medium` and `high`, twelve calls for well under a dollar. The table shows latency, input, output and reasoning tokens,
+cost, and cheap checks on each list (candidates, backbones, total hours, URLs and recommenders the notes cannot vouch
+for, retitled pages). Every list is written to `evals/results/candidates-bench-<ts>.json` for a reader to judge; the
+gate and the judges, not these checks, decide quality. The first run (2026-10-13) is summarized in the arm W spec's open
+items.
