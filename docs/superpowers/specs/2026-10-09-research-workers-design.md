@@ -74,6 +74,12 @@ case, against about 78 s today, with backbone hit rate and `mustInclude` recall 
     their second step is their reads. Arm A's loop has the same switch but does not use it, so the baseline stays as it
     was for the compare. (From the live run of 2026-10-13, where the backbone worker spent its last two steps on one
     failed fetch each and wrote nothing, and the candidate step then reasoned for 106 s.)
+14. **Research runs on Sonnet 5.5 at `low` effort**, every call: the worker steps, the candidate step, and arm C's
+    loop in the eval, so the arms stay comparable. `RESEARCH_EFFORT` in `lib/ai/models.ts` is the one place it is set,
+    and each call's effort is recorded on its generation-log row. From the bench of 2026-10-13: Sonnet 5 at its default
+    effort reasoned for 94 s on the candidate step; Sonnet 5.5 at `low` wrote no reasoning tokens and took 10 s for a
+    list of the same quality, and the worker steps showed the same pattern (19 s to issue two searches). The
+    plan-drafting content model is unchanged.
 
 ## Architecture
 
@@ -340,9 +346,15 @@ cheaper model for it, would help every arm. The compare run will say whether thi
   (`evals/results/candidates-bench-2026-10-13.json`): Sonnet 5 at its default effort reproduced the 94 s; Sonnet 5.5
   and Opus 5.5 at `low` or `medium` wrote no reasoning tokens and finished in 8 to 19 s; Haiku 5.5 could not size the
   list; four of twelve lists got the backbone wrong, with no pattern by effort, and Opus 5.5 got it right at every
-  level. Still open: pick the model and effort for `runCandidateStep` (Sonnet 5.5 `low` or Opus 5.5 `low`, three
-  repeats each on the bench first), then re-export a run with the enforced notes step and replay it to see how much
-  the notes alone take off the step.
+  level. Decided on 2026-10-14: every research call runs on Sonnet 5.5 at `low` (decision 14). Still open: re-export
+  a run and replay it on the bench to see how much the notes step alone takes off the candidate step.
+- **The notes step and the clock.** The live run of 2026-10-14 (still on Sonnet 5) reached the enforced notes step and
+  the shared deadline cut it off: three tool steps took about 25 s of the workers' 45 s, and the text turn did not
+  finish in what was left, so the backbone stopped by `clock` with no notes and the candidate step took 125 s. Two
+  guards would close this: let a notes step that is running when the deadline fires finish, with a hard stop a few
+  seconds later; and start the notes step once the worker has used about 60% of its wall time, not only on its last
+  step or when its budget is spent. Decision 14 should make four steps fit the clock on its own; measure a run on the
+  new model before building the guards.
 
 - **Current worker at ten hours or less.** The table folds it into canonical. If short plans on fast-moving topics
   come out stale in the eval, give the band a third worker with one search and accept four searches at that band.

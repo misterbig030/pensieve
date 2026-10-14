@@ -184,6 +184,20 @@ describe("arm A through the pipeline", () => {
     expect(calls.every((c) => c.caller === "research")).toBe(true);
   });
 
+  it("runs the loop and the candidate step at the research effort, and records it on each row", async () => {
+    const { model, calls } = scriptedModel(
+      [{ calls: [{ tool: "webSearch", input: { query: "best llm engineering book" } }] }, { text: "Core Textbook is recommended by two lists." }],
+      [LIST],
+    );
+    const { fetcher } = fetcherFor();
+    const rows: ModelCall[] = [];
+    await collect(researchMaterials({ brief, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books, log: { onCall: (c) => void rows.push(c) } }));
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    for (const c of calls) expect(c.providerOptions?.anthropic?.effort).toBe("low");
+    expect(rows.length).toBe(calls.length);
+    for (const r of rows) expect(r.effort).toBe("low");
+  });
+
   it("enforces the caps in code whatever the model requests", async () => {
     const many = Array.from({ length: 5 }, (_, i) => ({ tool: "webSearch" as const, input: { query: `q${i}` } }));
     const reads = Array.from({ length: 5 }, (_, i) => ({ tool: "fetchSource" as const, input: { url: `https://docs.example.com/${i}` } }));

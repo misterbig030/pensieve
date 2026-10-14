@@ -453,3 +453,17 @@ describe("the backbone's notes step", () => {
     expect(outcome.arm?.workers?.find((w) => w.direction === "backbone")?.steps).toBe(3);
   });
 });
+
+describe("the research model's effort", () => {
+  it("sends the research effort on every worker step and on the candidate step, and records it on each row", async () => {
+    const { model, calls } = directedModel(SCRIPTS, [LIST]);
+    const { fetcher } = fetcherFor();
+    const log: ModelCall[] = [];
+    await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books, log: { onCall: (c) => void log.push(c) } }));
+    expect(calls.length).toBeGreaterThan(3);
+    expect(calls.some((c) => c.responseFormat?.type === "json")).toBe(true);
+    for (const c of calls) expect(c.providerOptions?.anthropic?.effort).toBe("low");
+    expect(log.length).toBe(calls.length);
+    for (const row of log) expect(row.effort).toBe("low");
+  });
+});

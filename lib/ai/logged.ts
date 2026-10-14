@@ -1,8 +1,13 @@
 import { generateObject, type FlexibleSchema, type LanguageModel, type LanguageModelUsage } from "ai";
 import type { GenerationCaller } from "@/lib/db/schema";
-import { estimateCostUsd, type AiModelId } from "./models";
+import { estimateCostUsd, type AiModelId, type ReasoningEffort } from "./models";
 
 export type { GenerationCaller };
+
+/** The provider options that set Anthropic's reasoning effort on one call. Other providers ignore the key. */
+export function effortOptions(effort: ReasoningEffort): { anthropic: { effort: ReasoningEffort } } {
+  return { anthropic: { effort } };
+}
 
 /** One normalized `generation_log` row, ready to insert. Kept free of DB types so the eval harness can collect them in memory. */
 export interface GenerationLogRow {
@@ -64,6 +69,8 @@ export interface LoggedGenerateObjectOptions<T> {
   /** More checks computed from the validated object, appended to `facts`. */
   check?: (object: T) => string[];
   abortSignal?: AbortSignal;
+  /** Anthropic reasoning effort for this call, sent as a provider option and recorded on the row. Omitted: the model's default. */
+  effort?: ReasoningEffort;
 }
 
 export interface LoggedGenerateObjectResult<T> {
@@ -80,6 +87,7 @@ export interface BuildGenerationLogRowInput {
   latencyMs: number;
   trackId?: string;
   userId?: string;
+  effort?: ReasoningEffort | null;
 }
 
 /** Normalizes the AI SDK usage shape into a flat `generation_log` row. Shared by the object wrapper and the streaming routes. */
@@ -88,7 +96,7 @@ export function buildGenerationLogRow(input: BuildGenerationLogRowInput): Genera
   return {
     caller: input.caller,
     model: input.model,
-    effort: null,
+    effort: input.effort ?? null,
     inputTokens: usage.inputTokens ?? null,
     outputTokens: usage.outputTokens ?? null,
     cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? null,
@@ -124,6 +132,7 @@ export async function loggedGenerateObject<T>(
     schema: opts.schema,
     prompt: opts.prompt,
     ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
+    ...(opts.effort ? { providerOptions: effortOptions(opts.effort) } : {}),
   });
   const latencyMs = Math.round(performance.now() - startedAt);
   const row = buildGenerationLogRow({
@@ -131,6 +140,7 @@ export async function loggedGenerateObject<T>(
     model: opts.model,
     usage,
     latencyMs,
+    effort: opts.effort ?? null,
     trackId: meta.trackId,
     userId: meta.userId,
   });

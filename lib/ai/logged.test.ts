@@ -82,6 +82,23 @@ describe("loggedGenerateObject", () => {
     );
   });
 
+  it("sends an effort as the Anthropic provider option and records it on the row", async () => {
+    mockedGenerateObject.mockResolvedValue(mockResult());
+    const rows: GenerationLogRow[] = [];
+    await loggedGenerateObject(
+      { model: "anthropic/claude-sonnet-5.5", schema, prompt: "hi", effort: "low" },
+      { caller: "research", onLog: (row) => void rows.push(row) },
+    );
+    expect(mockedGenerateObject).toHaveBeenCalledWith(expect.objectContaining({ providerOptions: { anthropic: { effort: "low" } } }));
+    expect(rows[0].effort).toBe("low");
+  });
+
+  it("sends no provider options when no effort is given", async () => {
+    mockedGenerateObject.mockResolvedValue(mockResult());
+    await loggedGenerateObject({ model: "anthropic/claude-sonnet-5", schema, prompt: "hi" }, { caller: "daily" });
+    expect(mockedGenerateObject.mock.calls[0][0]).not.toHaveProperty("providerOptions");
+  });
+
   it("hands the whole call to onCall: prompt, raw JSON response, label and finish reason", async () => {
     mockedGenerateObject.mockResolvedValue({ ...mockResult(), finishReason: "stop" } as unknown as Awaited<
       ReturnType<typeof generateObject>
