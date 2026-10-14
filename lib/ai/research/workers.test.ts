@@ -172,6 +172,7 @@ describe("buildWorkerInstructions", () => {
     expect(b).toContain("Budget: 3 searches, 5 page reads and 4 steps in all");
     // Four steps: searches, the recommenders, the publisher page, then notes.
     expect(b).toContain("you have 4 steps, and the last must be your notes");
+    expect(b).toContain("In your last step the tools are taken away");
     expect(b).toContain("Then try the leading book's publisher's or author's page once");
     const c = buildWorkerInstructions(canonical);
     expect(c.startsWith("Direction: canonical.\n")).toBe(true);
@@ -398,5 +399,57 @@ describe("defaultArm", () => {
     expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: " Workers " })?.name).toBe("researchWorkers");
     expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: "agent" })?.name).toBe("research");
     expect(defaultArm({ RESEARCH_ARM: "workers" })).toBeNull();
+  });
+});
+
+describe("the backbone's notes step", () => {
+  it("takes the tools away on the backbone's last step and asks for the notes, and never on a two-step worker", async () => {
+    const { model, calls } = directedModel(
+      {
+        backbone: [
+          { calls: [{ tool: "webSearch", input: { query: "best llm engineering book" } }] },
+          { calls: [{ tool: "fetchSource", input: { url: "https://books.example.com/core" } }] },
+          { calls: [{ tool: "fetchSource", input: { url: "https://publisher.example.com/missing" } }] },
+          { text: "Core Textbook by A. Author; two lists recommend it; its own page could not be read." },
+        ],
+        canonical: SCRIPTS.canonical,
+        current: SCRIPTS.current,
+      },
+      [LIST],
+    );
+    const { fetcher } = fetcherFor();
+    await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }));
+    const backbone = calls.filter((c) => directionOf(c) === "backbone");
+    expect(backbone).toHaveLength(4);
+    expect(backbone.slice(0, 3).map((c) => c.toolChoice?.type ?? "auto")).toEqual(["auto", "auto", "auto"]);
+    expect(backbone[3].toolChoice).toEqual({ type: "none" });
+    expect(userText(backbone[3])).toContain("Write your notes now");
+    for (const c of calls.filter((c) => directionOf(c) !== "backbone")) expect(c.toolChoice?.type ?? "auto").not.toBe("none");
+    const prompt = candidatePrompt(calls);
+    const section = prompt.slice(prompt.indexOf("Backbone research:"), prompt.indexOf("Canonical materials:"));
+    expect(section).toContain("Your notes while researching:\nCore Textbook by A. Author");
+  });
+
+  it("moves the notes step forward as soon as both budgets are spent", async () => {
+    const extra = ["c", "d", "e", "f"].map((k) => [`https://docs.example.com/${k}`, page(`https://docs.example.com/${k}`, `Guide ${k.toUpperCase()}`)] as const);
+    const { model, calls } = directedModel(
+      {
+        backbone: [
+          { calls: ["best llm engineering book", "llm engineering syllabus", "llm engineering reading list"].map((query) => ({ tool: "webSearch" as const, input: { query } })) },
+          { calls: ["https://books.example.com/core", ...extra.map(([url]) => url)].map((url) => ({ tool: "fetchSource" as const, input: { url } })) },
+          { text: "Core Textbook; budget spent." },
+        ],
+        canonical: SCRIPTS.canonical,
+        current: SCRIPTS.current,
+      },
+      [LIST],
+    );
+    const { fetcher } = fetcherFor({ ...PAGES, ...Object.fromEntries(extra) });
+    const { outcome } = await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }));
+    const backbone = calls.filter((c) => directionOf(c) === "backbone");
+    // Three searches and five reads are the backbone's whole share in this band: step 3 is its notes step, though its cap is four.
+    expect(backbone).toHaveLength(3);
+    expect(backbone[2].toolChoice).toEqual({ type: "none" });
+    expect(outcome.arm?.workers?.find((w) => w.direction === "backbone")?.steps).toBe(3);
   });
 });

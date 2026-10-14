@@ -183,7 +183,15 @@ export interface LoopInput {
   /** The request's own signal: a client disconnect. */
   signal?: AbortSignal;
   clock?: () => number;
+  /**
+   * Reserve a text turn for the model's notes: on the last step, or as soon as both budgets are spent, the tools are
+   * taken away and the model is asked to write. For loops whose brief ends with notes; a two-step worker has none.
+   */
+  notesStep?: boolean;
 }
+
+/** What the model is told on its notes step, when its tools are gone. */
+export const NOTES_NOW = `Your tools are gone for this step. Write your notes now: the leading book and its author, the pages that recommend it, its own page if found, and any rival worth a mention. If you found no book, say so.`;
 
 export interface LoopResult {
   steps: number;
@@ -253,6 +261,13 @@ export async function runResearchLoop(input: LoopInput): Promise<LoopResult> {
     instructions: input.instructions,
     tools,
     stopWhen: isStepCount(caps.steps),
+    prepareStep: ({ stepNumber, messages }) => {
+      if (!input.notesStep) return {};
+      const last = stepNumber === caps.steps - 1;
+      const spent = budget.searches >= caps.searches && budget.fetches >= caps.fetches;
+      if (!last && !spent) return {};
+      return { toolChoice: "none", messages: [...messages, { role: "user", content: NOTES_NOW }] };
+    },
     onStepEnd: async (step) => {
       const index = steps;
       steps += 1;

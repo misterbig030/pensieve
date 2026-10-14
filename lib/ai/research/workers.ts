@@ -79,7 +79,7 @@ const BACKBONE_BRIEF = (steps: number) => [
     ? `Strategy: you have ${steps} steps, and the last must be your notes: a step that calls tools leaves no turn for them. First, search from several angles at once (best book for the topic, university course syllabi, reading lists). Second, read the two most independent recommending pages and, when a result already shows it, the leading book's publisher's or author's page, all at once. Third, write your notes. If the learner provided a book, decide first whether it is the backbone and look for pages that recommend it rather than for a rival.`
     : `Strategy: you have ${steps} steps, and the last must be your notes: a step that calls tools leaves no turn for them. First, search from several angles at once (best book for the topic, university course syllabi, reading lists). Then read the two most independent recommending pages. Then try the leading book's publisher's or author's page once for a link; if it cannot be read, move on. If the learner provided a book, decide first whether it is the backbone and look for pages that recommend it rather than for a rival.`,
   `Boundaries: books only. Do not collect courses, documentation, videos or papers; other researchers do. Never a shop listing (Amazon or another retailer) as a book's page.`,
-  `Output: a few lines of notes, as your last step: the leading book and its author, the pages that recommend it, its own page if found, and any rival worth a mention. Write them as soon as you have the book, its author and two recommending pages, or when the budget is spent.`,
+  `Output: a few lines of notes, as your last step: the leading book and its author, the pages that recommend it, its own page if found, and any rival worth a mention. Write them as soon as you have the book, its author and two recommending pages, or when the budget is spent. In your last step the tools are taken away, so write them then at the latest.`,
 ];
 
 const TWO_STEPS = `Do not write notes; the tool results are your notes.`;
@@ -246,6 +246,7 @@ export function createWorkersArm(options: WorkersArmOptions): ResearchArm {
             label: `Research · ${plan.direction}`,
             signal,
             clock: options.clock,
+            notesStep: plan.direction === "backbone",
           });
         } catch (error) {
           // A failed model call ends this worker like a search outage; what it had done still counts, and the others go on.

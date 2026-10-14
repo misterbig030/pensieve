@@ -68,6 +68,12 @@ case, against about 78 s today, with backbone hit rate and `mustInclude` recall 
 12. **Briefs fit their steps.** The backbone brief at a three-step band reads the publisher page together with the
     recommending pages, since the last step must be the notes; the two-step briefs ask for no notes at all. (From the
     build's review.)
+13. **The backbone's notes step is enforced, not requested.** On the backbone worker's last step, or as soon as both
+    its budgets are spent, the loop takes the tools away (`tool_choice: none`) and appends a one-line request for the
+    notes, so the step can only be text and the text lands in the worker's remarks. The two-step workers are untouched:
+    their second step is their reads. Arm A's loop has the same switch but does not use it, so the baseline stays as it
+    was for the compare. (From the live run of 2026-10-13, where the backbone worker spent its last two steps on one
+    failed fetch each and wrote nothing, and the candidate step then reasoned for 106 s.)
 
 ## Architecture
 
@@ -327,8 +333,16 @@ cheaper model for it, would help every arm. The compare run will say whether thi
 
 ## Open items
 
-- **The candidate step's thinking time.** See the live run above. Measure it in the compare (per-call latency is in
-  the run records); if it holds, cap the reasoning effort on `runCandidateStep` before touching the workers.
+- **The candidate step's thinking time.** A second live run (2026-10-13) took 106 s on this step: 8,900 of its 11,000
+  output tokens were reasoning, and the backbone worker had written no notes, so the step was deciding the backbone
+  from raw search results. Two things followed. The notes step is now enforced (decision 13). And
+  `evals/research/candidates-bench.ts` replayed that run's exact prompt on four models at three effort levels
+  (`evals/results/candidates-bench-2026-10-13.json`): Sonnet 5 at its default effort reproduced the 94 s; Sonnet 5.5
+  and Opus 5.5 at `low` or `medium` wrote no reasoning tokens and finished in 8 to 19 s; Haiku 5.5 could not size the
+  list; four of twelve lists got the backbone wrong, with no pattern by effort, and Opus 5.5 got it right at every
+  level. Still open: pick the model and effort for `runCandidateStep` (Sonnet 5.5 `low` or Opus 5.5 `low`, three
+  repeats each on the bench first), then re-export a run with the enforced notes step and replay it to see how much
+  the notes alone take off the step.
 
 - **Current worker at ten hours or less.** The table folds it into canonical. If short plans on fast-moving topics
   come out stale in the eval, give the band a third worker with one search and accept four searches at that band.
