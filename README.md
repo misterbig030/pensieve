@@ -30,6 +30,8 @@ Besides the database, Clerk and AI Gateway keys:
   of one loop; unset, the single loop runs. Behind a flag until the research eval decides (`evals/research/README.md`).
 - `MATERIALS_SIGNING_SECRET`: signs verified materials so a forged "verified" badge cannot be saved. Without it a
   random per-process secret is used, and plans confirmed on another instance re-verify their materials.
+- `USER_KEY_ENCRYPTION_SECRET`: encrypts the API keys users store in Settings (AES-256-GCM). 32 random bytes, base64:
+  `openssl rand -base64 32`. Without it, saving a key fails; nothing is ever stored in plaintext.
 
 ## Learn More
 
