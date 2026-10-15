@@ -101,6 +101,38 @@ describe("streamPlanDraft and the time split", () => {
     expect(calls[0].facts).toContain("split 85% reading · writing summaries");
   });
 
+  it("drafts on the outline model it is given and records who paid", async () => {
+    mockedStreamObject.mockImplementation(() =>
+      fakeStream([
+        { title: "A", summary: "a" },
+        { title: "B", summary: "b" },
+        { title: "C", summary: "c" },
+        { title: "D", summary: "d" },
+      ]),
+    );
+    const direct = { modelId: "claude-haiku-4-5", provider: "anthropic.messages" };
+    const calls: ModelCall[] = [];
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({
+      topic: "T",
+      days: 28,
+      granularity: "week",
+      materials: [],
+      hoursPerWeek: 6,
+      outlineModel: { model: direct as never, id: "anthropic/claude-haiku-4.5", keyOwner: "user" },
+      log: { onCall: (c) => void calls.push(c) },
+    }))
+      events.push(event);
+    expect(events.at(-1)?.type).toBe("finish");
+    expect(mockedStreamObject.mock.calls.length).toBeGreaterThan(0);
+    for (const call of mockedStreamObject.mock.calls) expect(call[0].model).toBe(direct);
+    expect(calls.length).toBe(mockedStreamObject.mock.calls.length);
+    for (const c of calls) {
+      expect(c.model).toBe("anthropic/claude-haiku-4.5");
+      expect(c.keyOwner).toBe("user");
+    }
+  });
+
   it("drafts on without a split when the model returns none", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeTop(weeks(4), undefined));
     const calls: ModelCall[] = [];
