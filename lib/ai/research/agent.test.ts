@@ -184,7 +184,7 @@ describe("arm A through the pipeline", () => {
     expect(calls.every((c) => c.caller === "research")).toBe(true);
   });
 
-  it("runs the loop and the candidate step at the research effort, and records it on each row", async () => {
+  it("runs the loop at the loop effort and the candidate step at its own, and records each on its row", async () => {
     const { model, calls } = scriptedModel(
       [{ calls: [{ tool: "webSearch", input: { query: "best llm engineering book" } }] }, { text: "Core Textbook is recommended by two lists." }],
       [LIST],
@@ -192,10 +192,14 @@ describe("arm A through the pipeline", () => {
     const { fetcher } = fetcherFor();
     const rows: ModelCall[] = [];
     await collect(researchMaterials({ brief, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books, log: { onCall: (c) => void rows.push(c) } }));
-    expect(calls.length).toBeGreaterThanOrEqual(3);
-    for (const c of calls) expect(c.providerOptions?.anthropic?.effort).toBe("low");
+    const steps = calls.filter((c) => c.responseFormat?.type !== "json");
+    const candidates = calls.filter((c) => c.responseFormat?.type === "json");
+    expect(steps).toHaveLength(2);
+    expect(candidates).toHaveLength(1);
+    for (const c of steps) expect(c.providerOptions?.anthropic?.effort).toBe("high");
+    expect(candidates[0].providerOptions?.anthropic?.effort).toBe("low");
     expect(rows.length).toBe(calls.length);
-    for (const r of rows) expect(r.effort).toBe("low");
+    for (const r of rows) expect(r.effort).toBe(r.label === "Research · candidates" ? "low" : "high");
   });
 
   it("enforces the caps in code whatever the model requests", async () => {

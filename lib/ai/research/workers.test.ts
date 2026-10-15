@@ -455,16 +455,19 @@ describe("the backbone's notes step", () => {
 });
 
 describe("the research model's effort", () => {
-  it("sends the research effort on every worker step and on the candidate step, and records it on each row", async () => {
+  it("runs the worker steps at the loop effort and the candidate step at its own, and records each on its row", async () => {
     const { model, calls } = directedModel(SCRIPTS, [LIST]);
     const { fetcher } = fetcherFor();
     const log: ModelCall[] = [];
     await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books, log: { onCall: (c) => void log.push(c) } }));
-    expect(calls.length).toBeGreaterThan(3);
-    expect(calls.some((c) => c.responseFormat?.type === "json")).toBe(true);
-    for (const c of calls) expect(c.providerOptions?.anthropic?.effort).toBe("low");
+    const steps = calls.filter((c) => c.responseFormat?.type !== "json");
+    const candidates = calls.filter((c) => c.responseFormat?.type === "json");
+    expect(steps.length).toBeGreaterThan(3);
+    expect(candidates).toHaveLength(1);
+    for (const c of steps) expect(c.providerOptions?.anthropic?.effort).toBe("high");
+    expect(candidates[0].providerOptions?.anthropic?.effort).toBe("low");
     expect(log.length).toBe(calls.length);
-    for (const row of log) expect(row.effort).toBe("low");
+    for (const row of log) expect(row.effort).toBe(row.label === "Research · candidates" ? "low" : "high");
   });
 });
 

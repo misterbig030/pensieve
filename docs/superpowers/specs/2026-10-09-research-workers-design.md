@@ -74,12 +74,16 @@ case, against about 78 s today, with backbone hit rate and `mustInclude` recall 
     their second step is their reads. Arm A's loop has the same switch but does not use it, so the baseline stays as it
     was for the compare. (From the live run of 2026-10-13, where the backbone worker spent its last two steps on one
     failed fetch each and wrote nothing, and the candidate step then reasoned for 106 s.)
-14. **Research runs on Sonnet 5.5 at `low` effort**, every call: the worker steps, the candidate step, and arm C's
-    loop in the eval, so the arms stay comparable. `RESEARCH_EFFORT` in `lib/ai/models.ts` is the one place it is set,
-    and each call's effort is recorded on its generation-log row. From the bench of 2026-10-13: Sonnet 5 at its default
-    effort reasoned for 94 s on the candidate step; Sonnet 5.5 at `low` wrote no reasoning tokens and took 10 s for a
-    list of the same quality, and the worker steps showed the same pattern (19 s to issue two searches). The
-    plan-drafting content model is unchanged.
+14. **Research runs on Sonnet 5.5, the loops at `high` effort and the candidate step at `low`.** The loops are arm
+    A's, arm W's workers and arm C's in the eval, so the arms stay comparable. `RESEARCH_LOOP_EFFORT` and
+    `CANDIDATE_STEP_EFFORT` in `lib/ai/models.ts` are the two places this is set, and each call's effort is recorded on
+    its generation-log row. Two measurements decided it. The candidate-step bench of 2026-10-13: Sonnet 5 at its default
+    effort reasoned for 94 s on one recorded prompt; Sonnet 5.5 at `low` wrote no reasoning tokens and chose the same
+    list in 10 s. The effort runs of 2026-10-14 (`evals/research/effort-bench.ts`, one brief, Sonnet 5.5 and Opus 5.5
+    at every level): at `low` the workers used 2 of 12 reads and declared the backbone from snippets, at `medium` 6, at
+    `high` all 12, with the backbone's notes written on the enforced step and the gate keeping 9 of 10. Effort changes
+    how much work a loop does, not only how long it thinks. Opus 5.5 did more at `low` and wrote more careful notes, at
+    twice the cost and 1.7× the time, without a better list at any level. The plan-drafting content model is unchanged.
 
 ## Architecture
 

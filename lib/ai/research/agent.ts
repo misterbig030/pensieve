@@ -2,7 +2,7 @@ import { ToolLoopAgent, isStepCount, type LanguageModel } from "ai";
 import type { SourceInput } from "@/lib/schemas/source";
 import { DEFAULT_HOURS_PER_WEEK, totalHours } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, loggedGenerateObject, type GenerationLogContext } from "../logged";
-import { DEFAULT_RESEARCH_MODEL, RESEARCH_EFFORT, type AiModelId, type ReasoningEffort } from "../models";
+import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, RESEARCH_LOOP_EFFORT, type AiModelId, type ReasoningEffort } from "../models";
 import type { Coverage, ResearchEvent, WorkerDirection } from "./events";
 import {
   RESEARCH_CAPS,
@@ -188,7 +188,7 @@ export interface LoopInput {
    * taken away and the model is asked to write. For loops whose brief ends with notes; a two-step worker has none.
    */
   notesStep?: boolean;
-  /** Reasoning effort for every step; `RESEARCH_EFFORT` when omitted. */
+  /** Reasoning effort for every step; `RESEARCH_LOOP_EFFORT` when omitted. */
   effort?: ReasoningEffort;
 }
 
@@ -225,7 +225,7 @@ export class ResearchLoopError extends Error {
 export async function runResearchLoop(input: LoopInput): Promise<LoopResult> {
   const { caps, notes, emit, log, label } = input;
   const modelId = (typeof input.model === "string" ? input.model : DEFAULT_RESEARCH_MODEL) as AiModelId;
-  const effort = input.effort ?? RESEARCH_EFFORT;
+  const effort = input.effort ?? RESEARCH_LOOP_EFFORT;
   const budget = new ResearchBudget(caps, input.clock);
   const loop = new AbortController();
   let stoppedBy: StopReason = "model";
@@ -330,7 +330,7 @@ export interface CandidateStepInput {
   log?: GenerationLogContext;
   /** Shown beside the response in the admin panel. */
   facts: string[];
-  /** Reasoning effort for the call; `RESEARCH_EFFORT` when omitted. */
+  /** Reasoning effort for the call; `CANDIDATE_STEP_EFFORT` when omitted. */
   effort?: ReasoningEffort;
 }
 
@@ -354,7 +354,7 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
           label: attempt === 1 ? "Research · candidates" : "Research · candidates (retry)",
           abortSignal: input.signal,
           facts: input.facts,
-          effort: input.effort ?? RESEARCH_EFFORT,
+          effort: input.effort ?? CANDIDATE_STEP_EFFORT,
         },
         { ...input.log, caller: "research" },
       );
@@ -377,7 +377,7 @@ export interface AgentArmOptions {
   model?: AiModelId | LanguageModel;
   caps?: ResearchCaps;
   clock?: () => number;
-  /** Reasoning effort for every call; `RESEARCH_EFFORT` when omitted. The eval sets it to compare levels. */
+  /** One effort for every call, loop steps and candidate step alike; the eval sets it to compare levels. Omitted: the loop and candidate defaults. */
   effort?: ReasoningEffort;
 }
 

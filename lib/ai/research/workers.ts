@@ -207,7 +207,7 @@ export interface WorkersArmOptions {
   model?: AiModelId | LanguageModel;
   caps?: ResearchCaps;
   clock?: () => number;
-  /** Reasoning effort for every call; `RESEARCH_EFFORT` when omitted. The eval sets it to compare levels. */
+  /** One effort for every call, worker steps and candidate step alike; the eval sets it to compare levels. Omitted: the loop and candidate defaults. */
   effort?: ReasoningEffort;
 }
 

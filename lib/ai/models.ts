@@ -26,11 +26,18 @@ export const DEFAULT_RESEARCH_MODEL: AiModelId = "anthropic/claude-sonnet-5.5";
 /** Anthropic's reasoning effort levels; the default when none is sent is `high` on Sonnet. */
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max";
 /**
- * Every research call runs at this effort. Measured on 2026-10-13 (`evals/research/candidates-bench.ts`): Sonnet 5 at its
- * default effort spent 94 s and 7,800 reasoning tokens on the candidate step; Sonnet 5.5 at `low` wrote no reasoning
- * tokens, took 10 s and chose the same list. The worker steps showed the same pattern (19 s to issue two searches).
+ * The research loops (arm A's loop, arm W's workers, arm C's loop) run at this effort. Measured on 2026-10-14
+ * (`evals/research/effort-bench.ts`, Sonnet 5.5, one brief): at `low` the workers used 2 of 12 reads and declared the
+ * backbone from search snippets; at `medium` 6; at `high` all 12, with the backbone's notes written and the gate keeping
+ * 9 of 10. Effort changes how much work the loop does, not only how long it thinks.
  */
-export const RESEARCH_EFFORT: ReasoningEffort = "low";
+export const RESEARCH_LOOP_EFFORT: ReasoningEffort = "high";
+/**
+ * The candidate step runs at this effort. Measured on 2026-10-13 (`evals/research/candidates-bench.ts`): given the same
+ * notes, Sonnet 5.5 at `low` wrote no reasoning tokens and chose in 8 s the list it chose in 25 s at `high`; Sonnet 5 at
+ * its default effort took 94 s on the same prompt.
+ */
+export const CANDIDATE_STEP_EFFORT: ReasoningEffort = "low";
 
 interface TokenUsage {
   inputTokens?: number;

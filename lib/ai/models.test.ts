@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AVAILABLE_MODELS, DEFAULT_OUTLINE_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_RESEARCH_MODEL, RESEARCH_EFFORT, estimateCostUsd } from "./models";
+import { AVAILABLE_MODELS, CANDIDATE_STEP_EFFORT, DEFAULT_OUTLINE_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_RESEARCH_MODEL, RESEARCH_LOOP_EFFORT, estimateCostUsd } from "./models";
 
 describe("AVAILABLE_MODELS", () => {
   it("every model id matches the provider/model gateway format", () => {
@@ -15,11 +15,13 @@ describe("AVAILABLE_MODELS", () => {
     expect(ids).toContain(DEFAULT_RESEARCH_MODEL);
   });
 
-  it("research runs on Sonnet 5.5 at low effort, priced like Sonnet 5", () => {
-    // Measured on 2026-10-13 (evals/research/candidates-bench.ts): Sonnet 5 at its default effort reasoned for 94 s on the
-    // candidate step; Sonnet 5.5 at low wrote no reasoning tokens and took 10 s for a list of the same quality.
+  it("research runs on Sonnet 5.5: the loops at high effort, the candidate step at low; priced like Sonnet 5", () => {
+    // Measured 2026-10-13/14 (evals/research/candidates-bench.ts, effort-bench.ts): at low the workers used 2 of 12 reads
+    // and declared the backbone from snippets; at high they used all 12. The candidate step at low chose the same list
+    // from good notes in 8 s that it chose in 25 s at high.
     expect(DEFAULT_RESEARCH_MODEL).toBe("anthropic/claude-sonnet-5.5");
-    expect(RESEARCH_EFFORT).toBe("low");
+    expect(RESEARCH_LOOP_EFFORT).toBe("high");
+    expect(CANDIDATE_STEP_EFFORT).toBe("low");
     expect(estimateCostUsd("anthropic/claude-sonnet-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(12, 5);
   });
 
