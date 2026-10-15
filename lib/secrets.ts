@@ -10,7 +10,7 @@ const ENV_NAME = "USER_KEY_ENCRYPTION_SECRET";
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
-function keyFromEnv(env: NodeJS.ProcessEnv): Buffer {
+function keyFromEnv(env: Record<string, string | undefined>): Buffer {
   const raw = env[ENV_NAME];
   if (!raw) throw new Error(`${ENV_NAME} is not set; generate one with: openssl rand -base64 32`);
   const key = Buffer.from(raw, "base64");
@@ -18,7 +18,7 @@ function keyFromEnv(env: NodeJS.ProcessEnv): Buffer {
   return key;
 }
 
-export function sealSecret(plaintext: string, env: NodeJS.ProcessEnv = process.env): { ciphertext: string; version: number } {
+export function sealSecret(plaintext: string, env: Record<string, string | undefined> = process.env): { ciphertext: string; version: number } {
   const key = keyFromEnv(env);
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
@@ -27,7 +27,7 @@ export function sealSecret(plaintext: string, env: NodeJS.ProcessEnv = process.e
   return { ciphertext: Buffer.concat([iv, tag, body]).toString("base64"), version: SECRET_VERSION };
 }
 
-export function openSecret(ciphertext: string, version: number, env: NodeJS.ProcessEnv = process.env): string {
+export function openSecret(ciphertext: string, version: number, env: Record<string, string | undefined> = process.env): string {
   if (version !== SECRET_VERSION) throw new Error(`Unknown secret version ${version}`);
   const key = keyFromEnv(env);
   const bytes = Buffer.from(ciphertext, "base64");
