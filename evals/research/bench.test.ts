@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type CandidateList, checkObject, estimateCostUsd, hoursCap, notesUrls, pairs, pickCall, readTitles } from "./bench";
+import { type CandidateList, briefFromPrompt, checkObject, estimateCostUsd, hoursCap, notesUrls, pairs, pickCall, readTitles } from "./bench";
 
 const PROMPT = [
   `You researched materials for a self-study plan.`,
@@ -111,5 +111,13 @@ describe("estimateCostUsd / pairs", () => {
       { model: "m2", effort: "low" },
       { model: "m2", effort: "high" },
     ]);
+  });
+});
+
+describe("briefFromPrompt", () => {
+  it("rebuilds the brief from a recorded candidate prompt's header", () => {
+    expect(briefFromPrompt(PROMPT)).toEqual({ topic: "X", days: 90, hoursPerWeek: 6, sources: [] });
+    expect(briefFromPrompt("Plan length: 30 days at about 1 hour a week: 4 hours of study in all\nTopic: Y")).toEqual({ topic: "Y", days: 30, hoursPerWeek: 1, sources: [] });
+    expect(() => briefFromPrompt("nothing here")).toThrow(/Topic/);
   });
 });

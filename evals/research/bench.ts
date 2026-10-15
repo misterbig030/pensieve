@@ -3,6 +3,7 @@
  * effort levels. Pure functions, so the CLI stays thin and this file is what the tests cover.
  */
 import { z } from "zod";
+import type { ResearchBrief } from "@/lib/ai/research/agent";
 import { candidateListSchema } from "@/lib/ai/research/verify";
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -44,6 +45,17 @@ export function pickCall(calls: ExportedCall[], label: string): RecordedCall {
   if (!call) throw new Error(`No call labelled "${label}" in the export (labels: ${calls.map((c) => c.label).join(", ")})`);
   if (typeof call.prompt !== "string") throw new Error(`The "${label}" call's prompt is not text; the bench replays single-prompt calls only`);
   return { prompt: call.prompt, system: typeof call.system === "string" && call.system.length > 0 ? call.system : null };
+}
+
+/**
+ * The brief a recorded candidate prompt was built from: its topic and plan length. Sources and instructions are not
+ * recovered; a brief with either is not what this reads.
+ */
+export function briefFromPrompt(prompt: string): ResearchBrief {
+  const topic = prompt.match(/^Topic: (.+)$/m)?.[1]?.trim();
+  const plan = prompt.match(/^Plan length: (\d+) days at about (\d+) hours? a week/m);
+  if (!topic || !plan) throw new Error('The prompt has no "Topic:" and "Plan length:" header to rebuild the brief from');
+  return { topic, days: Number(plan[1]), hoursPerWeek: Number(plan[2]), sources: [] };
 }
 
 // ---------------------------------------------------------------------------------------------------------------

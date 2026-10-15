@@ -377,6 +377,8 @@ export interface AgentArmOptions {
   model?: AiModelId | LanguageModel;
   caps?: ResearchCaps;
   clock?: () => number;
+  /** Reasoning effort for every call; `RESEARCH_EFFORT` when omitted. The eval sets it to compare levels. */
+  effort?: ReasoningEffort;
 }
 
 /**
@@ -408,6 +410,7 @@ export function createAgentArm(options: AgentArmOptions): ResearchArm {
         label: "Research",
         signal,
         clock: options.clock,
+        effort: options.effort,
       });
     } finally {
       clearTimeout(clockTimer);
@@ -417,7 +420,7 @@ export function createAgentArm(options: AgentArmOptions): ResearchArm {
       return { candidates: [], learnerNotes: [], seenUrls: notes.seenUrls(), counts, searchesOk: loop.searchesOk, stoppedBy: "cancelled", costUsd: loop.costUsd };
     }
 
-    const { list, costUsd } = await runCandidateStep({ model, brief, notes: notes.render(), signal, log, facts: [`stopped by ${loop.stoppedBy}`, `${loop.steps} steps`] });
+    const { list, costUsd } = await runCandidateStep({ model, brief, notes: notes.render(), signal, log, facts: [`stopped by ${loop.stoppedBy}`, `${loop.steps} steps`], effort: options.effort });
     return {
       candidates: list.candidates,
       learnerNotes: list.learner,

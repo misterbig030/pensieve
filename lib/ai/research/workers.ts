@@ -1,7 +1,7 @@
 import type { LanguageModel } from "ai";
 import { hostOf } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
-import { DEFAULT_RESEARCH_MODEL, type AiModelId } from "../models";
+import { DEFAULT_RESEARCH_MODEL, type AiModelId, type ReasoningEffort } from "../models";
 import {
   RESEARCH_RULES,
   ResearchLoopError,
@@ -207,6 +207,8 @@ export interface WorkersArmOptions {
   model?: AiModelId | LanguageModel;
   caps?: ResearchCaps;
   clock?: () => number;
+  /** Reasoning effort for every call; `RESEARCH_EFFORT` when omitted. The eval sets it to compare levels. */
+  effort?: ReasoningEffort;
 }
 
 const sum = <T>(items: T[], pick: (item: T) => number) => items.reduce((n, item) => n + pick(item), 0);
@@ -247,6 +249,7 @@ export function createWorkersArm(options: WorkersArmOptions): ResearchArm {
             signal,
             clock: options.clock,
             notesStep: plan.direction === "backbone",
+            effort: options.effort,
           });
         } catch (error) {
           // A failed model call ends this worker like a search outage; what it had done still counts, and the others go on.
@@ -283,6 +286,7 @@ export function createWorkersArm(options: WorkersArmOptions): ResearchArm {
       signal,
       log,
       facts: [`stopped by ${stoppedBy}`, ...workers.map((w) => `${w.direction}: ${w.steps} steps, ${w.stoppedBy}`)],
+      effort: options.effort,
     });
     return { ...base, candidates: list.candidates, learnerNotes: list.learner, stoppedBy, costUsd: loopCost + costUsd, coverage: normalizeCoverage(list.coverage) };
   };

@@ -467,3 +467,15 @@ describe("the research model's effort", () => {
     for (const row of log) expect(row.effort).toBe("low");
   });
 });
+
+describe("an effort override on the arm", () => {
+  it("runs every worker step and the candidate step at the arm's effort when one is given", async () => {
+    const { model, calls } = directedModel(SCRIPTS, [LIST]);
+    const { fetcher } = fetcherFor();
+    const log: ModelCall[] = [];
+    await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model, effort: "high" }), fetcher, books, log: { onCall: (c) => void log.push(c) } }));
+    expect(calls.length).toBeGreaterThan(3);
+    for (const c of calls) expect(c.providerOptions?.anthropic?.effort).toBe("high");
+    for (const row of log) expect(row.effort).toBe("high");
+  });
+});
