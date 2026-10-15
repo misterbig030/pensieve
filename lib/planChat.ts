@@ -1,3 +1,4 @@
+import type { KeyErrorKind } from "@/lib/ai/models";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { ResearchEvent } from "@/lib/ai/research/events";
 import type { Granularity, PlanLevel, PlanNode } from "@/lib/planTree";
@@ -66,7 +67,7 @@ export type PlanDraftEvent =
   /** Sent once the top level has validated: how the drafter divides the learner's time. */
   | { type: "split"; split: PlanSplit }
   | { type: "finish"; root: PlanNode; costUsd: number }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
 
 /** Request body for POST /api/plan/expand: plan the children of one node of the draft. */
@@ -83,7 +84,7 @@ export interface PlanExpandRequest extends PlanContext {
 export type PlanExpandEvent =
   | { type: "child"; node: PlanNode }
   | { type: "finish"; children: PlanNode[]; costUsd: number }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
 
 /** Request body for POST /api/plan/chat. */
@@ -104,7 +105,7 @@ export type PlanChatEvent =
   | { type: "revising" }
   | { type: "revised"; tree: PlanNode; changed: ChangedNodes; costUsd: number }
   | { type: "finish"; costUsd: number }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
 
 let counter = 0;

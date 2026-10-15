@@ -13,7 +13,10 @@ export function ndjsonResponse<T>(events: AsyncIterable<T>, init?: ResponseInit)
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "stream failed";
-        controller.enqueue(encoder.encode(JSON.stringify({ type: "error", message }) + "\n"));
+        // A code names a failure the client can act on (a refused user key); plain errors carry none.
+        const rawCode = error instanceof Error ? (error as Error & { code?: unknown }).code : undefined;
+        const code = typeof rawCode === "string" ? rawCode : undefined;
+        controller.enqueue(encoder.encode(JSON.stringify(code ? { type: "error", message, code } : { type: "error", message }) + "\n"));
       } finally {
         controller.close();
       }
