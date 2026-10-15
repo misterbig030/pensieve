@@ -4,12 +4,11 @@ import type { PlanChatEvent, PlanChatRequest } from "@/lib/planChat";
 import { diffChangedNodes, type ChangedNodes } from "@/lib/planSummary";
 import { cloneTree, layout, type PlanNode } from "@/lib/planTree";
 import { buildGenerationLogRow, emitGenerationLog, type GenerationLogContext } from "./logged";
-import { type AiModelId } from "./models";
+import { DEFAULT_CHAT_MODEL, type AiModelId } from "./models";
 import { buildPlanChatSystemPrompt, renderTree } from "./planPrompt";
 import { revisePlanTree } from "./planRevision";
 
-/** Chat turns are short and latency-sensitive; the revision tool uses the outline model. */
-export const DEFAULT_CHAT_MODEL: AiModelId = "anthropic/claude-haiku-4.5";
+export { DEFAULT_CHAT_MODEL } from "./models";
 
 const revisePlanInput = z.object({
   changeRequest: z

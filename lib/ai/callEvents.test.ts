@@ -7,6 +7,7 @@ function call(label: string): ModelCall {
     caller: "outline",
     model: "anthropic/claude-haiku-4.5",
     effort: null,
+    keyOwner: "app",
     inputTokens: 10,
     outputTokens: 5,
     cacheReadTokens: 0,
