@@ -1,6 +1,7 @@
 # User API keys: a user's own key pays for their usage
 
-**Status:** designed on 2026-10-15; not built. Plan: pending.
+**Status:** built on 2026-10-15 (plan: `docs/superpowers/plans/2026-10-15-user-api-keys.md`). The live check on the
+operator's Max key waits on the migration being applied to production and the encryption secret being set in Vercel.
 
 ## Summary
 
