@@ -396,6 +396,8 @@ describe("defaultArm", () => {
   it("ships arm A, or arm W behind RESEARCH_ARM=workers, and nothing without a search key", () => {
     expect(defaultArm({ TAVILY_API_KEY: "k" })?.name).toBe("research");
     expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: "workers" })?.name).toBe("researchWorkers");
+    // A second argument carries the model the request resolved, for a user running on their own key.
+    expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: "workers" }, { model: "anthropic/claude-opus-5.5" })?.name).toBe("researchWorkers");
     expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: " Workers " })?.name).toBe("researchWorkers");
     expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: "agent" })?.name).toBe("research");
     expect(defaultArm({ RESEARCH_ARM: "workers" })).toBeNull();

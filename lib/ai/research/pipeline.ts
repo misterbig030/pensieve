@@ -1,5 +1,7 @@
+import type { LanguageModel } from "ai";
 import type { Material } from "@/lib/schemas/material";
 import type { GenerationLogContext } from "../logged";
+import type { AiModelId } from "../models";
 import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type ResearchBrief } from "./agent";
 import type { Coverage, DroppedMaterial, ResearchEvent, ResearchNotice } from "./events";
 import { SourceFetcher, capsFor, searchProviderFromEnv, type ResearchCaps } from "./tools";
@@ -85,10 +87,14 @@ export interface ResearchMaterialsInput {
  * The arm the app ships: arm A with Tavily, or arm W (one worker per research direction) when `RESEARCH_ARM=workers`.
  * Null when `TAVILY_API_KEY` is unset.
  */
-export function defaultArm(env: Record<string, string | undefined> = process.env): ResearchArm | null {
+export function defaultArm(
+  env: Record<string, string | undefined> = process.env,
+  options: { model?: AiModelId | LanguageModel } = {},
+): ResearchArm | null {
   const provider = searchProviderFromEnv(env);
   if (!provider) return null;
-  return env.RESEARCH_ARM?.trim().toLowerCase() === "workers" ? createWorkersArm({ provider }) : createAgentArm({ provider });
+  const common = { provider, model: options.model };
+  return env.RESEARCH_ARM?.trim().toLowerCase() === "workers" ? createWorkersArm(common) : createAgentArm(common);
 }
 
 /**
