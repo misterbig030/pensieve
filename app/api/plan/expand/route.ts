@@ -4,6 +4,8 @@ import { isAdminUserId } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
 import { streamExpandNode } from "@/lib/ai/planDraft";
 import { insertGenerationLog } from "@/lib/db/generationLog";
+import { resolveModels } from "@/lib/ai/resolve";
+import { guardUserKey } from "@/lib/ai/userKeyError";
 import { ndjsonResponse } from "@/lib/ndjson";
 import { fromTreeInput } from "@/lib/planInput";
 import { granularitySchema, planTreeInputSchema } from "@/lib/schemas/plan";
@@ -32,22 +34,27 @@ export async function POST(request: Request) {
   const body = parsed.data;
   const tree = fromTreeInput(body.tree);
   const debug = body.debug === true && isAdminUserId(userId);
+  const models = await resolveModels(userId);
 
   return ndjsonResponse(
-    withCallEvents(debug, { userId, onLog: insertGenerationLog }, (log) =>
-      streamExpandNode({
-        topic: body.topic,
-        days: tree.len,
-        granularity: body.granularity,
-        instructions: body.instructions || undefined,
-        materials: body.materials,
-        hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
-        split: body.split ?? null,
-        tree,
-        nodeId: body.nodeId,
-        reason: body.reason,
-        log,
-      }),
+    withCallEvents(debug, { userId, onLog: insertGenerationLog, keyOwner: models.outline.keyOwner }, (log) =>
+      guardUserKey(
+        streamExpandNode({
+          topic: body.topic,
+          days: tree.len,
+          granularity: body.granularity,
+          instructions: body.instructions || undefined,
+          materials: body.materials,
+          hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
+          split: body.split ?? null,
+          tree,
+          nodeId: body.nodeId,
+          reason: body.reason,
+          outlineModel: models.outline,
+          log,
+        }),
+        { userId, models },
+      ),
     ),
   );
 }

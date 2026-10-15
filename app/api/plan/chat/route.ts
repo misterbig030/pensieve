@@ -7,6 +7,8 @@ import { runPlanChat } from "@/lib/ai/planChat";
 import { db } from "@/lib/db/client";
 import { insertGenerationLog } from "@/lib/db/generationLog";
 import { tracks } from "@/lib/db/schema";
+import { resolveModels } from "@/lib/ai/resolve";
+import { guardUserKey } from "@/lib/ai/userKeyError";
 import { ndjsonResponse } from "@/lib/ndjson";
 import { fromTreeInput } from "@/lib/planInput";
 import { granularitySchema, planTreeInputSchema } from "@/lib/schemas/plan";
@@ -52,9 +54,16 @@ export async function POST(request: Request) {
 
   const tree = fromTreeInput(body.tree);
   const debug = body.debug === true && isAdminUserId(userId);
+  const models = await resolveModels(userId);
   return ndjsonResponse(
-    withCallEvents(debug, { userId, trackId: body.trackId, onLog: insertGenerationLog }, (log) =>
-      runPlanChat({ ...body, days: tree.len, instructions: body.instructions || undefined, hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK, split: body.split ?? null, tree }, { log }),
+    withCallEvents(debug, { userId, trackId: body.trackId, onLog: insertGenerationLog, keyOwner: models.chat.keyOwner }, (log) =>
+      guardUserKey(
+        runPlanChat(
+          { ...body, days: tree.len, instructions: body.instructions || undefined, hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK, split: body.split ?? null, tree },
+          { log, model: models.chat, outlineModel: models.outline },
+        ),
+        { userId, models },
+      ),
     ),
   );
 }

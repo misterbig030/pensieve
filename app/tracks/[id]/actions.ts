@@ -4,6 +4,8 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { streamExpandNode } from "@/lib/ai/planDraft";
+import { resolveModels } from "@/lib/ai/resolve";
+import { guardUserKey } from "@/lib/ai/userKeyError";
 import { insertGenerationLog } from "@/lib/db/generationLog";
 import { getTrackDetail, updateTrackStudyTime, updateTrackSummary } from "@/lib/db/queries";
 import { insertChildren, logSession, markLeafComplete, replacePlanTree } from "@/lib/db/planQueries";
@@ -72,21 +74,26 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
   const detail = await getTrackDetail(input.trackId, userId);
   if (!detail) throw new Error("Track not found");
 
+  const models = await resolveModels(userId);
   let children: PlanNode[] | null = null;
   let costUsd = 0;
-  for await (const event of streamExpandNode({
-    topic: detail.track.title,
-    days: detail.root.len,
-    granularity: detail.track.granularity,
-    instructions: detail.track.instructions ?? undefined,
-    materials: detail.materials,
-    hoursPerWeek: detail.track.hoursPerWeek,
-    split: detail.track.split,
-    tree: detail.root,
-    nodeId: input.nodeId,
-    reason: input.reason,
-    log: { userId, trackId: input.trackId, onLog: insertGenerationLog },
-  })) {
+  for await (const event of guardUserKey(
+    streamExpandNode({
+      topic: detail.track.title,
+      days: detail.root.len,
+      granularity: detail.track.granularity,
+      instructions: detail.track.instructions ?? undefined,
+      materials: detail.materials,
+      hoursPerWeek: detail.track.hoursPerWeek,
+      split: detail.track.split,
+      tree: detail.root,
+      nodeId: input.nodeId,
+      reason: input.reason,
+      outlineModel: models.outline,
+      log: { userId, trackId: input.trackId, onLog: insertGenerationLog, keyOwner: models.outline.keyOwner },
+    }),
+    { userId, models },
+  )) {
     if (event.type === "finish") {
       children = event.children;
       costUsd = event.costUsd;

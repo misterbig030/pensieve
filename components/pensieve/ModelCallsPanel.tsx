@@ -184,6 +184,7 @@ function MetaStrip({ call }: { call: ModelCall }) {
       <CallerBadge caller={call.caller} large />
       <Chip>{call.model}</Chip>
       <Chip>effort {call.effort ?? "—"}</Chip>
+      <Chip>{call.keyOwner === "user" ? "user's key" : "app key"}</Chip>
       <Chip>in {fmt(call.inputTokens)}</Chip>
       <Chip>out {fmt(call.outputTokens)}</Chip>
       <Chip>cache read {fmt(call.cacheReadTokens)}</Chip>

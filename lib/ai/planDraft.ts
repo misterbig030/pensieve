@@ -326,6 +326,8 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
 export interface StreamResearchedDraftInput extends PlanDraftRequest {
   /** The research arm; null when no search provider is configured. */
   arm: ResearchArm | null;
+  /** The model that drafts units after research; the app's outline model when omitted. */
+  outlineModel?: ResolvedModel;
   signal?: AbortSignal;
   log?: GenerationLogContext;
   /** Tests and the eval inject these; the app uses the defaults. */

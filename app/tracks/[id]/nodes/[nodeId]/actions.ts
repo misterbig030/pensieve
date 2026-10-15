@@ -7,8 +7,9 @@ import { db } from "@/lib/db/client";
 import { sources } from "@/lib/db/schema";
 import { generateDailyContent, type LessonMaterial } from "@/lib/ai/dailyContent";
 import { getNodeReadList, getOwnedNode, upsertLeafContent } from "@/lib/db/planQueries";
+import { resolveModels } from "@/lib/ai/resolve";
+import { guardUserKeyCall } from "@/lib/ai/userKeyError";
 import { insertGenerationLog } from "@/lib/db/generationLog";
-import { DEFAULT_CONTENT_MODEL } from "@/lib/ai/models";
 
 export async function generateLeafContentAction(input: {
   trackId: string;
@@ -40,19 +41,25 @@ export async function generateLeafContentAction(input: {
           kind: s.kind,
         }));
 
-  const { content, costUsd } = await generateDailyContent({
-    title: node.title,
-    summary: node.summary,
-    unit: node.level === "day" ? "day" : "week",
-    spanDays: node.len,
-    materials,
-    log: { trackId: input.trackId, userId, onLog: insertGenerationLog },
-  });
+  const models = await resolveModels(userId);
+  const { content, costUsd } = await guardUserKeyCall(
+    () =>
+      generateDailyContent({
+        title: node.title,
+        summary: node.summary,
+        unit: node.level === "day" ? "day" : "week",
+        spanDays: node.len,
+        materials,
+        model: models.content,
+        log: { trackId: input.trackId, userId, onLog: insertGenerationLog, keyOwner: models.content.keyOwner },
+      }),
+    { userId, models },
+  );
 
   await upsertLeafContent(node.id, {
     contentMarkdown: content.contentMarkdown,
     citations: content.citations,
-    model: DEFAULT_CONTENT_MODEL,
+    model: models.content.id,
   });
 
   revalidatePath(`/tracks/${input.trackId}`);
