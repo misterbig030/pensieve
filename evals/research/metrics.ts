@@ -1,4 +1,5 @@
 import type { GenerationLogRow, ModelCall } from "@/lib/ai/logged";
+import type { WorkerSummary } from "@/lib/ai/research/agent";
 import type { ResearchOutcome } from "@/lib/ai/research/pipeline";
 import { titleMatches, titleTokens } from "@/lib/ai/research/verify";
 import { recencyShare } from "@/lib/materials";
@@ -6,7 +7,7 @@ import type { Material } from "@/lib/schemas/material";
 import { totalHours } from "@/lib/studyTime";
 import type { ResearchGoldenRecord } from "./golden.v3";
 
-export type ArmName = "A" | "C";
+export type ArmName = "A" | "C" | "W";
 
 /** One record through one arm, once. Rubric scores (accuracy, coverage, source fidelity, materials fit) come from the judges. */
 export interface RunMetrics {
@@ -39,9 +40,16 @@ export interface RunMetrics {
   /** Main areas research named as covered and as left open. */
   coverage: { covered: number; open: number } | null;
   costUsd: number;
+  /** The whole run: research, then the plan draft. */
   latencyMs: number;
+  /** The research stage alone (arm and gate), which the arms differ on. */
+  researchMs: number;
   toolCalls: { searches: number; fetches: number; steps: number };
   stoppedBy: string | null;
+  /** Arm W: how each worker ran; null for the other arms. */
+  workers: WorkerSummary[] | null;
+  /** Arm W: share of distinct search-result URLs more than one worker saw; null for the other arms. */
+  duplicateShare: number | null;
 }
 
 function authorMatches(expected: string, author: string | null): boolean {
@@ -105,6 +113,7 @@ export function runMetrics(input: {
   calls: ModelCall[];
   rows: GenerationLogRow[];
   latencyMs: number;
+  researchMs: number;
   /** Fees billed outside tokens, such as arm C's server-side searches. */
   extraCostUsd?: number;
 }): RunMetrics {
@@ -126,14 +135,24 @@ export function runMetrics(input: {
     coverage: outcome.coverage ? { covered: outcome.coverage.covered.length, open: outcome.coverage.open.length } : null,
     costUsd: input.rows.reduce((sum, r) => sum + r.costUsd, 0) + (input.extraCostUsd ?? 0),
     latencyMs: input.latencyMs,
+    researchMs: input.researchMs,
     toolCalls: outcome.arm?.counts ?? { searches: 0, fetches: 0, steps: 0 },
     stoppedBy: outcome.arm?.stoppedBy ?? null,
+    workers: outcome.arm?.workers ?? null,
+    duplicateShare: outcome.arm?.duplicateShare ?? null,
   };
 }
 
 function mean(values: (number | null)[]): number | null {
   const xs = values.filter((v): v is number => v !== null);
   return xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length;
+}
+
+export function median(values: (number | null)[]): number | null {
+  const xs = values.filter((v): v is number => v !== null).sort((a, b) => a - b);
+  if (xs.length === 0) return null;
+  const mid = Math.floor(xs.length / 2);
+  return xs.length % 2 === 1 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
 }
 
 export interface ArmSummary {
@@ -151,6 +170,10 @@ export interface ArmSummary {
   measuredShare: number | null;
   costUsd: number | null;
   latencyMs: number | null;
+  /** Median of the research stage alone, what the arm W rule reads. */
+  researchMedianMs: number | null;
+  /** Arm W: mean duplicate share across runs; null for the other arms. */
+  duplicateShare: number | null;
   searches: number | null;
   fetches: number | null;
 }
@@ -171,6 +194,8 @@ export function summarize(arm: ArmName, runs: RunMetrics[]): ArmSummary {
     measuredShare: mean(mine.map((r) => r.measuredShare)),
     costUsd: mean(mine.map((r) => r.costUsd)),
     latencyMs: mean(mine.map((r) => r.latencyMs)),
+    researchMedianMs: median(mine.map((r) => r.researchMs)),
+    duplicateShare: mean(mine.map((r) => r.duplicateShare)),
     searches: mean(mine.map((r) => r.toolCalls.searches)),
     fetches: mean(mine.map((r) => r.toolCalls.fetches)),
   };
@@ -194,6 +219,34 @@ export function decide(a: ArmSummary, c: ArmSummary): { keepA: boolean; reasons:
   }
   if (keepA) reasons.push("no worse on backbone hit, within 10 points on verified rate");
   return { keepA, reasons };
+}
+
+/**
+ * The pre-registered rule for arm W against arm A: adopt W if its median research latency is at most 0.7 × A's, its
+ * backbone hit and mustInclude recall are each within five points of A's, and its cost per run is at most 1.8 × A's.
+ * A check that cannot be made (no runs, or no labelled runs on one side) blocks adoption and says so. When the answer
+ * is no, `reasons` lists what blocked it; when yes, every check that passed.
+ */
+export function decideWorkers(a: ArmSummary, w: ArmSummary): { adoptW: boolean; reasons: string[] } {
+  if (a.runs === 0 || w.runs === 0) return { adoptW: false, reasons: [`no runs to compare (A ${a.runs}, W ${w.runs})`] };
+  const passed: string[] = [];
+  const blockers: string[] = [];
+  const secs = (ms: number) => `${(ms / 1000).toFixed(0)} s`;
+  if (a.researchMedianMs === null || w.researchMedianMs === null) blockers.push("research latency not comparable");
+  else if (w.researchMedianMs <= 0.7 * a.researchMedianMs) passed.push(`median research latency ${secs(w.researchMedianMs)} is at most 0.7 × ${secs(a.researchMedianMs)}`);
+  else blockers.push(`median research latency ${secs(w.researchMedianMs)} is more than 0.7 × ${secs(a.researchMedianMs)}`);
+  const quality: [string, number | null, number | null][] = [["backbone hit", a.backboneHit, w.backboneHit], ["mustInclude recall", a.mustIncludeRecall, w.mustIncludeRecall]];
+  let within = 0;
+  for (const [name, av, wv] of quality) {
+    if (av === null || wv === null) blockers.push(`${name} not comparable: no labelled runs on both sides`);
+    else if (av - wv > 0.05 + 1e-9) blockers.push(`${name} ${pct(wv)} is more than five points below ${pct(av)}`);
+    else within += 1;
+  }
+  if (within === quality.length) passed.push("backbone hit and mustInclude recall within five points");
+  if (a.costUsd === null || w.costUsd === null) blockers.push("cost not comparable");
+  else if (w.costUsd <= 1.8 * a.costUsd) passed.push(`cost $${w.costUsd.toFixed(3)} is at most 1.8 × $${a.costUsd.toFixed(3)}`);
+  else blockers.push(`cost $${w.costUsd.toFixed(3)} is more than 1.8 × $${a.costUsd.toFixed(3)}`);
+  return blockers.length > 0 ? { adoptW: false, reasons: blockers } : { adoptW: true, reasons: passed };
 }
 
 export function pct(x: number | null): string {

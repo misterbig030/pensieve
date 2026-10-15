@@ -26,6 +26,8 @@ Besides the database, Clerk and AI Gateway keys:
 
 - `TAVILY_API_KEY`: web search for the research step. Without it, plans draft from the learner's own sources and say
   research was unavailable.
+- `RESEARCH_ARM`: `workers` runs research as one worker per direction (backbone, canonical, current) at once instead
+  of one loop; unset, the single loop runs. Behind a flag until the research eval decides (`evals/research/README.md`).
 - `MATERIALS_SIGNING_SECRET`: signs verified materials so a forged "verified" badge cannot be saved. Without it a
   random per-process secret is used, and plans confirmed on another instance re-verify their materials.
 

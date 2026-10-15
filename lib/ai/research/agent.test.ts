@@ -184,6 +184,24 @@ describe("arm A through the pipeline", () => {
     expect(calls.every((c) => c.caller === "research")).toBe(true);
   });
 
+  it("runs the loop at the loop effort and the candidate step at its own, and records each on its row", async () => {
+    const { model, calls } = scriptedModel(
+      [{ calls: [{ tool: "webSearch", input: { query: "best llm engineering book" } }] }, { text: "Core Textbook is recommended by two lists." }],
+      [LIST],
+    );
+    const { fetcher } = fetcherFor();
+    const rows: ModelCall[] = [];
+    await collect(researchMaterials({ brief, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books, log: { onCall: (c) => void rows.push(c) } }));
+    const steps = calls.filter((c) => c.responseFormat?.type !== "json");
+    const candidates = calls.filter((c) => c.responseFormat?.type === "json");
+    expect(steps).toHaveLength(2);
+    expect(candidates).toHaveLength(1);
+    for (const c of steps) expect(c.providerOptions?.anthropic?.effort).toBe("high");
+    expect(candidates[0].providerOptions?.anthropic?.effort).toBe("low");
+    expect(rows.length).toBe(calls.length);
+    for (const r of rows) expect(r.effort).toBe(r.label === "Research · candidates" ? "low" : "high");
+  });
+
   it("enforces the caps in code whatever the model requests", async () => {
     const many = Array.from({ length: 5 }, (_, i) => ({ tool: "webSearch" as const, input: { query: `q${i}` } }));
     const reads = Array.from({ length: 5 }, (_, i) => ({ tool: "fetchSource" as const, input: { url: `https://docs.example.com/${i}` } }));
@@ -323,5 +341,13 @@ describe("research prompts", () => {
     expect(events[0]).toEqual({ type: "research.start", caps: { searches: 3, fetches: 6, steps: 8 } });
     expect(capsFor(72)).toEqual(RESEARCH_CAPS);
     expect(capsFor(360).fetches).toBe(16);
+  });
+
+  it("says when the notes are grouped by direction, and only then", () => {
+    const plain = buildFinalPrompt({ topic: "T", days: 7, sources: [] }, "notes");
+    const grouped = buildFinalPrompt({ topic: "T", days: 7, sources: [] }, "notes", { grouped: true });
+    expect(plain).not.toContain("grouped by the research direction");
+    expect(grouped).toContain("Notes are grouped by the research direction that found them; a material found by more than one appears once in your list.");
+    expect(grouped.indexOf("Research notes")).toBeLessThan(grouped.indexOf("grouped by the research direction"));
   });
 });

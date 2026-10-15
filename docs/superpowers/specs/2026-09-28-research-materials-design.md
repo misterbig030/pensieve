@@ -62,8 +62,10 @@ brief ─► research (arm A | arm C) ─► verification gate ─► materials 
   tools, prompted to return the same candidate shape.
 - **The verification gate** re-fetches every candidate whichever arm proposed it. Running it on arm C too makes the
   comparison fair and measures how often provider citations hold up.
-- **Model.** Research uses a new `DEFAULT_RESEARCH_MODEL = "anthropic/claude-sonnet-5"`: judging which sources agree
-  needs more than the Haiku model used for outlines. Arm C uses the same model.
+- **Model.** Research uses a new `DEFAULT_RESEARCH_MODEL`: judging which sources agree needs more than the Haiku model
+  used for outlines. Arm C uses the same model. It began as `anthropic/claude-sonnet-5`; since 2026-10-14 it is
+  `anthropic/claude-sonnet-5.5`, with the loop at `RESEARCH_LOOP_EFFORT = "high"` and the candidate step at
+  `CANDIDATE_STEP_EFFORT = "low"` (arm W spec, decision 14).
 
 ## Data model
 
