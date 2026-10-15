@@ -33,6 +33,22 @@ Besides the database, Clerk and AI Gateway keys:
 - `USER_KEY_ENCRYPTION_SECRET`: encrypts the API keys users store in Settings (AES-256-GCM). 32 random bytes, base64:
   `openssl rand -base64 32`. Without it, saving a key fails; nothing is ever stored in plaintext.
 
+## Deployment checklist
+
+There is no cloud deployment yet: the app runs locally against the production database hosted on Vercel. Before the
+first deployment, in this order:
+
+- [ ] **Set `USER_KEY_ENCRYPTION_SECRET` in Vercel for production and preview, to the same value as the local
+  `.env.local`.** Users' API keys already stored from the local app are sealed with that value; a different one makes
+  them unreadable, and every user would have to re-enter their key. Read it from the file so it never shows on screen:
+  `grep '^USER_KEY_ENCRYPTION_SECRET=' .env.local | cut -d= -f2- > /tmp/s && vercel env add USER_KEY_ENCRYPTION_SECRET production preview < /tmp/s; rm -f /tmp/s`
+- [ ] Set the rest of the local environment the same way: the database URL, the Clerk keys, `AI_GATEWAY_API_KEY`,
+  `TAVILY_API_KEY`, `MATERIALS_SIGNING_SECRET`, `ADMIN_USER_IDS`, and `RESEARCH_ARM` if it is set locally.
+- [ ] Apply any pending migrations with `npx drizzle-kit migrate` **before** the deploy that needs them. New columns
+  must exist before the new code inserts into them; old code tolerates new columns because they carry defaults.
+- [ ] After the first deploy, run one plan draft on a stored user key and confirm the admin model-calls panel shows
+  "user's key" on every row and the usage appears on that user's Anthropic Console, not the gateway.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
