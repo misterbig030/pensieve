@@ -224,7 +224,9 @@ Neither action ever returns the key. There is no edit: a user with a different k
 
 Every model call goes through the AI SDK, which throws `APICallError` with the status code and response body. The app
 already carries errors to the user: the NDJSON stream turns a thrown error into `{ type: "error", message }` and the plan
-workspace renders it; server actions throw and their pages show the message.
+workspace renders it. Server actions return the refusal as a value (`{ ok: false, message, code }`), because in a
+production build a thrown action error reaches the browser as a generic message with its text redacted; their pages
+render the message with a link to Settings.
 
 `classifyProviderError(error): KeyErrorKind` maps the SDK error: 400 whose body says the credit balance is too low →
 `credits`; 401 → `invalid`; 429 → `rate_limit`; anything else → `other`. It is applied only when the request's log
@@ -238,8 +240,18 @@ the provider and a message for the user:
 - other: "Anthropic returned an error for your key (status N). Try again; if it keeps happening, check the Console."
 
 The stream's error event gains an optional `code` (the kind) so the workspace shows the message with a link to
-Settings. Server actions throw the same error. On a `UserKeyError` the route or action records the kind and time on the
-key's row, fire-and-forget. On the first request that completes on a key with an error recorded, the error is cleared.
+Settings. Server actions return the same error as a value. On a refusal the guard records the kind and time on the
+key's row and waits for that write before the error goes out, since work left pending when a serverless response ends
+is not guaranteed to finish. On the first request that completes on a key with an error recorded, the error is cleared,
+again awaited.
+
+The SDK does not always throw the refusal directly: 429 and 5xx responses are retried and surface as a `RetryError`
+whose last attempt is the `APICallError`, and the research loop wraps failures with a `cause`. `providerError()` in
+`lib/ai/providerError.ts` unwraps both, and everything that asks "was this the provider refusing?" goes through it.
+Nor does every call throw at all: `streamObject` reports a failed stream through `onError` and ends the partial stream,
+so the drafting loop captures that callback and rethrows after the loop; without it the request would hang. In the
+research phase, a provider refusal on a user key is rethrown by the arm, the workers and the candidate step instead of
+being folded into "research unavailable", so the request stops at the first refusal as decided.
 
 Not done: no retry on the app's key (decision 2); no partial fallback, since the drafting that follows research would
 run on the same key and fail the same way, so the request stops at the first refusal; no generation-log row for a failed

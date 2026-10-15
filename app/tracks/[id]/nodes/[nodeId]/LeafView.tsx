@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,8 @@ export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, 
   const [isPending, setIsPending] = useState(false);
   const [completed, setCompleted] = useState(isCompleted);
   const [error, setError] = useState<string | null>(null);
+  /** True when the error is a refused user key, so the message links to Settings. */
+  const [errorLink, setErrorLink] = useState(false);
   const [costUsd, setCostUsd] = useState<number | null>(null);
 
   const isWeek = unit === "week";
@@ -48,10 +51,16 @@ export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, 
   async function handleGenerate() {
     setIsPending(true);
     setError(null);
+    setErrorLink(false);
     try {
-      const { costUsd: cost, ...result } = await generateLeafContentAction({ trackId, nodeId });
-      setContent(result);
-      setCostUsd(cost);
+      const result = await generateLeafContentAction({ trackId, nodeId });
+      if (!result.ok) {
+        setError(result.message);
+        setErrorLink(true);
+      } else {
+        setContent({ contentMarkdown: result.contentMarkdown, citations: result.citations });
+        setCostUsd(result.costUsd);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed. Try again.");
     } finally {
@@ -133,7 +142,19 @@ export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, 
           <Button onClick={handleGenerate} disabled={isPending}>
             {isWeek ? "Generate this week's material" : "Generate today's lesson"}
           </Button>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <p className="text-sm text-red-600">
+              {error}
+              {errorLink && (
+                <>
+                  {" "}
+                  <Link href="/settings" className="underline">
+                    Open Settings
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
         </div>
         {provenance}
       </div>

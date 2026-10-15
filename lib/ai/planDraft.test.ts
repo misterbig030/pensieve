@@ -27,7 +27,10 @@ function material(id: string, extra: Partial<Material> = {}): Material {
 }
 
 describe("streamPlanDraft with materials", () => {
-  beforeEach(() => mockedStreamObject.mockReset());
+  beforeEach(() => {
+    // Braces matter: a returned mock would be called by the runner as a cleanup hook, with no arguments.
+    mockedStreamObject.mockReset();
+  });
 
   it("puts covers on headings and the Read table on leaves, drops unknown ids, and reports the checks", async () => {
     mockedStreamObject
@@ -79,7 +82,10 @@ describe("streamPlanDraft with materials", () => {
 });
 
 describe("streamPlanDraft and the time split", () => {
-  beforeEach(() => mockedStreamObject.mockReset());
+  beforeEach(() => {
+    // Braces matter: a returned mock would be called by the runner as a cleanup hook, with no arguments.
+    mockedStreamObject.mockReset();
+  });
 
   function fakeTop(units: UnitDraft[], split: unknown) {
     const stream = fakeStream(units) as unknown as { object: Promise<unknown> };
@@ -131,6 +137,26 @@ describe("streamPlanDraft and the time split", () => {
       expect(c.model).toBe("anthropic/claude-haiku-4.5");
       expect(c.keyOwner).toBe("user");
     }
+  });
+
+  it("rethrows a stream failure instead of waiting on an object that never arrives", async () => {
+    // The SDK reports a failed stream through onError and ends the partial stream; result.object never settles.
+    const refusal = Object.assign(new Error("Your credit balance is too low"), { statusCode: 400 });
+    mockedStreamObject.mockImplementation((opts) => {
+      const onError = (opts as { onError?: (e: { error: unknown }) => void }).onError;
+      return {
+        // The SDK calls onError while the stream is consumed, then ends the stream without a result.
+        partialObjectStream: (async function* () {
+          onError?.({ error: refusal });
+        })(),
+        object: new Promise(() => {}),
+        usage: new Promise(() => {}),
+        finishReason: new Promise(() => {}),
+      } as unknown as ReturnType<typeof streamObject>;
+    });
+    await expect(async () => {
+      for await (const _ of streamPlanDraft({ topic: "T", days: 28, granularity: "week", materials: [], hoursPerWeek: 6 })) void _;
+    }).rejects.toBe(refusal);
   });
 
   it("drafts on without a split when the model returns none", async () => {

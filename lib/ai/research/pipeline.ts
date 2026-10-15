@@ -2,6 +2,7 @@ import type { LanguageModel } from "ai";
 import type { Material } from "@/lib/schemas/material";
 import type { GenerationLogContext } from "../logged";
 import type { AiModelId } from "../models";
+import { providerError } from "../providerError";
 import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type ResearchBrief } from "./agent";
 import type { Coverage, DroppedMaterial, ResearchEvent, ResearchNotice } from "./events";
 import { SourceFetcher, capsFor, searchProviderFromEnv, type ResearchCaps } from "./tools";
@@ -115,6 +116,9 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
         runArm({ brief: input.brief, signal: input.signal, fetcher, emit, log: input.log, caps }),
       );
     } catch (error) {
+      // On the user's own key a provider refusal is theirs to hear about: it stops the request (the guard names it).
+      // Everything else, a search outage or a model hiccup on the app's key, shortens the list with a notice.
+      if (input.log?.keyOwner === "user" && providerError(error)) throw error;
       console.error("[research] arm failed", error);
       arm = null;
     }

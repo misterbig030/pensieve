@@ -56,3 +56,15 @@ describe("ndjson round trip", () => {
     await expect(readNdjson(new Response("nope", { status: 401 }), () => {})).rejects.toThrow("nope");
   });
 });
+
+describe("ndjson error codes", () => {
+  it("forwards only the codes a refused user key can carry, never a system error's code", async () => {
+    async function* failing() {
+      yield { type: "a" };
+      throw Object.assign(new Error("socket hang up"), { code: "ECONNRESET" });
+    }
+    const seen: unknown[] = [];
+    await readNdjson(ndjsonResponse(failing()), (e) => seen.push(e));
+    expect(seen).toEqual([{ type: "a" }, { type: "error", message: "socket hang up" }]);
+  });
+});

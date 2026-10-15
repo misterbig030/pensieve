@@ -78,3 +78,26 @@ describe("guardUserKey", () => {
     expect(await guardUserKeyCall(async () => 42, { userId: "u1", models: onUserKey, record })).toBe(42);
   });
 });
+
+describe("provider errors as the SDK really throws them", () => {
+  it("classifies a RetryError by its last attempt, and an error whose cause is the refusal", async () => {
+    const { RetryError } = await import("ai");
+    const retried = new RetryError({ message: "Failed after 3 attempts", reason: "maxRetriesExceeded", errors: [apiError(429, ""), apiError(429, ""), apiError(429, "")] });
+    expect(classifyProviderError(retried)).toBe("rate_limit");
+    const wrapped = Object.assign(new Error("research loop failed"), { cause: apiError(400, "Your credit balance is too low") });
+    expect(classifyProviderError(wrapped)).toBe("credits");
+    const record = vi.fn(async () => {});
+    await expect(guardUserKeyCall(async () => { throw retried; }, { userId: "u1", models: onUserKey, record })).rejects.toMatchObject({ code: "rate_limit" });
+    await expect(guardUserKeyCall(async () => { throw wrapped; }, { userId: "u1", models: onUserKey, record })).rejects.toMatchObject({ code: "credits" });
+  });
+
+  it("waits for the refusal to be recorded before the error reaches the caller", async () => {
+    let recorded = false;
+    const record = vi.fn(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      recorded = true;
+    });
+    await expect(guardUserKeyCall(async () => { throw apiError(401, ""); }, { userId: "u1", models: onUserKey, record })).rejects.toMatchObject({ code: "invalid" });
+    expect(recorded).toBe(true);
+  });
+});

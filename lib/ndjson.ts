@@ -1,3 +1,5 @@
+import { KEY_ERRORS } from "@/lib/ai/models";
+
 /**
  * Newline-delimited JSON over a streaming Response. Server side wraps an async iterable of events; client side
  * reads them back one at a time. Kept dependency-free so both routes and the browser share it.
@@ -13,9 +15,10 @@ export function ndjsonResponse<T>(events: AsyncIterable<T>, init?: ResponseInit)
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "stream failed";
-        // A code names a failure the client can act on (a refused user key); plain errors carry none.
+        // A code names a failure the client can act on (a refused user key). System errors carry codes too
+        // ("ECONNRESET", a Postgres "42703"); those must not reach the client as something to act on.
         const rawCode = error instanceof Error ? (error as Error & { code?: unknown }).code : undefined;
-        const code = typeof rawCode === "string" ? rawCode : undefined;
+        const code = typeof rawCode === "string" && (KEY_ERRORS as readonly string[]).includes(rawCode) ? rawCode : undefined;
         controller.enqueue(encoder.encode(JSON.stringify(code ? { type: "error", message, code } : { type: "error", message }) + "\n"));
       } finally {
         controller.close();

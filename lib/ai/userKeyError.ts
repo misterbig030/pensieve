@@ -2,9 +2,9 @@
  * A refusal on a user's own key, told to the user in their words and recorded on the key's row. Gateway calls are not
  * touched: the guard only acts when a model in the request runs on the user's key.
  */
-import { APICallError } from "ai";
 import { clearUserApiKeyError, recordUserApiKeyError } from "@/lib/db/userApiKeys";
 import { providerOf, type KeyErrorKind, type ModelProvider } from "./models";
+import { providerError } from "./providerError";
 import { PROVIDER_NAMES } from "./providerKeys";
 import type { ResolvedModels } from "./resolve";
 
@@ -19,12 +19,14 @@ export class UserKeyError extends Error {
   }
 }
 
+/** The kind of refusal, read from the APICallError inside whatever was thrown (a RetryError, a wrapped loop error). */
 export function classifyProviderError(error: unknown): KeyErrorKind {
-  if (!APICallError.isInstance(error)) return "other";
-  const status = error.statusCode;
+  const api = providerError(error);
+  if (!api) return "other";
+  const status = api.statusCode;
   if (status === 401 || status === 403) return "invalid";
   if (status === 429) return "rate_limit";
-  if (status === 400 && (error.responseBody ?? "").toLowerCase().includes("credit balance")) return "credits";
+  if (status === 400 && (api.responseBody ?? "").toLowerCase().includes("credit balance")) return "credits";
   return "other";
 }
 
@@ -55,18 +57,23 @@ function userProviders(models: ResolvedModels): ModelProvider[] {
   return [...new Set(roles.filter((m) => m.keyOwner === "user").map((m) => providerOf(m.id)))];
 }
 
-function translate(error: unknown, guard: UserKeyGuard): unknown {
+/**
+ * A provider refusal on a user-key request becomes a UserKeyError, recorded on the key before it is thrown so the
+ * settings page learns of it even when the response ends right after. Anything else passes through untouched.
+ */
+async function translate(error: unknown, guard: UserKeyGuard): Promise<unknown> {
   const providers = userProviders(guard.models);
-  if (providers.length === 0 || !APICallError.isInstance(error)) return error;
+  const api = providerError(error);
+  if (providers.length === 0 || !api) return error;
   const provider = providers[0];
-  const kind = classifyProviderError(error);
-  void (guard.record ?? recordUserApiKeyError)(guard.userId, provider, kind).catch(() => undefined);
-  return new UserKeyError(provider, kind, userKeyMessage(provider, kind, error.statusCode));
+  const kind = classifyProviderError(api);
+  await (guard.record ?? recordUserApiKeyError)(guard.userId, provider, kind).catch(() => undefined);
+  return new UserKeyError(provider, kind, userKeyMessage(provider, kind, api.statusCode));
 }
 
-function clearIfRecorded(guard: UserKeyGuard): void {
+async function clearIfRecorded(guard: UserKeyGuard): Promise<void> {
   for (const provider of userProviders(guard.models)) {
-    if (guard.models.keyErrors[provider]) void (guard.clear ?? clearUserApiKeyError)(guard.userId, provider).catch(() => undefined);
+    if (guard.models.keyErrors[provider]) await (guard.clear ?? clearUserApiKeyError)(guard.userId, provider).catch(() => undefined);
   }
 }
 
@@ -75,9 +82,9 @@ export async function* guardUserKey<T>(events: AsyncIterable<T>, guard: UserKeyG
   try {
     for await (const event of events) yield event;
   } catch (error) {
-    throw translate(error, guard);
+    throw await translate(error, guard);
   }
-  clearIfRecorded(guard);
+  await clearIfRecorded(guard);
 }
 
 /** The same for a server action's single promise. */
@@ -86,8 +93,8 @@ export async function guardUserKeyCall<T>(run: () => Promise<T>, guard: UserKeyG
   try {
     result = await run();
   } catch (error) {
-    throw translate(error, guard);
+    throw await translate(error, guard);
   }
-  clearIfRecorded(guard);
+  await clearIfRecorded(guard);
   return result;
 }

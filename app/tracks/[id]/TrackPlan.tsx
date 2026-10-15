@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { formatCostUsd } from "@/lib/formatCost";
 import { childLevel, childSpans, currentLeaf, doneDays, findNode, type Granularity, type PlanNode } from "@/lib/planTree";
@@ -29,6 +30,8 @@ export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek,
   const [openChips, setOpenChips] = useState<Set<string>>(() => new Set());
   const [pending, setPending] = useState<Record<string, PendingSlots>>({});
   const [error, setError] = useState<string | null>(null);
+  /** True when the error is a refused user key, so the message links to Settings. */
+  const [errorLink, setErrorLink] = useState(false);
   const [lastCost, setLastCost] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -45,10 +48,16 @@ export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek,
     const slots: PendingSlots = { count: childSpans(node).length, groups };
     setPending({ [nodeId]: slots });
     setError(null);
+    setErrorLink(false);
     startTransition(async () => {
       try {
-        const { costUsd } = await expandNodeAction({ trackId, nodeId, reason });
-        setLastCost(costUsd);
+        const result = await expandNodeAction({ trackId, nodeId, reason });
+        if (!result.ok) {
+          setError(result.message);
+          setErrorLink(true);
+        } else {
+          setLastCost(result.costUsd);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Planning failed. Try again.");
       } finally {
@@ -94,7 +103,19 @@ export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek,
         leafHref={(node) => `/tracks/${trackId}/nodes/${node.id}`}
       />
       {lastCost !== null && <p className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(lastCost)}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="text-sm text-red-600">
+          {error}
+          {errorLink && (
+            <>
+              {" "}
+              <Link href="/settings" className="underline">
+                Open Settings
+              </Link>
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }

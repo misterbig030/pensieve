@@ -102,7 +102,17 @@ type UnitEvent = { type: "unit"; unit: UnitDraft } | { type: "done"; units: Unit
 /** Streams units as they fully arrive (the in-progress one is withheld), then the validated list with its cost. */
 async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> {
   const startedAt = performance.now();
-  const result = streamObject({ model: input.model.model, schema: input.wantSplit ? topUnitListSchema : unitListSchema, prompt: input.prompt });
+  // A failed stream is reported through onError and the partial stream just ends; result.object would then never
+  // settle. Keep the failure and throw it once the loop is over, so a provider refusal reaches the caller.
+  let failure: unknown;
+  const result = streamObject({
+    model: input.model.model,
+    schema: input.wantSplit ? topUnitListSchema : unitListSchema,
+    prompt: input.prompt,
+    onError: ({ error }) => {
+      failure = error;
+    },
+  });
   let sent = 0;
   for await (const partial of result.partialObjectStream) {
     const units = (partial.units ?? []).filter((u): u is Partial<UnitDraft> => u != null);
@@ -114,6 +124,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
       yield { type: "unit", unit: unit as UnitDraft };
     }
   }
+  if (failure !== undefined) throw failure;
   const [object, usage, finishReason] = await Promise.all([result.object, result.usage, result.finishReason]);
   const row = buildGenerationLogRow({
     caller: "outline",

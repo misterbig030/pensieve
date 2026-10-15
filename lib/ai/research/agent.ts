@@ -3,6 +3,7 @@ import type { SourceInput } from "@/lib/schemas/source";
 import { DEFAULT_HOURS_PER_WEEK, totalHours } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, loggedGenerateObject, type GenerationLogContext } from "../logged";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, RESEARCH_LOOP_EFFORT, type AiModelId, type ReasoningEffort } from "../models";
+import { providerError } from "../providerError";
 import type { Coverage, ResearchEvent, WorkerDirection } from "./events";
 import {
   RESEARCH_CAPS,
@@ -363,6 +364,8 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
       break;
     } catch (error) {
       if (input.signal?.aborted) break;
+      // On the user's own key a provider refusal is theirs to hear about; a retry on the same key would be refused too.
+      if (input.log?.keyOwner === "user" && providerError(error)) throw error;
       console.error(`[research] candidate step failed (attempt ${attempt})`, error);
     }
   }

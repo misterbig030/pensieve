@@ -9,6 +9,7 @@ import { MaterialsList } from "@/components/pensieve/MaterialsList";
 import { ModelCallsPanel } from "@/components/pensieve/ModelCallsPanel";
 import { ResearchProgress } from "@/components/pensieve/ResearchProgress";
 import { TimeSplitCard } from "@/components/pensieve/TimeSplitCard";
+import { KEY_ERRORS } from "@/lib/ai/models";
 import type { Coverage, DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
 import { assignmentsOf, removeMaterialRefs } from "@/lib/materials";
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
@@ -91,7 +92,10 @@ function slotsFor(node: PlanNode, granularity: Granularity): PendingSlots | null
 }
 
 /** The code a refused user key travels with (see lib/ai/userKeyError); null for every other failure. */
-const codeOf = (e: unknown): string | null => (typeof (e as { code?: unknown } | null)?.code === "string" ? (e as { code: string }).code : null);
+const codeOf = (e: unknown): string | null => {
+  const code = (e as { code?: unknown } | null)?.code;
+  return typeof code === "string" && (KEY_ERRORS as readonly string[]).includes(code) ? code : null;
+};
 
 export function PlanWorkspace(props: PlanWorkspaceProps) {
   const { mode, topic, days, granularity, instructions, sources, initialTree, lockBefore = 0, trackId } = props;

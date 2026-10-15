@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
+import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
+import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
 import { initialResearch, reduceResearch } from "@/lib/researchProgress";
 import { RESEARCH_RULES, type StopReason } from "./agent";
@@ -482,5 +484,33 @@ describe("an effort override on the arm", () => {
     expect(calls.length).toBeGreaterThan(3);
     for (const c of calls) expect(c.providerOptions?.anthropic?.effort).toBe("high");
     for (const row of log) expect(row.effort).toBe("high");
+  });
+});
+
+describe("a provider refusal on a user's key (arm W)", () => {
+  const refusal = () =>
+    new APICallError({ message: "credit balance is too low", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 400, responseBody: "Your credit balance is too low", isRetryable: false });
+
+  it("stops research instead of folding the refusal into a search outage", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw refusal();
+      },
+    });
+    const { fetcher } = fetcherFor();
+    await expect(collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books, log: { keyOwner: "user" } }))).rejects.toSatisfy(
+      (e: unknown) => providerError(e)?.statusCode === 400,
+    );
+  });
+
+  it("keeps today's behaviour on the app's key: the run ends as a search outage with the learner's sources", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw refusal();
+      },
+    });
+    const { fetcher } = fetcherFor();
+    const { outcome } = await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }));
+    expect(outcome.notice).toBeTruthy();
   });
 });

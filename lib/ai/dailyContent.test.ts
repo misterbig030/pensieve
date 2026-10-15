@@ -86,7 +86,9 @@ describe("enforceCitations", () => {
 });
 
 describe("generateDailyContent", () => {
-  beforeEach(() => mockedGenerateObject.mockReset());
+  beforeEach(() => {
+    mockedGenerateObject.mockReset();
+  });
 
   it("generates on the content model it is given and records who paid", async () => {
     mockedGenerateObject.mockResolvedValue({

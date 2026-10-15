@@ -2,6 +2,7 @@ import type { LanguageModel } from "ai";
 import { hostOf } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
 import { DEFAULT_RESEARCH_MODEL, type AiModelId, type ReasoningEffort } from "../models";
+import { providerError } from "../providerError";
 import {
   RESEARCH_RULES,
   ResearchLoopError,
@@ -252,6 +253,8 @@ export function createWorkersArm(options: WorkersArmOptions): ResearchArm {
             effort: options.effort,
           });
         } catch (error) {
+          // On the user's own key a provider refusal stops the run; the pipeline lets it through and the guard names it.
+          if (log?.keyOwner === "user" && providerError(error)) throw error;
           // A failed model call ends this worker like a search outage; what it had done still counts, and the others go on.
           console.error(`[research] ${plan.direction} worker failed`, error);
           const partial = error instanceof ResearchLoopError ? error.partial : { steps: 0, searches: notes.searches.length, fetches: notes.fetches.length, searchesOk: notes.searches.length, costUsd: 0 };
