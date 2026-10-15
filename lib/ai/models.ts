@@ -4,7 +4,8 @@ export const AVAILABLE_MODELS = [
   { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5（Anthropic，便宜）", pricing: { input: 1, output: 5 } },
   { id: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5（Anthropic，均衡）", pricing: { input: 2, output: 10 } },
   { id: "anthropic/claude-sonnet-5.5", label: "Claude Sonnet 5.5（Anthropic，推荐，均衡，更快）", pricing: { input: 2, output: 10 } },
-  { id: "anthropic/claude-opus-5", label: "Claude Opus 5（Anthropic，最强）", pricing: { input: 5, output: 25 } },
+  { id: "anthropic/claude-opus-5", label: "Claude Opus 5（Anthropic）", pricing: { input: 5, output: 25 } },
+  { id: "anthropic/claude-opus-5.5", label: "Claude Opus 5.5（Anthropic，最强）", pricing: { input: 4, output: 20 } },
   // Google
   { id: "google/gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite（Google，便宜）", pricing: { input: 0.25, output: 1.5 } },
   { id: "google/gemini-3-flash", label: "Gemini 3 Flash（Google，均衡）", pricing: { input: 0.5, output: 3 } },

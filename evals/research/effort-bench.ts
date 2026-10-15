@@ -14,7 +14,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { config } from "dotenv";
 import type { ModelCall } from "@/lib/ai/logged";
-import { DEFAULT_RESEARCH_MODEL } from "@/lib/ai/models";
+import { AVAILABLE_MODELS, DEFAULT_RESEARCH_MODEL, type AiModelId } from "@/lib/ai/models";
 import { createAgentArm, type ResearchArm, type ResearchBrief } from "@/lib/ai/research/agent";
 import { researchMaterials, type ResearchOutcome } from "@/lib/ai/research/pipeline";
 import { searchProviderFromEnv } from "@/lib/ai/research/tools";
@@ -30,6 +30,7 @@ const { values } = parseArgs({
     days: { type: "string" },
     hours: { type: "string" },
     efforts: { type: "string", default: "low,medium,high" },
+    model: { type: "string", default: DEFAULT_RESEARCH_MODEL },
     arm: { type: "string", default: "W" },
     "dry-run": { type: "boolean", default: false },
     out: { type: "string" },
@@ -79,10 +80,10 @@ interface EffortRun {
   candidateResponse: string | null;
 }
 
-async function runAt(effort: Effort, b: ResearchBrief): Promise<EffortRun> {
+async function runAt(effort: Effort, b: ResearchBrief, model: AiModelId): Promise<EffortRun> {
   const provider = searchProviderFromEnv();
   if (!provider) throw new Error("TAVILY_API_KEY is not set (.env.local)");
-  const arm: ResearchArm = values.arm === "A" ? createAgentArm({ provider, effort }) : createWorkersArm({ provider, effort });
+  const arm: ResearchArm = values.arm === "A" ? createAgentArm({ provider, effort, model }) : createWorkersArm({ provider, effort, model });
   const calls: ModelCall[] = [];
   const started = performance.now();
   const gen = researchMaterials({ brief: b, arm, log: { onCall: (c) => void calls.push(c) } });
@@ -125,8 +126,10 @@ async function main() {
   const efforts = values.efforts!.split(",").map((e) => e.trim()) as Effort[];
   for (const e of efforts) if (!EFFORTS.includes(e)) throw new Error(`Unknown effort ${e}; use ${EFFORTS.join(", ")}`);
   if (values.arm !== "W" && values.arm !== "A") throw new Error("--arm is W or A");
-  console.log(`Brief: "${b.topic}", ${b.days} days at ${b.hoursPerWeek ?? "default"} hours a week. Arm ${values.arm} on ${DEFAULT_RESEARCH_MODEL} at ${efforts.join(", ")}.`);
-  console.log(`${efforts.length} full research runs, one per effort, in sequence. The last live run cost $0.08 at low; expect up to a few times that at high.`);
+  const model = values.model as AiModelId;
+  if (!AVAILABLE_MODELS.some((m) => m.id === model)) throw new Error(`Unknown model ${values.model}; use one of ${AVAILABLE_MODELS.map((m) => m.id).join(", ")}`);
+  console.log(`Brief: "${b.topic}", ${b.days} days at ${b.hoursPerWeek ?? "default"} hours a week. Arm ${values.arm} on ${model} at ${efforts.join(", ")}.`);
+  console.log(`${efforts.length} full research runs, one per effort, in sequence. On Sonnet 5.5 a run cost $0.08 at low and $0.17 at high; Opus 5.5 is twice the price per token.`);
   if (values["dry-run"]) {
     console.log("Dry run: nothing was called.");
     return;
@@ -137,7 +140,7 @@ async function main() {
   for (const effort of efforts) {
     process.stdout.write(`\neffort ${effort} … `);
     try {
-      const r = await runAt(effort, b);
+      const r = await runAt(effort, b, model);
       runs.push(r);
       console.log("done");
       report(r);
@@ -151,7 +154,7 @@ async function main() {
 
   const out = values.out ?? path.join("evals", "results", `effort-bench-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
   mkdirSync(path.dirname(out), { recursive: true });
-  writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), brief: b, arm: values.arm, model: DEFAULT_RESEARCH_MODEL, efforts, runs }, null, 2));
+  writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), brief: b, arm: values.arm, model, efforts, runs }, null, 2));
   console.log(`\nWrote ${out}`);
 }
 

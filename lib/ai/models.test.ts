@@ -23,6 +23,10 @@ describe("AVAILABLE_MODELS", () => {
     expect(estimateCostUsd("anthropic/claude-sonnet-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(12, 5);
   });
 
+  it("lists Opus 5.5 at its gateway price, $4 in and $20 out per million", () => {
+    expect(estimateCostUsd("anthropic/claude-opus-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(24, 5);
+  });
+
   it("every model has positive input and output pricing", () => {
     for (const model of AVAILABLE_MODELS) {
       expect(model.pricing.input).toBeGreaterThan(0);
