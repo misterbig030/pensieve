@@ -133,6 +133,7 @@ export async function generateDailyContent(
       keyOwner: model.keyOwner,
       schema: dailyContentSchema,
       prompt: buildDailyContentPrompt(input),
+      label: `Lesson · ${input.title}`,
       facts: [`${input.materials.length} material${input.materials.length === 1 ? "" : "s"} on the list`],
       check: (object) => {
         const { citations, dropped } = enforceCitations(object.citations, input.materials);
