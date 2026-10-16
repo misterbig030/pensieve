@@ -1,7 +1,12 @@
 # User API keys: a user's own key pays for their usage
 
-**Status:** built on 2026-10-15 (plan: `docs/superpowers/plans/2026-10-15-user-api-keys.md`). The live check on the
-operator's Max key waits on the migration being applied to production and the encryption secret being set in Vercel.
+**Status:** built on 2026-10-15 (plan: `docs/superpowers/plans/2026-10-15-user-api-keys.md`). Live check run the same
+day on the operator's Max key against the local app, after the migration was applied: a draft runs entirely on the user's
+key, every `generation_log` row reads `user`, the admin panel shows "user's key" on research steps too, and a recorded
+refusal shows on Settings and clears after the next success. It surfaced two fixes, both on the branch: the Anthropic
+provider package had to be upgraded to know Sonnet 5.5, and the research loop's step rows had dropped the key owner. Not
+yet run: the refusal half (a revoked key stopping a draft, a daily-content generation and an in-track expand with the
+message and the Settings link), which needs the key revoked in the Console.
 
 ## Summary
 
@@ -292,6 +297,9 @@ Test-first throughout.
 - **Per-user research model**, e.g. Opus 5.5 for a key holder, once the compare has numbers for it.
 - **A secret-rotation script**: re-encrypt rows from version N to N+1; the column exists for it.
 - **A usage display** is the Console's job; the page says so.
+- **Move off `generateObject` and `streamObject`.** The SDK set upgraded for this feature (`ai` 7.0.142) deprecates
+  both in favour of `generateText`/`streamText` with an output setting, and the dev log prints the warning once per call
+  site. Mechanical, touches every structured call, so its own branch.
 
 ## Open items
 
