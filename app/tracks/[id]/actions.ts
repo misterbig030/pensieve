@@ -1,8 +1,11 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { isAdminUserId } from "@/lib/admin";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { collectCalls } from "@/lib/ai/collectCalls";
+import type { ModelCall } from "@/lib/ai/logged";
 import { streamExpandNode } from "@/lib/ai/planDraft";
 import { resolveModels } from "@/lib/ai/resolve";
 import { UserKeyError, guardUserKey } from "@/lib/ai/userKeyError";
@@ -70,11 +73,17 @@ function lockedIds(root: PlanNode, lockBefore: number): string[] {
 
 /** Plans a heading in detail (`expand`) or splits a week leaf into days (`split`) on a saved track. */
 /** A refused user key comes back as a value: a thrown error's message does not survive to the browser in production. */
-export type ExpandNodeResult = { ok: true; costUsd: number } | { ok: false; message: string; code: KeyErrorKind };
+/** `calls` is present only when the server confirmed the caller is an admin: the model calls behind this request, for the dock. */
+export type ExpandNodeResult =
+  | { ok: true; costUsd: number; calls?: ModelCall[] }
+  | { ok: false; message: string; code: KeyErrorKind; calls?: ModelCall[] };
 
 export async function expandNodeAction(input: { trackId: string; nodeId: string; reason: "expand" | "split" }): Promise<ExpandNodeResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
+  const admin = isAdminUserId(userId);
+  const calls: ModelCall[] = [];
+  const extra = admin ? { calls } : {};
   const detail = await getTrackDetail(input.trackId, userId);
   if (!detail) throw new Error("Track not found");
 
@@ -95,7 +104,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
         nodeId: input.nodeId,
         reason: input.reason,
         outlineModel: models.outline,
-        log: { userId, trackId: input.trackId, onLog: insertGenerationLog, keyOwner: models.outline.keyOwner },
+        log: collectCalls(admin, { userId, trackId: input.trackId, onLog: insertGenerationLog, keyOwner: models.outline.keyOwner }, calls),
       }),
       { userId, models },
     )) {
@@ -107,7 +116,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
       }
     }
   } catch (error) {
-    if (error instanceof UserKeyError) return { ok: false, message: error.message, code: error.code };
+    if (error instanceof UserKeyError) return { ok: false, message: error.message, code: error.code, ...extra };
     throw error;
   }
   if (!children) throw new Error("Planning ended early. Try again.");
@@ -116,7 +125,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
   const fresh = await getTrackDetail(input.trackId, userId);
   await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title));
   revalidatePath(`/tracks/${input.trackId}`);
-  return { ok: true, costUsd };
+  return { ok: true, costUsd, ...extra };
 }
 
 export async function markCompleteAction(nodeId: string): Promise<void> {

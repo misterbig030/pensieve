@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ReadTable, type ReadRow } from "@/components/pensieve/ReadTable";
 import { ShieldCheck } from "lucide-react";
 import { formatCostUsd } from "@/lib/formatCost";
+import { pushModelCalls } from "@/lib/modelCalls";
 import { generateLeafContentAction } from "./actions";
 import { logSessionAction, markCompleteAction } from "../../actions";
 
@@ -54,6 +55,7 @@ export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, 
     setErrorLink(false);
     try {
       const result = await generateLeafContentAction({ trackId, nodeId });
+      if (result.calls) pushModelCalls(result.calls);
       if (!result.ok) {
         setError(result.message);
         setErrorLink(true);

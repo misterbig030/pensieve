@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { formatCostUsd } from "@/lib/formatCost";
+import { pushModelCalls } from "@/lib/modelCalls";
 import { childLevel, childSpans, currentLeaf, doneDays, findNode, type Granularity, type PlanNode } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 import { expandNodeAction } from "./actions";
@@ -52,6 +53,7 @@ export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek,
     startTransition(async () => {
       try {
         const result = await expandNodeAction({ trackId, nodeId, reason });
+        if (result.calls) pushModelCalls(result.calls);
         if (!result.ok) {
           setError(result.message);
           setErrorLink(true);
