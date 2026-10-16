@@ -37,6 +37,34 @@ function isStoredList(value: unknown): value is StoredList {
   return typeof value === "object" && value !== null && (value as StoredList).v === VERSION && Array.isArray((value as StoredList).calls);
 }
 
+const isNumberOrNull = (v: unknown) => typeof v === "number" || v === null;
+const isStringOrNull = (v: unknown) => typeof v === "string" || v === null;
+
+/**
+ * The fields the panel reads without a guard. A stored element that lacks them (another writer, or a `ModelCall` shape
+ * change shipped without bumping `VERSION`) is dropped rather than rendered, so a stale item can never take the page
+ * down. Bump `VERSION` whenever `ModelCall` changes shape.
+ */
+function isModelCall(value: unknown): value is ModelCall {
+  if (typeof value !== "object" || value === null) return false;
+  const c = value as Record<string, unknown>;
+  return (
+    typeof c.label === "string" &&
+    typeof c.model === "string" &&
+    typeof c.prompt === "string" &&
+    typeof c.response === "string" &&
+    isStringOrNull(c.system) &&
+    isStringOrNull(c.finishReason) &&
+    typeof c.costUsd === "number" &&
+    typeof c.latencyMs === "number" &&
+    isNumberOrNull(c.inputTokens) &&
+    isNumberOrNull(c.outputTokens) &&
+    isNumberOrNull(c.cacheReadTokens) &&
+    Array.isArray(c.facts) &&
+    c.facts.every((f) => typeof f === "string")
+  );
+}
+
 export function createModelCallStore(
   options: { storage?: StorageLike | null; maxCalls?: number; maxStoredBytes?: number } = {},
 ): ModelCallStore {
@@ -47,7 +75,8 @@ export function createModelCallStore(
   let calls: ModelCall[] = [];
   let hydrated = false;
 
-  // Read once, on first use, so the list a previous page left behind comes back. Anything but our own shape is ignored.
+  // Read once, on first use, so the list a previous page left behind comes back. Anything but our own shape is ignored,
+  // element by element.
   const hydrate = () => {
     if (hydrated) return;
     hydrated = true;
@@ -56,7 +85,7 @@ export function createModelCallStore(
       const raw = storage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed: unknown = JSON.parse(raw);
-      if (isStoredList(parsed)) calls = parsed.calls;
+      if (isStoredList(parsed)) calls = parsed.calls.filter(isModelCall);
     } catch {
       // Unparsable or blocked storage: start empty.
     }

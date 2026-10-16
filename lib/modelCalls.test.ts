@@ -70,6 +70,21 @@ describe("createModelCallStore", () => {
     }
   });
 
+  it("drops stored elements that are not model calls and keeps the rest", () => {
+    const storage = fakeStorage();
+    storage.items.set(STORAGE_KEY, JSON.stringify({ v: 1, calls: [{}, null, "x", { ...call("ok"), facts: "not a list" }, call("kept")] }));
+    expect(createModelCallStore({ storage }).getSnapshot().map((c) => c.label)).toEqual(["kept"]);
+  });
+
+  it("starts empty when every stored element is malformed", () => {
+    const storage = fakeStorage();
+    storage.items.set(STORAGE_KEY, JSON.stringify({ v: 1, calls: [{}] }));
+    const store = createModelCallStore({ storage });
+    expect(store.getSnapshot()).toEqual([]);
+    store.push([call("a")]);
+    expect(store.getSnapshot().map((c) => c.label)).toEqual(["a"]);
+  });
+
   it("clear empties memory, removes the item and notifies", () => {
     const storage = fakeStorage();
     const store = createModelCallStore({ storage });
