@@ -1,7 +1,14 @@
 # Admin model-calls dock: one panel for the whole app
 
-**Status:** design, 2026-10-16. Follows the research in the session of 2026-10-16: two model calls on saved tracks
-never reached the panel, and the panel itself lived on two pages only.
+**Status:** implemented 2026-10-16 (branch `feat/admin-calls-dock`). Live check in Chrome as the admin, on the local
+app: a 7-day draft put six calls in the dock (two research workers' steps, the candidate step, the top level);
+confirming redirected to the track page with the same six still listed; "Generate today's lesson" on Day 1 added
+"Lesson · What is a branch and why it matters"; "Split into days" on another track's Week 2 added "Week 2 · 7 days";
+a reload kept all eight; Clear emptied the list and the storage item and a reload stayed empty; a list seeded in
+session storage hydrated on reload and a fresh tab saw none of it; the console showed no hydration warning. Not run:
+a non-admin account (none at hand), so "no `calls` field for a non-admin" rests on the server-side `isAdminUserId`
+gate and the helper's disabled-path test. Follows the research in the session of 2026-10-16: two model calls on saved
+tracks never reached the panel, and the panel itself lived on two pages only.
 
 ## Summary
 
