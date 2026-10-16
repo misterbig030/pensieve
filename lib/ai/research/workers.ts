@@ -5,6 +5,7 @@ import { DEFAULT_RESEARCH_MODEL, type AiModelId, type ReasoningEffort } from "..
 import { providerError } from "../providerError";
 import {
   RESEARCH_RULES,
+  todayLine,
   ResearchLoopError,
   briefLines,
   runCandidateStep,
@@ -100,12 +101,13 @@ const CURRENT_BRIEF = [
 ];
 
 /** One worker's system prompt: direction, tools and budget, then objective, strategy, boundaries and output, then the shared rules. */
-export function buildWorkerInstructions(plan: WorkerPlan): string {
+export function buildWorkerInstructions(plan: WorkerPlan, today: Date = new Date()): string {
   const { caps, direction } = plan;
   const body = direction === "backbone" ? BACKBONE_BRIEF(caps.steps) : direction === "canonical" ? CANONICAL_BRIEF(plan.withCurrent) : CURRENT_BRIEF;
   return [
     `Direction: ${direction}.`,
     `You research one direction of the materials for a self-study plan; other researchers cover the other directions at the same time, so stay inside yours. The learner's own sources have already been read: what they are is in the brief, so do not read them again.`,
+    todayLine(today),
     `You have two tools. webSearch returns titles, URLs and snippets. fetchSource reads one https page and returns its own title, headings and text. Budget: ${count(caps.searches, "search", "searches")}, ${count(caps.fetches, "page read", "page reads")} and ${caps.steps} steps in all; calls past a cap are refused.`,
     ...body,
     RESEARCH_RULES,

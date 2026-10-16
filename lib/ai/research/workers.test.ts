@@ -525,3 +525,24 @@ describe("who paid, on the research rows", () => {
     expect(log.map((r) => r.keyOwner)).toEqual(log.map(() => "user"));
   });
 });
+
+describe("the date in a worker's instructions", () => {
+  const plan = { direction: "current" as const, caps: { searches: 2, fetches: 4, steps: 2, wallMs: 60_000 }, withCurrent: false };
+
+  it("tells each worker today's date", () => {
+    for (const direction of ["backbone", "canonical", "current"] as const) {
+      expect(buildWorkerInstructions({ ...plan, direction }, new Date("2026-10-15T12:00:00Z"))).toContain("Today is 15 October 2026.");
+    }
+  });
+
+  it("reads the clock at request time, so the date is never stale", async () => {
+    const { model } = directedModel(SCRIPTS, [LIST]);
+    const { fetcher } = fetcherFor();
+    const log: ModelCall[] = [];
+    await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books, log: { onCall: (c) => void log.push(c) } }));
+    const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    const firstSteps = log.filter((c) => c.label?.endsWith("step 1"));
+    expect(firstSteps.length).toBe(3);
+    for (const c of firstSteps) expect(c.system).toContain(`Today is ${today}.`);
+  });
+});

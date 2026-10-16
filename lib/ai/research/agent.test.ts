@@ -4,7 +4,7 @@ import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
-import { briefLines, buildFinalPrompt, createAgentArm } from "./agent";
+import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
 import { isThin, researchMaterials, streamWhile } from "./pipeline";
@@ -379,5 +379,14 @@ describe("a provider refusal on a user's key", () => {
     const { fetcher } = fetcherFor();
     const { outcome } = await collect(researchMaterials({ brief, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
     expect(outcome.notice).toBeTruthy();
+  });
+});
+
+describe("the date in the research instructions", () => {
+  it("tells the model today's date, so 'recent' counts from now and not from its training data", () => {
+    const caps: ResearchCaps = { steps: 3, searches: 4, fetches: 3, wallMs: 60_000 };
+    const text = buildResearchInstructions(caps, undefined, undefined, new Date("2026-10-15T12:00:00Z"));
+    expect(text).toContain("Today is 15 October 2026.");
+    expect(text.indexOf("Today is")).toBeLessThan(text.indexOf("You have two tools"));
   });
 });
