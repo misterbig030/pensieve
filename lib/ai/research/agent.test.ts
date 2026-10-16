@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
+import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
+import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
-import { briefLines, buildFinalPrompt, createAgentArm } from "./agent";
+import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
 import { isThin, researchMaterials, streamWhile } from "./pipeline";
@@ -349,5 +351,42 @@ describe("research prompts", () => {
     expect(plain).not.toContain("grouped by the research direction");
     expect(grouped).toContain("Notes are grouped by the research direction that found them; a material found by more than one appears once in your list.");
     expect(grouped.indexOf("Research notes")).toBeLessThan(grouped.indexOf("grouped by the research direction"));
+  });
+});
+
+describe("a provider refusal on a user's key", () => {
+  const refusal = () =>
+    new APICallError({ message: "credit balance is too low", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 400, responseBody: "Your credit balance is too low", isRetryable: false });
+
+  it("stops research instead of drafting on without it", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw refusal();
+      },
+    });
+    const { fetcher } = fetcherFor();
+    await expect(collect(researchMaterials({ brief, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books, log: { keyOwner: "user" } }))).rejects.toSatisfy(
+      (e: unknown) => providerError(e)?.statusCode === 400,
+    );
+  });
+
+  it("keeps today's behaviour on the app's key: research is reported unavailable and the draft goes on", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw refusal();
+      },
+    });
+    const { fetcher } = fetcherFor();
+    const { outcome } = await collect(researchMaterials({ brief, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
+    expect(outcome.notice).toBeTruthy();
+  });
+});
+
+describe("the date in the research instructions", () => {
+  it("tells the model today's date, so 'recent' counts from now and not from its training data", () => {
+    const caps: ResearchCaps = { steps: 3, searches: 4, fetches: 3, wallMs: 60_000 };
+    const text = buildResearchInstructions(caps, undefined, undefined, new Date("2026-10-15T12:00:00Z"));
+    expect(text).toContain("Today is 15 October 2026.");
+    expect(text.indexOf("Today is")).toBeLessThan(text.indexOf("You have two tools"));
   });
 });

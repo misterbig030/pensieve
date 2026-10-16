@@ -1,6 +1,6 @@
 import { generateObject, type FlexibleSchema, type LanguageModel, type LanguageModelUsage } from "ai";
 import type { GenerationCaller } from "@/lib/db/schema";
-import { estimateCostUsd, type AiModelId, type ReasoningEffort } from "./models";
+import { estimateCostUsd, type AiModelId, type KeyOwner, type ReasoningEffort } from "./models";
 
 export type { GenerationCaller };
 
@@ -14,6 +14,8 @@ export interface GenerationLogRow {
   caller: GenerationCaller;
   model: AiModelId;
   effort: string | null;
+  /** Who paid for the call: the app's gateway key, or the user's own key. */
+  keyOwner: KeyOwner;
   inputTokens: number | null;
   outputTokens: number | null;
   cacheReadTokens: number | null;
@@ -51,6 +53,8 @@ export interface GenerationLogMeta {
   onLog?: OnGenerationLog;
   /** Receives the full call (prompt and raw response) for the admin panel. Omitted means nothing is captured. */
   onCall?: OnModelCall;
+  /** Who pays for the calls in this request; "app" when omitted. The resolver sets it from the user's keys. */
+  keyOwner?: KeyOwner;
 }
 
 /** The subset of `GenerationLogMeta` that callers of the generators supply; the generator fills in `caller`. */
@@ -71,6 +75,8 @@ export interface LoggedGenerateObjectOptions<T> {
   abortSignal?: AbortSignal;
   /** Anthropic reasoning effort for this call, sent as a provider option and recorded on the row. Omitted: the model's default. */
   effort?: ReasoningEffort;
+  /** Who pays for this call when it differs from the context (a resolved model carries its own). */
+  keyOwner?: KeyOwner;
 }
 
 export interface LoggedGenerateObjectResult<T> {
@@ -88,6 +94,7 @@ export interface BuildGenerationLogRowInput {
   trackId?: string;
   userId?: string;
   effort?: ReasoningEffort | null;
+  keyOwner?: KeyOwner;
 }
 
 /** Normalizes the AI SDK usage shape into a flat `generation_log` row. Shared by the object wrapper and the streaming routes. */
@@ -97,6 +104,7 @@ export function buildGenerationLogRow(input: BuildGenerationLogRowInput): Genera
     caller: input.caller,
     model: input.model,
     effort: input.effort ?? null,
+    keyOwner: input.keyOwner ?? "app",
     inputTokens: usage.inputTokens ?? null,
     outputTokens: usage.outputTokens ?? null,
     cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? null,
@@ -141,6 +149,7 @@ export async function loggedGenerateObject<T>(
     usage,
     latencyMs,
     effort: opts.effort ?? null,
+    keyOwner: opts.keyOwner ?? meta.keyOwner,
     trackId: meta.trackId,
     userId: meta.userId,
   });

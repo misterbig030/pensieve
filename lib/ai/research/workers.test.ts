@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
+import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
+import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
 import { initialResearch, reduceResearch } from "@/lib/researchProgress";
 import { RESEARCH_RULES, type StopReason } from "./agent";
@@ -396,6 +398,8 @@ describe("defaultArm", () => {
   it("ships arm A, or arm W behind RESEARCH_ARM=workers, and nothing without a search key", () => {
     expect(defaultArm({ TAVILY_API_KEY: "k" })?.name).toBe("research");
     expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: "workers" })?.name).toBe("researchWorkers");
+    // A second argument carries the model the request resolved, for a user running on their own key.
+    expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: "workers" }, { model: "anthropic/claude-opus-5.5" })?.name).toBe("researchWorkers");
     expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: " Workers " })?.name).toBe("researchWorkers");
     expect(defaultArm({ TAVILY_API_KEY: "k", RESEARCH_ARM: "agent" })?.name).toBe("research");
     expect(defaultArm({ RESEARCH_ARM: "workers" })).toBeNull();
@@ -480,5 +484,65 @@ describe("an effort override on the arm", () => {
     expect(calls.length).toBeGreaterThan(3);
     for (const c of calls) expect(c.providerOptions?.anthropic?.effort).toBe("high");
     for (const row of log) expect(row.effort).toBe("high");
+  });
+});
+
+describe("a provider refusal on a user's key (arm W)", () => {
+  const refusal = () =>
+    new APICallError({ message: "credit balance is too low", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 400, responseBody: "Your credit balance is too low", isRetryable: false });
+
+  it("stops research instead of folding the refusal into a search outage", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw refusal();
+      },
+    });
+    const { fetcher } = fetcherFor();
+    await expect(collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books, log: { keyOwner: "user" } }))).rejects.toSatisfy(
+      (e: unknown) => providerError(e)?.statusCode === 400,
+    );
+  });
+
+  it("keeps today's behaviour on the app's key: the run ends as a search outage with the learner's sources", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw refusal();
+      },
+    });
+    const { fetcher } = fetcherFor();
+    const { outcome } = await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }));
+    expect(outcome.notice).toBeTruthy();
+  });
+});
+
+describe("who paid, on the research rows", () => {
+  it("records the request's key owner on every worker step row, not only on the candidate step", async () => {
+    const { model, calls } = directedModel(SCRIPTS, [LIST]);
+    const { fetcher } = fetcherFor();
+    const log: ModelCall[] = [];
+    await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books, log: { keyOwner: "user", onCall: (c) => void log.push(c) } }));
+    expect(log.length).toBe(calls.length);
+    expect(log.map((r) => r.keyOwner)).toEqual(log.map(() => "user"));
+  });
+});
+
+describe("the date in a worker's instructions", () => {
+  const plan = { direction: "current" as const, caps: { searches: 2, fetches: 4, steps: 2, wallMs: 60_000 }, withCurrent: false };
+
+  it("tells each worker today's date", () => {
+    for (const direction of ["backbone", "canonical", "current"] as const) {
+      expect(buildWorkerInstructions({ ...plan, direction }, new Date("2026-10-15T12:00:00Z"))).toContain("Today is 15 October 2026.");
+    }
+  });
+
+  it("reads the clock at request time, so the date is never stale", async () => {
+    const { model } = directedModel(SCRIPTS, [LIST]);
+    const { fetcher } = fetcherFor();
+    const log: ModelCall[] = [];
+    await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books, log: { onCall: (c) => void log.push(c) } }));
+    const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    const firstSteps = log.filter((c) => c.label?.endsWith("step 1"));
+    expect(firstSteps.length).toBe(3);
+    for (const c of firstSteps) expect(c.system).toContain(`Today is ${today}.`);
   });
 });

@@ -13,6 +13,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
+import { KEY_ERRORS, KEY_OWNERS, MODEL_PROVIDERS } from "@/lib/ai/models";
 import { SOURCE_TYPES } from "@/lib/schemas/source";
 import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS, MINUTES_BASES } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
@@ -173,8 +174,31 @@ export const generationLog = pgTable("generation_log", {
   latencyMs: integer("latency_ms").notNull(),
   trackId: uuid("track_id"), // nullable: draft outlines have no track yet
   userId: text("user_id"), // nullable: eval-harness rows have no user
+  /** Who paid: the app's gateway key, or the user's own key (see user_api_keys). */
+  keyOwner: text("key_owner", { enum: KEY_OWNERS }).notNull().default("app"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+/** A user's own API key for one provider, so their usage is billed to them. One row per user and provider. */
+export const userApiKeys = pgTable(
+  "user_api_keys",
+  {
+    userId: text("user_id").notNull(), // the Clerk id, as on tracks
+    provider: text("provider", { enum: MODEL_PROVIDERS }).notNull(),
+    /** AES-256-GCM with the server secret: base64 of iv + tag + ciphertext. */
+    ciphertext: text("ciphertext").notNull(),
+    /** Last four characters, the only part ever shown again. */
+    last4: text("last4").notNull(),
+    /** Which server secret encrypted it, so the secret can rotate without a flag day. Starts at 1. */
+    secretVersion: integer("secret_version").notNull().default(1),
+    /** The last time a request on this key was refused, and why; cleared when a request succeeds. */
+    lastError: text("last_error", { enum: KEY_ERRORS }),
+    lastErrorAt: timestamp("last_error_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.provider] })],
+);
 
 export type Track = typeof tracks.$inferSelect;
 export type NewTrack = typeof tracks.$inferInsert;
@@ -189,6 +213,8 @@ export type NewDailyContent = typeof dailyContent.$inferInsert;
 export type CheckIn = typeof checkIns.$inferSelect;
 export type GenerationLog = typeof generationLog.$inferSelect;
 export type NewGenerationLog = typeof generationLog.$inferInsert;
+export type UserApiKey = typeof userApiKeys.$inferSelect;
+export type NewUserApiKey = typeof userApiKeys.$inferInsert;
 
 export const planNodesRelations = relations(planNodes, ({ one }) => ({
   track: one(tracks, { fields: [planNodes.trackId], references: [tracks.id] }),

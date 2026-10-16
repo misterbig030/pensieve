@@ -7,13 +7,19 @@ import { db } from "@/lib/db/client";
 import { sources } from "@/lib/db/schema";
 import { generateDailyContent, type LessonMaterial } from "@/lib/ai/dailyContent";
 import { getNodeReadList, getOwnedNode, upsertLeafContent } from "@/lib/db/planQueries";
+import { resolveModels } from "@/lib/ai/resolve";
+import { UserKeyError, guardUserKeyCall } from "@/lib/ai/userKeyError";
+import type { KeyErrorKind } from "@/lib/ai/models";
 import { insertGenerationLog } from "@/lib/db/generationLog";
-import { DEFAULT_CONTENT_MODEL } from "@/lib/ai/models";
+
+export type GenerateLeafContentResult =
+  | { ok: true; contentMarkdown: string; citations: { title: string; url: string }[]; costUsd: number }
+  | { ok: false; message: string; code: KeyErrorKind };
 
 export async function generateLeafContentAction(input: {
   trackId: string;
   nodeId: string;
-}): Promise<{ contentMarkdown: string; citations: { title: string; url: string }[]; costUsd: number }> {
+}): Promise<GenerateLeafContentResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
@@ -40,23 +46,37 @@ export async function generateLeafContentAction(input: {
           kind: s.kind,
         }));
 
-  const { content, costUsd } = await generateDailyContent({
-    title: node.title,
-    summary: node.summary,
-    unit: node.level === "day" ? "day" : "week",
-    spanDays: node.len,
-    materials,
-    log: { trackId: input.trackId, userId, onLog: insertGenerationLog },
-  });
+  const models = await resolveModels(userId);
+  let generated: Awaited<ReturnType<typeof generateDailyContent>>;
+  try {
+    generated = await guardUserKeyCall(
+      () =>
+        generateDailyContent({
+          title: node.title,
+          summary: node.summary,
+          unit: node.level === "day" ? "day" : "week",
+          spanDays: node.len,
+          materials,
+          model: models.content,
+          log: { trackId: input.trackId, userId, onLog: insertGenerationLog, keyOwner: models.content.keyOwner },
+        }),
+      { userId, models },
+    );
+  } catch (error) {
+    // A refused user key comes back as a value: a thrown error's message does not survive to the browser in production.
+    if (error instanceof UserKeyError) return { ok: false, message: error.message, code: error.code };
+    throw error;
+  }
+  const { content, costUsd } = generated;
 
   await upsertLeafContent(node.id, {
     contentMarkdown: content.contentMarkdown,
     citations: content.citations,
-    model: DEFAULT_CONTENT_MODEL,
+    model: models.content.id,
   });
 
   revalidatePath(`/tracks/${input.trackId}`);
   revalidatePath(`/tracks/${input.trackId}/nodes/${input.nodeId}`);
 
-  return { ...content, costUsd };
+  return { ok: true, ...content, costUsd };
 }

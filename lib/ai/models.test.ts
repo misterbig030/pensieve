@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AVAILABLE_MODELS, CANDIDATE_STEP_EFFORT, DEFAULT_OUTLINE_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_RESEARCH_MODEL, RESEARCH_LOOP_EFFORT, estimateCostUsd } from "./models";
+import { AVAILABLE_MODELS, CANDIDATE_STEP_EFFORT, DEFAULT_CHAT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_RESEARCH_MODEL, MODEL_PROVIDERS, RESEARCH_LOOP_EFFORT, estimateCostUsd, providerOf } from "./models";
 
 describe("AVAILABLE_MODELS", () => {
   it("every model id matches the provider/model gateway format", () => {
@@ -23,6 +23,14 @@ describe("AVAILABLE_MODELS", () => {
     expect(RESEARCH_LOOP_EFFORT).toBe("high");
     expect(CANDIDATE_STEP_EFFORT).toBe("low");
     expect(estimateCostUsd("anthropic/claude-sonnet-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(12, 5);
+  });
+
+  it("knows every listed model's provider, which is the id's prefix", () => {
+    for (const model of AVAILABLE_MODELS) expect(MODEL_PROVIDERS).toContain(providerOf(model.id));
+    expect(providerOf("anthropic/claude-sonnet-5.5")).toBe("anthropic");
+    expect(providerOf("google/gemini-3-flash")).toBe("google");
+    expect(providerOf("openai/gpt-5.4-mini")).toBe("openai");
+    expect(AVAILABLE_MODELS.map((m) => m.id)).toContain(DEFAULT_CHAT_MODEL);
   });
 
   it("lists Opus 5.5 at its gateway price, $4 in and $20 out per million", () => {

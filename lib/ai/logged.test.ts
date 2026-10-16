@@ -93,6 +93,15 @@ describe("loggedGenerateObject", () => {
     expect(rows[0].effort).toBe("low");
   });
 
+  it("records who paid: the app by default, the user when the context or the call says so", async () => {
+    mockedGenerateObject.mockResolvedValue(mockResult());
+    const rows: GenerationLogRow[] = [];
+    await loggedGenerateObject({ model: "anthropic/claude-sonnet-5.5", schema, prompt: "hi" }, { caller: "research", onLog: (row) => void rows.push(row) });
+    await loggedGenerateObject({ model: "anthropic/claude-sonnet-5.5", schema, prompt: "hi" }, { caller: "research", keyOwner: "user", onLog: (row) => void rows.push(row) });
+    await loggedGenerateObject({ model: "anthropic/claude-sonnet-5.5", schema, prompt: "hi", keyOwner: "user" }, { caller: "daily", onLog: (row) => void rows.push(row) });
+    expect(rows.map((r) => r.keyOwner)).toEqual(["app", "user", "user"]);
+  });
+
   it("sends no provider options when no effort is given", async () => {
     mockedGenerateObject.mockResolvedValue(mockResult());
     await loggedGenerateObject({ model: "anthropic/claude-sonnet-5", schema, prompt: "hi" }, { caller: "daily" });

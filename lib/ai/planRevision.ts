@@ -18,6 +18,7 @@ import type { CoverRefDraft, MaterialRefDraft } from "@/lib/schemas/material";
 import { revisedTreeSchema, type RevisedTree } from "@/lib/schemas/plan";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
+import { appModel, type ResolvedModel } from "./resolve";
 import { assignRefs, buildRevisionPrompt, type PlanPromptContext } from "./planPrompt";
 
 export class LockedNodeError extends Error {
@@ -104,6 +105,8 @@ export interface RevisePlanInput extends PlanPromptContext {
   tree: PlanNode;
   lockBefore: number;
   changeRequest: string;
+  /** The model that redrafts the tree; the app's outline model when omitted. */
+  outlineModel?: ResolvedModel;
   log?: GenerationLogContext;
 }
 
@@ -116,9 +119,12 @@ export interface RevisePlanResult {
 export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlanResult> {
   const tree = layout(cloneTree(input.tree));
   const refs = assignRefs(tree);
+  const model = input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL);
   const { object, costUsd } = await loggedGenerateObject(
     {
-      model: DEFAULT_OUTLINE_MODEL,
+      model: model.id,
+      languageModel: typeof model.model === "string" ? undefined : model.model,
+      keyOwner: model.keyOwner,
       schema: revisedTreeSchema,
       prompt: buildRevisionPrompt({ ...input, tree, refs }),
       label: `Revision · ${input.changeRequest.length > 60 ? `${input.changeRequest.slice(0, 57)}…` : input.changeRequest}`,

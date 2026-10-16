@@ -4,6 +4,9 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { streamExpandNode } from "@/lib/ai/planDraft";
+import { resolveModels } from "@/lib/ai/resolve";
+import { UserKeyError, guardUserKey } from "@/lib/ai/userKeyError";
+import type { KeyErrorKind } from "@/lib/ai/models";
 import { insertGenerationLog } from "@/lib/db/generationLog";
 import { getTrackDetail, updateTrackStudyTime, updateTrackSummary } from "@/lib/db/queries";
 import { insertChildren, logSession, markLeafComplete, replacePlanTree } from "@/lib/db/planQueries";
@@ -66,33 +69,46 @@ function lockedIds(root: PlanNode, lockBefore: number): string[] {
 }
 
 /** Plans a heading in detail (`expand`) or splits a week leaf into days (`split`) on a saved track. */
-export async function expandNodeAction(input: { trackId: string; nodeId: string; reason: "expand" | "split" }): Promise<{ costUsd: number }> {
+/** A refused user key comes back as a value: a thrown error's message does not survive to the browser in production. */
+export type ExpandNodeResult = { ok: true; costUsd: number } | { ok: false; message: string; code: KeyErrorKind };
+
+export async function expandNodeAction(input: { trackId: string; nodeId: string; reason: "expand" | "split" }): Promise<ExpandNodeResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
   const detail = await getTrackDetail(input.trackId, userId);
   if (!detail) throw new Error("Track not found");
 
+  const models = await resolveModels(userId);
   let children: PlanNode[] | null = null;
   let costUsd = 0;
-  for await (const event of streamExpandNode({
-    topic: detail.track.title,
-    days: detail.root.len,
-    granularity: detail.track.granularity,
-    instructions: detail.track.instructions ?? undefined,
-    materials: detail.materials,
-    hoursPerWeek: detail.track.hoursPerWeek,
-    split: detail.track.split,
-    tree: detail.root,
-    nodeId: input.nodeId,
-    reason: input.reason,
-    log: { userId, trackId: input.trackId, onLog: insertGenerationLog },
-  })) {
-    if (event.type === "finish") {
-      children = event.children;
-      costUsd = event.costUsd;
-    } else if (event.type === "error") {
-      throw new Error(event.message);
+  try {
+    for await (const event of guardUserKey(
+      streamExpandNode({
+        topic: detail.track.title,
+        days: detail.root.len,
+        granularity: detail.track.granularity,
+        instructions: detail.track.instructions ?? undefined,
+        materials: detail.materials,
+        hoursPerWeek: detail.track.hoursPerWeek,
+        split: detail.track.split,
+        tree: detail.root,
+        nodeId: input.nodeId,
+        reason: input.reason,
+        outlineModel: models.outline,
+        log: { userId, trackId: input.trackId, onLog: insertGenerationLog, keyOwner: models.outline.keyOwner },
+      }),
+      { userId, models },
+    )) {
+      if (event.type === "finish") {
+        children = event.children;
+        costUsd = event.costUsd;
+      } else if (event.type === "error") {
+        throw new Error(event.message);
+      }
     }
+  } catch (error) {
+    if (error instanceof UserKeyError) return { ok: false, message: error.message, code: error.code };
+    throw error;
   }
   if (!children) throw new Error("Planning ended early. Try again.");
 
@@ -100,7 +116,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
   const fresh = await getTrackDetail(input.trackId, userId);
   await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title));
   revalidatePath(`/tracks/${input.trackId}`);
-  return { costUsd };
+  return { ok: true, costUsd };
 }
 
 export async function markCompleteAction(nodeId: string): Promise<void> {

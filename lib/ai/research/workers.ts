@@ -2,8 +2,10 @@ import type { LanguageModel } from "ai";
 import { hostOf } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
 import { DEFAULT_RESEARCH_MODEL, type AiModelId, type ReasoningEffort } from "../models";
+import { providerError } from "../providerError";
 import {
   RESEARCH_RULES,
+  todayLine,
   ResearchLoopError,
   briefLines,
   runCandidateStep,
@@ -99,12 +101,13 @@ const CURRENT_BRIEF = [
 ];
 
 /** One worker's system prompt: direction, tools and budget, then objective, strategy, boundaries and output, then the shared rules. */
-export function buildWorkerInstructions(plan: WorkerPlan): string {
+export function buildWorkerInstructions(plan: WorkerPlan, today: Date = new Date()): string {
   const { caps, direction } = plan;
   const body = direction === "backbone" ? BACKBONE_BRIEF(caps.steps) : direction === "canonical" ? CANONICAL_BRIEF(plan.withCurrent) : CURRENT_BRIEF;
   return [
     `Direction: ${direction}.`,
     `You research one direction of the materials for a self-study plan; other researchers cover the other directions at the same time, so stay inside yours. The learner's own sources have already been read: what they are is in the brief, so do not read them again.`,
+    todayLine(today),
     `You have two tools. webSearch returns titles, URLs and snippets. fetchSource reads one https page and returns its own title, headings and text. Budget: ${count(caps.searches, "search", "searches")}, ${count(caps.fetches, "page read", "page reads")} and ${caps.steps} steps in all; calls past a cap are refused.`,
     ...body,
     RESEARCH_RULES,
@@ -252,6 +255,8 @@ export function createWorkersArm(options: WorkersArmOptions): ResearchArm {
             effort: options.effort,
           });
         } catch (error) {
+          // On the user's own key a provider refusal stops the run; the pipeline lets it through and the guard names it.
+          if (log?.keyOwner === "user" && providerError(error)) throw error;
           // A failed model call ends this worker like a search outage; what it had done still counts, and the others go on.
           console.error(`[research] ${plan.direction} worker failed`, error);
           const partial = error instanceof ResearchLoopError ? error.partial : { steps: 0, searches: notes.searches.length, fetches: notes.fetches.length, searchesOk: notes.searches.length, costUsd: 0 };

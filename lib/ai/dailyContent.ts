@@ -3,6 +3,7 @@ import type { MaterialKind, MaterialTier } from "@/lib/schemas/material";
 import type { SourceType } from "@/lib/schemas/source";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_CONTENT_MODEL } from "./models";
+import { appModel, type ResolvedModel } from "./resolve";
 import { canonicalUrl } from "./research/verify";
 
 /** One row of the unit's Read table, as the lesson prompt sees it. */
@@ -110,6 +111,8 @@ export function enforceCitations(
 type GenerateDailyContentInput = BuildDailyContentPromptInput & {
   /** Who is asking and where to record the call. Omit for no logging (eval harness, tests). */
   log?: GenerationLogContext;
+  /** The model that writes the content; the app's content model when omitted. */
+  model?: ResolvedModel;
 };
 
 export interface GenerateDailyContentResult {
@@ -122,9 +125,12 @@ export interface GenerateDailyContentResult {
 export async function generateDailyContent(
   input: GenerateDailyContentInput,
 ): Promise<GenerateDailyContentResult> {
+  const model = input.model ?? appModel(DEFAULT_CONTENT_MODEL);
   const { object, costUsd } = await loggedGenerateObject(
     {
-      model: DEFAULT_CONTENT_MODEL,
+      model: model.id,
+      languageModel: typeof model.model === "string" ? undefined : model.model,
+      keyOwner: model.keyOwner,
       schema: dailyContentSchema,
       prompt: buildDailyContentPrompt(input),
       facts: [`${input.materials.length} material${input.materials.length === 1 ? "" : "s"} on the list`],

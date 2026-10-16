@@ -5,6 +5,8 @@ import { withCallEvents } from "@/lib/ai/callEvents";
 import { streamResearchedPlanDraft } from "@/lib/ai/planDraft";
 import { defaultArm } from "@/lib/ai/research/pipeline";
 import { insertGenerationLog } from "@/lib/db/generationLog";
+import { resolveModels } from "@/lib/ai/resolve";
+import { guardUserKey } from "@/lib/ai/userKeyError";
 import { ndjsonResponse } from "@/lib/ndjson";
 import { granularitySchema } from "@/lib/schemas/plan";
 import { sourceInputSchema } from "@/lib/schemas/source";
@@ -31,21 +33,26 @@ export async function POST(request: Request) {
   if (!parsed.success) return new Response("Invalid request", { status: 400 });
   const body = parsed.data;
   const debug = body.debug === true && isAdminUserId(userId);
+  const models = await resolveModels(userId);
 
   return ndjsonResponse(
-    withCallEvents(debug, { userId, onLog: insertGenerationLog }, (log) =>
-      streamResearchedPlanDraft({
-        topic: body.topic,
-        days: body.days,
-        granularity: body.granularity,
-        instructions: body.instructions || undefined,
-        materials: body.materials,
-        hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
-        arm: defaultArm(),
-        // A client that disconnects stops research: the signal reaches search and fetch.
-        signal: request.signal,
-        log,
-      }),
+    withCallEvents(debug, { userId, onLog: insertGenerationLog, keyOwner: models.research.keyOwner }, (log) =>
+      guardUserKey(
+        streamResearchedPlanDraft({
+          topic: body.topic,
+          days: body.days,
+          granularity: body.granularity,
+          instructions: body.instructions || undefined,
+          materials: body.materials,
+          hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
+          arm: defaultArm(process.env, { model: models.research.model }),
+          outlineModel: models.outline,
+          // A client that disconnects stops research: the signal reaches search and fetch.
+          signal: request.signal,
+          log,
+        }),
+        { userId, models },
+      ),
     ),
   );
 }

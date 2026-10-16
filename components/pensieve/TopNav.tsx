@@ -18,6 +18,9 @@ export async function TopNav() {
         <span className="font-heading text-[19px]">Pensieve</span>
       </Link>
       <StreakChip days={streak} />
+      <Link href="/settings" className="text-sm text-foreground/80 hover:text-foreground">
+        Settings
+      </Link>
       {isAdminUserId(userId) && <AdminToggle />}
       <Button nativeButton={false} render={<Link href="/tracks/new">+ New track</Link>} />
     </div>

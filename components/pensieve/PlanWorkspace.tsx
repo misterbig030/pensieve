@@ -9,6 +9,7 @@ import { MaterialsList } from "@/components/pensieve/MaterialsList";
 import { ModelCallsPanel } from "@/components/pensieve/ModelCallsPanel";
 import { ResearchProgress } from "@/components/pensieve/ResearchProgress";
 import { TimeSplitCard } from "@/components/pensieve/TimeSplitCard";
+import { KEY_ERRORS } from "@/lib/ai/models";
 import type { Coverage, DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
 import { assignmentsOf, removeMaterialRefs } from "@/lib/materials";
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
@@ -90,6 +91,12 @@ function slotsFor(node: PlanNode, granularity: Granularity): PendingSlots | null
   return { count: childSpans(node).length, groups: !leafLevel(below, granularity) };
 }
 
+/** The code a refused user key travels with (see lib/ai/userKeyError); null for every other failure. */
+const codeOf = (e: unknown): string | null => {
+  const code = (e as { code?: unknown } | null)?.code;
+  return typeof code === "string" && (KEY_ERRORS as readonly string[]).includes(code) ? code : null;
+};
+
 export function PlanWorkspace(props: PlanWorkspaceProps) {
   const { mode, topic, days, granularity, instructions, sources, initialTree, lockBefore = 0, trackId } = props;
   const isAdjust = mode === "adjust";
@@ -112,6 +119,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [unread, setUnread] = useState(false);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /** Set when the failure is a refused user key: the message then links to Settings. */
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   // Admin panel: the switch lives in the top nav; calls arrive as `call` events (admins only) and live only in this tab.
   const adminOn = useAdminMode();
@@ -145,6 +154,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const streamDraft = useCallback(async () => {
     setDrafting(true);
     setError(null);
+    setErrorCode(null);
     setTree(makeRoot([]));
     setMaterials([]);
     setDropped([]);
@@ -214,7 +224,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           setDrafting(false);
           pushAssistant(draftedText(layout(event.root), researched, decided));
         } else if (event.type === "error") {
-          throw new Error(event.message);
+          throw Object.assign(new Error(event.message), { code: event.code });
         }
       });
       if (!finished) throw new Error("The draft ended early. Try again.");
@@ -223,6 +233,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       setPending({});
       setResearch((r) => (r ? { ...r, running: false, reading: null } : r));
       setError(err instanceof Error ? err.message : "Drafting failed. Try again.");
+      setErrorCode(codeOf(err));
     }
   }, [topic, days, granularity, instructions, sources, pushAssistant]);
 
@@ -243,6 +254,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     if (!slots) return;
     setExpanding(true);
     setError(null);
+    setErrorCode(null);
     setPending((p) => ({ ...p, [nodeId]: slots }));
     setCollapsed((c) => {
       const next = new Set(c);
@@ -315,7 +327,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             pushAssistant(`Planned ${label}: ${shown}${more}. Say "collapse ${label.toLowerCase()} back" if you would rather leave it for later.`);
           }
         } else if (event.type === "error") {
-          throw new Error(event.message);
+          throw Object.assign(new Error(event.message), { code: event.code });
         }
       });
       if (!finished) throw new Error("Planning ended early. Try again.");
@@ -326,6 +338,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         return next;
       });
       setError(err instanceof Error ? err.message : "Planning failed. Try again.");
+      setErrorCode(codeOf(err));
     } finally {
       setExpanding(false);
     }
@@ -340,6 +353,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setInput("");
     setBusy(true);
     setError(null);
+    setErrorCode(null);
 
     const body: PlanChatRequest = {
       mode,
@@ -435,7 +449,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             setCostUsd((c) => c + event.costUsd);
             break;
           case "error":
-            throw new Error(event.message);
+            throw Object.assign(new Error(event.message), { code: event.code });
         }
       });
       if (activeKind === "change") setSummaryNote(latestChangeNote(changeText));
@@ -496,6 +510,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   async function confirm() {
     setConfirming(true);
     setError(null);
+    setErrorCode(null);
     try {
       await props.onConfirm(tree, summary, materials, { hoursPerWeek, split });
     } catch (err) {
@@ -636,7 +651,19 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             )}
             <p className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(costUsd)}</p>
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <p className="text-sm text-red-600">
+              {error}
+              {errorCode && (
+                <>
+                  {" "}
+                  <Link href="/settings" className="underline">
+                    Open Settings
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
         </div>
 
         <ConversationRail

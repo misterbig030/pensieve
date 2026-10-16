@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { buildDailyContentPrompt, enforceCitations } from "./dailyContent";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("ai", () => ({ generateObject: vi.fn() }));
+import { generateObject } from "ai";
+import type { ModelCall } from "./logged";
+import { buildDailyContentPrompt, enforceCitations, generateDailyContent } from "./dailyContent";
+
+const mockedGenerateObject = vi.mocked(generateObject);
 
 describe("buildDailyContentPrompt", () => {
   it("includes the day's title and summary", () => {
@@ -76,5 +82,32 @@ describe("enforceCitations", () => {
       { title: "The talk", url: "https://youtu.be/abc" },
     ]);
     expect(result.dropped).toBe(1);
+  });
+});
+
+describe("generateDailyContent", () => {
+  beforeEach(() => {
+    mockedGenerateObject.mockReset();
+  });
+
+  it("generates on the content model it is given and records who paid", async () => {
+    mockedGenerateObject.mockResolvedValue({
+      object: { contentMarkdown: "Read ch. 1.", citations: [] },
+      usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 },
+      finishReason: "stop",
+    } as unknown as Awaited<ReturnType<typeof generateObject>>);
+    const direct = { modelId: "claude-sonnet-5", provider: "anthropic.messages" };
+    const calls: ModelCall[] = [];
+    await generateDailyContent({
+      title: "Day 1",
+      summary: "s",
+      unit: "day",
+      spanDays: 1,
+      materials: [],
+      model: { model: direct as never, id: "anthropic/claude-sonnet-5", keyOwner: "user" },
+      log: { onCall: (c) => void calls.push(c) },
+    });
+    expect(mockedGenerateObject.mock.calls[0][0].model).toBe(direct);
+    expect(calls[0]).toMatchObject({ model: "anthropic/claude-sonnet-5", keyOwner: "user" });
   });
 });

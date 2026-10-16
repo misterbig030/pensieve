@@ -18,8 +18,27 @@ export const AVAILABLE_MODELS = [
 
 export type AiModelId = (typeof AVAILABLE_MODELS)[number]["id"];
 
+/** The providers the model list knows, as the prefix of each model id ("anthropic/claude-sonnet-5.5"). */
+export const MODEL_PROVIDERS = ["anthropic", "google", "openai"] as const;
+export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
+
+/** The provider a gateway model id belongs to: the part before the slash. */
+export function providerOf(id: AiModelId): ModelProvider {
+  return id.split("/")[0] as ModelProvider;
+}
+
+/** Who paid for a model call: the app's gateway key, or the user's own key. */
+export const KEY_OWNERS = ["app", "user"] as const;
+export type KeyOwner = (typeof KEY_OWNERS)[number];
+
+/** Why a user's key was refused, as stored on its row and shown on the settings page. */
+export const KEY_ERRORS = ["invalid", "credits", "rate_limit", "other"] as const;
+export type KeyErrorKind = (typeof KEY_ERRORS)[number];
+
 export const DEFAULT_OUTLINE_MODEL: AiModelId = "anthropic/claude-haiku-4.5";
 export const DEFAULT_CONTENT_MODEL: AiModelId = "anthropic/claude-sonnet-5";
+/** Chat turns are short and latency-sensitive; the revision tool uses the outline model. */
+export const DEFAULT_CHAT_MODEL: AiModelId = "anthropic/claude-haiku-4.5";
 /** Research judges which sources agree, which needs more than the outline model. Arm C in the eval uses the same. */
 export const DEFAULT_RESEARCH_MODEL: AiModelId = "anthropic/claude-sonnet-5.5";
 

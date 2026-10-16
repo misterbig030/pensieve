@@ -28,6 +28,16 @@ describe("ndjson round trip", () => {
     expect(seen).toEqual([{ type: "a" }, { type: "error", message: "boom" }]);
   });
 
+  it("forwards an error's code when it has one", async () => {
+    async function* failing() {
+      yield { type: "a" };
+      throw Object.assign(new Error("Your Anthropic credits are exhausted"), { code: "credits" });
+    }
+    const seen: unknown[] = [];
+    await readNdjson(ndjsonResponse(failing()), (e) => seen.push(e));
+    expect(seen).toEqual([{ type: "a" }, { type: "error", message: "Your Anthropic credits are exhausted", code: "credits" }]);
+  });
+
   it("handles chunks that split a line", async () => {
     const encoder = new TextEncoder();
     const parts = ['{"type":"a","x":', "1}\n{\"type\":\"b\"}"];
@@ -44,5 +54,17 @@ describe("ndjson round trip", () => {
 
   it("rejects on a non-2xx response", async () => {
     await expect(readNdjson(new Response("nope", { status: 401 }), () => {})).rejects.toThrow("nope");
+  });
+});
+
+describe("ndjson error codes", () => {
+  it("forwards only the codes a refused user key can carry, never a system error's code", async () => {
+    async function* failing() {
+      yield { type: "a" };
+      throw Object.assign(new Error("socket hang up"), { code: "ECONNRESET" });
+    }
+    const seen: unknown[] = [];
+    await readNdjson(ndjsonResponse(failing()), (e) => seen.push(e));
+    expect(seen).toEqual([{ type: "a" }, { type: "error", message: "socket hang up" }]);
   });
 });

@@ -4,12 +4,12 @@ import type { PlanChatEvent, PlanChatRequest } from "@/lib/planChat";
 import { diffChangedNodes, type ChangedNodes } from "@/lib/planSummary";
 import { cloneTree, layout, type PlanNode } from "@/lib/planTree";
 import { buildGenerationLogRow, emitGenerationLog, type GenerationLogContext } from "./logged";
-import { type AiModelId } from "./models";
+import { DEFAULT_CHAT_MODEL } from "./models";
 import { buildPlanChatSystemPrompt, renderTree } from "./planPrompt";
 import { revisePlanTree } from "./planRevision";
+import { appModel, type ResolvedModel } from "./resolve";
 
-/** Chat turns are short and latency-sensitive; the revision tool uses the outline model. */
-export const DEFAULT_CHAT_MODEL: AiModelId = "anthropic/claude-haiku-4.5";
+export { DEFAULT_CHAT_MODEL } from "./models";
 
 const revisePlanInput = z.object({
   changeRequest: z
@@ -22,7 +22,10 @@ const revisePlanInput = z.object({
 
 export interface RunPlanChatOptions {
   log?: GenerationLogContext;
-  model?: AiModelId;
+  /** The model that answers; the app's chat model when omitted. */
+  model?: ResolvedModel;
+  /** The model the revision tool drafts with; the app's outline model when omitted. */
+  outlineModel?: ResolvedModel;
 }
 
 /**
@@ -32,7 +35,7 @@ export interface RunPlanChatOptions {
 export type PlanChatInput = Omit<PlanChatRequest, "tree"> & { tree: PlanNode };
 
 export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptions = {}): AsyncGenerator<PlanChatEvent> {
-  const model = options.model ?? DEFAULT_CHAT_MODEL;
+  const chat = options.model ?? appModel(DEFAULT_CHAT_MODEL);
   const log = options.log;
   const startedAt = performance.now();
   const tree = layout(cloneTree(req.tree));
@@ -56,6 +59,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
         tree,
         lockBefore,
         changeRequest,
+        outlineModel: options.outlineModel,
         log,
       });
       revisionCostUsd += result.costUsd;
@@ -84,7 +88,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
   });
 
   const result = streamText({
-    model,
+    model: chat.model,
     system,
     messages,
     tools: { revisePlan },
@@ -130,7 +134,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
   const latencyMs = Math.round(performance.now() - startedAt);
   let chatCostUsd = 0;
   if (usage) {
-    const row = buildGenerationLogRow({ caller: "chat", model, usage, latencyMs, trackId: log?.trackId, userId: log?.userId });
+    const row = buildGenerationLogRow({ caller: "chat", model: chat.id, keyOwner: chat.keyOwner, usage, latencyMs, trackId: log?.trackId, userId: log?.userId });
     chatCostUsd = row.costUsd;
     await emitGenerationLog(log?.onLog, row);
     log?.onCall?.({
