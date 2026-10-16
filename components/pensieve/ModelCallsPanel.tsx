@@ -59,7 +59,7 @@ export function ModelCallsPanel({ calls, onClear, onClose }: ModelCallsPanelProp
     <div className="flex min-h-0 flex-col">
       {calls.length === 0 && (
         <p className="m-0 px-5 py-4 text-[12.5px] leading-relaxed opacity-60">
-          No model calls yet in this tab. Draft, expand or ask something and each call shows up here.
+          No model calls yet in this tab. Draft a plan, expand or split a unit, ask the plan a question or generate a lesson, and each call shows up here.
         </p>
       )}
       {calls.map((call, i) => (
@@ -84,7 +84,7 @@ export function ModelCallsPanel({ calls, onClear, onClose }: ModelCallsPanelProp
       >
         <div className="flex items-center gap-2.5">
           <h3 className="m-0 font-heading text-[15px] font-normal">Model calls</h3>
-          <span className="text-xs opacity-60">this session</span>
+          <span className="text-xs opacity-60">this tab</span>
           <span className="ml-auto inline-flex gap-1">
             {expanded && calls.length > 0 && (
               <IconButton label="Download all calls as JSON" onClick={() => downloadJson(calls)}>
@@ -120,7 +120,7 @@ export function ModelCallsPanel({ calls, onClear, onClose }: ModelCallsPanelProp
             <span className="px-5 pt-3.5 pb-1 text-[11px] tracking-wide uppercase opacity-50">Calls, oldest first</span>
             {list}
             <p className="mt-auto m-0 border-t border-background/10 px-5 py-3.5 text-xs leading-relaxed opacity-60">
-              Kept in this tab only. Reload and the list starts again. Nothing here is written to the database.
+              Kept in this tab until you close it or clear the list. Nothing here is written to the database.
             </p>
           </div>
           <div className="flex min-h-0 flex-col">

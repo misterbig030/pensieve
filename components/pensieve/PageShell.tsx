@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AdminDock } from "@/components/pensieve/AdminDock";
 import { TopNav } from "@/components/pensieve/TopNav";
 
 export function PageShell({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
@@ -6,6 +7,7 @@ export function PageShell({ children, wide = false }: { children: ReactNode; wid
     <div className={wide ? "mx-auto max-w-[1280px] px-6 pb-24" : "mx-auto max-w-[960px] px-6 pb-24"}>
       <TopNav />
       {children}
+      <AdminDock />
     </div>
   );
 }
