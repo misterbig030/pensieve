@@ -284,6 +284,7 @@ export async function runResearchLoop(input: LoopInput): Promise<LoopResult> {
         latencyMs: Math.round(step.performance?.stepTimeMs ?? 0),
         trackId: log?.trackId,
         userId: log?.userId,
+        keyOwner: log?.keyOwner,
         effort,
       });
       costUsd += row.costUsd;

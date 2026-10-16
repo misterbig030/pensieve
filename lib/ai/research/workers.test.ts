@@ -514,3 +514,14 @@ describe("a provider refusal on a user's key (arm W)", () => {
     expect(outcome.notice).toBeTruthy();
   });
 });
+
+describe("who paid, on the research rows", () => {
+  it("records the request's key owner on every worker step row, not only on the candidate step", async () => {
+    const { model, calls } = directedModel(SCRIPTS, [LIST]);
+    const { fetcher } = fetcherFor();
+    const log: ModelCall[] = [];
+    await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books, log: { keyOwner: "user", onCall: (c) => void log.push(c) } }));
+    expect(log.length).toBe(calls.length);
+    expect(log.map((r) => r.keyOwner)).toEqual(log.map(() => "user"));
+  });
+});
