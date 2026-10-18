@@ -6,7 +6,6 @@ import { unstable_rethrow } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConversationRail } from "@/components/pensieve/ConversationRail";
 import { MaterialsList } from "@/components/pensieve/MaterialsList";
-import { ModelCallsPanel } from "@/components/pensieve/ModelCallsPanel";
 import { ResearchProgress } from "@/components/pensieve/ResearchProgress";
 import { TimeSplitCard } from "@/components/pensieve/TimeSplitCard";
 import { KEY_ERRORS } from "@/lib/ai/models";
@@ -15,14 +14,13 @@ import { assignmentsOf, removeMaterialRefs } from "@/lib/materials";
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
-import { useAdminMode, writeAdminMode } from "@/lib/adminMode";
 import { formatCostUsd } from "@/lib/formatCost";
+import { pushModelCalls } from "@/lib/modelCalls";
 import { readNdjson } from "@/lib/ndjson";
 import {
   nextMessageId,
   toTranscript,
   type ChatMessage,
-  type ModelCall,
   type PlanChatEvent,
   type PlanChatRequest,
   type PlanDraftEvent,
@@ -122,9 +120,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   /** Set when the failure is a refused user key: the message then links to Settings. */
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  // Admin panel: the switch lives in the top nav; calls arrive as `call` events (admins only) and live only in this tab.
-  const adminOn = useAdminMode();
-  const [calls, setCalls] = useState<ModelCall[]>([]);
+  // Admin dock: it lives in PageShell. This page only pushes the `call` events the server sends (admins only) into the shared store.
   // Research runs first in create mode; its list is what every unit references.
   const [materials, setMaterials] = useState<Material[]>(() => props.initialMaterials ?? []);
   const [dropped, setDropped] = useState<DroppedMaterial[]>([]);
@@ -185,7 +181,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       let finished = false;
       await readNdjson<PlanDraftEvent>(response, (event) => {
         if (event.type === "call") {
-          setCalls((cs) => [...cs, event.call]);
+          pushModelCalls([event.call]);
         } else if (event.type.startsWith("research.")) {
           const researchEvent = event as Extract<PlanDraftEvent, { type: `research.${string}` }>;
           setResearch((r) => reduceResearch(r ?? initialResearch(), researchEvent, learnerUrls));
@@ -284,7 +280,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       let finished = false;
       await readNdjson<PlanExpandEvent>(response, (event) => {
         if (event.type === "call") {
-          setCalls((cs) => [...cs, event.call]);
+          pushModelCalls([event.call]);
         } else if (event.type === "child") {
           setTree((t) => {
             const next = cloneTree(t);
@@ -401,7 +397,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       await readNdjson<PlanChatEvent>(response, (event) => {
         switch (event.type) {
           case "call":
-            setCalls((cs) => [...cs, event.call]);
+            pushModelCalls([event.call]);
             break;
           case "text":
             appendText(event.text);
@@ -684,7 +680,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           onUndo={undo}
         />
       </div>
-      {adminOn && <ModelCallsPanel calls={calls} onClear={() => setCalls([])} onClose={() => writeAdminMode(false)} />}
     </div>
   );
 }

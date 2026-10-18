@@ -109,5 +109,6 @@ describe("generateDailyContent", () => {
     });
     expect(mockedGenerateObject.mock.calls[0][0].model).toBe(direct);
     expect(calls[0]).toMatchObject({ model: "anthropic/claude-sonnet-5", keyOwner: "user" });
+    expect(calls[0].label).toBe("Lesson · Day 1");
   });
 });
