@@ -4,6 +4,7 @@ import type { GenerationLogContext } from "../logged";
 import type { AiModelId } from "../models";
 import { providerError } from "../providerError";
 import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type ResearchBrief } from "./agent";
+import { createChapterFinder, type ChapterFinder, type ChapterFinderResult } from "./chapterFinder";
 import type { Coverage, DroppedMaterial, ResearchEvent, ResearchNotice } from "./events";
 import { SourceFetcher, capsFor, searchProviderFromEnv, type ResearchCaps } from "./tools";
 import { createOpenLibraryLookup, runGate, sizedMinutes, type BookLookup } from "./verify";
@@ -82,6 +83,8 @@ export interface ResearchMaterialsInput {
   signal?: AbortSignal;
   log?: GenerationLogContext;
   caps?: ResearchCaps;
+  /** Finds the backbone's chapters on a web page when the catalogue had none. Omitted, the stage is skipped. */
+  chapters?: ChapterFinder;
 }
 
 /**
@@ -96,6 +99,15 @@ export function defaultArm(
   if (!provider) return null;
   const common = { provider, model: options.model };
   return env.RESEARCH_ARM?.trim().toLowerCase() === "workers" ? createWorkersArm(common) : createAgentArm(common);
+}
+
+/** The chapter finder the app ships, on the same search provider as the arm. Null when `TAVILY_API_KEY` is unset. */
+export function defaultChapterFinder(
+  env: Record<string, string | undefined> = process.env,
+  options: { model?: AiModelId | LanguageModel } = {},
+): ChapterFinder | null {
+  const provider = searchProviderFromEnv(env);
+  return provider ? createChapterFinder({ provider, model: options.model }) : null;
 }
 
 /**
@@ -137,21 +149,45 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
     }),
   );
 
+  // The backbone's chapters: the gate took them from the catalogue when it could; otherwise one search and a few
+  // reads look for a page that lists them. Only the backbone, because only its chapters are reserved across units.
+  let materials = gate.materials;
+  let costUsd = arm?.costUsd ?? 0;
+  const counts = { searches: arm?.counts.searches ?? 0, fetches: arm?.counts.fetches ?? 0 };
+  const backbone = materials.find((m) => m.backbone);
+  if (backbone && !backbone.toc && input.chapters) {
+    const finder = input.chapters;
+    let found: ChapterFinderResult | null = null;
+    try {
+      found = yield* streamWhile<ResearchEvent, ChapterFinderResult>((emit) => finder.find(backbone, { fetcher, emit, signal: input.signal, log: input.log }));
+    } catch (error) {
+      if (input.log?.keyOwner === "user" && providerError(error)) throw error;
+      console.error("[research] chapter finder failed", error);
+    }
+    if (found) {
+      counts.searches += found.counts.searches;
+      counts.fetches += found.counts.fetches;
+      costUsd += found.costUsd;
+    }
+    const toc = found?.toc ?? null;
+    if (toc) materials = materials.map((m) => (m === backbone ? { ...m, toc } : m));
+    yield { type: "research.chapters", id: backbone.id, title: backbone.title, chapters: toc?.chapters.length ?? 0, source: toc?.source ?? null, ...(toc ? { url: toc.url } : {}) };
+  }
+
   const unavailable = !arm || arm.stoppedBy === "cancelled" || arm.stoppedBy === "clock-idle" || (arm.stoppedBy === "search-error" && arm.searchesOk === 0);
   const coverage = arm?.coverage ?? null;
   const notice: ResearchNotice | undefined = unavailable ? "unavailable" : isThin(gate.verified, coverage) ? "thin" : undefined;
-  const counts = { searches: arm?.counts.searches ?? 0, fetches: arm?.counts.fetches ?? 0 };
-  const sized = sizedMinutes(gate.materials);
-  yield { type: "research.done", materials: gate.materials, dropped: gate.dropped, ...(notice ? { notice } : {}), counts, coverage, sizedMinutes: sized };
+  const sized = sizedMinutes(materials);
+  yield { type: "research.done", materials, dropped: gate.dropped, ...(notice ? { notice } : {}), counts, coverage, sizedMinutes: sized };
 
   const armSummary = arm
     ? { counts: arm.counts, searchesOk: arm.searchesOk, stoppedBy: arm.stoppedBy, costUsd: arm.costUsd, ...(arm.workers ? { workers: arm.workers, duplicateShare: arm.duplicateShare ?? null } : {}) }
     : null;
   return {
-    materials: gate.materials,
+    materials,
     dropped: gate.dropped,
     notice,
-    costUsd: arm?.costUsd ?? 0,
+    costUsd,
     arm: armSummary,
     proposed: gate.proposed,
     verified: gate.verified,
