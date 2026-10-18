@@ -15,7 +15,7 @@ import {
 import { relations, sql } from "drizzle-orm";
 import { KEY_ERRORS, KEY_OWNERS, MODEL_PROVIDERS } from "@/lib/ai/models";
 import { SOURCE_TYPES } from "@/lib/schemas/source";
-import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS, MINUTES_BASES } from "@/lib/schemas/material";
+import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS, MINUTES_BASES, type ChapterList } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 
 export const tracks = pgTable("tracks", {
@@ -73,6 +73,8 @@ export const sources = pgTable(
     minutesBasis: text("minutes_basis", { enum: MINUTES_BASES }),
     /** The part the plan uses when that is not the whole work: "ch. 1, 7–9". */
     uses: text("uses"),
+    /** The book's chapter list, when research found one. Null for non-books and books with no list. */
+    toc: jsonb("toc").$type<ChapterList>(),
   },
   (t) => [uniqueIndex("sources_one_backbone_idx").on(t.trackId).where(sql`${t.backbone}`)],
 );

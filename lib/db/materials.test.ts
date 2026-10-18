@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
-import type { Material } from "@/lib/schemas/material";
+import type { ChapterList, Material } from "@/lib/schemas/material";
 
 vi.mock("./client", async () => {
   const { createTestDb } = await import("./testDb");
@@ -34,8 +34,20 @@ function material(id: string, title: string, extra: Partial<Material> = {}): Mat
   };
 }
 
+const TOC: ChapterList = {
+  source: "catalogue",
+  url: "https://openlibrary.org/books/OL54058212M",
+  printPages: false,
+  end: 1027,
+  chapters: [
+    { n: 1, title: "Introduction", page: 34, minutes: 107, sections: [] },
+    { n: 2, title: "Understanding Foundation Models", page: 130, minutes: 140, sections: ["Training Data", "Modeling"] },
+    { n: 3, title: "Evaluation Methodology", page: 256, minutes: 94, sections: [] },
+  ],
+};
+
 const MATERIALS: Material[] = [
-  material("M1", "AI Engineering", { kind: "book", backbone: true, year: 2024, recommendedBy: ["https://a.example/", "https://b.example/"], minutes: 1320, minutesBasis: "measured" }),
+  material("M1", "AI Engineering", { kind: "book", backbone: true, year: 2024, recommendedBy: ["https://a.example/", "https://b.example/"], minutes: 1320, minutesBasis: "measured", toc: TOC }),
   material("M2", "My notes", { origin: "learner", type: "note", kind: "note", url: "My notes", verifiedAt: null, fetchedTitle: null, sig: null }),
   material("M3", "Evals guide", { minutes: 300, uses: "units 1–4" }),
 ];
@@ -84,6 +96,11 @@ describe("persistence of materials", () => {
     expect(detail.materials.every((m) => /^[0-9a-f-]{36}$/.test(m.id))).toBe(true);
     expect(detail.materials[0].recommendedBy).toEqual(["https://a.example/", "https://b.example/"]);
     expect(detail.materials[0].verifiedAt).toBe("2026-09-28T10:00:00.000Z");
+  });
+
+  it("keeps a book's chapter list through save and load, and null for the rest", async () => {
+    const detail = (await getTrackDetail(trackId, "u1"))!;
+    expect(detail.materials.map((m) => m.toc ?? null)).toEqual([TOC, null, null]);
   });
 
   it("keeps the learner's hours, the plan's split and each material's size", async () => {
