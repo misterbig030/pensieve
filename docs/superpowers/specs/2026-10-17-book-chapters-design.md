@@ -1,8 +1,9 @@
 # Book chapters: the outline reserves real chapters — design
 
-**Status:** draft for review, 2026-10-17. Follows the investigation in the session of 2026-10-17: a lesson prompt
-named "Ch. 2: Prompting strategies and best practices" in a book whose chapter 2 is "Understanding Foundation
-Models" and whose prompt-engineering chapter is 5.
+**Status:** implemented 2026-10-17 (branch `feat/book-chapters`); live check pending the migration
+`0010_source_toc`, which the operator applies with `npx drizzle-kit migrate`. Suite 404 passing, tsc and lint clean.
+Follows the investigation in the session of 2026-10-17: a lesson prompt named "Ch. 2: Prompting strategies and best
+practices" in a book whose chapter 2 is "Understanding Foundation Models" and whose prompt-engineering chapter is 5.
 
 ## Summary
 
