@@ -86,6 +86,8 @@ export function reduceResearch(state: ResearchProgressState, event: ResearchEven
       };
     case "research.dropped":
       return { ...state, dropped: state.dropped + 1, log: push(state, { kind: "dropped", text: event.title, detail: event.reason }) };
+    case "research.chapters":
+      return state;
     case "research.done":
       return {
         ...state,

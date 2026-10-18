@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MAX_CHAPTERS, MAX_HEADING, MAX_SECTIONS } from "@/lib/schemas/material";
 import { parseOpenLibraryToc, withChapterSizes, type OpenLibraryTocEntry } from "./chapters";
+import { createOpenLibraryLookup } from "./verify";
 
 const ed = { url: "https://openlibrary.org/books/OL54058212M", numberOfPages: 350 };
 const labelShape: OpenLibraryTocEntry[] = [
@@ -99,5 +100,46 @@ describe("withChapterSizes", () => {
     expect(withChapterSizes(base, null).chapters.map((c) => c.minutes)).toEqual([null, null, null]);
     const noPos = { ...base, end: null, chapters: base.chapters.map((c) => ({ ...c, page: null })) };
     expect(withChapterSizes(noPos, 900).chapters.map((c) => c.minutes)).toEqual([null, null, null]);
+  });
+});
+
+describe("Open Library chapters", () => {
+  const match = { key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024, pages: 350 };
+  const editions = {
+    entries: [
+      { key: "/books/OL2M", number_of_pages: 534 },
+      {
+        key: "/books/OL1M",
+        number_of_pages: 350,
+        table_of_contents: [
+          { level: 1, label: "1. A", title: "10" },
+          { level: 1, label: "2. B", title: "30" },
+          { level: 1, label: "3. C", title: "70" },
+          { level: 1, label: "Index", title: "100" },
+        ],
+      },
+      { key: "/books/OL3M", number_of_pages: 300, table_of_contents: [{ level: 1, label: "1. A", title: "1" }, { level: 1, label: "2. B", title: "9" }] },
+    ],
+  };
+  const fetchJson = (body: unknown, ok = true) => vi.fn<typeof fetch>(async () => ({ ok, status: ok ? 200 : 500, json: async () => body }) as unknown as Response);
+
+  it("fetches the work's editions and returns the longest usable list", async () => {
+    const fetchImpl = fetchJson(editions);
+    const toc = await createOpenLibraryLookup(fetchImpl).chapters!(match);
+    expect(String(fetchImpl.mock.calls[0][0])).toBe("https://openlibrary.org/works/OL1W/editions.json?limit=50");
+    expect(toc).toMatchObject({ source: "catalogue", url: "https://openlibrary.org/books/OL1M", end: 100, printPages: true });
+    expect(toc!.chapters.map((c) => c.title)).toEqual(["A", "B", "C"]);
+  });
+  it("is null without a work key, on a failed request, and when no edition has a usable list", async () => {
+    expect(await createOpenLibraryLookup(fetchJson(editions)).chapters!({ ...match, key: null })).toBeNull();
+    expect(await createOpenLibraryLookup(fetchJson({}, false)).chapters!(match)).toBeNull();
+    expect(
+      await createOpenLibraryLookup(
+        vi.fn<typeof fetch>(async () => {
+          throw new Error("down");
+        }),
+      ).chapters!(match),
+    ).toBeNull();
+    expect(await createOpenLibraryLookup(fetchJson({ entries: [editions.entries[0]] })).chapters!(match)).toBeNull();
   });
 });
