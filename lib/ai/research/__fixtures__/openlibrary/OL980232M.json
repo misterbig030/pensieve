@@ -1,0 +1,652 @@
+{
+"key": "/books/OL980232M",
+"title": "Structure and interpretation of computer programs, second edition",
+"number_of_pages": 883,
+"languages": [
+{
+"key": "/languages/eng"
+}
+],
+"table_of_contents": [
+{
+"level": 0,
+"label": "Foreword",
+"title": "Foreword"
+},
+{
+"level": 0,
+"label": "Preface",
+"title": "Preface to the First Edition"
+},
+{
+"level": 0,
+"label": "Preface",
+"title": "Preface to the Second Edition"
+},
+{
+"level": 0,
+"label": "Acknowledgements",
+"title": "Acknowledgements"
+},
+{
+"level": 0,
+"label": "1",
+"title": "Building Abstractions with Procedures"
+},
+{
+"level": 0,
+"label": "1.1",
+"title": "The Elements of Programming"
+},
+{
+"level": 0,
+"label": "1.1.1",
+"title": "Expressions"
+},
+{
+"level": 0,
+"label": "1.1.2",
+"title": "Naming and the Environment"
+},
+{
+"level": 0,
+"label": "1.1.3",
+"title": "Evaluating Combinations"
+},
+{
+"level": 0,
+"label": "1.1.4",
+"title": "Compound Procedures"
+},
+{
+"level": 0,
+"label": "1.1.5",
+"title": "The Substitution Model for Procedure Application"
+},
+{
+"level": 0,
+"label": "1.1.6",
+"title": "Conditional Expressions and Predicates"
+},
+{
+"level": 0,
+"label": "1.1.7",
+"title": "Example: Square Roots by Newton's Method"
+},
+{
+"level": 0,
+"label": "1.1.8",
+"title": "Procedures as Black Box Abstractions"
+},
+{
+"level": 0,
+"label": "1.2",
+"title": "Procedures and the Processes They Create"
+},
+{
+"level": 0,
+"label": "1.2.1",
+"title": "Linear Recursion and Iteration"
+},
+{
+"level": 0,
+"label": "1.2.2",
+"title": "Tree Recursion"
+},
+{
+"level": 0,
+"label": "1.2.3",
+"title": "Orders of Growth"
+},
+{
+"level": 0,
+"label": "1.2.4",
+"title": "Exponentiation"
+},
+{
+"level": 0,
+"label": "1.2.5",
+"title": "Greatest Common Divisors"
+},
+{
+"level": 0,
+"label": "1.2.6",
+"title": "Example: Testing for Primality"
+},
+{
+"level": 0,
+"label": "1.3",
+"title": "Formulating Abstractions with Higher-Order Procedures"
+},
+{
+"level": 0,
+"label": "1.3.1",
+"title": "Procedures as Arguments"
+},
+{
+"level": 0,
+"label": "1.3.2",
+"title": "Constructing Procedures Using Lambda"
+},
+{
+"level": 0,
+"label": "1.3.3",
+"title": "Procedures as General Methods"
+},
+{
+"level": 0,
+"label": "1.3.4",
+"title": "Procedures as Returned Values"
+},
+{
+"level": 0,
+"label": "2",
+"title": "Building Abstractions with Data"
+},
+{
+"level": 0,
+"label": "2.1",
+"title": "Introduction to Data Abstraction"
+},
+{
+"level": 0,
+"label": "2.1.1",
+"title": "Example: Arithmetic Operations for Rational Numbers"
+},
+{
+"level": 0,
+"label": "2.1.2",
+"title": "Abstraction Barriers"
+},
+{
+"level": 0,
+"label": "2.1.3",
+"title": "What Is Meant By Data?"
+},
+{
+"level": 0,
+"label": "2.1.4",
+"title": "Extended Exercise: Interval Arithmetic"
+},
+{
+"level": 0,
+"label": "2.2",
+"title": "Hierarchical Data and the Closure Property"
+},
+{
+"level": 0,
+"label": "2.2.1",
+"title": "Representing Sequences"
+},
+{
+"level": 0,
+"label": "2.2.2",
+"title": "Hierarchical Structures"
+},
+{
+"level": 0,
+"label": "2.2.3",
+"title": "Sequences as Conventional Interfaces"
+},
+{
+"level": 0,
+"label": "2.2.4",
+"title": "Example: A Picture Language"
+},
+{
+"level": 0,
+"label": "2.3",
+"title": "Symbolic Data"
+},
+{
+"level": 0,
+"label": "2.3.1",
+"title": "Quotation"
+},
+{
+"level": 0,
+"label": "2.3.2",
+"title": "Example: Symbolic Differentiation"
+},
+{
+"level": 0,
+"label": "2.3.3",
+"title": "Example: Representing Sets"
+},
+{
+"level": 0,
+"label": "2.3.4",
+"title": "Example: Huffman Encoding Trees"
+},
+{
+"level": 0,
+"label": "2.4",
+"title": "Multiple Representations for Abstract Data"
+},
+{
+"level": 0,
+"label": "2.4.1",
+"title": "Representations for Complex Numbers"
+},
+{
+"level": 0,
+"label": "2.4.2",
+"title": "Tagged data"
+},
+{
+"level": 0,
+"label": "2.4.3",
+"title": "Data-Directed Programming and Additivity"
+},
+{
+"level": 0,
+"label": "2.5",
+"title": "Systems with Generic Operations"
+},
+{
+"level": 0,
+"label": "2.5.1",
+"title": "Generic Arithmetic Operations"
+},
+{
+"level": 0,
+"label": "2.5.2",
+"title": "Combining Data of Different Types"
+},
+{
+"level": 0,
+"label": "2.5.3",
+"title": "Example: Symbolic Algebra"
+},
+{
+"level": 0,
+"label": "3",
+"title": "Modularity, Objects, and State"
+},
+{
+"level": 0,
+"label": "3.1",
+"title": "Assignment and Local State"
+},
+{
+"level": 0,
+"label": "3.1.1",
+"title": "Local State Variables"
+},
+{
+"level": 0,
+"label": "3.1.2",
+"title": "The Benefits of Introducing Assigment"
+},
+{
+"level": 0,
+"label": "3.1.3",
+"title": "The Costs of Introducing Assignment"
+},
+{
+"level": 0,
+"label": "3.2",
+"title": "The Environment Model of Evaluation"
+},
+{
+"level": 0,
+"label": "3.2.1",
+"title": "The Rules for Evaluation"
+},
+{
+"level": 0,
+"label": "3.2.2",
+"title": "Applying Simple Procedures"
+},
+{
+"level": 0,
+"label": "3.2.3",
+"title": "Frames as the Repository of Local State"
+},
+{
+"level": 0,
+"label": "3.2.4",
+"title": "Internal Definitions"
+},
+{
+"level": 0,
+"label": "3.3",
+"title": "Modeling with Mutable Data"
+},
+{
+"level": 0,
+"label": "3.3.1",
+"title": "Mutable List Structures"
+},
+{
+"level": 0,
+"label": "3.3.2",
+"title": "Representing Queues"
+},
+{
+"level": 0,
+"label": "3.3.3",
+"title": "Representing Tables"
+},
+{
+"level": 0,
+"label": "3.3.4",
+"title": "A Simulator for Digital Circuits"
+},
+{
+"level": 0,
+"label": "3.3.5",
+"title": "Propogation of Constraints"
+},
+{
+"level": 0,
+"label": "3.4",
+"title": "Concurrency: Time Is of the Essence"
+},
+{
+"level": 0,
+"label": "3.4.1",
+"title": "The Nature of Time in Concurrent Systems"
+},
+{
+"level": 0,
+"label": "3.4.2",
+"title": "Mechanisms for Controlling Concurrency"
+},
+{
+"level": 0,
+"label": "3.5",
+"title": "Streams"
+},
+{
+"level": 0,
+"label": "3.5.1",
+"title": "Streams Are Delayed Lists"
+},
+{
+"level": 0,
+"label": "3.5.2",
+"title": "Infinite Streams"
+},
+{
+"level": 0,
+"label": "3.5.3",
+"title": "Exploiting the Stream Paradigm"
+},
+{
+"level": 0,
+"label": "3.5.4",
+"title": "Streams and Delayed Evaluation"
+},
+{
+"level": 0,
+"label": "3.5.5",
+"title": "Modularity of Functional Programs and Modularity of Objects"
+},
+{
+"level": 0,
+"label": "4",
+"title": "Metalinguistic Abstraction"
+},
+{
+"level": 0,
+"label": "4.1",
+"title": "The Metacircular Evaluator"
+},
+{
+"level": 0,
+"label": "4.1.1",
+"title": "The Core of the Evaluator"
+},
+{
+"level": 0,
+"label": "4.1.2",
+"title": "Representing Expressions"
+},
+{
+"level": 0,
+"label": "4.1.3",
+"title": "Evaluator Data Structures"
+},
+{
+"level": 0,
+"label": "4.1.4",
+"title": "Running the Evaluator as a Program"
+},
+{
+"level": 0,
+"label": "4.1.5",
+"title": "Data as Programs"
+},
+{
+"level": 0,
+"label": "4.1.6",
+"title": "Internal Definitions"
+},
+{
+"level": 0,
+"label": "4.1.7",
+"title": "Separating Syntactic Analysis from Execution"
+},
+{
+"level": 0,
+"label": "4.2",
+"title": "Variations on a Scheme—Lazy Evaluation"
+},
+{
+"level": 0,
+"label": "4.2.1",
+"title": "normal Order and Applicative Order"
+},
+{
+"level": 0,
+"label": "4.2.2",
+"title": "An Interpreter with Lazy Evaluation"
+},
+{
+"level": 0,
+"label": "4.2.3",
+"title": "Streams as Lazy Lists"
+},
+{
+"level": 0,
+"label": "4.3",
+"title": "Variations on a Scheme—Nondeterministic Computing"
+},
+{
+"level": 0,
+"label": "4.3.1",
+"title": "Amb and Search"
+},
+{
+"level": 0,
+"label": "4.3.2",
+"title": "Examples of Nondeterministic Programs"
+},
+{
+"level": 0,
+"label": "4.3.3",
+"title": "Implementing the Amb Evaluator"
+},
+{
+"level": 0,
+"label": "4.4",
+"title": "Logic Programming"
+},
+{
+"level": 0,
+"label": "4.4.1",
+"title": "Deductive Information Retrieval"
+},
+{
+"level": 0,
+"label": "4.4.2",
+"title": "How the Query System Works"
+},
+{
+"level": 0,
+"label": "4.4.3",
+"title": "Is Logic Programming Mathematical Logic?"
+},
+{
+"level": 0,
+"label": "4.4.4",
+"title": "Implementing the Query System"
+},
+{
+"level": 0,
+"label": "5",
+"title": "Computing with Register Machines"
+},
+{
+"level": 0,
+"label": "5.1",
+"title": "Designing Register Machines"
+},
+{
+"level": 0,
+"label": "5.1.1",
+"title": "A Language for Describing Register Machines"
+},
+{
+"level": 0,
+"label": "5.1.2",
+"title": "Abstraction in Machine Design"
+},
+{
+"level": 0,
+"label": "5.1.3",
+"title": "Subroutines"
+},
+{
+"level": 0,
+"label": "5.1.4",
+"title": "Using a Stack to Implement Recursion"
+},
+{
+"level": 0,
+"label": "5.1.5",
+"title": "Instruction Summary"
+},
+{
+"level": 0,
+"label": "5.2",
+"title": "A Register-Machine Simulator"
+},
+{
+"level": 0,
+"label": "5.2.1",
+"title": "The Machine Model"
+},
+{
+"level": 0,
+"label": "5.2.2",
+"title": "The Assembler"
+},
+{
+"level": 0,
+"label": "5.2.3",
+"title": "Generating Execution Procedures for Instructions"
+},
+{
+"level": 0,
+"label": "5.2.4",
+"title": "Monitoring Machine Performance"
+},
+{
+"level": 0,
+"label": "5.3",
+"title": "Storage Allocation and Garbage Collection"
+},
+{
+"level": 0,
+"label": "5.3.1",
+"title": "Memory as Vectors"
+},
+{
+"level": 0,
+"label": "5.3.2",
+"title": "Maintaining the Illusion of Infinite Memory"
+},
+{
+"level": 0,
+"label": "5.4",
+"title": "The Explicit-Control Evaluator"
+},
+{
+"level": 0,
+"label": "5.4.1",
+"title": "The Core of the Explicit-Control Evaluator"
+},
+{
+"level": 0,
+"label": "5.4.2",
+"title": "Sequence Evaluation and Tail Recursion"
+},
+{
+"level": 0,
+"label": "5.4.3",
+"title": "Conditionals, Assignments, and Definitions"
+},
+{
+"level": 0,
+"label": "5.4.4",
+"title": "Running the Evaluator"
+},
+{
+"level": 0,
+"label": "5.5",
+"title": "Compilation"
+},
+{
+"level": 0,
+"label": "5.5.1",
+"title": "Structure of the Compiler"
+},
+{
+"level": 0,
+"label": "5.5.2",
+"title": "Compiling Expressions"
+},
+{
+"level": 0,
+"label": "5.5.3",
+"title": "Compiling Combinations"
+},
+{
+"level": 0,
+"label": "5.5.4",
+"title": "Combining Instruction Sequences"
+},
+{
+"level": 0,
+"label": "5.5.5",
+"title": "An Example of Compiled Code"
+},
+{
+"level": 0,
+"label": "5.5.6",
+"title": "Lexical Addressing"
+},
+{
+"level": 0,
+"label": "5.5.7",
+"title": "Interfacing Compiled Code to the Evaluator"
+},
+{
+"level": 0,
+"label": "References",
+"title": "References"
+},
+{
+"level": 0,
+"label": "List of Exercises",
+"title": "List of Exercises"
+},
+{
+"level": 0,
+"label": "Index",
+"title": "Index"
+}
+]
+}

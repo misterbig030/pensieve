@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { detectSourceType, type SourceInput, type SourceType } from "@/lib/schemas/source";
-import { MATERIAL_KINDS, clip, hostOf, shortId, type Material, type MaterialKind, type MinutesBasis } from "@/lib/schemas/material";
+import { MATERIAL_KINDS, clip, hostOf, shortId, type ChapterList, type Material, type MaterialKind, type MinutesBasis } from "@/lib/schemas/material";
 import type { Coverage, DroppedMaterial, ResearchEvent } from "./events";
 import { signMaterial, signingSecret } from "./signature";
 import type { FetchOutcome, SourceFetcher } from "./tools";
+import { parseOpenLibraryToc, withChapterSizes, type OpenLibraryTocEntry } from "./chapters";
 
 /**
  * The verification gate, shared by both research arms. A material enters the plan only if code fetched it in this
@@ -201,6 +202,11 @@ export interface BookMatch {
 /** Finds a book by title and author. Throws when the service is unavailable; resolves null when there is no match. */
 export interface BookLookup {
   find(title: string, author: string | null, signal?: AbortSignal): Promise<BookMatch | null>;
+  /**
+   * The work's chapter list from the edition with the longest usable table of contents; null when none has one, when
+   * the match has no work key, or on any failure. Optional so small fakes stay small.
+   */
+  chapters?(match: BookMatch, signal?: AbortSignal): Promise<ChapterList | null>;
 }
 
 export class BookLookupUnavailable extends Error {}
@@ -212,6 +218,15 @@ interface OpenLibraryDoc {
   first_publish_year?: number;
   number_of_pages_median?: number;
 }
+
+interface OpenLibraryEdition {
+  key?: string;
+  title?: string;
+  number_of_pages?: number;
+  table_of_contents?: OpenLibraryTocEntry[];
+}
+
+const OPEN_LIBRARY_USER_AGENT = "PensieveResearch/1.0 (study-plan source checker)";
 
 function authorsOverlap(claimed: string | null, authors: string[]): boolean {
   if (!claimed || authors.length === 0) return true;
@@ -241,7 +256,7 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLo
     let res: Response;
     try {
       res = await fetchImpl(url, {
-        headers: { "user-agent": "PensieveResearch/1.0 (study-plan source checker)" },
+        headers: { "user-agent": OPEN_LIBRARY_USER_AGENT },
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
     } catch (error) {
@@ -259,6 +274,32 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLo
       const hit = pickBookMatch(title, author, withAuthor);
       if (hit) return hit;
       return pickBookMatch(title, author, await query({ title: main }, signal));
+    },
+    async chapters(match, signal) {
+      if (!match.key) return null;
+      try {
+        const timeout = AbortSignal.timeout(5_000);
+        const res = await fetchImpl(`https://openlibrary.org${match.key}/editions.json?limit=50`, {
+          headers: { "user-agent": OPEN_LIBRARY_USER_AGENT },
+          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+        });
+        if (!res.ok) return null;
+        const json = (await res.json().catch(() => null)) as { entries?: OpenLibraryEdition[] } | null;
+        if (!json || !Array.isArray(json.entries)) return null;
+        // An edition whose title matches the work's is in the work's language; a translation's longer list loses to it.
+        let best: { toc: ChapterList; sameTitle: boolean } | null = null;
+        for (const edition of json.entries) {
+          if (typeof edition.key !== "string" || !Array.isArray(edition.table_of_contents)) continue;
+          const pages = typeof edition.number_of_pages === "number" && edition.number_of_pages > 0 ? edition.number_of_pages : null;
+          const toc = parseOpenLibraryToc(edition.table_of_contents, { url: `https://openlibrary.org${edition.key}`, numberOfPages: pages });
+          if (!toc) continue;
+          const sameTitle = titleMatches(match.title, [edition.title ?? null]).ok;
+          if (!best || (sameTitle && !best.sameTitle) || (sameTitle === best.sameTitle && toc.chapters.length > best.toc.chapters.length)) best = { toc, sameTitle };
+        }
+        return best?.toc ?? null;
+      } catch {
+        return null;
+      }
     },
   };
 }
@@ -464,6 +505,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
         sig: verifiedAt ? signMaterial({ url, fetchedTitle, verifiedAt }, secret) : null,
         ...sizeFields({ kind, uses: null, claimedMinutes: note?.minutes, words: fetched?.page.words, durationMinutes: fetched?.page.durationMinutes }),
         uses: null,
+        toc: null,
       },
       bookMatched: false,
       wantsBackbone: false,
@@ -488,9 +530,12 @@ export async function runGate(input: GateInput): Promise<GateResult> {
   const bookChecks = await mapLimit(valid, 4, async (c) => {
     if (c.kind !== "book") return null;
     try {
-      return { match: await input.books.find(c.title, c.author ?? null, input.signal), unavailable: false };
+      const match = await input.books.find(c.title, c.author ?? null, input.signal);
+      // Chapters are a bonus on top of the match: a failed lookup leaves the book verified without them.
+      const toc = match && input.books.chapters ? await input.books.chapters(match, input.signal).catch(() => null) : null;
+      return { match, unavailable: false, toc };
     } catch {
-      return { match: null, unavailable: true };
+      return { match: null, unavailable: true, toc: null };
     }
   });
 
@@ -501,12 +546,14 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     let year = validYear(c.year);
     let bookMatched = false;
     let bookPages: number | null = null;
+    let toc: ChapterList | null = null;
     if (c.kind === "book") {
       const check = bookChecks[i];
       if (check?.match) {
         bookMatched = true;
         year = check.match.year ?? year;
         bookPages = check.match.pages ?? null;
+        toc = check.toc;
         // The book is real. If its own page cannot be used, its Open Library entry is the link.
         if (!page.ok) page = catalogueEntry(check.match, c.author, now) ?? page;
       } else if (check?.unavailable) {
@@ -538,6 +585,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     const mine = learnerByUrl.get(finalUrl) ?? learnerByUrl.get(canonicalUrl(c.url) ?? c.url);
     if (mine) {
       Object.assign(mine.material, { ...fields, why: mine.material.why ?? fields.why, ...(mine.material.minutes ? {} : size) });
+      if (toc) mine.material.toc = withChapterSizes(toc, mine.material.minutes ?? null);
       mine.bookMatched = bookMatched;
       mine.wantsBackbone = c.backbone;
       return;
@@ -560,6 +608,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
         fetchedTitle,
         sig: signMaterial({ url: finalUrl, fetchedTitle, verifiedAt }, secret),
         ...size,
+        toc: toc ? withChapterSizes(toc, size.minutes) : null,
       },
       bookMatched,
       wantsBackbone: c.backbone,
@@ -587,6 +636,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     if (m.origin === "research") {
       input.emit({ type: "research.verified", id: m.id, title: m.title, kind: m.kind, backbone: m.backbone, minutes: m.minutes ?? null, basis: m.minutesBasis ?? null });
     }
+    if (m.toc) input.emit({ type: "research.chapters", id: m.id, title: m.title, chapters: m.toc.chapters.length, source: m.toc.source, url: m.toc.url });
   }
   return { materials, dropped, verified: accepted.length, proposed: valid.length };
 }

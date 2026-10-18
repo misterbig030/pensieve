@@ -50,6 +50,13 @@ export interface RunMetrics {
   workers: WorkerSummary[] | null;
   /** Arm W: share of distinct search-result URLs more than one worker saw; null for the other arms. */
   duplicateShare: number | null;
+  /** Where the backbone's chapter list came from; null without a backbone or a list. */
+  chaptersSource: "catalogue" | "page" | null;
+}
+
+/** Where the backbone's chapter list came from; null without a backbone or a list. */
+export function chaptersSource(materials: Material[]): "catalogue" | "page" | null {
+  return materials.find((m) => m.backbone)?.toc?.source ?? null;
 }
 
 function authorMatches(expected: string, author: string | null): boolean {
@@ -138,6 +145,7 @@ export function runMetrics(input: {
     researchMs: input.researchMs,
     toolCalls: outcome.arm?.counts ?? { searches: 0, fetches: 0, steps: 0 },
     stoppedBy: outcome.arm?.stoppedBy ?? null,
+    chaptersSource: chaptersSource(outcome.materials),
     workers: outcome.arm?.workers ?? null,
     duplicateShare: outcome.arm?.duplicateShare ?? null,
   };
@@ -176,6 +184,8 @@ export interface ArmSummary {
   duplicateShare: number | null;
   searches: number | null;
   fetches: number | null;
+  /** Share of runs with a backbone whose chapter list was found; null when no run had a backbone. */
+  chaptersFound: number | null;
 }
 
 export function summarize(arm: ArmName, runs: RunMetrics[]): ArmSummary {
@@ -198,6 +208,7 @@ export function summarize(arm: ArmName, runs: RunMetrics[]): ArmSummary {
     duplicateShare: mean(mine.map((r) => r.duplicateShare)),
     searches: mean(mine.map((r) => r.toolCalls.searches)),
     fetches: mean(mine.map((r) => r.toolCalls.fetches)),
+    chaptersFound: mean(mine.filter((r) => r.backboneHit !== false).map((r) => (r.chaptersSource === null ? 0 : 1))),
   };
 }
 

@@ -4,6 +4,15 @@ import type { ResearchEvent } from "@/lib/ai/research/events";
 import { approxDuration, formatDuration, initialResearch, reduceResearch } from "./researchProgress";
 
 describe("reduceResearch", () => {
+  it("logs the chapters line for a found list and for none", () => {
+    const found = reduceResearch(initialResearch(0), { type: "research.chapters", id: "M1", title: "AI Engineering", chapters: 10, source: "catalogue", url: "https://openlibrary.org/books/OL1M" }, new Set());
+    expect(found.log.at(-1)).toMatchObject({ kind: "chapters", text: "Chapters of “AI Engineering”: 10, from Open Library" });
+    const page = reduceResearch(initialResearch(0), { type: "research.chapters", id: "M1", title: "AI Engineering", chapters: 10, source: "page", url: "https://www.example.org/review" }, new Set());
+    expect(page.log.at(-1)!.text).toBe("Chapters of “AI Engineering”: 10, from example.org");
+    const none = reduceResearch(initialResearch(0), { type: "research.chapters", id: "M1", title: "AI Engineering", chapters: 0, source: null }, new Set());
+    expect(none.log.at(-1)!.text).toBe("No chapter list found for “AI Engineering”; its parts will be named by topic.");
+  });
+
   it("folds the stream into counters, a log and the found list", () => {
     const learner = new Set(["https://mine.example.com/post"]);
     const events: ResearchEvent[] = [

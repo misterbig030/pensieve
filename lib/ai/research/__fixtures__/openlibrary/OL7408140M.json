@@ -1,0 +1,396 @@
+{
+"key": "/books/OL7408140M",
+"title": "The Pragmatic Programmer",
+"number_of_pages": 352,
+"languages": [
+{
+"key": "/languages/eng"
+}
+],
+"table_of_contents": [
+{
+"level": 0,
+"label": "",
+"title": "Foreword",
+"pagenum": "xiii"
+},
+{
+"level": 0,
+"label": "",
+"title": "Preface",
+"pagenum": "xvii"
+},
+{
+"level": 0,
+"label": "1",
+"title": "A Pragmatic Philosophy",
+"pagenum": "1"
+},
+{
+"level": 1,
+"label": "1",
+"title": "The Cat Ate My Source Code",
+"pagenum": "2"
+},
+{
+"level": 1,
+"label": "2",
+"title": "Software Entropy",
+"pagenum": "4"
+},
+{
+"level": 1,
+"label": "3",
+"title": "Stone Soup and Boiled Frogs",
+"pagenum": "7"
+},
+{
+"level": 1,
+"label": "4",
+"title": "Good-Enough Software",
+"pagenum": "9"
+},
+{
+"level": 1,
+"label": "5",
+"title": "Your Knowledge Portfolio",
+"pagenum": "12"
+},
+{
+"level": 1,
+"label": "6",
+"title": "Communicate!",
+"pagenum": "18"
+},
+{
+"level": 0,
+"label": "2",
+"title": "A Pragmatic Approach",
+"pagenum": "25"
+},
+{
+"level": 1,
+"label": "7",
+"title": "The Evils of Duplication",
+"pagenum": "26"
+},
+{
+"level": 1,
+"label": "8",
+"title": "Orthogonality",
+"pagenum": "34"
+},
+{
+"level": 1,
+"label": "9",
+"title": "Reversibility",
+"pagenum": "44"
+},
+{
+"level": 1,
+"label": "10",
+"title": "Tracer Bullets",
+"pagenum": "48"
+},
+{
+"level": 1,
+"label": "11",
+"title": "Prototypes and Post-it Notes",
+"pagenum": "53"
+},
+{
+"level": 1,
+"label": "12",
+"title": "Domain Languages",
+"pagenum": "57"
+},
+{
+"level": 1,
+"label": "13",
+"title": "Estimating",
+"pagenum": "64"
+},
+{
+"level": 0,
+"label": "3",
+"title": "The Basic Tools",
+"pagenum": "71"
+},
+{
+"level": 1,
+"label": "14",
+"title": "The Power of Plain Text",
+"pagenum": "73"
+},
+{
+"level": 1,
+"label": "15",
+"title": "Shell Games",
+"pagenum": "77"
+},
+{
+"level": 1,
+"label": "16",
+"title": "Power Editing",
+"pagenum": "82"
+},
+{
+"level": 1,
+"label": "17",
+"title": "Source Code Control",
+"pagenum": "86"
+},
+{
+"level": 1,
+"label": "18",
+"title": "Debugging",
+"pagenum": "90"
+},
+{
+"level": 1,
+"label": "19",
+"title": "Text Manipulation",
+"pagenum": "99"
+},
+{
+"level": 1,
+"label": "20",
+"title": "Code Generators",
+"pagenum": "102"
+},
+{
+"level": 0,
+"label": "4",
+"title": "Pragmatic Paranoia",
+"pagenum": "107"
+},
+{
+"level": 1,
+"label": "21",
+"title": "Design by Contract",
+"pagenum": "109"
+},
+{
+"level": 1,
+"label": "22",
+"title": "Dead Programs Tell No Lies",
+"pagenum": "120"
+},
+{
+"level": 1,
+"label": "23",
+"title": "Assertive Programming",
+"pagenum": "122"
+},
+{
+"level": 1,
+"label": "24",
+"title": "When to Use Exceptions",
+"pagenum": "125"
+},
+{
+"level": 1,
+"label": "25",
+"title": "How to Balance Resources",
+"pagenum": "129"
+},
+{
+"level": 0,
+"label": "5",
+"title": "Bend, or Break",
+"pagenum": "137"
+},
+{
+"level": 1,
+"label": "26",
+"title": "Decoupling and the Law of Demeter",
+"pagenum": "138"
+},
+{
+"level": 1,
+"label": "27",
+"title": "Metaprogramming",
+"pagenum": "144"
+},
+{
+"level": 1,
+"label": "28",
+"title": "Temporal Coupling",
+"pagenum": "150"
+},
+{
+"level": 1,
+"label": "29",
+"title": "It's Just a View",
+"pagenum": "157"
+},
+{
+"level": 1,
+"label": "30",
+"title": "Blackboards",
+"pagenum": "165"
+},
+{
+"level": 0,
+"label": "6",
+"title": "While You Are Coding",
+"pagenum": "171"
+},
+{
+"level": 1,
+"label": "31",
+"title": "Programming by Coincidence",
+"pagenum": "172"
+},
+{
+"level": 1,
+"label": "32",
+"title": "Algorithm Speed",
+"pagenum": "177"
+},
+{
+"level": 1,
+"label": "33",
+"title": "Refactoring",
+"pagenum": "184"
+},
+{
+"level": 1,
+"label": "34",
+"title": "Code That's Easy to Test",
+"pagenum": "189"
+},
+{
+"level": 1,
+"label": "35",
+"title": "Evil Wizards",
+"pagenum": "198"
+},
+{
+"level": 0,
+"label": "7",
+"title": "Before the Project",
+"pagenum": "201"
+},
+{
+"level": 1,
+"label": "36",
+"title": "The Requirements Pit",
+"pagenum": "202"
+},
+{
+"level": 1,
+"label": "37",
+"title": "Solving Impossible Puzzles",
+"pagenum": "212"
+},
+{
+"level": 1,
+"label": "38",
+"title": "Not Until You're Ready",
+"pagenum": "215"
+},
+{
+"level": 1,
+"label": "39",
+"title": "The Specification Trap",
+"pagenum": "217"
+},
+{
+"level": 1,
+"label": "40",
+"title": "Circles and Arrows",
+"pagenum": "220"
+},
+{
+"level": 0,
+"label": "8",
+"title": "Pragmatic Projects",
+"pagenum": "223"
+},
+{
+"level": 1,
+"label": "41",
+"title": "Pragmatic Teams",
+"pagenum": "224"
+},
+{
+"level": 1,
+"label": "42",
+"title": "Ubiquitous Automation",
+"pagenum": "230"
+},
+{
+"level": 1,
+"label": "43",
+"title": "Ruthless Testing",
+"pagenum": "237"
+},
+{
+"level": 1,
+"label": "44",
+"title": "It's All Writing",
+"pagenum": "248"
+},
+{
+"level": 1,
+"label": "45",
+"title": "Great Expectations",
+"pagenum": "255"
+},
+{
+"level": 1,
+"label": "46",
+"title": "Pride and Prejudice",
+"pagenum": "258"
+},
+{
+"level": 0,
+"label": "",
+"title": "Appendices",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "A",
+"title": "Resources",
+"pagenum": "261"
+},
+{
+"level": 2,
+"label": "",
+"title": "Professional Societies",
+"pagenum": "262"
+},
+{
+"level": 2,
+"label": "",
+"title": "Building a Library",
+"pagenum": "262"
+},
+{
+"level": 2,
+"label": "",
+"title": "Internet Resources",
+"pagenum": "266"
+},
+{
+"level": 2,
+"label": "",
+"title": "Bibliography",
+"pagenum": "274"
+},
+{
+"level": 1,
+"label": "B",
+"title": "Answers to Exercises",
+"pagenum": "279"
+},
+{
+"level": 0,
+"label": "",
+"title": "Index",
+"pagenum": "309"
+}
+]
+}

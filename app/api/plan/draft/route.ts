@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isAdminUserId } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
 import { streamResearchedPlanDraft } from "@/lib/ai/planDraft";
-import { defaultArm } from "@/lib/ai/research/pipeline";
+import { defaultArm, defaultChapterFinder } from "@/lib/ai/research/pipeline";
 import { insertGenerationLog } from "@/lib/db/generationLog";
 import { resolveModels } from "@/lib/ai/resolve";
 import { guardUserKey } from "@/lib/ai/userKeyError";
@@ -46,6 +46,7 @@ export async function POST(request: Request) {
           materials: body.materials,
           hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
           arm: defaultArm(process.env, { model: models.research.model }),
+          research: { chapters: defaultChapterFinder(process.env, { model: models.research.model }) ?? undefined },
           outlineModel: models.outline,
           // A client that disconnects stops research: the signal reaches search and fetch.
           signal: request.signal,

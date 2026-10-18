@@ -10,7 +10,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import type { CoverRef, Material, MaterialRef } from "@/lib/schemas/material";
+import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialRef } from "@/lib/schemas/material";
 import { dayMinutes, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 
 export interface PlanPromptContext {
@@ -108,26 +108,55 @@ function sizeNote(m: Material): string {
   return ` · ${m.uses ? `${m.uses}, ` : ""}about ${formatMinutes(m.minutes)}${m.minutesBasis === "estimated" ? " (estimated)" : ""}`;
 }
 
-/** One line per material: `M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024 · about 22 h. Why: …`. */
-export function renderMaterials(materials: Material[], aliases: MaterialAliases = aliasMaterials(materials)): string {
+export interface RenderMaterialsOptions {
+  /** Print section headings under the backbone's chapters. */
+  sections?: boolean;
+}
+
+/**
+ * The indented chapter lines under a book, then the source line: `  ch. 5 "Prompt Engineering" · pp. 453–540 · about
+ * 2 h — Introduction to Prompting; …`. The number, the pages, the size and the sections each appear only when known
+ * (and, for sections, asked for).
+ */
+export function renderChapters(toc: ChapterList, options: { sections: boolean }): string[] {
+  const lines = toc.chapters.map((c, i) => {
+    const parts = [`${c.n !== null ? `ch. ${c.n} ` : ""}"${c.title}"`];
+    if (toc.printPages && c.page !== null) {
+      const next = i + 1 < toc.chapters.length ? toc.chapters[i + 1].page : toc.end;
+      parts.push(next !== null && next > c.page ? `pp. ${c.page}–${next - 1}` : `p. ${c.page}`);
+    }
+    if (c.minutes !== null) parts.push(`about ${formatMinutes(c.minutes)}`);
+    const tail = options.sections && c.sections.length > 0 ? ` — ${c.sections.join("; ")}` : "";
+    return `  ${parts.join(" · ")}${tail}`;
+  });
+  lines.push(`  (chapters from ${toc.source === "catalogue" ? "Open Library" : (hostOf(toc.url) ?? "a page")})`);
+  return lines;
+}
+
+/**
+ * One line per material: `M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024 · about 22 h. Why: …`, followed by
+ * its chapter lines when it has a list.
+ */
+export function renderMaterials(materials: Material[], aliases: MaterialAliases = aliasMaterials(materials), options: RenderMaterialsOptions = {}): string {
   return materials
-    .map((m) => {
+    .flatMap((m) => {
       const tags = [m.kind, m.backbone ? "backbone" : null, m.origin === "learner" ? "the learner's own" : null].filter(Boolean).join(" · ");
       const byline = [m.author, m.year].filter(Boolean).join(", ");
       const where = m.type === "note" || m.type === "file" ? "" : ` <${m.url}>`;
-      return `${aliases.alias(m.id)} [${tags}] "${m.title}"${byline ? ` — ${byline}` : ""}${where}${sizeNote(m)}${m.why ? `. ${m.why}` : ""}`;
+      const line = `${aliases.alias(m.id)} [${tags}] "${m.title}"${byline ? ` — ${byline}` : ""}${where}${sizeNote(m)}${m.why ? `. ${m.why}` : ""}`;
+      return m.toc ? [line, ...renderChapters(m.toc, { sections: !!options.sections && m.backbone })] : [line];
     })
     .join("\n");
 }
 
-function contextLines(ctx: PlanPromptContext): string[] {
+function contextLines(ctx: PlanPromptContext, options: RenderMaterialsOptions = {}): string[] {
   const parts: string[] = [];
   parts.push(`Topic: ${ctx.topic}`);
   if (ctx.instructions?.trim()) parts.push(`The learner's focus & instructions: "${ctx.instructions.trim()}"`);
   parts.push(...timeLines(ctx));
   if (ctx.materials.length > 0) {
     parts.push(`The plan's materials. The learner's own are always part of it; the rest were found and checked by research. Refer to them by id:`);
-    parts.push(renderMaterials(ctx.materials));
+    parts.push(renderMaterials(ctx.materials, undefined, options));
   }
   return parts;
 }
@@ -168,7 +197,7 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   const aliases = aliasMaterials(input.materials);
   const hasMaterials = input.materials.length > 0;
   parts.push(`You are designing a self-study curriculum, one unit at a time.`);
-  parts.push(...contextLines(input));
+  parts.push(...contextLines(input, { sections: true }));
   parts.push(`The whole plan is ${input.totalDays} days long.`);
   // While the split is being decided in this same call there is no share to state yet.
   const share = input.decideSplit ? null : (readingShareOf(input.split) ?? MUST_SHARE);
@@ -228,15 +257,27 @@ function formatMinutes(minutes: number): string {
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} h`;
 }
 
+/** For every prompt that lists a book: chapters come from the list or not at all. */
+const CHAPTER_LINE = `Where a book's chapters are listed, name them as listed. Where they are not, name the part by topic and never invent a chapter number.`;
+
 function headingMaterialRules(input: UnitsPromptInput): string {
   const backbone = input.materials.findIndex((m) => m.backbone);
-  return [
+  const lines = [
     `Materials: for each unit, list in "covers" the materials its ${UNIT_NOUN[input.level]} will read, as { id, note } with a note naming the part ("ch. 5–6", "whole essay", "lectures 3–4"). No tier and no minutes yet: the units inside are planned later from this reservation.`,
-    backbone >= 0
-      ? `M${backbone + 1} is the backbone textbook: reserve its chapters in order across the units, each chapter in exactly one unit, and name them in the note.`
-      : `There is no backbone textbook; spread the materials where they fit best.`,
-    `Use only ids from the list.`,
-  ].join("\n");
+  ];
+  if (backbone < 0) lines.push(`There is no backbone textbook; spread the materials where they fit best.`);
+  else if (input.materials[backbone].toc) {
+    lines.push(
+      `M${backbone + 1} is the backbone textbook and its chapters are listed above: reserve them in order across the units, each chapter in exactly one unit, and write the note as the chapter numbers and titles exactly as listed ("ch. 5–6: Prompt Engineering; RAG and Agents").`,
+    );
+  } else {
+    lines.push(
+      `M${backbone + 1} is the backbone textbook, but its chapters are not listed: reserve it in order across the units and name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
+    );
+  }
+  if (input.materials.some((m) => m.kind === "book")) lines.push(CHAPTER_LINE);
+  lines.push(`Use only ids from the list.`);
+  return lines.join("\n");
 }
 
 function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): string {
@@ -256,7 +297,16 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
         : `Rules: at least one must per unit; must minutes stay within about ${Math.round(MUST_SHARE * 100)}% of the unit's budget, because the rest of the time is for building and practice; should items are optional extras.`,
   ];
   if (input.materials.some((m) => m.minutes)) lines.push(`Each material's size is in the list. Across all units a material's minutes should add up to about that size; never assign more of it than it has.`);
-  if (backbone >= 0) lines.push(`M${backbone + 1} is the backbone textbook: its chapters run in order across the units, continuing from where earlier units stopped. Name the chapter in the note.`);
+  if (backbone >= 0 && input.materials[backbone].toc) {
+    lines.push(
+      `M${backbone + 1} is the backbone textbook and its chapters are listed above with their sizes: they run in order across the units, continuing from where earlier units stopped. Name the chapter in the note by number and title as listed, and the sections when a chapter spans several units. A unit's minutes for it are the listed size of what it reads, or that share of a chapter.`,
+    );
+  } else if (backbone >= 0) {
+    lines.push(
+      `M${backbone + 1} is the backbone textbook, but its chapters are not listed: it runs in order across the units, continuing from where earlier units stopped. Name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
+    );
+  }
+  if (input.materials.some((m) => m.kind === "book")) lines.push(CHAPTER_LINE);
   lines.push(`Use only ids from the list.`);
   return lines.join("\n");
 }
@@ -272,7 +322,7 @@ export interface RevisionPromptInput extends PlanPromptContext {
 export function buildRevisionPrompt(input: RevisionPromptInput): string {
   const parts: string[] = [];
   parts.push(`You are revising a self-study plan. The plan is a tree: months contain weeks, weeks contain days. A unit with no children is a heading that gets planned in detail later, or the finest unit the learner works at.`);
-  parts.push(...contextLines(input));
+  parts.push(...contextLines(input, { sections: true }));
   const hasMaterials = input.materials.length > 0;
   parts.push(`Current plan (${input.tree.len} days). Every unit has a ref in square brackets${hasMaterials ? "; braces show the materials a heading reserves (covers) or a unit reads (materials)" : ""}:`);
   parts.push(renderTree(input.tree, { refs: input.refs, lockBefore: input.lockBefore, aliases: hasMaterials ? aliasMaterials(input.materials) : undefined }));

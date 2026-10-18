@@ -227,10 +227,17 @@ function MaterialRow({ material: m, onRemove }: { material: Material; onRemove?:
 
 /** "≈ 5 h · ch. 1, 7–9 · estimated": the size of the part the plan uses, and whether code measured it. */
 function SizeLine({ material: m }: { material: Material }) {
-  if (!m.minutes && !m.uses) return null;
-  const parts = [m.minutes ? approxDuration(m.minutes) : null, m.uses, m.minutes ? (m.minutesBasis === "measured" ? "measured" : "estimated") : null].filter(Boolean);
+  if (!m.minutes && !m.uses && !m.toc) return null;
+  const parts = [
+    m.minutes ? approxDuration(m.minutes) : null,
+    m.uses,
+    m.minutes ? (m.minutesBasis === "measured" ? "measured" : "estimated") : null,
+    m.toc ? `${m.toc.chapters.length} chapters` : null,
+  ].filter(Boolean);
+  const sizeTitle = m.minutesBasis === "measured" ? "Counted from a page count, a runtime or the page's own length" : "A judgement, so treat it as rough";
+  const chaptersTitle = m.toc ? `; chapters from ${m.toc.source === "catalogue" ? "Open Library" : (hostOf(m.toc.url) ?? "a page")}` : "";
   return (
-    <span className="text-xs text-muted-foreground" title={m.minutesBasis === "measured" ? "Counted from a page count, a runtime or the page's own length" : "A judgement, so treat it as rough"}>
+    <span className="text-xs text-muted-foreground" title={`${sizeTitle}${chaptersTitle}`}>
       {parts.join(" · ")}
     </span>
   );

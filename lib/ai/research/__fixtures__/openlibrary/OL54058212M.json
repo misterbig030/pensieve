@@ -1,0 +1,1080 @@
+{
+"key": "/books/OL54058212M",
+"title": "AI Engineering",
+"number_of_pages": 350,
+"languages": [
+{
+"key": "/languages/eng"
+}
+],
+"table_of_contents": [
+{
+"level": 1,
+"label": "Preface",
+"title": "10",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "What This Book Is About",
+"title": "12",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "What This Book Is Not",
+"title": "16",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Who This Book Is For",
+"title": "18",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Navigating This Book",
+"title": "20",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Conventions Used in This Book",
+"title": "24",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Using Code Examples",
+"title": "26",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "O’Reilly Online Learning",
+"title": "27",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "How to Contact Us",
+"title": "28",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Acknowledgments",
+"title": "29",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "1. Introduction to Building AI Applications with Foundation Models",
+"title": "34",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "The Rise of AI Engineering",
+"title": "36",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "From Language Models to Large Language Models",
+"title": "36",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "From Large Language Models to Foundation Models",
+"title": "48",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "From Foundation Models to AI Engineering",
+"title": "55",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Foundation Model Use Cases",
+"title": "63",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Coding",
+"title": "71",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Image and Video Production",
+"title": "74",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Writing",
+"title": "75",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Education",
+"title": "78",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Conversational Bots",
+"title": "80",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Information Aggregation",
+"title": "82",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Data Organization",
+"title": "83",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Workflow Automation",
+"title": "85",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Planning AI Applications",
+"title": "86",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Use Case Evaluation",
+"title": "86",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Setting Expectations",
+"title": "94",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Milestone Planning",
+"title": "95",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Maintenance",
+"title": "97",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "The AI Engineering Stack",
+"title": "100",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Three Layers of the AI Stack",
+"title": "102",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "AI Engineering Versus ML Engineering",
+"title": "106",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "AI Engineering Versus Full-Stack Engineering",
+"title": "123",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Summary",
+"title": "124",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "2. Understanding Foundation Models",
+"title": "130",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Training Data",
+"title": "132",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Multilingual Models",
+"title": "135",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Domain-Specific Models",
+"title": "144",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Modeling",
+"title": "148",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Model Architecture",
+"title": "148",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Model Size",
+"title": "165",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Post-Training",
+"title": "184",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Supervised Finetuning",
+"title": "189",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Preference Finetuning",
+"title": "195",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Sampling",
+"title": "205",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Sampling Fundamentals",
+"title": "205",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Sampling Strategies",
+"title": "209",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Test Time Compute",
+"title": "219",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Structured Outputs",
+"title": "226",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "The Probabilistic Nature of AI",
+"title": "235",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Summary",
+"title": "248",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "3. Evaluation Methodology",
+"title": "256",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Challenges of Evaluating Foundation Models",
+"title": "258",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Understanding Language Modeling Metrics",
+"title": "264",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Entropy",
+"title": "266",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Cross Entropy",
+"title": "268",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Bits-per-Character and Bits-per-Byte",
+"title": "269",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Perplexity",
+"title": "270",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Perplexity Interpretation and Use Cases",
+"title": "272",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Exact Evaluation",
+"title": "277",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Functional Correctness",
+"title": "278",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Similarity Measurements Against Reference Data",
+"title": "281",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Introduction to Embedding",
+"title": "292",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "AI as a Judge",
+"title": "297",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Why AI as a Judge?",
+"title": "297",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "How to Use AI as a Judge",
+"title": "300",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Limitations of AI as a Judge",
+"title": "306",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "What Models Can Act as Judges?",
+"title": "315",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Ranking Models with Comparative Evaluation",
+"title": "320",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Challenges of Comparative Evaluation",
+"title": "327",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "The Future of Comparative Evaluation",
+"title": "333",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Summary",
+"title": "335",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "4. Evaluate AI Systems",
+"title": "340",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Evaluation Criteria",
+"title": "341",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Domain-Specific Capability",
+"title": "345",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Generation Capability",
+"title": "350",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Instruction-Following Capability",
+"title": "368",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Cost and Latency",
+"title": "381",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Model Selection",
+"title": "385",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Model Selection Workflow",
+"title": "386",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Model Build Versus Buy",
+"title": "389",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Navigate Public Benchmarks",
+"title": "411",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Design Your Evaluation Pipeline",
+"title": "428",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Step 1. Evaluate All Components in a System",
+"title": "428",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Step 2. Create an Evaluation Guideline",
+"title": "431",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Step 3. Define Evaluation Methods and Data",
+"title": "436",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Summary",
+"title": "446",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "5. Prompt Engineering",
+"title": "453",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Introduction to Prompting",
+"title": "454",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "In-Context Learning: Zero-Shot and Few-Shot",
+"title": "457",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "System Prompt and User Prompt",
+"title": "461",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Context Length and Context Efficiency",
+"title": "467",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Prompt Engineering Best Practices",
+"title": "471",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Write Clear and Explicit Instructions",
+"title": "472",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Provide Sufficient Context",
+"title": "480",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Break Complex Tasks into Simpler Subtasks",
+"title": "482",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Give the Model Time to Think",
+"title": "488",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Iterate on Your Prompts",
+"title": "494",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Evaluate Prompt Engineering Tools",
+"title": "495",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Organize and Version Prompts",
+"title": "501",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Defensive Prompt Engineering",
+"title": "505",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Proprietary Prompts and Reverse Prompt Engineering",
+"title": "507",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Jailbreaking and Prompt Injection",
+"title": "511",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Information Extraction",
+"title": "521",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Defenses Against Prompt Attacks",
+"title": "528",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Summary",
+"title": "536",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "6. RAG and Agents",
+"title": "541",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "RAG",
+"title": "542",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "RAG Architecture",
+"title": "546",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Retrieval Algorithms",
+"title": "548",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Retrieval Optimization",
+"title": "572",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "RAG Beyond Texts",
+"title": "583",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Agents",
+"title": "588",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Agent Overview",
+"title": "590",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Tools",
+"title": "594",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Planning",
+"title": "602",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Agent Failure Modes and Evaluation",
+"title": "635",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Memory",
+"title": "641",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Summary",
+"title": "650",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "7. Finetuning",
+"title": "655",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Finetuning Overview",
+"title": "657",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "When to Finetune",
+"title": "663",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Reasons to Finetune",
+"title": "664",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Reasons Not to Finetune",
+"title": "666",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Finetuning and RAG",
+"title": "674",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Memory Bottlenecks",
+"title": "681",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Backpropagation and Trainable Parameters",
+"title": "684",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Memory Math",
+"title": "687",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Numerical Representations",
+"title": "692",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Quantization",
+"title": "697",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Finetuning Techniques",
+"title": "705",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Parameter-Efficient Finetuning",
+"title": "706",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Model Merging and Multi-Task Finetuning",
+"title": "734",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Finetuning Tactics",
+"title": "751",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Summary",
+"title": "760",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "8. Dataset Engineering",
+"title": "768",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Data Curation",
+"title": "771",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Data Quality",
+"title": "778",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Data Coverage",
+"title": "782",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Data Quantity",
+"title": "787",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Data Acquisition and Annotation",
+"title": "796",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Data Augmentation and Synthesis",
+"title": "801",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Why Data Synthesis",
+"title": "803",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Traditional Data Synthesis Techniques",
+"title": "807",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "AI-Powered Data Synthesis",
+"title": "814",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Model Distillation",
+"title": "832",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Data Processing",
+"title": "834",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Inspect Data",
+"title": "835",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Deduplicate Data",
+"title": "838",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Clean and Filter Data",
+"title": "842",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Format Data",
+"title": "844",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Summary",
+"title": "847",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "9. Inference Optimization",
+"title": "852",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Understanding Inference Optimization",
+"title": "854",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Inference Overview",
+"title": "854",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Inference Performance Metrics",
+"title": "864",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "AI Accelerators",
+"title": "878",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Inference Optimization",
+"title": "891",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Model Optimization",
+"title": "892",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Inference Service Optimization",
+"title": "919",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Summary",
+"title": "933",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "10. AI Engineering Architecture and User Feedback",
+"title": "941",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "AI Engineering Architecture",
+"title": "942",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Step 1. Enhance Context",
+"title": "944",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Step 2. Put in Guardrails",
+"title": "946",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Step 3. Add Model Router and Gateway",
+"title": "954",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Step 4. Reduce Latency with Caches",
+"title": "962",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Step 5. Add Agent Patterns",
+"title": "967",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Monitoring and Observability",
+"title": "970",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "AI Pipeline Orchestration",
+"title": "984",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "User Feedback",
+"title": "989",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Extracting Conversational Feedback",
+"title": "990",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Feedback Design",
+"title": "1003",
+"pagenum": ""
+},
+{
+"level": 3,
+"label": "Feedback Limitations",
+"title": "1017",
+"pagenum": ""
+},
+{
+"level": 2,
+"label": "Summary",
+"title": "1023",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "Epilogue",
+"title": "1027",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "Index",
+"title": "1029",
+"pagenum": ""
+},
+{
+"level": 1,
+"label": "About the Author",
+"title": "1094",
+"pagenum": ""
+}
+]
+}

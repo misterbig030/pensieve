@@ -14,6 +14,42 @@ export type MaterialTier = (typeof MATERIAL_TIERS)[number];
 export const MINUTES_BASES = ["measured", "estimated"] as const;
 export type MinutesBasis = (typeof MINUTES_BASES)[number];
 
+/** Where a book's chapter list came from: the Open Library catalogue, or a web page the research model read. */
+export const CHAPTER_SOURCES = ["catalogue", "page"] as const;
+export type ChapterSource = (typeof CHAPTER_SOURCES)[number];
+
+/** Caps on a chapter list: fewer than MIN_CHAPTERS is unusable; the rest bound what the prompts carry. */
+export const MIN_CHAPTERS = 3;
+export const MAX_CHAPTERS = 40;
+export const MAX_SECTIONS = 12;
+export const MAX_HEADING = 120;
+
+/** One chapter as a table of contents lists it. `n` is null when the heading carries no number. */
+export const chapterSchema = z.object({
+  n: z.number().int().min(1).nullable(),
+  title: z.string().trim().min(1).max(MAX_HEADING),
+  /** Start position as the list gives it: a print page only when the list's `printPages` is true. Null without positions. */
+  page: z.number().int().min(0).nullable(),
+  /** This chapter's share of the whole span, applied to the book's size. Null without positions or a book size. */
+  minutes: z.number().int().min(1).max(60000).nullable(),
+  /** Headings one level below the chapter, in order. */
+  sections: z.array(z.string().trim().min(1).max(MAX_HEADING)).max(MAX_SECTIONS),
+});
+export type Chapter = z.infer<typeof chapterSchema>;
+
+/** A book's chapters, where they came from, and how its positions read. */
+export const chapterListSchema = z.object({
+  source: z.enum(CHAPTER_SOURCES),
+  /** The edition on Open Library, or the page the model read the list from. */
+  url: z.string().trim().min(1).max(2000),
+  /** True when the positions fit the edition's page count, so they can be shown as `pp.` ranges. */
+  printPages: z.boolean(),
+  /** The position after the last chapter (first back-matter entry or the page count); null when unknown or without positions. */
+  end: z.number().int().min(0).nullable(),
+  chapters: z.array(chapterSchema).min(MIN_CHAPTERS).max(MAX_CHAPTERS),
+});
+export type ChapterList = z.infer<typeof chapterListSchema>;
+
 /** How materials are grouped in the list, backbone aside. */
 export const KIND_ORDER: MaterialKind[] = ["book", "course", "video", "docs", "essay", "paper", "repo", "tool", "note"];
 
@@ -54,6 +90,8 @@ export const materialSchema = z.object({
   minutesBasis: z.enum(MINUTES_BASES).nullable().optional(),
   /** The part the plan uses when that is not the whole work. */
   uses: z.string().trim().max(120).nullable().optional(),
+  /** The book's chapter list, when research found one. Absent on materials saved before chapters existed. */
+  toc: chapterListSchema.nullable().optional(),
 });
 export type Material = z.infer<typeof materialSchema>;
 /** Up to 50 of the learner's own plus what research adds (at most 25 are asked for). */

@@ -1,7 +1,7 @@
 import type { DroppedMaterial, ResearchEvent, ResearchNotice } from "@/lib/ai/research/events";
 import { hostOf, type Material, type MaterialKind } from "@/lib/schemas/material";
 
-export type ResearchLogKind = "source" | "searched" | "verified" | "dropped" | "failed";
+export type ResearchLogKind = "source" | "searched" | "verified" | "dropped" | "failed" | "chapters";
 
 export interface ResearchLogEntry {
   id: number;
@@ -86,6 +86,12 @@ export function reduceResearch(state: ResearchProgressState, event: ResearchEven
       };
     case "research.dropped":
       return { ...state, dropped: state.dropped + 1, log: push(state, { kind: "dropped", text: event.title, detail: event.reason }) };
+    case "research.chapters": {
+      const from = event.source === "catalogue" ? "Open Library" : (hostOf(event.url ?? "") ?? "a page");
+      const text =
+        event.chapters > 0 ? `Chapters of “${event.title}”: ${event.chapters}, from ${from}` : `No chapter list found for “${event.title}”; its parts will be named by topic.`;
+      return { ...state, log: push(state, { kind: "chapters", text }) };
+    }
     case "research.done":
       return {
         ...state,

@@ -100,6 +100,7 @@ const LOG_LABEL: Record<ResearchLogEntry["kind"], string> = {
   verified: "Verified",
   dropped: "Dropped",
   failed: "Couldn't open",
+  chapters: "Chapters",
 };
 
 function LogLine({ entry }: { entry: ResearchLogEntry }) {

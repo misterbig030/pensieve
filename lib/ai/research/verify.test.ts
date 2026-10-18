@@ -454,3 +454,50 @@ describe("sizes through the gate", () => {
     expect(verified.map((e) => (e.type === "research.verified" ? [e.minutes, e.basis] : null))).toEqual([[1250, "measured"], [10, "measured"], [480, "estimated"]]);
   });
 });
+
+describe("chapters through the gate", () => {
+  const TOC_IN = {
+    source: "catalogue" as const,
+    url: "https://openlibrary.org/books/OL1M",
+    printPages: true,
+    end: 100,
+    chapters: [
+      { n: 1, title: "A", page: 10, minutes: null, sections: [] },
+      { n: 2, title: "B", page: 30, minutes: null, sections: ["B1"] },
+      { n: 3, title: "C", page: 70, minutes: null, sections: [] },
+    ],
+  };
+  const withChapters: BookLookup = {
+    find: async () => ({ key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024, pages: 500 }),
+    chapters: async () => TOC_IN,
+  };
+  const book = "https://publisher.example.com/ai-engineering";
+  const cand = () => candidate({ url: book, title: "AI Engineering", kind: "book", author: "Chip Huyen" });
+
+  it("a matched book carries its chapter list sized from the book, and the gate announces it", async () => {
+    const f = gateFixture({ [book]: info(book, "AI Engineering") }, withChapters);
+    const result = await runGate({ candidates: [cand()], learner: [], learnerNotes: [], fetcher: f.fetcher, books: f.books, seenUrls: new Set(), emit: f.emit, secret: SECRET });
+    const m = result.materials[0];
+    expect(m.minutes).toBe(1250);
+    expect(m.toc!.chapters.map((c) => c.minutes)).toEqual([278, 556, 417]);
+    expect(f.events.find((e) => e.type === "research.chapters")).toEqual({ type: "research.chapters", id: m.id, title: "AI Engineering", chapters: 3, source: "catalogue", url: "https://openlibrary.org/books/OL1M" });
+  });
+  it("chapters() throwing leaves toc null and the book verified", async () => {
+    const f = gateFixture({ [book]: info(book, "AI Engineering") }, {
+      ...withChapters,
+      chapters: async () => {
+        throw new Error("boom");
+      },
+    });
+    const result = await runGate({ candidates: [cand()], learner: [], learnerNotes: [], fetcher: f.fetcher, books: f.books, seenUrls: new Set(), emit: f.emit, secret: SECRET });
+    expect(result.materials[0]).toMatchObject({ title: "AI Engineering", toc: null });
+    expect(f.events.some((e) => e.type === "research.chapters")).toBe(false);
+  });
+  it("a learner's own book enriched by a candidate gets the chapters too", async () => {
+    const f = gateFixture({ [book]: info(book, "AI Engineering") }, withChapters);
+    const result = await runGate({ candidates: [cand()], learner: [{ url: book, type: "link" }], learnerNotes: [], fetcher: f.fetcher, books: f.books, seenUrls: new Set(), emit: f.emit, secret: SECRET });
+    expect(result.materials).toHaveLength(1);
+    expect(result.materials[0]).toMatchObject({ origin: "learner", toc: { source: "catalogue" } });
+    expect(f.events.filter((e) => e.type === "research.chapters")).toHaveLength(1);
+  });
+});
