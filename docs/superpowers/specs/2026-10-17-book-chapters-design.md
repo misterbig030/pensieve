@@ -1,9 +1,19 @@
 # Book chapters: the outline reserves real chapters — design
 
-**Status:** implemented 2026-10-17 (branch `feat/book-chapters`); live check pending the migration
-`0010_source_toc`, which the operator applies with `npx drizzle-kit migrate`. Suite 414 passing, tsc and lint clean.
-The whole-branch review found the first parser built on the one record the spec had studied; it now parses six real
-records (see Testing) and refuses what does not read as a chapter list.
+**Status:** implemented and live-checked 2026-10-17 (branch `feat/book-chapters`, PR #10). Suite 414 passing, tsc
+and lint clean. The whole-branch review found the first parser built on the one record the spec had studied; it now
+parses six real records (see Testing) and refuses what does not read as a chapter list. Live check in Chrome against
+the worktree's dev server, after the operator applied `0010_source_toc`: a 90-day draft of the AI-engineering plan
+took the backbone's ten chapters from Open Library (the size line reads "10 chapters"), reserved "ch. 1–4:
+Introduction to Building AI Applications with Foundation Models; Understanding Foundation Models; Evaluation
+Methodology; Evaluate AI Systems" for month 1 and "ch. 5–6: Prompt Engineering; RAG and Agents" for month 2, and
+assigned "Ch. 1 …; Ch. 2 Understanding Foundation Models" to week 1; the confirmed track stored the list with sizes
+summing to the book's 1105 minutes; splitting week 1 produced day notes such as "Ch. 2 Understanding Foundation
+Models (Post-Training; Sampling)", though days 5–7 ran into chapters 3–4 that week 2 had reserved. A 7-day draft on
+distributed systems picked a backbone with no catalogue list; the finder's call ran (3,428 input tokens, 3 s, one
+cent) and found ten chapters on books.google.com. The whole first draft cost $0.14 and the second $0.10. Not seen:
+the progress log's "Chapters" line, which the card shows only while research runs and the check read the page after
+it finished.
 Follows the investigation in the session of 2026-10-17: a lesson prompt named "Ch. 2: Prompting strategies and best
 practices" in a book whose chapter 2 is "Understanding Foundation Models" and whose prompt-engineering chapter is 5.
 
