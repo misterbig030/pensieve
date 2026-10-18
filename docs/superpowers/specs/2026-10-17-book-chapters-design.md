@@ -1,7 +1,9 @@
 # Book chapters: the outline reserves real chapters — design
 
 **Status:** implemented 2026-10-17 (branch `feat/book-chapters`); live check pending the migration
-`0010_source_toc`, which the operator applies with `npx drizzle-kit migrate`. Suite 404 passing, tsc and lint clean.
+`0010_source_toc`, which the operator applies with `npx drizzle-kit migrate`. Suite 414 passing, tsc and lint clean.
+The whole-branch review found the first parser built on the one record the spec had studied; it now parses six real
+records (see Testing) and refuses what does not read as a chapter list.
 Follows the investigation in the session of 2026-10-17: a lesson prompt named "Ch. 2: Prompting strategies and best
 practices" in a book whose chapter 2 is "Understanding Foundation Models" and whose prompt-engineering chapter is 5.
 
@@ -140,27 +142,37 @@ Migration `0010_source_toc.sql`, one added column. `sourceToMaterial` and `mater
 `BookLookup` gains `chapters(match: BookMatch, signal?: AbortSignal): Promise<ChapterList | null>`. The Open
 Library implementation fetches `https://openlibrary.org{match.key}/editions.json?limit=50` with the same user agent
 and 5 s timeout as the search, and returns null on any failure: chapters are optional, so no
-`BookLookupUnavailable` here. It parses each edition's `table_of_contents` with `parseOpenLibraryToc`, and returns
-the longest usable list, with `url` the edition's page (`https://openlibrary.org{edition.key}`).
+`BookLookupUnavailable` here. It parses each edition's `table_of_contents` with `parseOpenLibraryToc` and prefers an
+edition whose title matches the work's (a translation's longer list loses to the work's own language), then the
+longest usable list, with `url` the edition's page (`https://openlibrary.org{edition.key}`).
 
 `parseOpenLibraryToc(entries, numberOfPages)` is tolerant, because the records are not uniform:
 
-- An entry is an object or a string. Objects seen in the wild: `{ level, label, title, type }` with the heading in
-  `label` and the page in `title`; `{ level, label, pagenum, title }` with the page in `pagenum`; `{ level,
-  pagenum, title }` with the heading in `title`. The heading is `label` when present, else `title`; the page is
-  `pagenum` when numeric, else `title` when `label` is present and `title` is numeric. A string entry is split on
-  `|` into heading and page.
-- Level 1 entries are chapters; level 2 under a chapter are its sections. When the level 1 headings are parts
-  (`/^part\b/i`), chapters are level 2 and sections level 3.
+- An entry is an object or a string. The common shape (Clean Code, The Pragmatic Programmer, SICP): `{ level:
+  0-based, label: "1" | "Chapter 1" | "I" | "", title: heading, pagenum }`; the heading is `title` and `label` only
+  numbers it. One publisher's shape (AI Engineering): `{ level: 1-based, label: heading, title: page }`, recognised
+  by a numeric `title`. A string entry is `*`-prefixed for depth and split on `|` into `label | heading | page` or
+  `heading | page`. Front-matter pages in roman numerals are not positions.
+- Levels are relative: chapters are the lowest level among entries that are not matter, sections the level below.
+  When every entry at that level is a part (`Part …`, or a roman-numeral label), chapters are one level down. On
+  a flat list (every entry at one level) the depth is read from the numbering: `1` is a chapter, `1.1` a section,
+  `1.1.1` deeper, whether the number is in the label or leads the heading.
 - A heading is matter, not a chapter, when it matches `/^(preface|foreword|acknowledg|about the|index|glossary|
   bibliography|references|notes|epilogue|afterword|appendix|colophon|contents|dedication|copyright)/i`. Matter
   before the first chapter is dropped; the first matter entry after the last chapter bounds its span.
-- A chapter's number is the leading integer of its heading (`5. Prompt Engineering`, `Chapter 5`, `5 Prompt
-  Engineering`), stripped from the title; null when there is none.
+- A chapter's number is its label when the label only numbers it (`1`, `Chapter 5`), else the leading integer of
+  its heading (`5. Prompt Engineering`, `Chapter 5: …`, `第5章 …`), stripped from the title; null when there is
+  none. A dotted number (`1.1`) never numbers a chapter.
+- In a list with numbered chapters, unnumbered chapter-level entries are matter or noise (`Introduction`, `On the
+  Cover`, `List of Exercises`) and are set aside like matter. A list with no numbers at all keeps every entry as an
+  unnumbered chapter.
 - Sections are the headings one level below a chapter, minus those that say nothing about its subject
   (`Summary`, `Exercises`, `Conclusion`, `Further reading`, `Key takeaways`, `Review questions`). Headings below
   the level of sections, and sections before the first chapter, are dropped.
-- Fewer than `MIN_CHAPTERS` chapters, or positions that do not increase, make the edition's list unusable.
+- The list is unusable (null, so the finder runs for a backbone) when it has fewer than `MIN_CHAPTERS` chapters,
+  when only one or two entries are numbered among unnumbered ones, when chapter numbers are out of order, or when
+  it lists parts with no chapters inside. Positions that do not increase, or a chapter without one, drop every
+  position but keep the list.
 - The parser records positions and `printPages` (the last position, or the first back-matter position after the
   last chapter, is at most 1.1 × the edition's `number_of_pages`); it leaves `minutes` null.
 
@@ -294,8 +306,10 @@ message that says why.
 
 Vitest, node environment, as the rest of research.
 
-- `chapters.test.ts`: `parseOpenLibraryToc` on the three object shapes and the string shape; parts shifting the
-  levels; matter dropped before and bounding after; numbers parsed and stripped; unnumbered chapters keep `n:
+- `chapters.test.ts`: `parseOpenLibraryToc` on six real records saved under `lib/ai/research/__fixtures__/
+  openlibrary/` (Clean Code, The Pragmatic Programmer, SICP in English and in Chinese, Introduction to Algorithms,
+  AI Engineering), on hand-made object and string shapes; parts shifting the levels; matter dropped before and
+  bounding after; the sanity gate; numbers parsed and stripped; unnumbered chapters keep `n:
   null`; fewer than three chapters or non-increasing positions → unusable; `printPages` true for positions within
   the page count and false for the 1094-in-350-pages record; caps on chapters, sections and heading length.
   `withChapterSizes`: shares of the span applied to the book's minutes, the last chapter bounded by the first

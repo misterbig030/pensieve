@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { MAX_CHAPTERS, MAX_HEADING, MAX_SECTIONS } from "@/lib/schemas/material";
 import { parseOpenLibraryToc, withChapterSizes, type OpenLibraryTocEntry } from "./chapters";
@@ -34,7 +35,7 @@ describe("parseOpenLibraryToc", () => {
   });
   it("reads the pagenum shape and the title-only shape", () => {
     const a = parseOpenLibraryToc(
-      [{ level: 1, label: "Chapter 1 Alpha", pagenum: "5", title: "ignored" }, { level: 1, label: "Chapter 2 Beta", pagenum: 20 }, { level: 1, label: "Chapter 3 Gamma", pagenum: "40" }],
+      [{ level: 1, label: "Chapter 1", title: "Alpha", pagenum: "5" }, { level: 1, label: "2", title: "Beta", pagenum: 20 }, { level: 1, label: "Chapter 3 Gamma", pagenum: "40" }],
       { url: "u", numberOfPages: 60 },
     )!;
     expect(a.chapters.map((c) => [c.n, c.title, c.page])).toEqual([[1, "Alpha", 5], [2, "Beta", 20], [3, "Gamma", 40]]);
@@ -103,6 +104,101 @@ describe("withChapterSizes", () => {
   });
 });
 
+interface Edition {
+  key: string;
+  title: string;
+  number_of_pages?: number;
+  languages: { key: string }[];
+  table_of_contents: OpenLibraryTocEntry[];
+}
+function edition(key: string): Edition {
+  return JSON.parse(readFileSync(new URL(`./__fixtures__/openlibrary/${key}.json`, import.meta.url), "utf8")) as Edition;
+}
+function parseEdition(key: string) {
+  const e = edition(key);
+  return parseOpenLibraryToc(e.table_of_contents, { url: `https://openlibrary.org/books/${key}`, numberOfPages: e.number_of_pages ?? null });
+}
+
+describe("real Open Library records", () => {
+  it("Clean Code: 'Chapter N' labels, headings in title, 0-based levels; front matter and appendices set aside", () => {
+    const toc = parseEdition("OL26222911M")!;
+    expect(toc.chapters.map((c) => c.n)).toEqual(Array.from({ length: 17 }, (_, i) => i + 1));
+    expect(toc.chapters[0]).toMatchObject({
+      title: "Clean Code",
+      page: 1,
+      sections: ["There Will Be Code", "Bad Code", "The Total Cost of Owning a Mess", "Schools of Thought", "We Are Authors", "The Boy Scout Rule", "Prequel and Principles"],
+    });
+    expect(toc.chapters[16]).toMatchObject({ n: 17, title: "Smells and Heuristics", page: 285 });
+    expect(toc).toMatchObject({ end: 317, printPages: true });
+  });
+  it("The Pragmatic Programmer: bare-number labels, numbered sections, roman-numbered front matter", () => {
+    const toc = parseEdition("OL7408140M")!;
+    expect(toc.chapters.map((c) => [c.n, c.title, c.page])).toEqual([
+      [1, "A Pragmatic Philosophy", 1],
+      [2, "A Pragmatic Approach", 25],
+      [3, "The Basic Tools", 71],
+      [4, "Pragmatic Paranoia", 107],
+      [5, "Bend, or Break", 137],
+      [6, "While You Are Coding", 171],
+      [7, "Before the Project", 201],
+      [8, "Pragmatic Projects", 223],
+    ]);
+    expect(toc.chapters[0].sections).toEqual(["The Cat Ate My Source Code", "Software Entropy", "Stone Soup and Boiled Frogs", "Good-Enough Software", "Your Knowledge Portfolio", "Communicate!"]);
+    expect(toc).toMatchObject({ end: 309, printPages: true });
+  });
+  it("SICP in English: a flat list whose depth lives in dotted labels, with no positions", () => {
+    const toc = parseEdition("OL980232M")!;
+    expect(toc.chapters.map((c) => [c.n, c.title])).toEqual([
+      [1, "Building Abstractions with Procedures"],
+      [2, "Building Abstractions with Data"],
+      [3, "Modularity, Objects, and State"],
+      [4, "Metalinguistic Abstraction"],
+      [5, "Computing with Register Machines"],
+    ]);
+    expect(toc.chapters[0].sections).toEqual(["The Elements of Programming", "Procedures and the Processes They Create", "Formulating Abstractions with Higher-Order Procedures"]);
+    expect(toc.chapters.every((c) => c.page === null)).toBe(true);
+    expect(toc).toMatchObject({ end: null, printPages: false });
+  });
+  it("SICP in Chinese: chapter numbers in 第N章 headings, depth in dotted headings", () => {
+    const toc = parseEdition("OL49238817M")!;
+    expect(toc.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4, 5]);
+    expect(toc.chapters[1].sections[0]).toBe("数据抽象导引55");
+  });
+  it("Introduction to Algorithms: parts only, no chapters, so null", () => {
+    expect(parseEdition("OL25409352M")).toBeNull();
+  });
+  it("AI Engineering: the heading-in-label shape still parses", () => {
+    const toc = parseEdition("OL54058212M")!;
+    expect(toc.chapters).toHaveLength(10);
+    expect(toc.chapters[4]).toMatchObject({ n: 5, title: "Prompt Engineering", page: 453 });
+    expect(toc.chapters[4].sections).toEqual(["Introduction to Prompting", "Prompt Engineering Best Practices", "Defensive Prompt Engineering"]);
+    expect(toc).toMatchObject({ end: 1027, printPages: false });
+  });
+});
+
+describe("the sanity gate", () => {
+  const ed = { url: "u", numberOfPages: 100 };
+  it("rejects chapter numbers out of order", () => {
+    expect(parseOpenLibraryToc([{ level: 0, label: "2", title: "B", pagenum: "1" }, { level: 0, label: "1", title: "A", pagenum: "9" }, { level: 0, label: "3", title: "C", pagenum: "20" }], ed)).toBeNull();
+  });
+  it("rejects a list with fewer than three numbered chapters among unnumbered entries", () => {
+    expect(
+      parseOpenLibraryToc(
+        [{ level: 0, title: "Foo", pagenum: "1" }, { level: 0, label: "1", title: "A", pagenum: "5" }, { level: 0, title: "Bar", pagenum: "9" }, { level: 0, label: "2", title: "B", pagenum: "20" }, { level: 0, title: "Baz", pagenum: "30" }],
+        ed,
+      ),
+    ).toBeNull();
+  });
+  it("drops unnumbered entries from a numbered list and lets the first one after the last chapter bound it", () => {
+    const toc = parseOpenLibraryToc(
+      [{ level: 0, title: "Intro", pagenum: "1" }, { level: 0, label: "1", title: "A", pagenum: "5" }, { level: 0, label: "2", title: "B", pagenum: "9" }, { level: 0, label: "3", title: "C", pagenum: "20" }, { level: 0, title: "Odds and ends", pagenum: "40" }],
+      ed,
+    )!;
+    expect(toc.chapters.map((c) => c.title)).toEqual(["A", "B", "C"]);
+    expect(toc.end).toBe(40);
+  });
+});
+
 describe("Open Library chapters", () => {
   const match = { key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024, pages: 350 };
   const editions = {
@@ -129,6 +225,15 @@ describe("Open Library chapters", () => {
     expect(String(fetchImpl.mock.calls[0][0])).toBe("https://openlibrary.org/works/OL1W/editions.json?limit=50");
     expect(toc).toMatchObject({ source: "catalogue", url: "https://openlibrary.org/books/OL1M", end: 100, printPages: true });
     expect(toc!.chapters.map((c) => c.title)).toEqual(["A", "B", "C"]);
+  });
+  it("prefers an edition whose title matches the work over a longer translated one", async () => {
+    const chi = edition("OL49238817M");
+    const eng = edition("OL980232M");
+    const body = { entries: [chi, eng].map((e) => ({ key: e.key, title: e.title, number_of_pages: e.number_of_pages, languages: e.languages, table_of_contents: e.table_of_contents })) };
+    const sicp = { key: "/works/OL3267304W", title: "Structure and Interpretation of Computer Programs", authors: ["Harold Abelson"], year: 1985, pages: 657 };
+    const toc = await createOpenLibraryLookup(fetchJson(body)).chapters!(sicp);
+    expect(toc?.url).toBe("https://openlibrary.org/books/OL980232M");
+    expect(toc?.chapters[0].title).toBe("Building Abstractions with Procedures");
   });
   it("is null without a work key, on a failed request, and when no edition has a usable list", async () => {
     expect(await createOpenLibraryLookup(fetchJson(editions)).chapters!({ ...match, key: null })).toBeNull();

@@ -1,0 +1,792 @@
+{
+"key": "/books/OL49238817M",
+"title": "计算机程序的构造和解释（原书第2版）",
+"number_of_pages": 473,
+"languages": [
+{
+"key": "/languages/chi"
+}
+],
+"table_of_contents": [
+{
+"level": 0,
+"label": "",
+"title": "出版者的话",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "序",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "第2版前言",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "第1版前言",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "致谢",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "第1章 构造过程抽象1",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.1 程序设计的基本元素3",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.1.1 表达式3",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.1.2 命名和环境5",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.1.3 组合式的求值6",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.1.4 复合过程7",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.1.5 过程应用的代换模型9",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.1.6 条件表达式和谓词11",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.1.7 实例：采用牛顿法求平方根14",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.1.8 过程作为黑箱抽象17",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.2 过程及其产生的计算20",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.2.1 线性的递归和迭代21",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.2.2 树形递归24",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.2.3 增长的阶28",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.2.4 求幂29",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.2.5 最大公约数32",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.2.6 实例：素数检测33",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.3 用高阶函数做抽象37",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.3.1 过程作为参数37",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.3.2 用lambda构造过程41",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.3.3 过程作为一般性的方法44",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "1.3.4 过程作为返回值48",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "第2章 构造数据抽象53",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.1 数据抽象导引55",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.1.1 实例：有理数的算术运算55",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.1.2 抽象屏障58",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.1.3 数据意味着什么60",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.1.4 扩展练习：区间算术62",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.2 层次性数据和闭包性质65",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.2.1 序列的表示66",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.2.2 层次性结构72",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.2.3 序列作为一种约定的界面76",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.2.4 实例：一个图形语言86",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.3 符号数据96",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.3.1 引号96",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.3.2 实例：符号求导99",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.3.3 实例：集合的表示103",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.3.4 实例：Huffman编码树109",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.4 抽象数据的多重表示115",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.4.1 复数的表示116",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.4.2 带标志数据119",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.4.3 数据导向的程序设计和可加性122",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.5 带有通用型操作的系统128",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.5.1 通用型算术运算129",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.5.2 不同类型数据的组合132",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "2.5.3 实例：符号代数138",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "第3章 模块化、对象和状态149",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.1 赋值和局部状态149",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.1.1 局部状态变量150",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.1.2 引进赋值带来的利益154",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.1.3 引进赋值的代价157",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.2 求值的环境模型162",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.2.1 求值规则163",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.2.2 简单过程的应用165",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.2.3 将框架看作局部状态的展台167",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.2.4 内部定义171",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.3 用变动数据做模拟173",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.3.1 变动的表结构173",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.3.2 队列的表示180",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.3.3 表格的表示183",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.3.4 数字电路的模拟器188",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.3.5 约束的传播198",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.4 并发：时间是一个本质问题206",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.4.1 并发系统中时间的性质207",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.4.2 控制并发的机制210",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.5 流220",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.5.1 流作为延时的表220",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.5.2 无穷流226",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.5.3 流计算模式的使用232",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.5.4 流和延时求值241",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "3.5.5 函数式程序的模块化和对象的",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "模块化245",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "第4章 元语言抽象249",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.1 元循环求值器251",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.1.1 求值器的内核252",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.1.2 表达式的表示255",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.1.3 求值器数据结构260",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.1.4 作为程序运行求值器264",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.1.5 将数据作为程序266",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.1.6 内部定义269",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.1.7 将语法分析与执行分离273",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.2 Scheme的变形—惰性求值276",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.2.1 正则序和应用序277",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.2.2 一个采用惰性求值的解释器278",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.2.3 将流作为惰性的表284",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.3 Scheme的变形—非确定性计算286",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.3.1 amb和搜索287",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.3.2 非确定性程序的实例290",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.3.3 实现amb求值器296",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.4 逻辑程序设计304",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.4.1 演绎信息检索306",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.4.2 查询系统如何工作315",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.4.3 逻辑程序设计是数理逻辑吗321",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "4.4.4 查询系统的实现324",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "第5章 寄存器机器里的计算343",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.1 寄存器机器的设计344",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.1.1 一种描述寄存器机器的语言346",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.1.2 机器设计的抽象348",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.1.3 子程序351",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.1.4 采用堆栈实现递归354",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.1.5 指令总结358",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.2 一个寄存器机器模拟器359",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.2.1 机器模型360",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.2.2 汇编程序364",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.2.3 为指令生成执行过程366",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.2.4 监视机器执行372",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.3 存储分配和废料收集374",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.3.1 将存储看作向量374",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.3.2 维持一种无穷存储的假象378",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.4 显式控制的求值器383",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.4.1 显式控制求值器的内核384",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.4.2 序列的求值和尾递归388",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.4.3 条件、赋值和定义391",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.4.4 求值器的运行393",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.5 编译397",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.5.1 编译器的结构399",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.5.2 表达式的编译402",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.5.3 组合式的编译407",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.5.4 指令序列的组合412",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.5.5 编译代码的实例415",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.5.6 词法地址422",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "5.5.7 编译代码与求值器的互连425",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "参考文献431",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "练习表437",
+"pagenum": ""
+},
+{
+"level": 0,
+"label": "",
+"title": "索引439",
+"pagenum": ""
+}
+]
+}

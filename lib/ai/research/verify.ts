@@ -221,6 +221,7 @@ interface OpenLibraryDoc {
 
 interface OpenLibraryEdition {
   key?: string;
+  title?: string;
   number_of_pages?: number;
   table_of_contents?: OpenLibraryTocEntry[];
 }
@@ -285,14 +286,17 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLo
         if (!res.ok) return null;
         const json = (await res.json().catch(() => null)) as { entries?: OpenLibraryEdition[] } | null;
         if (!json || !Array.isArray(json.entries)) return null;
-        let best: ChapterList | null = null;
+        // An edition whose title matches the work's is in the work's language; a translation's longer list loses to it.
+        let best: { toc: ChapterList; sameTitle: boolean } | null = null;
         for (const edition of json.entries) {
           if (typeof edition.key !== "string" || !Array.isArray(edition.table_of_contents)) continue;
           const pages = typeof edition.number_of_pages === "number" && edition.number_of_pages > 0 ? edition.number_of_pages : null;
           const toc = parseOpenLibraryToc(edition.table_of_contents, { url: `https://openlibrary.org${edition.key}`, numberOfPages: pages });
-          if (toc && (!best || toc.chapters.length > best.chapters.length)) best = toc;
+          if (!toc) continue;
+          const sameTitle = titleMatches(match.title, [edition.title ?? null]).ok;
+          if (!best || (sameTitle && !best.sameTitle) || (sameTitle === best.sameTitle && toc.chapters.length > best.toc.chapters.length)) best = { toc, sameTitle };
         }
-        return best;
+        return best?.toc ?? null;
       } catch {
         return null;
       }

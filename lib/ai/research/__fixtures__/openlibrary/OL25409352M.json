@@ -1,0 +1,78 @@
+{
+"key": "/books/OL25409352M",
+"title": "Introduction to Algorithms",
+"number_of_pages": 1292,
+"languages": [
+{
+"key": "/languages/eng"
+}
+],
+"table_of_contents": [
+{
+"level": 2,
+"label": "",
+"title": "Preface",
+"pagenum": "xiii"
+},
+{
+"level": 1,
+"label": "I",
+"title": "Foundations",
+"pagenum": "3"
+},
+{
+"level": 1,
+"label": "II",
+"title": "Sorting and Order Statistics",
+"pagenum": "147"
+},
+{
+"level": 1,
+"label": "III",
+"title": "Data Structures",
+"pagenum": "229"
+},
+{
+"level": 1,
+"label": "IV",
+"title": "Advanced Design and Analysis Techniques",
+"pagenum": "357"
+},
+{
+"level": 1,
+"label": "V",
+"title": "Advanced Data Structures",
+"pagenum": "481"
+},
+{
+"level": 1,
+"label": "VI",
+"title": "Graph Algorithms",
+"pagenum": "587"
+},
+{
+"level": 1,
+"label": "VII",
+"title": "Selected Topics",
+"pagenum": "769"
+},
+{
+"level": 1,
+"label": "VIII",
+"title": "Appendix: Mathematical Background",
+"pagenum": "1143"
+},
+{
+"level": 2,
+"label": "",
+"title": "Bibliography",
+"pagenum": "1231"
+},
+{
+"level": 2,
+"label": "",
+"title": "Index",
+"pagenum": "1251"
+}
+]
+}
