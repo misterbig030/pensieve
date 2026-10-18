@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { makeNode, makeRoot } from "@/lib/planTree";
 import { aliasMaterials } from "@/lib/materials";
-import type { Material } from "@/lib/schemas/material";
-import { assignRefs, buildPlanChatSystemPrompt, buildRevisionPrompt, buildUnitsPrompt, renderMaterials, renderRefs, renderTree } from "./planPrompt";
+import type { ChapterList, Material } from "@/lib/schemas/material";
+import { assignRefs, buildPlanChatSystemPrompt, buildRevisionPrompt, buildUnitsPrompt, renderChapters, renderMaterials, renderRefs, renderTree } from "./planPrompt";
 
 function tree() {
   return makeRoot([
@@ -131,7 +131,9 @@ describe("materials in prompts", () => {
     const prompt = buildUnitsPrompt({ topic: "X", materials: MATERIALS, granularity: "week", level: "month", spans: [28, 28], startDay: 1, totalDays: 56, unitsAreLeaves: false });
     expect(prompt).toContain('list in "covers"');
     expect(prompt).toContain("No tier and no minutes yet");
-    expect(prompt).toContain("M1 is the backbone textbook: reserve its chapters in order");
+    expect(prompt).toContain("M1 is the backbone textbook, but its chapters are not listed: reserve it in order across the units");
+    expect(prompt).toContain("Never write a chapter number or a chapter title you were not given.");
+    expect(prompt).toContain("Where a book's chapters are listed, name them as listed.");
   });
 
   it("gives leaves their budget, the parent's reservation, and the must rules", () => {
@@ -159,6 +161,78 @@ describe("materials in prompts", () => {
     const chat = buildPlanChatSystemPrompt({ mode: "create", topic: "X", materials: MATERIALS, granularity: "day", tree: root, lockBefore: 0 });
     expect(chat).toContain('M1 [book · backbone] "AI Engineering"');
     expect(chat).toContain("{reads M2 must 15 min}");
+  });
+});
+
+describe("chapters in prompts", () => {
+  const TOC: ChapterList = {
+    source: "catalogue",
+    url: "https://openlibrary.org/books/OL1M",
+    printPages: true,
+    end: 100,
+    chapters: [
+      { n: 1, title: "Alpha", page: 10, minutes: 200, sections: ["A1", "A2"] },
+      { n: 2, title: "Beta", page: 30, minutes: 400, sections: [] },
+      { n: 3, title: "Gamma", page: 70, minutes: 300, sections: ["G1"] },
+    ],
+  };
+  const withToc: Material[] = [{ ...MATERIALS[0], toc: TOC }, MATERIALS[1]];
+
+  it("renders chapter lines under the book, with sections for the backbone when asked", () => {
+    expect(renderMaterials(withToc, undefined, { sections: true })).toBe(
+      [
+        'M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024 <https://example.com/aie>. The backbone.',
+        '  ch. 1 "Alpha" · pp. 10–29 · about 3.3 h — A1; A2',
+        '  ch. 2 "Beta" · pp. 30–69 · about 6.7 h',
+        '  ch. 3 "Gamma" · pp. 70–99 · about 5 h — G1',
+        "  (chapters from Open Library)",
+        `M2 [video · the learner's own] "Intro talk" <https://youtu.be/x>`,
+      ].join("\n"),
+    );
+    expect(renderMaterials(withToc)).not.toContain("A1; A2");
+  });
+  it("omits the number, the pages and the size when the list has none, and names the page host", () => {
+    const sparse: ChapterList = {
+      source: "page",
+      url: "https://www.example.org/review?x=1",
+      printPages: false,
+      end: null,
+      chapters: [
+        { n: null, title: "Alpha", page: null, minutes: null, sections: [] },
+        { n: null, title: "Beta", page: null, minutes: null, sections: [] },
+        { n: null, title: "Gamma", page: null, minutes: null, sections: [] },
+      ],
+    };
+    expect(renderChapters(sparse, { sections: true })).toEqual(['  "Alpha"', '  "Beta"', '  "Gamma"', "  (chapters from example.org)"]);
+  });
+  it("switches the backbone rules on the list, at both levels", () => {
+    const heading = buildUnitsPrompt({ topic: "X", materials: withToc, granularity: "week", level: "month", spans: [28, 28], startDay: 1, totalDays: 56, unitsAreLeaves: false });
+    expect(heading).toContain(
+      "M1 is the backbone textbook and its chapters are listed above: reserve them in order across the units, each chapter in exactly one unit, and write the note as the chapter numbers and titles exactly as listed",
+    );
+    expect(heading).toContain('ch. 1 "Alpha"');
+    const leaf = buildUnitsPrompt({ topic: "X", materials: withToc, granularity: "week", level: "week", spans: [7, 7], startDay: 1, totalDays: 14, unitsAreLeaves: true });
+    expect(leaf).toContain("M1 is the backbone textbook and its chapters are listed above with their sizes");
+    expect(leaf).toContain("A unit's minutes for it are the listed size of what it reads, or that share of a chapter.");
+    const leafNoList = buildUnitsPrompt({ topic: "X", materials: MATERIALS, granularity: "week", level: "week", spans: [7, 7], startDay: 1, totalDays: 14, unitsAreLeaves: true });
+    expect(leafNoList).toContain("M1 is the backbone textbook, but its chapters are not listed: it runs in order across the units");
+  });
+  it("a saved material with toc undefined renders no chapter lines and gets the no-list rule", () => {
+    const saved = MATERIALS.map((m) => ({ ...m, toc: undefined }));
+    const prompt = buildUnitsPrompt({ topic: "X", materials: saved, granularity: "week", level: "month", spans: [28], startDay: 1, totalDays: 28, unitsAreLeaves: false });
+    expect(prompt).not.toMatch(/^ {2}ch\. /m);
+    expect(prompt).toContain("but its chapters are not listed");
+  });
+  it("revision prompts show sections and chat prompts do not", () => {
+    const root = makeRoot([makeNode({ id: "d1", level: "day", title: "A", summary: "b", len: 1 })]);
+    expect(buildRevisionPrompt({ topic: "X", materials: withToc, granularity: "day", tree: root, refs: assignRefs(root), lockBefore: 0, changeRequest: "x" })).toContain("— A1; A2");
+    const chat = buildPlanChatSystemPrompt({ mode: "create", topic: "X", materials: withToc, granularity: "day", tree: root, lockBefore: 0 });
+    expect(chat).toContain('ch. 2 "Beta"');
+    expect(chat).not.toContain("— A1; A2");
+  });
+  it("leaves the general chapter line out when no book is listed", () => {
+    const prompt = buildUnitsPrompt({ topic: "X", materials: [MATERIALS[1]], granularity: "day", level: "day", spans: [1], startDay: 1, totalDays: 1, unitsAreLeaves: true });
+    expect(prompt).not.toContain("Where a book's chapters are listed");
   });
 });
 
