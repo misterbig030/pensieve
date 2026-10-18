@@ -92,3 +92,12 @@ cost, and cheap checks on each list (candidates, backbones, total hours, URLs an
 for, retitled pages). Every list is written to `evals/results/candidates-bench-<ts>.json` for a reader to judge; the
 gate and the judges, not these checks, decide quality. The first run (2026-10-13) is summarized in the arm W spec's open
 items.
+
+## Book chapters (Oct 17)
+
+Each run now records `chaptersSource` for the backbone: `catalogue` when Open Library had a table of contents,
+`page` when the chapter finder read one off a web page, null when neither. `summarize` reports `chaptersFound`, the
+share of runs with a backbone whose list was found. The rubric's "Materials fit" dimension (§8) should treat a
+chapter reference in the plan that is not in the book's list as a regression, and a plan that names chapters by topic
+because no list was found as correct. Spec: `docs/superpowers/specs/2026-10-17-book-chapters-design.md`. The eval has
+not been rerun for this change.

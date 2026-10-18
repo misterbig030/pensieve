@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { Material } from "@/lib/schemas/material";
-import { backboneHit, checkCounts, decide, decideWorkers, median, mustIncludeRecall, sizeMetrics, summarize, type ArmName, type RunMetrics } from "./metrics";
+import { backboneHit, chaptersSource, checkCounts, decide, decideWorkers, median, mustIncludeRecall, sizeMetrics, summarize, type ArmName, type RunMetrics } from "./metrics";
 
 function material(title: string, extra: Partial<Material> = {}): Material {
   return { id: title, origin: "research", type: "link", kind: "docs", url: "https://x", title, author: null, year: null, why: null, backbone: false, verifiedAt: null, fetchedTitle: null, recommendedBy: [], sig: null, ...extra };
@@ -39,7 +39,7 @@ describe("decide", () => {
     recordId: "r", arm, run: 1, verifiedRate, proposed: 10, verified: 5, backboneHit: backbone, mustIncludeRecall: null, recency: 0,
     notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0, overShareLeaves: 0,
     sizedHours: 36, totalHours: 72, measuredShare: 0.5, unsizedShare: 0, coverage: null, costUsd: 0, latencyMs: 0,
-    researchMs: 0, toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null,
+    researchMs: 0, toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: null,
   });
   it("keeps arm A when it is no worse on backbone and within 10 points on verified rate", () => {
     const runs = [run("A", 0.7, true), run("C", 0.78, true)];
@@ -67,7 +67,7 @@ describe("decideWorkers", () => {
     recordId: "r", arm, run: 1, verifiedRate: 0.7, proposed: 10, verified: 7, backboneHit: backbone, mustIncludeRecall: recall, recency: 0,
     notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0, overShareLeaves: 0,
     sizedHours: 36, totalHours: 72, measuredShare: 0.5, unsizedShare: 0, coverage: null, costUsd, latencyMs: researchMs + 40_000, researchMs,
-    toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null,
+    toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: null,
   });
   it("adopts W when its research is fast enough, no more than five points behind, and not too dear", () => {
     const runs = [run("A", 100_000, 0.2, true, 1), run("A", 120_000, 0.2, true, 0.5), run("W", 60_000, 0.3, true, 0.75), run("W", 70_000, 0.3, false, 0.75)];
@@ -105,5 +105,35 @@ describe("decideWorkers", () => {
     expect(s.duplicateShare).toBeCloseTo(0.3);
     expect(median([])).toBeNull();
     expect(median([4, 1, 3, 2])).toBe(2.5);
+  });
+});
+
+describe("chaptersSource", () => {
+  const toc = {
+    source: "page" as const,
+    url: "https://www.example.org/review",
+    printPages: false,
+    end: null,
+    chapters: [
+      { n: 1, title: "A", page: null, minutes: null, sections: [] },
+      { n: 2, title: "B", page: null, minutes: null, sections: [] },
+      { n: 3, title: "C", page: null, minutes: null, sections: [] },
+    ],
+  };
+  const run = (backbone: boolean | null, source: "catalogue" | "page" | null): RunMetrics => ({
+    recordId: "r", arm: "A", run: 1, verifiedRate: 0.7, proposed: 10, verified: 7, backboneHit: backbone, mustIncludeRecall: null, recency: 0,
+    notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0, overShareLeaves: 0,
+    sizedHours: 36, totalHours: 72, measuredShare: 0.5, unsizedShare: 0, coverage: null, costUsd: 0, latencyMs: 0, researchMs: 0,
+    toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: source,
+  });
+  it("reads the backbone's list source, null without a backbone or a list", () => {
+    expect(chaptersSource([material("Core", { kind: "book", backbone: true, toc }), material("Other", { toc: { ...toc, source: "catalogue" } })])).toBe("page");
+    expect(chaptersSource([material("Core", { kind: "book", backbone: true })])).toBeNull();
+    expect(chaptersSource([material("Other", { toc })])).toBeNull();
+  });
+  it("summarizes the share of runs with a source, over runs that had a backbone", () => {
+    const runs = [run(true, "page"), run(true, null), run(false, null)];
+    expect(summarize("A", runs).chaptersFound).toBe(0.5);
+    expect(summarize("C", runs).chaptersFound).toBeNull();
   });
 });
