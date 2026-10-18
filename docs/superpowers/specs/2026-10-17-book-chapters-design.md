@@ -61,7 +61,8 @@ when code saw it in a table of contents.
    not always print pages: the record for the book in question runs to position 1094 in an edition of 350 pages,
    so they are e-book positions. They are therefore used as proportions only. A chapter's span is the positions
    from its start to the next chapter's start, or to the first back-matter entry after the last chapter, or to the
-   edition's page count; its size is that span's share of the whole span, applied to the book's own size
+   edition's page count; when nothing bounds the last chapter, it gets the mean span of the others, so every chapter
+   has a size. A chapter's size is its span's share of the whole span, applied to the book's own size
    (`Material.minutes`, whatever its basis). Print page ranges are shown only when the last position fits the
    edition's page count. A list from a page has no positions, so its chapters have no sizes; the model estimates
    as it does today. The whole-book size is unchanged.
@@ -113,6 +114,8 @@ export interface ChapterList {
   url: string;
   /** True when the positions fit the edition's page count, so they can be shown as `pp.` ranges. */
   printPages: boolean;
+  /** The position after the last chapter: the first back-matter entry, else the edition's page count; null when unknown or without positions. */
+  end: number | null;
   chapters: Chapter[];
 }
 ```
@@ -153,6 +156,9 @@ the longest usable list, with `url` the edition's page (`https://openlibrary.org
   before the first chapter is dropped; the first matter entry after the last chapter bounds its span.
 - A chapter's number is the leading integer of its heading (`5. Prompt Engineering`, `Chapter 5`, `5 Prompt
   Engineering`), stripped from the title; null when there is none.
+- Sections are the headings one level below a chapter, minus those that say nothing about its subject
+  (`Summary`, `Exercises`, `Conclusion`, `Further reading`, `Key takeaways`, `Review questions`). Headings below
+  the level of sections, and sections before the first chapter, are dropped.
 - Fewer than `MIN_CHAPTERS` chapters, or positions that do not increase, make the edition's list unusable.
 - The parser records positions and `printPages` (the last position, or the first back-matter position after the
   last chapter, is at most 1.1 × the edition's `number_of_pages`); it leaves `minutes` null.
@@ -197,7 +203,7 @@ What `find` does, in order, under a 20 s wall clock and without touching the arm
    rethrown, as everywhere in research.
 4. Validation in code: `found`, `url` canonicalises to one of the pages read, at least `MIN_CHAPTERS` chapters,
    numbers strictly increasing where present, caps applied. Anything else is null. The result carries
-   `source: "page"`, `printPages: false`, and `page: null` and `minutes: null` on every chapter.
+   `source: "page"`, `printPages: false`, `end: null`, and `page: null` and `minutes: null` on every chapter.
 
 ### Events (`events.ts`)
 
