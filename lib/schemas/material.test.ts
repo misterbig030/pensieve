@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_CHAPTERS, MAX_HEADING, MAX_SECTIONS, chapterListSchema, materialSchema, type ChapterList } from "./material";
+import { MAX_CHAPTERS, MAX_HEADING, MAX_SECTIONS, chapterAt, chapterListSchema, coverRefSchema, materialRefSchema, materialSchema, normalizeCoverRef, normalizeMaterialRef, type ChapterList } from "./material";
 
 function chapter(n: number) {
   return { n, title: `Chapter ${n}`, page: n * 10, minutes: 30, sections: ["A", "B"] };
@@ -25,5 +25,25 @@ describe("chapterListSchema", () => {
     expect(materialSchema.safeParse(base).success).toBe(true);
     expect(materialSchema.safeParse({ ...base, toc: null }).success).toBe(true);
     expect(materialSchema.parse({ ...base, toc: list }).toc).toEqual(list);
+  });
+});
+
+describe("references with chapters", () => {
+  it("accepts chapter and activity on both ref shapes and defaults neither", () => {
+    expect(materialRefSchema.parse({ id: "a", tier: "must", minutes: 10, note: null, chapter: 3, activity: "review" })).toMatchObject({ chapter: 3, activity: "review" });
+    expect(coverRefSchema.parse({ id: "a", note: null })).toEqual({ id: "a", note: null });
+    expect(materialRefSchema.safeParse({ id: "a", tier: "must", minutes: 10, note: null, chapter: 0 }).success).toBe(false);
+    expect(materialRefSchema.safeParse({ id: "a", tier: "must", minutes: 10, note: null, chapter: 41 }).success).toBe(false);
+  });
+  it("normalizes a draft to activity read and leaves the chapter to the resolver", () => {
+    expect(normalizeMaterialRef({ id: " M1.3 ", tier: "must", minutes: 42.6 })).toEqual({ id: "M1.3", tier: "must", minutes: 43, note: null, activity: "read" });
+    expect(normalizeCoverRef({ id: "M2", activity: "review" })).toEqual({ id: "M2", note: null, activity: "review" });
+  });
+  it("chapterAt returns the chapter at a 1-based position or null", () => {
+    const toc = { source: "catalogue" as const, url: "u", printPages: false, end: null, chapters: [{ n: 1, title: "A", page: null, minutes: null, sections: [] }] };
+    expect(chapterAt(toc, 1)?.title).toBe("A");
+    expect(chapterAt(toc, 2)).toBeNull();
+    expect(chapterAt(toc, null)).toBeNull();
+    expect(chapterAt(undefined, 1)).toBeNull();
   });
 });
