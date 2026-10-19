@@ -212,6 +212,8 @@ export interface Breach {
   /** "Week 1" */
   unit: string;
   refs: ResolvedAlias[];
+  /** `refs` as the prompt names them: "M1.3–M1.4". */
+  names: string;
   /** The sentence the retry quotes and the admin dock shows. */
   text: string;
 }
@@ -268,7 +270,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const share = input.readingShare ?? MUST_SHARE;
   const verb = input.leaves ? "reads" : "reserves";
   const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
-  const breach = (kind: BreachKind, index: number, unit: string, refs: RefLike[], text: string) => breaches.push({ kind, index, unit, refs: refs.map(toResolved), text });
+  const breach = (kind: BreachKind, index: number, unit: string, refs: RefLike[], text: string) => breaches.push({ kind, index, unit, refs: refs.map(toResolved), names: names(refs), text });
 
   // Where these units sit: their parent (none at the top level), its line of ancestors, and their own descendants.
   const placed = new Set(input.nodes.map((n) => n.id));
@@ -456,8 +458,7 @@ export function dropBreaches(nodes: PlanNode[], breaches: Breach[]): string[] {
       node.materials = node.materials.filter((r) => !keys.has(refKey(r)));
       if (node.materials.length === 0) delete node.materials;
     }
-    const aliases = b.refs.map((r) => (r.chapter ? `${r.id}#${r.chapter}` : r.id));
-    out.push(`dropped ${b.text.match(/^\S+ \S+ (?:reads |reserves |reviews |refers to )?(.+?)(?:,| as a whole)/)?.[1] ?? aliases.join(", ")} from ${b.unit}: ${b.kind}`);
+    out.push(`dropped ${b.names} from ${b.unit}: ${b.kind}`);
   }
   return out;
 }

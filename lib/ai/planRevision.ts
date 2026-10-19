@@ -13,9 +13,10 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import { aliasMaterials, resolveCoverRefs, resolveMaterialRefs, type MaterialAliases } from "@/lib/materials";
+import { aliasMaterials, dropBreaches, resolveCoverRefs, resolveMaterialRefs, treeChecks, type MaterialAliases } from "@/lib/materials";
 import type { CoverRefDraft, MaterialRefDraft } from "@/lib/schemas/material";
 import { revisedTreeSchema, type RevisedTree } from "@/lib/schemas/plan";
+import { readingShareOf } from "@/lib/studyTime";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
 import { appModel, type ResolvedModel } from "./resolve";
@@ -115,12 +116,31 @@ export interface RevisePlanResult {
   costUsd: number;
 }
 
-/** Runs one revision: the model returns the whole tree with refs, and `applyRevision` reconciles it. */
+/**
+ * Runs one revision: the model returns the whole tree with refs, and `applyRevision` reconciles it. The reference
+ * checks run tree-wide inside the call's `check` hook, so breaches and the rows dropped for them land on the call's
+ * log row; a revision is one large call, so there is no retry.
+ */
 export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlanResult> {
   const tree = layout(cloneTree(input.tree));
   const refs = assignRefs(tree);
   const model = input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL);
-  const { object, costUsd } = await loggedGenerateObject(
+  const aliases = input.materials.length > 0 ? aliasMaterials(input.materials) : undefined;
+  let revised: PlanNode | null = null;
+  let failure: unknown;
+  const check = (object: RevisedTree): string[] => {
+    try {
+      revised = applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek);
+    } catch (error) {
+      failure = error;
+      return [];
+    }
+    if (!aliases) return [];
+    const checks = treeChecks(revised, input.materials, { hoursPerWeek: input.hoursPerWeek, readingShare: readingShareOf(input.split) });
+    const dropped = dropBreaches(checks.nodes, checks.breaches);
+    return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...dropped];
+  };
+  const { costUsd } = await loggedGenerateObject(
     {
       model: model.id,
       languageModel: typeof model.model === "string" ? undefined : model.model,
@@ -128,9 +148,11 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       schema: revisedTreeSchema,
       prompt: buildRevisionPrompt({ ...input, tree, refs }),
       label: `Revision · ${input.changeRequest.length > 60 ? `${input.changeRequest.slice(0, 57)}…` : input.changeRequest}`,
+      check,
     },
     { ...input.log, caller: "outline_revision" },
   );
-  const aliases = input.materials.length > 0 ? aliasMaterials(input.materials) : undefined;
-  return { tree: applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek), costUsd };
+  if (failure !== undefined) throw failure;
+  if (!revised) throw new Error("Revision ended without a tree");
+  return { tree: revised, costUsd };
 }
