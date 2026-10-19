@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { BudgetBar, ReadRows, readRowsFor, sumMinutes } from "@/components/pensieve/ReadTable";
 import { budgetMinutes } from "@/lib/materials";
 import { formatDuration } from "@/lib/researchProgress";
-import type { Material } from "@/lib/schemas/material";
+import { chapterAt, type Material } from "@/lib/schemas/material";
 import {
   capitalize,
   childLevel,
@@ -330,25 +330,49 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
 
 const SHOWN_COVERS = 3;
 
-/** A heading's reservation as chips: the backbone's chapters first, then the rest, "+ N more" past three. */
+/** "1–4", "5–6, 10": chapter numbers collapsed into runs. */
+function chapterRuns(numbers: number[]): string {
+  const runs: [number, number][] = [];
+  for (const n of numbers) {
+    const last = runs[runs.length - 1];
+    if (last && n === last[1] + 1) last[1] = n;
+    else runs.push([n, n]);
+  }
+  return runs.map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`)).join(", ");
+}
+
+/** A heading's reservation as chips: one per material and activity, the backbone first, "+ N more" past three. */
 function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, Material> }) {
-  const refs = (node.covers ?? []).flatMap((r) => {
+  const groups = new Map<string, { m: Material; review: boolean; chapters: number[]; note: string | null }>();
+  for (const r of node.covers ?? []) {
     const m = byId.get(r.id);
-    return m ? [{ m, note: r.note }] : [];
-  });
+    if (!m) continue;
+    const review = (r.activity ?? "read") === "review";
+    const key = `${m.id}#${review ? "review" : "read"}`;
+    const group = groups.get(key) ?? { m, review, chapters: [], note: null };
+    const chapter = chapterAt(m.toc, r.chapter);
+    if (chapter) group.chapters.push(chapter.n ?? r.chapter!);
+    else if (r.note) group.note = r.note;
+    groups.set(key, group);
+  }
+  const refs = [...groups.values()];
   if (refs.length === 0) return null;
   const sorted = [...refs].sort((a, b) => Number(b.m.backbone) - Number(a.m.backbone));
   const shown = sorted.slice(0, SHOWN_COVERS);
+  const text = (g: (typeof refs)[number]) => {
+    const part = g.chapters.length > 0 ? `ch. ${chapterRuns(g.chapters)}` : g.note;
+    return `${g.review ? "Review: " : ""}${g.m.title}${part ? ` · ${part}` : ""}`;
+  };
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="mr-0.5 text-muted-foreground">Covers</span>
-      {shown.map(({ m, note }) => (
+      {shown.map((g) => (
         <span
-          key={m.id}
-          title={note ? `${m.title} · ${note}` : m.title}
-          className={cn("max-w-[260px] truncate rounded-full px-[9px] py-[3px]", m.backbone ? "bg-accent-2-200 font-semibold text-accent-2-800" : "bg-background")}
+          key={`${g.m.id}#${g.review ? "review" : "read"}`}
+          title={text(g)}
+          className={cn("max-w-[260px] truncate rounded-full px-[9px] py-[3px]", g.m.backbone ? "bg-accent-2-200 font-semibold text-accent-2-800" : "bg-background")}
         >
-          {m.backbone && note ? `${m.title} ${note}` : m.title}
+          {text(g)}
         </span>
       ))}
       {sorted.length > SHOWN_COVERS && <span className="rounded-full bg-background px-[9px] py-[3px]">+ {sorted.length - SHOWN_COVERS} more</span>}
