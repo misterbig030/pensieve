@@ -5,9 +5,11 @@ import {
   assignmentsOf,
   chapterGaps,
   chapterRegressions,
+  formatAliases,
   learnerMaterials,
   levelFacts,
   parseChapters,
+  refKey,
   remapTreeRefs,
   removeMaterialRefs,
   resolveMaterialRefs,
@@ -30,11 +32,40 @@ describe("parseChapters", () => {
 });
 
 describe("aliases and refs", () => {
-  const aliases = aliasMaterials([{ id: "uuid-a" }, { id: "uuid-b" }]);
+  const toc = (n: number) => ({ source: "catalogue" as const, url: "u", printPages: false, end: null, chapters: Array.from({ length: n }, (_, i) => ({ n: i + 1, title: `C${i + 1}`, page: null, minutes: null, sections: [] })) });
+  const aliases = aliasMaterials([{ id: "uuid-a", toc: toc(4) }, { id: "uuid-b" }]);
   it("maps list positions to M ids and back", () => {
     expect(aliases.alias("uuid-b")).toBe("M2");
-    expect(aliases.resolve("m1")).toBe("uuid-a");
+    expect(aliases.resolve("m1")).toEqual({ id: "uuid-a", chapter: null });
     expect(aliases.resolve("M9")).toBeUndefined();
+  });
+  it("names chapters by position and resolves them back", () => {
+    expect(aliases.alias("uuid-a", 3)).toBe("M1.3");
+    expect(aliases.alias("uuid-a")).toBe("M1");
+    expect(aliases.resolve("m1.3")).toEqual({ id: "uuid-a", chapter: 3 });
+    expect(aliases.resolve("[M2]")).toEqual({ id: "uuid-b", chapter: null });
+    expect(aliases.resolve("M1.5")).toBeUndefined(); // past the list
+    expect(aliases.resolve("M2.1")).toBeUndefined(); // no list
+    expect(aliases.chapters("uuid-a")).toBe(4);
+    expect(aliases.chapters("uuid-b")).toBe(0);
+  });
+  it("resolves chapter refs, dedupes on id and chapter, keeps a bare book id for the checks", () => {
+    const { refs, unknown } = resolveMaterialRefs(
+      [
+        { id: "M1.2", tier: "must", minutes: 30 },
+        { id: "M1.2", tier: "should", minutes: 5 },
+        { id: "M1.3", tier: "must", minutes: 20, activity: "review" },
+        { id: "M1", tier: "must", minutes: 10 },
+        { id: "M7", tier: "must", minutes: 1 },
+      ],
+      aliases,
+    );
+    expect(unknown).toEqual(["M7"]);
+    expect(refs.map((r) => [r.chapter, r.activity, r.minutes])).toEqual([[2, "read", 30], [3, "review", 20], [null, "read", 10]]);
+  });
+  it("collapses runs of consecutive chapters", () => {
+    expect(formatAliases([{ id: "uuid-a", chapter: 1 }, { id: "uuid-a", chapter: 2 }, { id: "uuid-a", chapter: 3 }, { id: "uuid-b", chapter: null }, { id: "uuid-a", chapter: 4 }], aliases)).toBe("M1.1–M1.3, M2, M1.4");
+    expect(refKey({ id: "x", chapter: null })).toBe("x#0");
   });
   it("drops unknown ids and duplicates, rounds minutes, clips notes", () => {
     const { refs, unknown } = resolveMaterialRefs(

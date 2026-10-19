@@ -17,28 +17,76 @@ import type { SourceInput } from "@/lib/schemas/source";
 
 /**
  * Prompts always call materials `M1…Mn` in list order, whatever their real ids are (short ids while drafting, uuids
- * once saved), so the model never has to echo a uuid. These map between the two.
+ * once saved), so the model never has to echo a uuid. A book with a chapter list also gets one alias per chapter,
+ * `M1.3` for the third chapter in its list. These map between the two.
  */
-export interface MaterialAliases {
-  alias(id: string): string | undefined;
-  resolve(alias: string): string | undefined;
+export interface ResolvedAlias {
+  id: string;
+  /** 1-based position in the material's chapter list; null for the whole resource. */
+  chapter: number | null;
 }
 
-export function aliasMaterials(materials: Pick<Material, "id">[]): MaterialAliases {
+export interface MaterialAliases {
+  alias(id: string, chapter?: number | null): string | undefined;
+  resolve(alias: string): ResolvedAlias | undefined;
+  /** How many chapters the material's list has; 0 without a list. */
+  chapters(id: string): number;
+}
+
+const ALIAS_RE = /^\[?\s*(m\d+)(?:\.(\d+))?\s*\]?$/i;
+
+export function aliasMaterials(materials: Pick<Material, "id" | "toc">[]): MaterialAliases {
   const toAlias = new Map<string, string>();
   const fromAlias = new Map<string, string>();
+  const counts = new Map<string, number>();
   materials.forEach((m, i) => {
     const alias = `M${i + 1}`;
     toAlias.set(m.id, alias);
     fromAlias.set(alias.toLowerCase(), m.id);
+    counts.set(m.id, m.toc?.chapters.length ?? 0);
   });
   return {
-    alias: (id) => toAlias.get(id),
-    resolve: (alias) => fromAlias.get(alias.trim().replace(/^\[|\]$/g, "").toLowerCase()),
+    alias: (id, chapter) => {
+      const base = toAlias.get(id);
+      return base === undefined ? undefined : chapter ? `${base}.${chapter}` : base;
+    },
+    resolve: (alias) => {
+      const m = alias.match(ALIAS_RE);
+      if (!m) return undefined;
+      const id = fromAlias.get(m[1].toLowerCase());
+      if (!id) return undefined;
+      if (m[2] === undefined) return { id, chapter: null };
+      const chapter = Number(m[2]);
+      return chapter >= 1 && chapter <= (counts.get(id) ?? 0) ? { id, chapter } : undefined;
+    },
+    chapters: (id) => counts.get(id) ?? 0,
   };
 }
 
-/** Resolves what the model wrote to real ids. Unknown ids are dropped and returned so the caller can report them. */
+/** One key per resource: `uuid#3` for a chapter, `uuid#0` for the whole. */
+export function refKey(ref: { id: string; chapter?: number | null }): string {
+  return `${ref.id}#${ref.chapter ?? 0}`;
+}
+
+/** "M1.1–M1.3, M2, M1.4": runs of consecutive chapters of one material collapse. */
+export function formatAliases(refs: ResolvedAlias[], aliases: MaterialAliases): string {
+  const runs: { id: string; first: number | null; last: number | null }[] = [];
+  for (const ref of refs) {
+    const prev = runs[runs.length - 1];
+    if (prev && prev.id === ref.id && prev.last !== null && ref.chapter === prev.last + 1) prev.last = ref.chapter;
+    else runs.push({ id: ref.id, first: ref.chapter, last: ref.chapter });
+  }
+  return runs
+    .map((r) => {
+      const first = aliases.alias(r.id, r.first);
+      if (first === undefined) return null;
+      return r.first !== null && r.last !== null && r.last > r.first ? `${first}–${aliases.alias(r.id, r.last)}` : first;
+    })
+    .filter((s): s is string => s !== null)
+    .join(", ");
+}
+
+/** Resolves what the model wrote to real ids and chapters. Unknown ids are dropped and returned so the caller can report them. */
 export function resolveMaterialRefs(
   refs: MaterialRefDraft[] | undefined,
   aliases: MaterialAliases,
@@ -47,14 +95,14 @@ export function resolveMaterialRefs(
   const unknown: string[] = [];
   const seen = new Set<string>();
   for (const draft of refs ?? []) {
-    const id = aliases.resolve(draft.id);
-    if (!id) {
+    const resolved = aliases.resolve(draft.id);
+    if (!resolved) {
       unknown.push(draft.id);
       continue;
     }
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push({ ...normalizeMaterialRef(draft), id });
+    if (seen.has(refKey(resolved))) continue;
+    seen.add(refKey(resolved));
+    out.push({ ...normalizeMaterialRef(draft), ...resolved });
   }
   return { refs: out, unknown };
 }
@@ -64,14 +112,14 @@ export function resolveCoverRefs(refs: CoverRefDraft[] | undefined, aliases: Mat
   const unknown: string[] = [];
   const seen = new Set<string>();
   for (const draft of refs ?? []) {
-    const id = aliases.resolve(draft.id);
-    if (!id) {
+    const resolved = aliases.resolve(draft.id);
+    if (!resolved) {
       unknown.push(draft.id);
       continue;
     }
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push({ ...normalizeCoverRef(draft), id });
+    if (seen.has(refKey(resolved))) continue;
+    seen.add(refKey(resolved));
+    out.push({ ...normalizeCoverRef(draft), ...resolved });
   }
   return { refs: out, unknown };
 }
