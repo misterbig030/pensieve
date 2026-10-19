@@ -6,7 +6,16 @@ the hand-split flow had bypassed the reservation (the client sends the week befo
 now converts it), the budget was judged before chapter rows were sized, `treeChecks` misread a month with one hand-split
 week as headings, a revision dropped every whole-book row of a plan saved before this change (rows whose note names
 chapters now stand as written), the availability block offered review covers as reading, and an unlisted book reserved by
-topic was charged in full to every heading. Not yet live-checked: the operator applies `0011_chapter_refs` first.
+topic was charged in full to every heading. Live-checked 2026-10-18 in Chrome against the worktree's dev server after the
+operator applied `0011_chapter_refs` (169 existing rows took chapter 0): a 90-day draft of the AI-engineering plan reserved
+ch. 1–4 for month 1, ch. 5–6 and 10 for month 2, and a review of ch. 3–6 for month 3; month 1's weeks read each chapter once
+(1–2, 3, 4) with marked reviews; splitting week 1 sent the days the reservation (`M1.1–M1.2`) and what other units hold, the
+first answer broke the day budgets, the retry was asked with those lines quoted, a non-consecutive re-read of ch. 1 on day 6
+was dropped as an overlap, and the days ended inside ch. 1–2 at exactly 107 and 140 minutes; planning month 2 produced four
+weeks inside ch. 5, 6 and 10 with no retry; day 1's lesson prompt read `ch. 1 "Introduction to Building AI Applications with
+Foundation Models" · sections: The Rise of AI Engineering; Foundation Model Use Cases — must, 55 min` and the lesson followed
+it. About $0.16 on the user's key. Observed: when a week's reservation cannot fit its days' must-reading (247 min against
+7 × 30), the retry cannot cure the over-budget breaches and only costs a call; see Open items.
 Builds on `feat/book-chapters` (PR #10, merged), which gives every verified book a chapter list. Follows the live check of 2026-10-17, in which a hand-split week
 read chapters its neighbour had reserved, and the design conversation and Open Library survey of 2026-10-18.
 
@@ -405,5 +414,7 @@ and month 2's weeks, when planned, to read only chapters 5 and 6.
   not here.
 - Lists whose chapters have no numbers (`n` null, from the page path): the alias still works by position and the
   prompt shows `M1.3 "Title"` without `ch. 3`. Whether to number them for the learner is a UI question.
-- The retry doubles the cost of a level that breaches. The first live runs will say how often that happens; if it is
-  most levels, the rules need work before the retry does.
+- The retry doubles the cost of a level that breaches. The live check showed one case it cannot cure: a week whose
+  reservation is larger than its days' must-reading in total (247 min against 7 × 30). The model shrank its minutes, sizing
+  restored them, and the breaches stayed facts. Either the weeks call should be told the days' capacity, or a level whose
+  only breaches are over-budget ones that no answer can fix should skip the retry.
