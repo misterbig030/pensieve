@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
-import { chapterLabel, partLabel, readRowsFor } from "./ReadTable";
+import { byTier, chapterLabel, partLabel, readRowsFor } from "./ReadTable";
 
 describe("readRowsFor", () => {
   it("fills chapter, activity and a key per row", () => {
@@ -36,5 +36,22 @@ describe("readRowsFor", () => {
     expect(partLabel(review)).toBe("Review of Ch. 2 Understanding Foundation Models");
     expect(partLabel(whole)).toBeNull();
     expect(partLabel(wholeReview)).toBe("Review");
+  });
+});
+
+describe("row order", () => {
+  it("shows must rows before should rows, keeping the plan's order within a tier", () => {
+    const byId = new Map(AIE_MATERIALS.map((m) => [m.id, m]));
+    const rows = readRowsFor(
+      [
+        { id: "aie", tier: "should", minutes: 50, note: null, chapter: 2, activity: "review" },
+        { id: "aie", tier: "must", minutes: 93, note: null, chapter: 3 },
+        { id: "evals", tier: "should", minutes: 79, note: null },
+        { id: "oaievals", tier: "must", minutes: 25, note: null },
+      ],
+      byId,
+    );
+    expect(rows.map((r) => r.key)).toEqual(["aie#3", "oaievals#0", "aie#2", "evals#0"]);
+    expect([{ tier: "should" as const }, { tier: "must" as const }].sort(byTier).map((r) => r.tier)).toEqual(["must", "should"]);
   });
 });
