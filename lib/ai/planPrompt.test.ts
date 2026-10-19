@@ -329,6 +329,16 @@ describe("chapters as resources in prompts", () => {
     expect(prompt).not.toContain("Take them first from what the unit marked");
     expect(prompt).not.toContain("Where a book's chapters are listed");
   });
+  it("review covers are offered to review, never as resources to read", () => {
+    const root = aiePlan();
+    const w4 = root.children![0].children![3];
+    w4.covers = w4.materials!.map((m) => ({ id: m.id, chapter: m.chapter, note: null, activity: "review" as const }));
+    delete w4.materials;
+    layout(root);
+    const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "day", spans: Array(8).fill(1), startDay: 23, totalDays: 90, tree: root, parentId: "w4", unitsAreLeaves: true });
+    expect(prompt).toContain("This unit reserves nothing to read: its days may only review.\nTo review (activity \"review\"): M1.1–M1.4.");
+    expect(prompt).not.toContain("may use: M1.1–M1.4");
+  });
   it("the top level is told everything is free", () => {
     const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", level: "month", spans: [30, 30, 30], startDay: 1, totalDays: 90, unitsAreLeaves: false, decideSplit: true });
     expect(prompt).toContain("Every resource is free. Reserve each in at most one month; the book's chapters in order.");

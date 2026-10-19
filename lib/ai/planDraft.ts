@@ -228,13 +228,18 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       return node;
     });
     if (!aliases) return [];
+    // Chapter rows take their minutes from the list before the budget is judged, so the checks see real sizes.
+    if (leaf) sizeChapterRows(final, ctx.materials);
     const { root, placed } = placeForChecks(input.tree, input.parentId, final);
     // While the split is decided in this same call, there is no share to hold the units to yet.
     const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, readingShare: input.decideSplit ? null : readingShareOf(ctx.split) });
     breaches = checks.breaches;
     const facts = [...checks.facts, ...breaches.map((b) => `breach: ${b.text}`)];
-    if (attempt === 2) facts.push(...dropBreaches(final, breaches));
-    if (leaf) sizeChapterRows(final, ctx.materials);
+    if (attempt === 2) {
+      // Rows that still breach are dropped, the drops recorded, and the surviving chapter rows resized.
+      facts.push(...dropBreaches(final, breaches));
+      if (leaf) sizeChapterRows(final, ctx.materials);
+    }
     return facts;
   };
 
@@ -352,12 +357,18 @@ export interface StreamExpandNodeInput extends Omit<PlanExpandRequest, "tree"> {
 
 /** Plans one heading (or splits one week leaf) into the level below it. */
 export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGenerator<PlanExpandEvent> {
-  const root = layout(input.tree);
+  const root = layout(cloneTree(input.tree));
   const node = findNode(root, input.nodeId);
   if (!node) throw new Error("Plan node not found");
   if (node.children) throw new Error("This unit is already planned in detail");
   const level = childLevel(node.level);
   if (!level) throw new Error("A day cannot be planned in more detail");
+  // A week split by hand: its Read table is the reservation its days are planned from, whatever the client sent.
+  if (input.reason === "split" && node.materials) {
+    node.covers = node.materials.map(({ id, note, chapter, activity }) => ({ id, note, chapter, activity }));
+    delete node.materials;
+    node.manualSplit = true;
+  }
   const granularity: Granularity = input.reason === "split" ? "day" : input.granularity;
   const ctx = { ...input, granularity, outlineModel: input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL) };
   const spans = childSpans(node);

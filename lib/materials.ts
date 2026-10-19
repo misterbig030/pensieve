@@ -1,5 +1,5 @@
 import { learnerKind } from "@/lib/ai/research/verify";
-import { budgetFor, cloneTree, labelOf, parentOf, walk, type PlanNode } from "@/lib/planTree";
+import { budgetFor, cloneTree, labelOf, parentOf, walk, type Granularity, type PlanNode } from "@/lib/planTree";
 import { dayMinutes } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
@@ -267,6 +267,17 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const listed = (id: string) => (byId.get(id)?.toc?.chapters.length ?? 0) > 0;
   // A book without a list is divided by topic in notes, so several units hold it; it is never anyone's to take.
   const byTopic = (r: RefLike) => !r.chapter && !listed(r.id) && byId.get(r.id)?.kind === "book";
+  // A row saved before chapters were data: the whole book, with the chapters in its note. It stands as written.
+  const legacy = (r: RefLike) => !r.chapter && listed(r.id) && parseChapters(r.note).length > 0;
+  /** The minutes a reservation is known to take: a chapter's size, a legacy note's chapters, a sized whole resource. */
+  const knownMinutes = (r: RefLike): number => {
+    const m = byId.get(r.id);
+    if (r.chapter) return chapterAt(m?.toc, r.chapter)?.minutes ?? 0;
+    if (byTopic(r)) return 0;
+    if (legacy(r)) return parseChapters(r.note).reduce((sum, n) => sum + (m?.toc?.chapters.find((c) => c.n === n)?.minutes ?? 0), 0);
+    if (listed(r.id)) return 0;
+    return m?.minutes ?? 0;
+  };
   const share = input.readingShare ?? MUST_SHARE;
   const verb = input.leaves ? "reads" : "reserves";
   const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
@@ -326,7 +337,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     const unit = label(node);
     const refs = refsOf(node);
     const reads = refs.filter(isRead);
-    const whole = reads.filter((r) => !r.chapter && listed(r.id));
+    const whole = reads.filter((r) => !r.chapter && listed(r.id) && !legacy(r));
     if (whole.length > 0) breach("whole-book", index, unit, whole, `${unit} refers to ${names(whole)} as a whole; use its chapters`);
     const chaptered = reads.filter((r) => !whole.includes(r));
     if (hasReservation) {
@@ -357,7 +368,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
         breach("over-budget", index, unit, [], `${unit}'s must-reading is ${must} min against a budget of about ${Math.round(budget * share)} min`);
       }
     } else {
-      const known = reads.reduce((sum, r) => sum + (r.chapter ? (chapterAt(byId.get(r.id)?.toc, r.chapter)?.minutes ?? 0) : (byId.get(r.id)?.minutes ?? 0)), 0);
+      const known = reads.reduce((sum, r) => sum + knownMinutes(r), 0);
       const budget = budgetFor(node.len, input.hoursPerWeek) * 60 * share;
       if (known > budget * SHARE_TOLERANCE) {
         breach("over-budget", index, unit, [], `${unit} reserves about ${known} min of reading against a budget of about ${Math.round(budget)} min`);
@@ -421,7 +432,12 @@ function chaptersBefore(root: PlanNode, node: PlanNode | undefined, backbone: Ch
  * Every sibling group of a tree through `levelChecks`, in walk order. `nodes` is that walk order without the root, and
  * each breach's `index` points into it, so `dropBreaches(nodes, breaches)` works on the whole tree.
  */
-export function treeChecks(root: PlanNode, materials: CheckMaterial[], opts: { hoursPerWeek?: number; readingShare?: number | null }): LevelChecks & { nodes: PlanNode[] } {
+export function treeChecks(
+  root: PlanNode,
+  materials: CheckMaterial[],
+  opts: { granularity: Granularity; hoursPerWeek?: number; readingShare?: number | null },
+): LevelChecks & { nodes: PlanNode[] } {
+  const { granularity, ...shares } = opts;
   const nodes: PlanNode[] = [];
   const position = new Map<string, number>();
   walk(root, (n) => {
@@ -434,8 +450,10 @@ export function treeChecks(root: PlanNode, materials: CheckMaterial[], opts: { h
   walk(root, (n) => {
     const group = n.children;
     if (!group || group.length === 0) return;
-    const leaves = group.every((g) => g.children === null && !g.covers);
-    const out = levelChecks({ root, nodes: group, leaves, top: n.id === root.id, materials, unknownIds: [], ...opts });
+    // Leaf-ness is the level's, not the node's: a hand-split week is still a week-sized leaf of a week plan.
+    const level = group[0].level;
+    const leaves = level === "day" || (level === "week" && granularity === "week");
+    const out = levelChecks({ root, nodes: group, leaves, top: n.id === root.id, materials, unknownIds: [], ...shares });
     facts.push(...out.facts);
     breaches.push(...out.breaches.map((b) => ({ ...b, index: b.index < 0 ? -1 : position.get(group[b.index].id)! })));
   });

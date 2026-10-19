@@ -200,6 +200,29 @@ describe("revisePlanTree checks the whole tree", () => {
     mockedGenerateObject.mockReset();
   });
 
+  it("keeps a plan saved before chapters: whole-book rows with chapter notes survive a rename", async () => {
+    const legacy = layout(
+      makeRoot([
+        makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, materials: [{ id: "aie", tier: "must", minutes: 40, note: "Ch. 1 Introduction" }] }),
+        makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1, materials: [{ id: "aie", tier: "must", minutes: 40, note: "Ch. 2 Understanding Foundation Models" }] }),
+      ]),
+    );
+    mockedGenerateObject.mockResolvedValueOnce({
+      object: {
+        units: [
+          { ref: "n1", title: "A", summary: "a", days: 1, materials: [{ id: "M1", tier: "must", minutes: 40, note: "Ch. 1 Introduction" }] },
+          { ref: "n2", title: "B, renamed", summary: "b", days: 1, materials: [{ id: "M1", tier: "must", minutes: 40, note: "Ch. 2 Understanding Foundation Models" }] },
+        ],
+      },
+      usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 },
+      finishReason: "stop",
+    } as unknown as Awaited<ReturnType<typeof generateObject>>);
+    const calls: ModelCall[] = [];
+    const { tree } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, tree: legacy, lockBefore: 0, changeRequest: "rename day 2", log: { onCall: (c) => void calls.push(c) } });
+    expect(calls[0].facts.filter((f) => f.startsWith("dropped"))).toEqual([]);
+    expect(tree.children!.map((d) => d.materials?.length)).toEqual([1, 1]);
+  });
+
   it("drops a duplicated resource and a bare book id after one call, with facts", async () => {
     const two = layout(
       makeRoot([

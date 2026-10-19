@@ -136,7 +136,7 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       return [];
     }
     if (!aliases) return [];
-    const checks = treeChecks(revised, input.materials, { hoursPerWeek: input.hoursPerWeek, readingShare: readingShareOf(input.split) });
+    const checks = treeChecks(revised, input.materials, { granularity: input.granularity, hoursPerWeek: input.hoursPerWeek, readingShare: readingShareOf(input.split) });
     const dropped = dropBreaches(checks.nodes, checks.breaches);
     return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...dropped];
   };

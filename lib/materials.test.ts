@@ -237,10 +237,41 @@ describe("levelChecks", () => {
     expect(dropBreaches(placed, breaches)).toEqual(["dropped M1.3 from Day 2: outside", "dropped M1.3 from Day 2: overlap"]);
     expect(placed[1].materials).toBeUndefined();
   });
+  it("treeChecks judges a mixed group of leaf weeks by level and granularity, not by children", () => {
+    const root = aiePlan();
+    const [m1, m2] = root.children!;
+    const weeks = weeksOf(root);
+    // Week 1 split by hand: covers plus days. Weeks 2 and 3 share the 240-minute course, longer than a week's reading.
+    weeks[0].covers = weeks[0].materials!.map((r) => ({ id: r.id, chapter: r.chapter, note: null }));
+    delete weeks[0].materials;
+    weeks[0].children = [makeNode({ id: "d1", level: "day", title: "D", summary: "s", len: 7, materials: [read(1, 107), read(2, 140)] })];
+    m1.covers!.push({ id: "rag", note: null });
+    m2.covers = m2.covers!.filter((r) => r.id !== "rag");
+    weeks[1].materials!.push(read(null, 120, "rag"));
+    weeks[2].materials!.push(read(null, 120, "rag"));
+    layout(root);
+    const out = treeChecks(root, AIE_MATERIALS, { granularity: "week", ...share });
+    expect(out.breaches.map((b) => b.text)).not.toContain("Week 3 reads M5, which Week 2 holds");
+    expect(out.breaches.map((b) => b.text)).toContain("Week 2's must-reading is 339 min against a budget of about 144 min");
+  });
+  it("a saved whole-book row whose note names chapters is neither a whole-book breach nor charged the whole book", () => {
+    const root = aiePlan();
+    const [m1] = root.children!;
+    m1.covers = [{ id: "aie", note: "ch. 1–4" }, { id: "evals", note: null }, { id: "oaievals", note: null }];
+    const out = check(root, root.children!, false, true);
+    expect(out.breaches.map((b) => b.kind)).not.toContain("whole-book");
+    expect(out.breaches.map((b) => b.kind)).not.toContain("over-budget"); // 466 + 109 min against 624 × 1.25, not 1105 + 109
+  });
+  it("an unlisted sized book reserved by topic is not charged in full to every heading", () => {
+    const book = { id: "B", backbone: true, kind: "book" as const, minutes: 1105 };
+    const months = [1, 2, 3].map((i) => makeNode({ id: `m${i}`, level: "month", title: `M${i}`, summary: "s", len: 30, covers: [{ id: "B", note: `part ${i}` }] }));
+    const root = layout(makeRoot(months));
+    expect(levelChecks({ root, nodes: months, leaves: false, top: true, materials: [book], unknownIds: [], ...share }).breaches).toEqual([]);
+  });
   it("treeChecks runs every sibling group", () => {
     const root = aiePlan();
     weeksOf(root)[1].materials!.push(read(1, 107));
-    const out = treeChecks(root, AIE_MATERIALS, share);
+    const out = treeChecks(root, AIE_MATERIALS, { granularity: "week", ...share });
     expect(out.breaches.map((b) => b.text)).toEqual([
       "Week 1's must-reading is 247 min against a budget of about 144 min",
       "Week 2 reads M1.1, which Week 1 holds",

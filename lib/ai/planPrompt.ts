@@ -303,9 +303,14 @@ export function availabilityLines(input: UnitsPromptInput, aliases: MaterialAlia
     return [`Every resource is free. ${each}${listedBackbone ? "; the book's chapters in order" : ""}.`];
   }
   const lines: string[] = [];
-  const reserved = (parent.covers ?? []).filter((r) => aliases.alias(r.id));
-  if (reserved.length > 0) lines.push(`This unit's reservation, the only resources its ${noun}s may use: ${describeRefs(reserved, aliases)}.`);
+  // A week split by hand passes its own Read table down as the reservation.
+  const reserved = (parent.covers ?? parent.materials ?? []).filter((r) => aliases.alias(r.id));
+  const toRead = reserved.filter((r) => activityOf(r) === "read");
+  const toReview = reserved.filter((r) => activityOf(r) === "review");
+  if (toRead.length > 0) lines.push(`This unit's reservation, the only resources its ${noun}s may use: ${describeRefs(toRead, aliases)}.`);
+  else if (toReview.length > 0) lines.push(`This unit reserves nothing to read: its ${noun}s may only review.`);
   else lines.push(`Take them from the list above, matching each unit's ground.`);
+  if (toReview.length > 0) lines.push(`To review (activity "review"): ${describeRefs(toReview, aliases)}.`);
   const skip = new Set<string>([input.tree.id, parent.id]);
   for (let p = parentOf(input.tree, parent.id); p; p = parentOf(input.tree, p.id)) skip.add(p.id);
   const held: string[] = [];
@@ -344,7 +349,7 @@ function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases)
 function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): string {
   const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
   // A week split into days by hand passes its own Read table down as the reservation.
-  const reserved = (parent?.covers ?? parent?.materials ?? []).filter((r) => aliases.alias(r.id));
+  const reserved = (parent?.covers ?? parent?.materials ?? []).filter((r) => aliases.alias(r.id) && activityOf(r) === "read");
   const backbone = input.materials.findIndex((m) => m.backbone);
   const listed = backbone >= 0 && !!input.materials[backbone].toc;
   const B = `M${backbone + 1}`;
