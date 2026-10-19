@@ -15,14 +15,23 @@ export interface ReadRow {
   key: string;
 }
 
-/** A node's Read table rows, in order, skipping references to materials that are not in the list. */
+const TIER_RANK: Record<MaterialTier, number> = { must: 0, should: 1 };
+
+/** Must rows before should rows; a stable sort keeps the plan's own order within a tier. */
+export function byTier(a: { tier: MaterialTier }, b: { tier: MaterialTier }): number {
+  return TIER_RANK[a.tier] - TIER_RANK[b.tier];
+}
+
+/** A node's Read table rows, must first, skipping references to materials that are not in the list. */
 export function readRowsFor(refs: MaterialRef[] | undefined, byId: ReadonlyMap<string, Material>): ReadRow[] {
-  return (refs ?? []).flatMap((r) => {
-    const material = byId.get(r.id);
-    return material
-      ? [{ material, tier: r.tier, minutes: r.minutes, note: r.note, chapter: chapterAt(material.toc, r.chapter), activity: r.activity ?? "read", key: `${r.id}#${r.chapter ?? 0}` }]
-      : [];
-  });
+  return (refs ?? [])
+    .flatMap((r) => {
+      const material = byId.get(r.id);
+      return material
+        ? [{ material, tier: r.tier, minutes: r.minutes, note: r.note, chapter: chapterAt(material.toc, r.chapter), activity: r.activity ?? "read", key: `${r.id}#${r.chapter ?? 0}` }]
+        : [];
+    })
+    .sort(byTier);
 }
 
 /** "Ch. 2 Understanding Foundation Models", or the title alone for an unnumbered chapter. */
