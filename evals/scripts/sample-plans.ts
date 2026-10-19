@@ -58,6 +58,8 @@ interface Sample {
   calls: GenerationLogRow[];
   /** What the generators' own checks reported per call (unknown ids, over-budget leaves, chapter order, …). */
   checkFacts: string[];
+  /** How many rule breaches the checks reported (`breach: …` facts): reads outside a reservation, overlaps, whole-book ids, reviews before reading, over-budget units, unread reservations. */
+  breaches: number;
   costUsd: number;
   latencyMs: number;
   /** One-line facts for the stdout summary; not a verdict. */
@@ -169,7 +171,9 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
     error = { name: err instanceof LockedNodeError ? "LockedNodeError" : err.name, message: err.message };
     facts = `${error.name}: ${error.message.slice(0, 100)}`;
   }
+  const breaches = checkFacts.filter((f) => f.includes(": breach: ")).length;
   if (checkFacts.length > 0) facts += ` · checks ${checkFacts.length}`;
+  if (breaches > 0) facts += ` · breaches ${breaches}`;
 
   return {
     ...base,
@@ -182,6 +186,7 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
     changed,
     calls,
     checkFacts,
+    breaches,
     costUsd: calls.reduce((sum, c) => sum + c.costUsd, 0),
     latencyMs: Math.round(performance.now() - startedAt),
     facts,

@@ -101,3 +101,14 @@ share of runs with a backbone whose list was found. The rubric's "Materials fit"
 chapter reference in the plan that is not in the book's list as a regression, and a plan that names chapters by topic
 because no list was found as correct. Spec: `docs/superpowers/specs/2026-10-17-book-chapters-design.md`. The eval has
 not been rerun for this change.
+
+## Chapters as resources (Oct 18)
+
+Each chapter of a listed book is now a resource of its own (`M1.3`), and every drafted level runs the reference checks
+in code: a read outside the parent's reservation, a resource read twice, a bare book id for a listed book, a review of
+something no earlier unit read, a unit over its reading budget, a reservation nothing reads. A breaching level is asked
+once more with the breaches quoted; rows that still breach are dropped. Each breach reaches a call's facts as
+`breach: …` and each drop as `dropped …`; `sample-plans` counts the breaches per sample (`breaches`) and prints them in
+the facts line. For the rubric, a plan whose months share a chapter, or whose days read outside their week's
+reservation, is a regression; a review row (activity `review`) over chapters read earlier is correct. Spec:
+`docs/superpowers/specs/2026-10-18-chapter-resources-design.md`. The eval has not been rerun for this change.
