@@ -221,7 +221,7 @@ export interface LevelChecks {
   breaches: Breach[];
 }
 
-type CheckMaterial = Pick<Material, "id" | "toc" | "minutes"> & { backbone?: boolean };
+type CheckMaterial = Pick<Material, "id" | "toc" | "minutes"> & { backbone?: boolean; kind?: Material["kind"] };
 
 export interface LevelCheckInput {
   root: PlanNode;
@@ -263,6 +263,8 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const aliases = aliasMaterials(input.materials);
   const byId = new Map(input.materials.map((m) => [m.id, m]));
   const listed = (id: string) => (byId.get(id)?.toc?.chapters.length ?? 0) > 0;
+  // A book without a list is divided by topic in notes, so several units hold it; it is never anyone's to take.
+  const byTopic = (r: RefLike) => !r.chapter && !listed(r.id) && byId.get(r.id)?.kind === "book";
   const share = input.readingShare ?? MUST_SHARE;
   const verb = input.leaves ? "reads" : "reserves";
   const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
@@ -290,7 +292,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const taken = new Map<string, string>();
   walk(input.root, (n) => {
     if (n.id === input.root.id || skip.has(n.id)) return;
-    for (const r of refsOf(n).filter(isRead)) if (!taken.has(refKey(r))) taken.set(refKey(r), label(n));
+    for (const r of refsOf(n).filter(isRead)) if (!byTopic(r) && !taken.has(refKey(r))) taken.set(refKey(r), label(n));
   });
   // Siblings: a heading holds a resource exclusively; consecutive leaves may share one that is too long for one of them.
   const siblingLast = new Map<string, number>();
@@ -331,6 +333,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     }
     const byHolder = new Map<string, RefLike[]>();
     for (const r of chaptered) {
+      if (byTopic(r)) continue;
       const sibling = siblingLast.get(refKey(r));
       const holder = taken.get(refKey(r)) ?? (sibling !== undefined && !mayShare(node, r, index) ? label(input.nodes[sibling]) : undefined);
       if (holder) byHolder.set(holder, [...(byHolder.get(holder) ?? []), r]);

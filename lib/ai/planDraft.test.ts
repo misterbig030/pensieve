@@ -2,12 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Material } from "@/lib/schemas/material";
 import type { UnitDraft } from "@/lib/schemas/plan";
 
-vi.mock("ai", () => ({ streamObject: vi.fn() }));
+// Only streamObject is faked; the error classes stay real so provider refusals are recognised.
+vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof import("ai")>()), streamObject: vi.fn() }));
 
 import { streamObject } from "ai";
+import { APICallError } from "@ai-sdk/provider";
 import type { ModelCall } from "./logged";
-import { streamPlanDraft } from "./planDraft";
-import type { PlanDraftEvent } from "@/lib/planChat";
+import { streamExpandNode, streamPlanDraft } from "./planDraft";
+import type { ResolvedModel } from "./resolve";
+import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
+import type { PlanNode } from "@/lib/planTree";
+import { AIE_MATERIALS, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 
 const mockedStreamObject = vi.mocked(streamObject);
 
@@ -36,7 +41,7 @@ describe("streamPlanDraft with materials", () => {
     mockedStreamObject
       .mockReturnValueOnce(
         fakeStream([
-          { title: "Foundations", summary: "a", covers: [{ id: "M1", note: "ch. 1–2" }, { id: "M9" }] },
+          { title: "Foundations", summary: "a", covers: [{ id: "M1", note: "ch. 1–2" }, { id: "M9" }, { id: "M2" }] },
           { title: "Applied", summary: "b", covers: [{ id: "M1", note: "ch. 5" }] },
           { title: "Projects", summary: "c" },
           { title: "Review", summary: "d" },
@@ -67,11 +72,14 @@ describe("streamPlanDraft with materials", () => {
     if (finish?.type !== "finish") return;
     const [w1, w2, w3] = finish.root.children!;
     expect(w3.covers).toBeUndefined();
-    expect(w1.covers).toEqual([{ id: "M1", note: "ch. 1–2" }]);
-    expect(w2.covers).toEqual([{ id: "M1", note: "ch. 5" }]);
+    expect(w1.covers).toEqual([
+      { id: "M1", note: "ch. 1–2", chapter: null, activity: "read" },
+      { id: "M2", note: null, chapter: null, activity: "read" },
+    ]);
+    expect(w2.covers).toEqual([{ id: "M1", note: "ch. 5", chapter: null, activity: "read" }]);
     expect(w1.children![0].materials).toEqual([
-      { id: "M1", tier: "must", minutes: 40, note: "ch. 1" },
-      { id: "M2", tier: "should", minutes: 10, note: null },
+      { id: "M1", tier: "must", minutes: 40, note: "ch. 1", chapter: null, activity: "read" },
+      { id: "M2", tier: "should", minutes: 10, note: null, chapter: null, activity: "read" },
     ]);
     expect(calls[0].facts).toEqual(expect.arrayContaining(["dropped unknown M9", "backbone ch. 3, 4 not reserved"]));
     expect(calls[1].facts).toEqual(expect.arrayContaining(["no must: Day 2, Day 3, Day 4, Day 5, Day 6, Day 7"]));
@@ -177,5 +185,87 @@ describe("streamPlanDraft and the time split", () => {
     for await (const event of streamPlanDraft({ topic: "T", days: 28, granularity: "week", split, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
     expect(events.some((e) => e.type === "split")).toBe(false);
     expect(calls[0].prompt).not.toContain('as "split"');
+  });
+});
+
+/** The stream shape of a failed call: onError fires while the stream is consumed, and the result never settles. */
+function failingStream(error: unknown) {
+  return (opts: unknown) => {
+    const onError = (opts as { onError?: (e: { error: unknown }) => void }).onError;
+    return {
+      partialObjectStream: (async function* () {
+        onError?.({ error });
+      })(),
+      object: new Promise(() => {}),
+      usage: new Promise(() => {}),
+      finishReason: new Promise(() => {}),
+    } as unknown as ReturnType<typeof streamObject>;
+  };
+}
+
+describe("breaches while drafting", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+  });
+  const ctx = { topic: "AI engineering", days: 7, granularity: "day" as const, materials: AIE_MATERIALS, hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" } };
+  const dayUnits = (chapters: number[]) => chapters.map((c, i) => ({ title: `D${i + 1}`, summary: "s", materials: [{ id: `M1.${c}`, tier: "must" as const, minutes: 20 }] }));
+  /** The fixture with week 1 as a hand-split week: its Read table has become its reservation. */
+  const tree = () => {
+    const r = aiePlan();
+    const w1 = r.children![0].children![0];
+    w1.covers = w1.materials!.map((m) => ({ id: m.id, chapter: m.chapter, note: null }));
+    delete w1.materials;
+    return r;
+  };
+
+  it("retries once, silently, when a level breaches, and keeps the corrected answer", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(dayUnits([1, 1, 2, 2, 3, 3, 4]))).mockReturnValueOnce(fakeStream(dayUnits([1, 1, 1, 2, 2, 2, 2])));
+    const calls: ModelCall[] = [];
+    const events: PlanExpandEvent[] = [];
+    for await (const e of streamExpandNode({ ...ctx, tree: tree(), nodeId: "w1", reason: "split", log: { onCall: (c) => void calls.push(c) } })) events.push(e);
+    expect(mockedStreamObject).toHaveBeenCalledTimes(2);
+    expect(events.filter((e) => e.type === "child")).toHaveLength(6); // the last unit arrives with done, and the retry streamed nothing
+    const retryPrompt = (mockedStreamObject.mock.calls[1][0] as { prompt: string }).prompt;
+    expect(retryPrompt).toContain("Your previous answer broke these rules; return all 7 units again, corrected:\n- Day 5 reads M1.3, which Week 1 did not reserve");
+    expect(calls.map((c) => c.label)).toEqual(["Week 1 · 7 days", "Week 1 · 7 days (retry)"]);
+    expect(calls[0].facts).toContain("breach: Day 5 reads M1.3, which Week 2 holds");
+    const finish = events.at(-1);
+    if (finish?.type !== "finish") throw new Error("no finish");
+    expect(finish.children.map((d) => d.materials![0].chapter)).toEqual([1, 1, 1, 2, 2, 2, 2]);
+    expect(finish.children.map((d) => d.materials![0].minutes)).toEqual([36, 36, 35, 35, 35, 35, 35]); // sized from 107 and 140
+  });
+  it("drops rows that still breach after the retry and records the drops", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(dayUnits([1, 3]))).mockReturnValueOnce(fakeStream(dayUnits([1, 3])));
+    const calls: ModelCall[] = [];
+    let children: PlanNode[] = [];
+    for await (const e of streamExpandNode({ ...ctx, tree: tree(), nodeId: "w1", reason: "split", log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") children = e.children;
+    expect(children[1].materials).toBeUndefined();
+    expect(calls[1].facts).toEqual(expect.arrayContaining(["dropped M1.3 from Day 2: outside", "dropped M1.3 from Day 2: overlap"]));
+  });
+  it("an over-budget leaf triggers the retry and then stays a fact", async () => {
+    const week = (title: string, ids: string[], minutes: number[]) => ({ title, summary: "s", materials: ids.map((id, i) => ({ id, tier: "must" as const, minutes: minutes[i] })) });
+    const weeks = [week("W1", ["M1.1", "M1.2"], [107, 140]), week("W2", ["M1.3"], [93]), week("W3", ["M1.4"], [126]), week("W4", ["M1.5"], [98])];
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks)).mockReturnValueOnce(fakeStream(weeks));
+    const calls: ModelCall[] = [];
+    for await (const _ of streamPlanDraft({ ...ctx, days: 28, granularity: "week", log: { onCall: (c) => void calls.push(c) } })) void _;
+    expect(mockedStreamObject).toHaveBeenCalledTimes(2);
+    expect(calls[1].facts).toContain("breach: Week 1's must-reading is 247 min against a budget of about 144 min");
+    expect(calls[1].facts.some((f) => f.startsWith("dropped"))).toBe(false);
+  });
+  it("a failed retry keeps the first answer with its drops on the app's key and rethrows a refusal on the user's", async () => {
+    const refusal = new APICallError({ message: "credit balance is too low", url: "u", requestBodyValues: {}, statusCode: 400, responseBody: "", isRetryable: false });
+    mockedStreamObject.mockReturnValueOnce(fakeStream(dayUnits([1, 3]))).mockImplementationOnce(failingStream(refusal));
+    let children: PlanNode[] = [];
+    for await (const e of streamExpandNode({ ...ctx, tree: tree(), nodeId: "w1", reason: "split" })) if (e.type === "finish") children = e.children;
+    expect(children).toHaveLength(2);
+    expect(children[1].materials).toBeUndefined();
+    mockedStreamObject.mockReset();
+    mockedStreamObject.mockReturnValueOnce(fakeStream(dayUnits([1, 3]))).mockImplementationOnce(failingStream(refusal));
+    const outlineModel = { id: "anthropic/claude-sonnet-5-5", model: {}, keyOwner: "user" } as unknown as ResolvedModel;
+    await expect(
+      (async () => {
+        for await (const _ of streamExpandNode({ ...ctx, outlineModel, tree: tree(), nodeId: "w1", reason: "split" })) void _;
+      })(),
+    ).rejects.toBe(refusal);
   });
 });
