@@ -55,6 +55,27 @@ describe("buildDailyContentPrompt", () => {
     expect(prompt).not.toMatch(/search the web/i);
   });
 
+  it("names the chapter, its sections from the note or the list, and reviews", () => {
+    const base = { url: "https://example.com/aie", type: "link" as const, title: "AI Engineering", tier: "must" as const, minutes: 35 };
+    const ch2 = { n: 2, title: "Understanding Foundation Models", sections: ["Training Data", "Modeling", "Post-Training", "Sampling"] };
+    const prompt = buildDailyContentPrompt({
+      title: "D",
+      summary: "s",
+      materials: [
+        { ...base, note: "Post-Training; Sampling", chapter: ch2 },
+        { ...base, note: null, chapter: ch2, tier: "should", minutes: 140 },
+        { ...base, note: null, chapter: { n: 1, title: "Introduction", sections: [] }, activity: "review", tier: "should", minutes: 20 },
+        { ...base, note: null, chapter: { n: null, title: "Untitled part", sections: [] } },
+      ],
+    });
+    expect(prompt).toContain('- AI Engineering (https://example.com/aie) — ch. 2 "Understanding Foundation Models" · sections: Post-Training; Sampling — must, 35 min');
+    expect(prompt).toContain('- AI Engineering (https://example.com/aie) — ch. 2 "Understanding Foundation Models" · sections: Training Data; Modeling; Post-Training; Sampling — should, 140 min');
+    expect(prompt).toContain('- AI Engineering (https://example.com/aie) — review of ch. 1 "Introduction" — should, 20 min');
+    expect(prompt).toContain('- AI Engineering (https://example.com/aie) — "Untitled part" — must, 35 min');
+    expect(prompt).toContain("Rows marked review revisit material the learner read earlier: recap and connect it to today, do not teach it afresh.");
+    expect(buildDailyContentPrompt({ title: "D", summary: "s", materials: [{ ...base, note: "Ch. 4 §2" }] })).not.toContain("Rows marked review");
+  });
+
   it("asks for no citations when nothing on the list is citable", () => {
     const prompt = buildDailyContentPrompt({ title: "A", summary: "B", materials: [] });
     expect(prompt).toMatch(/leave "citations" empty/);
