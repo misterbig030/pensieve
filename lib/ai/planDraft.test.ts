@@ -85,7 +85,7 @@ describe("streamPlanDraft with materials", () => {
     expect(calls[1].facts).toEqual(expect.arrayContaining(["no must: Day 2, Day 3, Day 4, Day 5, Day 6, Day 7"]));
     // The prompt for the week's days carries the week's reservation.
     const secondPrompt = mockedStreamObject.mock.calls[1][0] as { prompt: string };
-    expect(secondPrompt.prompt).toContain("reserved: M1 (ch. 1–2)");
+    expect(secondPrompt.prompt).toContain("This unit's reservation, the only resources its days may use: M1 (ch. 1–2), M2.");
   });
 });
 

@@ -1,16 +1,17 @@
-import { MUST_SHARE, aliasMaterials, type MaterialAliases } from "@/lib/materials";
+import { MUST_SHARE, aliasMaterials, formatAliases, type MaterialAliases, type ResolvedAlias } from "@/lib/materials";
 import {
   budgetFor,
   childLevel,
   findNode,
   labelOf,
+  parentOf,
   spanOf,
   walk,
   type Granularity,
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialRef } from "@/lib/schemas/material";
+import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialRef, type RefActivity } from "@/lib/schemas/material";
 import { dayMinutes, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 
 export interface PlanPromptContext {
@@ -40,17 +41,45 @@ function refNote(note: string | null): string {
   return note ? ` (${note})` : "";
 }
 
-/** "covers M1 (ch. 1–2), M4" for a heading; "reads M1 must 90 min (ch. 1); M3 should 20 min" for a leaf. */
+type RefLike = { id: string; chapter?: number | null; activity?: RefActivity; note?: string | null };
+const activityOf = (r: RefLike): RefActivity => r.activity ?? "read";
+
+/** "M1.1–M1.4, M3 (lectures 3–4)": runs of consecutive chapters collapse; a whole resource keeps its note. */
+export function describeRefs(refs: RefLike[], aliases: MaterialAliases): string {
+  const out: string[] = [];
+  let run: ResolvedAlias[] = [];
+  const flush = () => {
+    if (run.length > 0) out.push(formatAliases(run, aliases));
+    run = [];
+  };
+  for (const r of refs) {
+    if (r.chapter) run.push({ id: r.id, chapter: r.chapter });
+    else {
+      flush();
+      out.push(`${aliases.alias(r.id)}${refNote(r.note ?? null)}`);
+    }
+  }
+  flush();
+  return out.join(", ");
+}
+
+/**
+ * "covers M1.1–M1.4, M3 · reviews M2" for a heading; "reads M1.2 must 35 min (Post-Training; Sampling); M3 should 79 min ·
+ * reviews M1.1 should 20 min" for a leaf.
+ */
 export function renderRefs(node: Pick<PlanNode, "covers" | "materials">, aliases: MaterialAliases): string {
   const parts: string[] = [];
   const covers = (node.covers ?? []).filter((r) => aliases.alias(r.id));
   const reads = (node.materials ?? []).filter((r) => aliases.alias(r.id));
-  if (covers.length > 0) parts.push(`covers ${covers.map((r: CoverRef) => `${aliases.alias(r.id)}${refNote(r.note)}`).join(", ")}`);
-  if (reads.length > 0) {
-    parts.push(
-      `reads ${reads.map((r: MaterialRef) => `${aliases.alias(r.id)} ${r.tier}${r.minutes !== null ? ` ${r.minutes} min` : ""}${refNote(r.note)}`).join("; ")}`,
-    );
-  }
+  const row = (r: MaterialRef) => `${aliases.alias(r.id, r.chapter)} ${r.tier}${r.minutes !== null ? ` ${r.minutes} min` : ""}${refNote(r.note)}`;
+  const coversRead = covers.filter((r: CoverRef) => activityOf(r) === "read");
+  const coversReview = covers.filter((r: CoverRef) => activityOf(r) === "review");
+  const readsRead = reads.filter((r: MaterialRef) => activityOf(r) === "read");
+  const readsReview = reads.filter((r: MaterialRef) => activityOf(r) === "review");
+  if (coversRead.length > 0) parts.push(`covers ${describeRefs(coversRead, aliases)}`);
+  if (coversReview.length > 0) parts.push(`reviews ${describeRefs(coversReview, aliases)}`);
+  if (readsRead.length > 0) parts.push(`reads ${readsRead.map(row).join("; ")}`);
+  if (readsReview.length > 0) parts.push(`reviews ${readsReview.map(row).join("; ")}`);
   return parts.join(" · ");
 }
 
@@ -114,13 +143,13 @@ export interface RenderMaterialsOptions {
 }
 
 /**
- * The indented chapter lines under a book, then the source line: `  ch. 5 "Prompt Engineering" · pp. 453–540 · about
- * 2 h — Introduction to Prompting; …`. The number, the pages, the size and the sections each appear only when known
- * (and, for sections, asked for).
+ * The indented chapter lines under a book, then the source line: `  M1.5 ch. 5 "Prompt Engineering" · pp. 453–540 ·
+ * about 2 h — Introduction to Prompting; …`. The alias prefix appears when the book's alias is given; the number, the
+ * pages, the size and the sections each appear only when known (and, for sections, asked for).
  */
-export function renderChapters(toc: ChapterList, options: { sections: boolean }): string[] {
+export function renderChapters(toc: ChapterList, options: { sections: boolean; alias?: string }): string[] {
   const lines = toc.chapters.map((c, i) => {
-    const parts = [`${c.n !== null ? `ch. ${c.n} ` : ""}"${c.title}"`];
+    const parts = [`${options.alias ? `${options.alias}.${i + 1} ` : ""}${c.n !== null ? `ch. ${c.n} ` : ""}"${c.title}"`];
     if (toc.printPages && c.page !== null) {
       const next = i + 1 < toc.chapters.length ? toc.chapters[i + 1].page : toc.end;
       parts.push(next !== null && next > c.page ? `pp. ${c.page}–${next - 1}` : `p. ${c.page}`);
@@ -135,7 +164,7 @@ export function renderChapters(toc: ChapterList, options: { sections: boolean })
 
 /**
  * One line per material: `M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024 · about 22 h. Why: …`, followed by
- * its chapter lines when it has a list.
+ * its chapter lines when it has a list, each a resource of its own (`M1.3`), in which case the book line says so.
  */
 export function renderMaterials(materials: Material[], aliases: MaterialAliases = aliasMaterials(materials), options: RenderMaterialsOptions = {}): string {
   return materials
@@ -143,8 +172,10 @@ export function renderMaterials(materials: Material[], aliases: MaterialAliases 
       const tags = [m.kind, m.backbone ? "backbone" : null, m.origin === "learner" ? "the learner's own" : null].filter(Boolean).join(" · ");
       const byline = [m.author, m.year].filter(Boolean).join(", ");
       const where = m.type === "note" || m.type === "file" ? "" : ` <${m.url}>`;
-      const line = `${aliases.alias(m.id)} [${tags}] "${m.title}"${byline ? ` — ${byline}` : ""}${where}${sizeNote(m)}${m.why ? `. ${m.why}` : ""}`;
-      return m.toc ? [line, ...renderChapters(m.toc, { sections: !!options.sections && m.backbone })] : [line];
+      const alias = aliases.alias(m.id);
+      const resource = m.toc ? `${m.why ? "" : "."} Refer to its chapters by id; ${alias} itself is not a resource.` : "";
+      const line = `${alias} [${tags}] "${m.title}"${byline ? ` — ${byline}` : ""}${where}${sizeNote(m)}${m.why ? `. ${m.why}` : ""}${resource}`;
+      return m.toc ? [line, ...renderChapters(m.toc, { sections: !!options.sections && m.backbone, alias })] : [line];
     })
     .join("\n");
 }
@@ -242,7 +273,7 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   parts.push(
     `Return exactly ${n} units in that order. Title: a short noun phrase (at most 8 words) with no "Week 1:" or "Day 3:" prefix. Summary: one sentence on what it covers and why it comes here.`,
   );
-  if (hasMaterials) parts.push(input.unitsAreLeaves ? leafMaterialRules(input, aliases) : headingMaterialRules(input));
+  if (hasMaterials) parts.push(input.unitsAreLeaves ? leafMaterialRules(input, aliases) : headingMaterialRules(input, aliases));
   return parts.join("\n");
 }
 
@@ -257,25 +288,55 @@ function formatMinutes(minutes: number): string {
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} h`;
 }
 
-/** For every prompt that lists a book: chapters come from the list or not at all. */
-const CHAPTER_LINE = `Where a book's chapters are listed, name them as listed. Where they are not, name the part by topic and never invent a chapter number.`;
+/**
+ * What this unit's children may take, computed from the tree: the parent's reservation, and what every other unit
+ * holds. At the top level everything is free.
+ */
+export function availabilityLines(input: UnitsPromptInput, aliases: MaterialAliases): string[] {
+  const noun = UNIT_NOUN[input.level];
+  const listedBackbone = input.materials.some((m) => m.backbone && m.toc);
+  const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
+  if (!input.tree || !parent) {
+    const each = input.unitsAreLeaves
+      ? `Read each in one ${noun}, or in consecutive ${noun}s when it is longer than one ${noun}'s reading time`
+      : `Reserve each in at most one ${noun}`;
+    return [`Every resource is free. ${each}${listedBackbone ? "; the book's chapters in order" : ""}.`];
+  }
+  const lines: string[] = [];
+  const reserved = (parent.covers ?? []).filter((r) => aliases.alias(r.id));
+  if (reserved.length > 0) lines.push(`This unit's reservation, the only resources its ${noun}s may use: ${describeRefs(reserved, aliases)}.`);
+  else lines.push(`Take them from the list above, matching each unit's ground.`);
+  const skip = new Set<string>([input.tree.id, parent.id]);
+  for (let p = parentOf(input.tree, parent.id); p; p = parentOf(input.tree, p.id)) skip.add(p.id);
+  const held: string[] = [];
+  walk(input.tree, (n) => {
+    if (skip.has(n.id)) return;
+    const reads = [...(n.covers ?? []), ...(n.materials ?? [])].filter((r) => activityOf(r) === "read" && aliases.alias(r.id));
+    if (reads.length > 0) held.push(`${describeRefs(reads, aliases)} (${labelOf(input.tree!, n)})`);
+  });
+  if (held.length > 0) lines.push(`Held by other units: ${held.join("; ")}.`);
+  return lines;
+}
 
-function headingMaterialRules(input: UnitsPromptInput): string {
+function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): string {
   const backbone = input.materials.findIndex((m) => m.backbone);
+  const kids = UNIT_NOUN[childLevel(input.level) ?? "day"];
+  const B = `M${backbone + 1}`;
   const lines = [
-    `Materials: for each unit, list in "covers" the materials its ${UNIT_NOUN[input.level]} will read, as { id, note } with a note naming the part ("ch. 5–6", "whole essay", "lectures 3–4"). No tier and no minutes yet: the units inside are planned later from this reservation.`,
+    `Materials: for each unit, list in "covers" the resources its ${kids}s will read, as { id, activity, note }. activity is "read" (the default) or "review". note names the part only for a resource without chapters ("lectures 3–4"); leave it out otherwise. No tier and no minutes yet: the units inside are planned later from this reservation.`,
   ];
-  if (backbone < 0) lines.push(`There is no backbone textbook; spread the materials where they fit best.`);
+  if (backbone < 0) lines.push(`Each resource is read in at most one unit at this level; spread the materials where they fit best.`);
   else if (input.materials[backbone].toc) {
     lines.push(
-      `M${backbone + 1} is the backbone textbook and its chapters are listed above: reserve them in order across the units, each chapter in exactly one unit, and write the note as the chapter numbers and titles exactly as listed ("ch. 5–6: Prompt Engineering; RAG and Agents").`,
+      `Each resource is read in at most one unit at this level. ${B}'s chapters are resources of their own (${B}.1, ${B}.2, …): reserve them in order across the units, each chapter in exactly one unit, and never refer to ${B} itself.`,
     );
   } else {
     lines.push(
-      `M${backbone + 1} is the backbone textbook, but its chapters are not listed: reserve it in order across the units and name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
+      `Each resource is read in at most one unit at this level. ${B} is the backbone textbook, but its chapters are not listed: reserve it in order across the units and name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
     );
   }
-  if (input.materials.some((m) => m.kind === "book")) lines.push(CHAPTER_LINE);
+  lines.push(`A unit may also reserve a review of resources that an earlier unit reads, with activity "review". A review is not a reading, so it may name resources another unit holds.`);
+  lines.push(...availabilityLines(input, aliases));
   lines.push(`Use only ids from the list.`);
   return lines.join("\n");
 }
@@ -285,28 +346,28 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   // A week split into days by hand passes its own Read table down as the reservation.
   const reserved = (parent?.covers ?? parent?.materials ?? []).filter((r) => aliases.alias(r.id));
   const backbone = input.materials.findIndex((m) => m.backbone);
+  const listed = backbone >= 0 && !!input.materials[backbone].toc;
+  const B = `M${backbone + 1}`;
+  const where = reserved.length > 0 ? "where the reservation has material for it" : "where the list has material for it";
   const lines = [
-    `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note }. tier is "must" or "should"; minutes is the reading or watching time for this unit; note names the part ("Ch. 4 §2", "evals and guardrails sections only").`,
-    reserved.length > 0
-      ? `Take them first from what the unit marked ">>" reserved: ${reserved.map((r) => `${aliases.alias(r.id)}${refNote(r.note)}`).join(", ")}. Use the rest of the list only to fill a gap.`
-      : `Take them from the list above, matching each unit's ground.`,
+    `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note, activity }. tier is "must" or "should"; minutes is the reading or watching time for this unit; activity is "read" (the default) or "review"; note names the part: for a chapter, the sections this unit covers ("Post-Training; Sampling"), for anything else the part ("§2 only", "whole essay").`,
+    ...availabilityLines(input, aliases),
     input.decideSplit
-      ? `Rules: at least one must per unit where the list has material for it; must minutes stay within your readingShare of the unit's budget, because the rest of the time is for the practice you named; should items are optional extras.`
+      ? `Rules: at least one must per unit ${where}; must minutes stay within your readingShare of the unit's budget, because the rest of the time is for the practice you named; should items are optional extras.`
       : input.split
-        ? `Rules: at least one must per unit where the list has material for it; must minutes stay within about ${input.split.readingShare}% of the unit's budget, because the rest of the time is for ${input.split.practice}; should items are optional extras.`
+        ? `Rules: at least one must per unit ${where}; must minutes stay within about ${input.split.readingShare}% of the unit's budget, because the rest of the time is for ${input.split.practice}; should items are optional extras.`
         : `Rules: at least one must per unit; must minutes stay within about ${Math.round(MUST_SHARE * 100)}% of the unit's budget, because the rest of the time is for building and practice; should items are optional extras.`,
   ];
-  if (input.materials.some((m) => m.minutes)) lines.push(`Each material's size is in the list. Across all units a material's minutes should add up to about that size; never assign more of it than it has.`);
-  if (backbone >= 0 && input.materials[backbone].toc) {
+  const size = input.materials.some((m) => m.minutes) ? "Each resource's size is in the list. " : "";
+  lines.push(
+    `${size}A chapter longer than one unit's reading time spans consecutive units: list it in each with the part in the note; across those units its minutes add up to its size. A resource is read once: do not assign what another unit reads${listed ? `, and never refer to ${B} itself` : ""}.`,
+  );
+  lines.push(`A review (activity "review") revisits a resource an earlier unit read. Its minutes count for this unit, and it may name resources other units hold.`);
+  if (backbone >= 0 && !listed) {
     lines.push(
-      `M${backbone + 1} is the backbone textbook and its chapters are listed above with their sizes: they run in order across the units, continuing from where earlier units stopped. Name the chapter in the note by number and title as listed, and the sections when a chapter spans several units. A unit's minutes for it are the listed size of what it reads, or that share of a chapter.`,
-    );
-  } else if (backbone >= 0) {
-    lines.push(
-      `M${backbone + 1} is the backbone textbook, but its chapters are not listed: it runs in order across the units, continuing from where earlier units stopped. Name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
+      `${B} is the backbone textbook, but its chapters are not listed: it runs in order across the units, continuing from where earlier units stopped. Name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
     );
   }
-  if (input.materials.some((m) => m.kind === "book")) lines.push(CHAPTER_LINE);
   lines.push(`Use only ids from the list.`);
   return lines.join("\n");
 }
@@ -339,7 +400,7 @@ export function buildRevisionPrompt(input: RevisionPromptInput): string {
       `- Keep the total length unless the request changes it.`,
       ...(hasMaterials
         ? [
-            `- Materials: return "covers" (headings: { id, note }) and "materials" (units without children: { id, tier, minutes, note }) for every unit that has them, changed only as the request asks. A request like "make the talk optional" changes that row's tier to "should"; it does not add or drop other rows. Leave both fields out only for units with no materials. Use only ids from the list.`,
+            `- Materials: return "covers" (headings: { id, activity, note }) and "materials" (units without children: { id, tier, minutes, note, activity }) for every unit that has them, changed only as the request asks. Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit, and a review of something read earlier has activity "review". A request like "make the talk optional" changes that row's tier to "should"; it does not add or drop other rows. Leave both fields out only for units with no materials. Use only ids from the list.`,
           ]
         : []),
     ].join("\n"),
