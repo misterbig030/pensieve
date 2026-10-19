@@ -1,7 +1,13 @@
 # Chapters as resources: the outline reserves chapters, not books — design
 
-**Status:** draft 2026-10-18, awaiting review. Builds on `feat/book-chapters` (PR #10), which gives every verified
-book a chapter list; this branch is cut from it. Follows the live check of 2026-10-17, in which a hand-split week
+**Status:** implemented 2026-10-18 on `feat/chapter-resources` (eleven tasks, suite 473 passing, tsc and lint clean, main
+merged in). The whole-branch review found one Critical and five Important issues, all fixed with tests that failed first:
+the hand-split flow had bypassed the reservation (the client sends the week before converting its Read table; the server
+now converts it), the budget was judged before chapter rows were sized, `treeChecks` misread a month with one hand-split
+week as headings, a revision dropped every whole-book row of a plan saved before this change (rows whose note names
+chapters now stand as written), the availability block offered review covers as reading, and an unlisted book reserved by
+topic was charged in full to every heading. Not yet live-checked: the operator applies `0011_chapter_refs` first.
+Builds on `feat/book-chapters` (PR #10, merged), which gives every verified book a chapter list. Follows the live check of 2026-10-17, in which a hand-split week
 read chapters its neighbour had reserved, and the design conversation and Open Library survey of 2026-10-18.
 
 ## Summary
