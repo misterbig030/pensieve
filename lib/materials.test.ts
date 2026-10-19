@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { MaterialRef } from "@/lib/schemas/material";
-import { AIE_HOURS, AIE_MATERIALS, AIE_SHARE, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
+import { AIE_HOURS, AIE_MATERIALS, AIE_SHARE, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 import {
   aliasMaterials,
   assignmentsOf,
@@ -16,6 +16,7 @@ import {
   remapTreeRefs,
   removeMaterialRefs,
   resolveMaterialRefs,
+  sizeChapterRows,
   tierMinutes,
   treeChecks,
 } from "./materials";
@@ -235,6 +236,27 @@ describe("levelChecks", () => {
     ]);
     expect(out.facts).toContain("backbone ch. 7, 8, 9 not reserved");
     expect(out.nodes[out.breaches[1].index].id).toBe("w2");
+  });
+});
+
+describe("sizeChapterRows", () => {
+  const row = (chapter: number, minutes: number, activity: "read" | "review" = "read"): MaterialRef => ({ id: "aie", tier: "must", minutes, note: null, chapter, activity });
+  const day = (id: string, rows: MaterialRef[]) => makeNode({ id, level: "day", title: id, summary: "s", len: 1, materials: rows });
+  it("rescales a shared chapter to its size, keeping proportions, remainder to the last row", () => {
+    const nodes = [day("a", [row(1, 20)]), day("b", [row(1, 20)]), day("c", [row(1, 20)])];
+    sizeChapterRows(nodes, AIE_MATERIALS);
+    expect(nodes.map((n) => n.materials![0].minutes)).toEqual([36, 36, 35]);
+    const skew = [day("a", [row(2, 10)]), day("b", [row(2, 30)])];
+    sizeChapterRows(skew, AIE_MATERIALS);
+    expect(skew.map((n) => n.materials![0].minutes)).toEqual([35, 105]);
+  });
+  it("splits evenly when the model wrote zeros, leaves reviews and unsized chapters alone", () => {
+    const nodes = [day("a", [row(3, 0), row(1, 25, "review")]), day("b", [row(3, 0)])];
+    sizeChapterRows(nodes, AIE_MATERIALS);
+    expect(nodes.map((n) => n.materials!.map((r) => r.minutes))).toEqual([[47, 25], [46]]);
+    const unsized = [day("a", [row(1, 20)])];
+    sizeChapterRows(unsized, [{ id: "aie", toc: { ...AIE_TOC, chapters: AIE_TOC.chapters.map((c) => ({ ...c, minutes: null })) } }]);
+    expect(unsized[0].materials![0].minutes).toBe(20);
   });
 });
 

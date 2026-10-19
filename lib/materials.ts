@@ -459,6 +459,36 @@ export function dropBreaches(nodes: PlanNode[], breaches: Breach[]): string[] {
   return out;
 }
 
+/**
+ * Chapter rows take their minutes from the list: the read rows across `nodes` that carry one chapter are rescaled so
+ * they add up to its listed size, keeping the model's proportions (rounding remainder to the last row); rows that
+ * all say zero share it evenly. Reviews and chapters without a size keep the model's minutes.
+ */
+export function sizeChapterRows(nodes: PlanNode[], materials: Pick<Material, "id" | "toc">[]): void {
+  const byId = new Map(materials.map((m) => [m.id, m]));
+  const groups = new Map<string, MaterialRef[]>();
+  for (const node of nodes) {
+    for (const row of node.materials ?? []) {
+      if (!row.chapter || (row.activity ?? "read") !== "read") continue;
+      const key = refKey(row);
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+  }
+  for (const rows of groups.values()) {
+    const size = chapterAt(byId.get(rows[0].id)?.toc, rows[0].chapter)?.minutes;
+    if (!size) continue;
+    const total = rows.reduce((sum, r) => sum + (r.minutes ?? 0), 0);
+    let given = 0;
+    rows.forEach((row, i) => {
+      if (i === rows.length - 1) row.minutes = size - given;
+      else {
+        row.minutes = total > 0 ? Math.round(((row.minutes ?? 0) * size) / total) : Math.round(size / rows.length);
+        given += row.minutes;
+      }
+    });
+  }
+}
+
 /** Where a material is used, for the remove-material confirmation. */
 export function assignmentsOf(root: PlanNode, id: string): { node: PlanNode; label: string; role: "covers" | "assigned" }[] {
   const out: { node: PlanNode; label: string; role: "covers" | "assigned" }[] = [];

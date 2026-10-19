@@ -1,5 +1,5 @@
 import { layout, makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
-import type { ChapterList, Material, MaterialRef } from "@/lib/schemas/material";
+import type { ChapterList, CoverRef, Material, MaterialRef } from "@/lib/schemas/material";
 
 /**
  * The plan "AI engineer interview preparation" as drafted on 2026-10-17 (90 days, 6 hours a week, 40% reading), in
@@ -72,7 +72,7 @@ export function aiePlan(): PlanNode {
         title: "Foundation Models and Evaluation Fundamentals",
         summary: "How foundation models work, how to measure them, and why evaluation comes first.",
         len: 30,
-        covers: [1, 2, 3, 4].map((chapter) => ({ id: "aie", note: null, chapter })).concat([{ id: "evals", note: null, chapter: null }, { id: "oaievals", note: null, chapter: null }]),
+        covers: [...[1, 2, 3, 4].map((chapter): CoverRef => ({ id: "aie", note: null, chapter })), { id: "evals", note: null }, { id: "oaievals", note: null }],
         children: [
           makeNode({ id: "w1", level: "week", title: "How Foundation Models Work", summary: "Training, learning, capabilities.", len: 7, budgetHours: 6, materials: [read(1, 107), read(2, 140)] }),
           makeNode({ id: "w2", level: "week", title: "Measuring Model Performance", summary: "Evaluation methodology.", len: 7, budgetHours: 6, materials: [read(3, 93), read(4, 126)] }),

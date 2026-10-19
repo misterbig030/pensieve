@@ -97,10 +97,13 @@ describe("withChapterSizes", () => {
   it("gives an unbounded last chapter the mean span of the others", () => {
     expect(withChapterSizes({ ...base, end: null }, 900).chapters.map((c) => c.minutes)).toEqual([200, 400, 300]);
   });
-  it("leaves minutes null without a book size or positions", () => {
+  it("leaves minutes null without a book size", () => {
     expect(withChapterSizes(base, null).chapters.map((c) => c.minutes)).toEqual([null, null, null]);
+  });
+  it("shares the book's minutes evenly when no chapter has a position", () => {
     const noPos = { ...base, end: null, chapters: base.chapters.map((c) => ({ ...c, page: null })) };
-    expect(withChapterSizes(noPos, 900).chapters.map((c) => c.minutes)).toEqual([null, null, null]);
+    expect(withChapterSizes(noPos, 900).chapters.map((c) => c.minutes)).toEqual([300, 300, 300]);
+    expect(withChapterSizes({ ...noPos, chapters: noPos.chapters.slice(0, 2) }, 101).chapters.map((c) => c.minutes)).toEqual([51, 50]);
   });
 });
 
