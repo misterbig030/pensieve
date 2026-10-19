@@ -315,7 +315,7 @@ lesson prompt".
 - The retry call fails (provider error on the app's key): the first answer is used with the same drops. On the
   user's key a provider refusal stops the request, as every call does today.
 - A list changes after rows reference it (a research rerun on a saved track is out of scope; the list is written
-  once): `chapter` beyond the list's length renders as `ch. ?` and the lesson prompt omits the chapter.
+  once): `chapter` beyond the list's length renders without a chapter label and the lesson prompt omits the chapter.
 - A page-found list without a book size stays unsized; chapter rows keep the model's minutes and the heading budget
   check counts them as 0.
 - A week split by hand whose Read table held a whole-book row on a listed book (a saved plan from before this
