@@ -30,9 +30,14 @@ export function chapterLabel(chapter: Pick<Chapter, "n" | "title">): string {
   return chapter.n !== null ? `Ch. ${chapter.n} ${chapter.title}` : chapter.title;
 }
 
-export function ReviewPill() {
-  return <span className="inline-flex justify-self-start rounded-full border border-neutral-600 px-[7px] py-px text-[10.5px] font-semibold text-neutral-800">Review</span>;
+/** What a row reads, as a phrase after the title: "Ch. 2 …", "Review of Ch. 2 …", "Review"; null for a plain whole read. */
+export function partLabel(row: Pick<ReadRow, "chapter" | "activity">): string | null {
+  const review = row.activity === "review";
+  if (row.chapter) return `${review ? "Review of " : ""}${chapterLabel(row.chapter)}`;
+  return review ? "Review" : null;
 }
+
+const REVIEW_HINT = "A second pass over something an earlier unit read: recap, not new reading.";
 
 export function sumMinutes(rows: ReadRow[]): { must: number; should: number } {
   return rows.reduce((t, r) => (r.tier === "must" ? { ...t, must: t.must + (r.minutes ?? 0) } : { ...t, should: t.should + (r.minutes ?? 0) }), { must: 0, should: 0 });
@@ -109,13 +114,13 @@ export function ReadRows({ rows, link = true }: { rows: ReadRow[]; link?: boolea
         <div key={r.key} className="contents">
           <TierPill tier={r.tier} />
           <span className="min-w-0 truncate">
-            {r.activity === "review" && (
-              <>
-                <ReviewPill />{" "}
-              </>
-            )}
             <ItemLink material={r.material} className="font-semibold" link={link} />
-            {r.chapter && <span className="text-muted-foreground"> · {chapterLabel(r.chapter)}</span>}
+            {partLabel(r) && (
+              <span className="text-muted-foreground" title={r.activity === "review" ? REVIEW_HINT : undefined}>
+                {" "}
+                · {partLabel(r)}
+              </span>
+            )}
             {r.note && <span className="text-muted-foreground"> · {r.note}</span>}
           </span>
           <span className="justify-self-end text-neutral-800">{r.minutes !== null ? `${r.minutes} min` : "—"}</span>
@@ -157,10 +162,7 @@ export function ReadTable({ rows, budgetMinutes, practice }: { rows: ReadRow[]; 
             {rows.map((r) => (
               <tr key={r.key} className="border-t border-foreground/10 align-top">
                 <td className="py-3 pr-2">
-                  <div className="flex flex-col items-start gap-1">
-                    <TierPill tier={r.tier} />
-                    {r.activity === "review" && <ReviewPill />}
-                  </div>
+                  <TierPill tier={r.tier} />
                 </td>
                 <td className="px-2 py-3">
                   <div className="flex flex-col gap-0.5">
@@ -170,8 +172,8 @@ export function ReadTable({ rows, budgetMinutes, practice }: { rows: ReadRow[]; 
                         <span className="ml-1.5 inline-flex rounded-full bg-accent-2-800 px-[7px] py-px align-[1px] text-[10px] font-semibold text-accent-2-100">BACKBONE</span>
                       )}
                     </span>
-                    <span className="text-xs text-muted-foreground">
-                      {[r.chapter ? chapterLabel(r.chapter) : null, r.material.author, r.material.kind, r.material.year].filter(Boolean).join(" · ")}
+                    <span className="text-xs text-muted-foreground" title={r.activity === "review" ? REVIEW_HINT : undefined}>
+                      {[partLabel(r), r.material.author, r.material.kind, r.material.year].filter(Boolean).join(" · ")}
                     </span>
                   </div>
                 </td>

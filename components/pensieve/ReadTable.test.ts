@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
-import { chapterLabel, readRowsFor } from "./ReadTable";
+import { chapterLabel, partLabel, readRowsFor } from "./ReadTable";
 
 describe("readRowsFor", () => {
   it("fills chapter, activity and a key per row", () => {
@@ -20,5 +20,21 @@ describe("readRowsFor", () => {
     ]);
     expect(chapterLabel(rows[0].chapter!)).toBe("Ch. 2 Understanding Foundation Models");
     expect(chapterLabel({ ...rows[0].chapter!, n: null })).toBe("Understanding Foundation Models");
+  });
+  it("names the part as a phrase: the chapter, or a review of it", () => {
+    const byId = new Map(AIE_MATERIALS.map((m) => [m.id, m]));
+    const [read, review, whole, wholeReview] = readRowsFor(
+      [
+        { id: "aie", tier: "must", minutes: 35, note: null, chapter: 2 },
+        { id: "aie", tier: "should", minutes: 20, note: null, chapter: 2, activity: "review" },
+        { id: "evals", tier: "should", minutes: 79, note: null },
+        { id: "evals", tier: "should", minutes: 20, note: null, activity: "review" },
+      ],
+      byId,
+    );
+    expect(partLabel(read)).toBe("Ch. 2 Understanding Foundation Models");
+    expect(partLabel(review)).toBe("Review of Ch. 2 Understanding Foundation Models");
+    expect(partLabel(whole)).toBeNull();
+    expect(partLabel(wholeReview)).toBe("Review");
   });
 });
