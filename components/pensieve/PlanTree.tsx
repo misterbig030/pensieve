@@ -361,7 +361,7 @@ function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, M
   const shown = sorted.slice(0, SHOWN_COVERS);
   const text = (g: (typeof refs)[number]) => {
     const part = g.chapters.length > 0 ? `ch. ${chapterRuns(g.chapters)}` : g.note;
-    return `${g.review ? "Review: " : ""}${g.m.title}${part ? ` · ${part}` : ""}`;
+    return `${g.review ? "Review of " : ""}${g.m.title}${part ? ` · ${part}` : ""}`;
   };
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
