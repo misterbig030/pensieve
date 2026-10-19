@@ -8,6 +8,7 @@ import { db } from "@/lib/db/client";
 import { sources } from "@/lib/db/schema";
 import { collectCalls } from "@/lib/ai/collectCalls";
 import { generateDailyContent, type LessonMaterial } from "@/lib/ai/dailyContent";
+import { chapterAt } from "@/lib/schemas/material";
 import type { ModelCall } from "@/lib/ai/logged";
 import { getNodeReadList, getOwnedNode, upsertLeafContent } from "@/lib/db/planQueries";
 import { resolveModels } from "@/lib/ai/resolve";
@@ -45,6 +46,8 @@ export async function generateLeafContentAction(input: {
           tier: r.tier,
           minutes: r.minutes,
           note: r.note,
+          chapter: chapterAt(r.source.toc, r.chapter || null),
+          activity: r.activity,
         }))
       : (await db.query.sources.findMany({ where: eq(sources.trackId, input.trackId), orderBy: [asc(sources.position)] })).map((s) => ({
           title: s.title ?? s.url,

@@ -1,5 +1,5 @@
 import { dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
-import type { MaterialKind, MaterialTier } from "@/lib/schemas/material";
+import type { Chapter, MaterialKind, MaterialTier, RefActivity } from "@/lib/schemas/material";
 import type { SourceType } from "@/lib/schemas/source";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_CONTENT_MODEL } from "./models";
@@ -14,7 +14,12 @@ export interface LessonMaterial {
   kind?: MaterialKind;
   tier?: MaterialTier | null;
   minutes?: number | null;
+  /** The part: a chapter's sections, or the part of a resource without chapters. */
   note?: string | null;
+  /** The chapter this row reads, from the book's list. */
+  chapter?: Pick<Chapter, "n" | "title" | "sections"> | null;
+  /** "review" revisits something an earlier unit read. */
+  activity?: RefActivity;
 }
 
 interface BuildDailyContentPromptInput {
@@ -28,9 +33,19 @@ interface BuildDailyContentPromptInput {
   spanDays?: number;
 }
 
+/**
+ * `- AI Engineering (url) — ch. 2 "Understanding Foundation Models" · sections: Post-Training; Sampling — must, 35 min`.
+ * The sections are the row's note when it has one, else the chapter's listed sections; a review says so.
+ */
 function row(m: LessonMaterial): string {
-  const meta = [m.tier, m.minutes ? `${m.minutes} min` : null, m.note].filter(Boolean).join(", ");
-  return `- ${m.title} (${m.url})${meta ? ` — ${meta}` : ""}`;
+  const review = m.activity === "review";
+  let part: string | null = null;
+  if (m.chapter) {
+    const sections = m.note ?? (m.chapter.sections.length > 0 ? m.chapter.sections.join("; ") : null);
+    part = `${review ? "review of " : ""}${m.chapter.n !== null ? `ch. ${m.chapter.n} ` : ""}"${m.chapter.title}"${sections ? ` · sections: ${sections}` : ""}`;
+  } else if (review) part = "review";
+  const meta = [m.tier, m.minutes ? `${m.minutes} min` : null, m.chapter ? null : m.note].filter(Boolean).join(", ");
+  return `- ${m.title} (${m.url})${part ? ` — ${part}` : ""}${meta ? ` — ${meta}` : ""}`;
 }
 
 export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): string {
@@ -53,7 +68,10 @@ export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): st
   const other = input.materials.filter((s) => s.type === "file" || s.type === "note");
 
   if (readable.length > 0) {
-    parts.push(`This unit's reading list. Guide the learner through it in order of tier (must before should), and point to the part named in each note:`);
+    const reviews = readable.some((s) => s.activity === "review");
+    parts.push(
+      `This unit's reading list. Guide the learner through it in order of tier (must before should), and point to the part named in each note:${reviews ? " Rows marked review revisit material the learner read earlier: recap and connect it to today, do not teach it afresh." : ""}`,
+    );
     for (const s of readable) parts.push(row(s));
   }
   if (videos.length > 0) {

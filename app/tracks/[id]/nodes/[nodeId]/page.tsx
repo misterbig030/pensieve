@@ -9,6 +9,8 @@ import { getLeafWithContent, getNodeReadList } from "@/lib/db/planQueries";
 import { budgetMinutes } from "@/lib/materials";
 import { budgetFor, findNode, labelOf, spanOf } from "@/lib/planTree";
 import { PageShell } from "@/components/pensieve/PageShell";
+import type { ReadRow } from "@/components/pensieve/ReadTable";
+import { chapterAt } from "@/lib/schemas/material";
 import { LeafView } from "./LeafView";
 
 export default async function LeafPage({ params }: { params: Promise<{ id: string; nodeId: string }> }) {
@@ -23,7 +25,10 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
   ]);
   if (!detail || !leaf || leaf.node.trackId !== id) notFound();
   const readList = await getNodeReadList(nodeId);
-  const readRows = readList.map((r) => ({ material: sourceToMaterial(r.source), tier: r.tier ?? "should", minutes: r.minutes, note: r.note }));
+  const readRows: ReadRow[] = readList.map((r) => {
+    const material = sourceToMaterial(r.source);
+    return { material, tier: r.tier ?? "should", minutes: r.minutes, note: r.note, chapter: chapterAt(material.toc, r.chapter || null), activity: r.activity, key: `${material.id}#${r.chapter}` };
+  });
 
   const node = findNode(detail.root, nodeId);
   if (!node || node.children !== null) notFound();

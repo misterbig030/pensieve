@@ -15,7 +15,7 @@ import {
 import { relations, sql } from "drizzle-orm";
 import { KEY_ERRORS, KEY_OWNERS, MODEL_PROVIDERS } from "@/lib/ai/models";
 import { SOURCE_TYPES } from "@/lib/schemas/source";
-import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS, MINUTES_BASES, type ChapterList } from "@/lib/schemas/material";
+import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS, MINUTES_BASES, type ChapterList, REF_ACTIVITIES } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 
 export const tracks = pgTable("tracks", {
@@ -129,12 +129,16 @@ export const nodeMaterials = pgTable(
     role: text("role", { enum: MATERIAL_ROLES }).notNull(),
     tier: text("tier", { enum: MATERIAL_TIERS }),
     minutes: integer("minutes"),
-    /** "Ch. 4 §2", "evals and guardrails sections only". */
+    /** The part: a chapter's sections, or the part of a resource without chapters. */
     note: text("note"),
     /** Row order in the Read table. */
     position: integer("position").notNull().default(0),
+    /** 1-based position in the source's chapter list; 0 is the whole resource. */
+    chapter: integer("chapter").notNull().default(0),
+    /** "read", or "review" for a second pass over something an earlier unit read. */
+    activity: text("activity", { enum: REF_ACTIVITIES }).notNull().default("read"),
   },
-  (t) => [primaryKey({ columns: [t.nodeId, t.sourceId] }), index("node_materials_source_idx").on(t.sourceId)],
+  (t) => [primaryKey({ columns: [t.nodeId, t.sourceId, t.chapter] }), index("node_materials_source_idx").on(t.sourceId)],
 );
 
 export const dailyContent = pgTable("daily_content", {

@@ -1,5 +1,5 @@
 import { streamObject } from "ai";
-import { aliasMaterials, levelFacts, resolveCoverRefs, resolveMaterialRefs, type MaterialAliases } from "@/lib/materials";
+import { aliasMaterials, dropBreaches, levelChecks, resolveCoverRefs, resolveMaterialRefs, sizeChapterRows, type Breach, type MaterialAliases } from "@/lib/materials";
 import type { PlanDraftEvent, PlanDraftRequest, PlanExpandEvent, PlanExpandRequest } from "@/lib/planChat";
 import {
   budgetFor,
@@ -23,6 +23,7 @@ import { topUnitListSchema, unitListSchema, type UnitDraft } from "@/lib/schemas
 import { normalizeSplit, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
+import { providerError } from "./providerError";
 import { appModel, type ResolvedModel } from "./resolve";
 import { buildUnitsPrompt, type UnitsPromptInput } from "./planPrompt";
 import type { ResearchArm } from "./research/agent";
@@ -84,6 +85,8 @@ interface StreamUnitsInput {
   expected: number;
   /** Runs on the validated units before the call is reported; returns the checks to show beside the response. */
   check?: (units: UnitDraft[]) => string[];
+  /** A retry: the units are not streamed, only the validated list is returned. */
+  silent?: boolean;
   /** Ask for the plan's time split along with the units (the top level of a new plan). */
   wantSplit?: boolean;
   /** The model that drafts the units, and who pays for it. */
@@ -121,7 +124,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
       const unit = units[sent];
       if (typeof unit.title !== "string" || typeof unit.summary !== "string") break;
       sent += 1;
-      yield { type: "unit", unit: unit as UnitDraft };
+      if (!input.silent) yield { type: "unit", unit: unit as UnitDraft };
     }
   }
   if (failure !== undefined) throw failure;
@@ -184,7 +187,6 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   const { ctx, level } = input;
   const leaf = unitsAreLeaves(level, ctx.granularity);
   const aliases = ctx.materials.length > 0 ? aliasMaterials(ctx.materials) : undefined;
-  const backboneId = ctx.materials.find((m) => m.backbone)?.id ?? null;
   const promptInput: UnitsPromptInput = {
     topic: ctx.topic,
     instructions: ctx.instructions,
@@ -207,8 +209,11 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   const label = `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
   const nodes: PlanNode[] = [];
   let final: PlanNode[] = [];
+  let breaches: Breach[] = [];
+  let attempt = 1;
 
-  // Reconciles spans and references once the whole level has validated, and states the checks in code.
+  // Reconciles spans and references once the whole level has validated, and states the checks in code. On the
+  // retry, rows that still breach are dropped; on either attempt, chapter rows take their minutes from the list.
   const check = (units: UnitDraft[]): string[] => {
     const spans = reconcileSpans(input.spans, units.length, level);
     const unknown: string[] = [];
@@ -223,22 +228,60 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       return node;
     });
     if (!aliases) return [];
+    // Chapter rows take their minutes from the list before the budget is judged, so the checks see real sizes.
+    if (leaf) sizeChapterRows(final, ctx.materials);
     const { root, placed } = placeForChecks(input.tree, input.parentId, final);
     // While the split is decided in this same call, there is no share to hold the units to yet.
-    return levelFacts({ root, nodes: placed, leaves: leaf, top: !input.parentId, backboneId, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, readingShare: input.decideSplit ? null : readingShareOf(ctx.split) });
+    const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, readingShare: input.decideSplit ? null : readingShareOf(ctx.split) });
+    breaches = checks.breaches;
+    const facts = [...checks.facts, ...breaches.map((b) => `breach: ${b.text}`)];
+    if (attempt === 2) {
+      // Rows that still breach are dropped, the drops recorded, and the surviving chapter rows resized.
+      facts.push(...dropBreaches(final, breaches));
+      if (leaf) sizeChapterRows(final, ctx.materials);
+    }
+    return facts;
   };
 
-  for await (const event of streamUnits({ prompt: buildUnitsPrompt(promptInput), label, expected: n, check, wantSplit: input.decideSplit, model: ctx.outlineModel, log: input.log })) {
+  const prompt = buildUnitsPrompt(promptInput);
+  const base = { expected: n, check, wantSplit: input.decideSplit, model: ctx.outlineModel, log: input.log };
+  let costUsd = 0;
+  let split: PlanSplit | null = null;
+  for await (const event of streamUnits({ ...base, prompt, label })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
       const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek);
       nodes.push(node);
       yield { type: "node", node };
     } else {
-      yield { type: "done", nodes: final, costUsd: event.costUsd, split: event.split };
+      costUsd = event.costUsd;
+      split = event.split;
     }
   }
+
+  // One retry with the breaches quoted, its units not streamed; the first answer stays on screen until it lands.
+  if (breaches.length > 0) {
+    attempt = 2;
+    const corrections = [RETRY_HEADER(n), ...breaches.map((b) => `- ${b.text}`)].join("\n");
+    try {
+      for await (const event of streamUnits({ ...base, prompt: `${prompt}\n${corrections}`, label: `${label} (retry)`, silent: true })) {
+        if (event.type === "done") {
+          costUsd += event.costUsd;
+          split = event.split ?? split;
+        }
+      }
+    } catch (error) {
+      // On the user's own key a provider refusal is theirs to hear about; otherwise the first answer stands, pruned.
+      if (ctx.outlineModel.keyOwner === "user" && providerError(error)) throw error;
+      console.error(`[draft] retry failed for ${label}`, error);
+      dropBreaches(final, breaches);
+      if (leaf) sizeChapterRows(final, ctx.materials);
+    }
+  }
+  yield { type: "done", nodes: final, costUsd, split };
 }
+
+export const RETRY_HEADER = (n: number) => `Your previous answer broke these rules; return all ${n} units again, corrected:`;
 
 export interface StreamPlanDraftInput extends Omit<PlanDraftRequest, "materials"> {
   /** The materials list research produced (the learner's own included). */
@@ -314,12 +357,18 @@ export interface StreamExpandNodeInput extends Omit<PlanExpandRequest, "tree"> {
 
 /** Plans one heading (or splits one week leaf) into the level below it. */
 export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGenerator<PlanExpandEvent> {
-  const root = layout(input.tree);
+  const root = layout(cloneTree(input.tree));
   const node = findNode(root, input.nodeId);
   if (!node) throw new Error("Plan node not found");
   if (node.children) throw new Error("This unit is already planned in detail");
   const level = childLevel(node.level);
   if (!level) throw new Error("A day cannot be planned in more detail");
+  // A week split by hand: its Read table is the reservation its days are planned from, whatever the client sent.
+  if (input.reason === "split" && node.materials) {
+    node.covers = node.materials.map(({ id, note, chapter, activity }) => ({ id, note, chapter, activity }));
+    delete node.materials;
+    node.manualSplit = true;
+  }
   const granularity: Granularity = input.reason === "split" ? "day" : input.granularity;
   const ctx = { ...input, granularity, outlineModel: input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL) };
   const spans = childSpans(node);

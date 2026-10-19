@@ -1,5 +1,5 @@
 import { learnerKind } from "@/lib/ai/research/verify";
-import { cloneTree, labelOf, walk, type PlanNode } from "@/lib/planTree";
+import { budgetFor, cloneTree, labelOf, parentOf, walk, type Granularity, type PlanNode } from "@/lib/planTree";
 import { dayMinutes } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
@@ -12,33 +12,83 @@ import {
   clip,
   hostOf,
   shortId,
+  type RefActivity,
+  chapterAt,
 } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
 
 /**
  * Prompts always call materials `M1…Mn` in list order, whatever their real ids are (short ids while drafting, uuids
- * once saved), so the model never has to echo a uuid. These map between the two.
+ * once saved), so the model never has to echo a uuid. A book with a chapter list also gets one alias per chapter,
+ * `M1.3` for the third chapter in its list. These map between the two.
  */
-export interface MaterialAliases {
-  alias(id: string): string | undefined;
-  resolve(alias: string): string | undefined;
+export interface ResolvedAlias {
+  id: string;
+  /** 1-based position in the material's chapter list; null for the whole resource. */
+  chapter: number | null;
 }
 
-export function aliasMaterials(materials: Pick<Material, "id">[]): MaterialAliases {
+export interface MaterialAliases {
+  alias(id: string, chapter?: number | null): string | undefined;
+  resolve(alias: string): ResolvedAlias | undefined;
+  /** How many chapters the material's list has; 0 without a list. */
+  chapters(id: string): number;
+}
+
+const ALIAS_RE = /^\[?\s*(m\d+)(?:\.(\d+))?\s*\]?$/i;
+
+export function aliasMaterials(materials: Pick<Material, "id" | "toc">[]): MaterialAliases {
   const toAlias = new Map<string, string>();
   const fromAlias = new Map<string, string>();
+  const counts = new Map<string, number>();
   materials.forEach((m, i) => {
     const alias = `M${i + 1}`;
     toAlias.set(m.id, alias);
     fromAlias.set(alias.toLowerCase(), m.id);
+    counts.set(m.id, m.toc?.chapters.length ?? 0);
   });
   return {
-    alias: (id) => toAlias.get(id),
-    resolve: (alias) => fromAlias.get(alias.trim().replace(/^\[|\]$/g, "").toLowerCase()),
+    alias: (id, chapter) => {
+      const base = toAlias.get(id);
+      return base === undefined ? undefined : chapter ? `${base}.${chapter}` : base;
+    },
+    resolve: (alias) => {
+      const m = alias.match(ALIAS_RE);
+      if (!m) return undefined;
+      const id = fromAlias.get(m[1].toLowerCase());
+      if (!id) return undefined;
+      if (m[2] === undefined) return { id, chapter: null };
+      const chapter = Number(m[2]);
+      return chapter >= 1 && chapter <= (counts.get(id) ?? 0) ? { id, chapter } : undefined;
+    },
+    chapters: (id) => counts.get(id) ?? 0,
   };
 }
 
-/** Resolves what the model wrote to real ids. Unknown ids are dropped and returned so the caller can report them. */
+/** One key per resource: `uuid#3` for a chapter, `uuid#0` for the whole. */
+export function refKey(ref: { id: string; chapter?: number | null }): string {
+  return `${ref.id}#${ref.chapter ?? 0}`;
+}
+
+/** "M1.1–M1.3, M2, M1.4": runs of consecutive chapters of one material collapse. */
+export function formatAliases(refs: ResolvedAlias[], aliases: MaterialAliases): string {
+  const runs: { id: string; first: number | null; last: number | null }[] = [];
+  for (const ref of refs) {
+    const prev = runs[runs.length - 1];
+    if (prev && prev.id === ref.id && prev.last !== null && ref.chapter === prev.last + 1) prev.last = ref.chapter;
+    else runs.push({ id: ref.id, first: ref.chapter, last: ref.chapter });
+  }
+  return runs
+    .map((r) => {
+      const first = aliases.alias(r.id, r.first);
+      if (first === undefined) return null;
+      return r.first !== null && r.last !== null && r.last > r.first ? `${first}–${aliases.alias(r.id, r.last)}` : first;
+    })
+    .filter((s): s is string => s !== null)
+    .join(", ");
+}
+
+/** Resolves what the model wrote to real ids and chapters. Unknown ids are dropped and returned so the caller can report them. */
 export function resolveMaterialRefs(
   refs: MaterialRefDraft[] | undefined,
   aliases: MaterialAliases,
@@ -47,14 +97,14 @@ export function resolveMaterialRefs(
   const unknown: string[] = [];
   const seen = new Set<string>();
   for (const draft of refs ?? []) {
-    const id = aliases.resolve(draft.id);
-    if (!id) {
+    const resolved = aliases.resolve(draft.id);
+    if (!resolved) {
       unknown.push(draft.id);
       continue;
     }
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push({ ...normalizeMaterialRef(draft), id });
+    if (seen.has(refKey(resolved))) continue;
+    seen.add(refKey(resolved));
+    out.push({ ...normalizeMaterialRef(draft), ...resolved });
   }
   return { refs: out, unknown };
 }
@@ -64,14 +114,14 @@ export function resolveCoverRefs(refs: CoverRefDraft[] | undefined, aliases: Mat
   const unknown: string[] = [];
   const seen = new Set<string>();
   for (const draft of refs ?? []) {
-    const id = aliases.resolve(draft.id);
-    if (!id) {
+    const resolved = aliases.resolve(draft.id);
+    if (!resolved) {
       unknown.push(draft.id);
       continue;
     }
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push({ ...normalizeCoverRef(draft), id });
+    if (seen.has(refKey(resolved))) continue;
+    seen.add(refKey(resolved));
+    out.push({ ...normalizeCoverRef(draft), ...resolved });
   }
   return { refs: out, unknown };
 }
@@ -150,6 +200,31 @@ function formatChapters(chapters: number[]): string {
   return chapters.length > 6 ? `${chapters.slice(0, 6).join(", ")}, …` : chapters.join(", ");
 }
 
+export type BreachKind = "outside" | "overlap" | "whole-book" | "review-before-read" | "over-budget" | "unread-reservation";
+
+/** The breaches a drop can cure: the row goes, the unit keeps the rest. Over-budget and unread reservations stay facts. */
+export const DROPPABLE: ReadonlySet<BreachKind> = new Set<BreachKind>(["outside", "overlap", "whole-book", "review-before-read"]);
+
+export interface Breach {
+  kind: BreachKind;
+  /** Position among the checked units; -1 for the parent's unread reservation. */
+  index: number;
+  /** "Week 1" */
+  unit: string;
+  refs: ResolvedAlias[];
+  /** `refs` as the prompt names them: "M1.3–M1.4". */
+  names: string;
+  /** The sentence the retry quotes and the admin dock shows. */
+  text: string;
+}
+
+export interface LevelChecks {
+  facts: string[];
+  breaches: Breach[];
+}
+
+type CheckMaterial = Pick<Material, "id" | "toc" | "minutes"> & { backbone?: boolean; kind?: Material["kind"] };
+
 export interface LevelCheckInput {
   root: PlanNode;
   /** The units this level placed, in order, already in `root`. */
@@ -157,66 +232,188 @@ export interface LevelCheckInput {
   leaves: boolean;
   /** Whether these are the plan's top-level units. */
   top: boolean;
-  backboneId: string | null;
+  /** The plan's materials, in list order, for aliases, chapter lists and sizes. */
+  materials: CheckMaterial[];
   unknownIds: string[];
   /** The learner's weekly hours. With them, day leaves are checked against a day's share of the week. */
   hoursPerWeek?: number;
-  /** The plan's reading share (0–1). With it, a leaf whose must-reading runs well past that share is reported. */
+  /** The plan's reading share (0–1); `MUST_SHARE` stands in when it is not decided yet. */
   readingShare?: number | null;
 }
 
-/** How far must-reading may run past the plan's reading share before it is worth a fact. */
+/** How far must-reading may run past the plan's reading share before it is worth reporting. */
 export const SHARE_TOLERANCE = 1.25;
 
-/**
- * The checks in code that run after each drafted level. They never change the plan; they become facts in the
- * admin panel and the eval: unknown ids dropped, leaves over budget or without a must, backbone chapters out of
- * order, and backbone chapters no top-level heading reserves.
- */
-export function levelFacts(input: LevelCheckInput): string[] {
-  const facts: string[] = [];
-  if (input.unknownIds.length > 0) facts.push(`dropped unknown ${[...new Set(input.unknownIds)].join(", ")}`);
-  const label = (n: PlanNode) => labelOf(input.root, n);
+type RefLike = { id: string; chapter?: number | null; activity?: RefActivity; note?: string | null };
 
-  if (input.leaves) {
-    const withRefs = input.nodes.filter((n) => (n.materials?.length ?? 0) > 0);
-    if (withRefs.length > 0) {
-      const noMust = input.nodes.filter((n) => !(n.materials ?? []).some((r) => r.tier === "must"));
-      if (noMust.length > 0) facts.push(`no must: ${noMust.map(label).join(", ")}`);
-      for (const n of input.nodes) {
-        // Without the learner's hours only week leaves carry a budget; with them, days do too.
-        if (n.budgetHours === null && input.hoursPerWeek === undefined) continue;
-        const budget = budgetMinutes(n, input.hoursPerWeek);
-        if (budget <= 0) continue;
-        const { must, should } = tierMinutes(n.materials);
-        if (must + should > budget) facts.push(`${label(n)} over budget: ${must + should} of ${budget} min`);
-        else if (typeof input.readingShare === "number" && must > budget * input.readingShare * SHARE_TOLERANCE + 10) {
-          facts.push(`${label(n)} must-reading over the plan's share: ${must} of about ${Math.round(budget * input.readingShare)} min`);
-        }
+const isRead = (r: RefLike) => (r.activity ?? "read") === "read";
+const toResolved = (r: RefLike): ResolvedAlias => ({ id: r.id, chapter: r.chapter ?? null });
+/** A node's references: a heading's reservation or a leaf's Read table. */
+const refsOf = (n: PlanNode): RefLike[] => [...(n.covers ?? []), ...(n.materials ?? [])];
+
+/**
+ * The checks in code that run after each drafted level. Facts describe the level for the admin panel and the eval;
+ * breaches are rule violations the drafter is asked to correct, and the droppable ones are removed when it does not.
+ */
+export function levelChecks(input: LevelCheckInput): LevelChecks {
+  const facts: string[] = [];
+  const breaches: Breach[] = [];
+  if (input.unknownIds.length > 0) facts.push(`dropped unknown ${[...new Set(input.unknownIds)].join(", ")}`);
+  if (input.nodes.length === 0) return { facts, breaches };
+
+  const label = (n: PlanNode) => labelOf(input.root, n);
+  const aliases = aliasMaterials(input.materials);
+  const byId = new Map(input.materials.map((m) => [m.id, m]));
+  const listed = (id: string) => (byId.get(id)?.toc?.chapters.length ?? 0) > 0;
+  // A book without a list is divided by topic in notes, so several units hold it; it is never anyone's to take.
+  const byTopic = (r: RefLike) => !r.chapter && !listed(r.id) && byId.get(r.id)?.kind === "book";
+  // A row saved before chapters were data: the whole book, with the chapters in its note. It stands as written.
+  const legacy = (r: RefLike) => !r.chapter && listed(r.id) && parseChapters(r.note).length > 0;
+  /** The minutes a reservation is known to take: a chapter's size, a legacy note's chapters, a sized whole resource. */
+  const knownMinutes = (r: RefLike): number => {
+    const m = byId.get(r.id);
+    if (r.chapter) return chapterAt(m?.toc, r.chapter)?.minutes ?? 0;
+    if (byTopic(r)) return 0;
+    if (legacy(r)) return parseChapters(r.note).reduce((sum, n) => sum + (m?.toc?.chapters.find((c) => c.n === n)?.minutes ?? 0), 0);
+    if (listed(r.id)) return 0;
+    return m?.minutes ?? 0;
+  };
+  const share = input.readingShare ?? MUST_SHARE;
+  const verb = input.leaves ? "reads" : "reserves";
+  const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
+  const breach = (kind: BreachKind, index: number, unit: string, refs: RefLike[], text: string) => breaches.push({ kind, index, unit, refs: refs.map(toResolved), names: names(refs), text });
+
+  // Where these units sit: their parent (none at the top level), its line of ancestors, and their own descendants.
+  const placed = new Set(input.nodes.map((n) => n.id));
+  const parent = parentOf(input.root, input.nodes[0].id);
+  const parentNode = parent && parent.id !== input.root.id ? parent : null;
+  const skip = new Set<string>(placed);
+  for (let p = parent; p; p = parentOf(input.root, p.id)) skip.add(p.id);
+  for (const n of input.nodes) walk(n, (d) => void skip.add(d.id));
+
+  // The parent's reservation: chapter keys, plus whole reservations that admit any chapter of that resource.
+  const reservedKeys = new Set<string>();
+  const reservedWhole = new Set<string>();
+  for (const r of (parentNode?.covers ?? []).filter(isRead)) {
+    if (r.chapter) reservedKeys.add(refKey(r));
+    else reservedWhole.add(r.id);
+  }
+  // A reservation of any kind binds the children's reads; a review cover reserves nothing for reading.
+  const hasReservation = (parentNode?.covers?.length ?? 0) > 0;
+
+  // What every other unit in the plan reads or reserves, keyed to the unit that holds it.
+  const taken = new Map<string, string>();
+  walk(input.root, (n) => {
+    if (n.id === input.root.id || skip.has(n.id)) return;
+    for (const r of refsOf(n).filter(isRead)) if (!byTopic(r) && !taken.has(refKey(r))) taken.set(refKey(r), label(n));
+  });
+  // Siblings: a heading holds a resource exclusively; consecutive leaves may share one that is too long for one of them.
+  const siblingLast = new Map<string, number>();
+  const sizeOf = (r: RefLike): number | null => (r.chapter ? (chapterAt(byId.get(r.id)?.toc, r.chapter)?.minutes ?? null) : (byId.get(r.id)?.minutes ?? null));
+  const mayShare = (node: PlanNode, r: RefLike, index: number): boolean => {
+    if (!input.leaves) return false;
+    const last = siblingLast.get(refKey(r));
+    if (last === undefined || last !== index - 1) return false;
+    const size = sizeOf(r);
+    const budget = node.budgetHours === null && input.hoursPerWeek === undefined ? 0 : budgetMinutes(node, input.hoursPerWeek);
+    return size === null || budget <= 0 || size > budget * share;
+  };
+  const readBefore = (node: PlanNode, key: string): boolean => {
+    let found = false;
+    walk(input.root, (n) => {
+      if (found || n.id === input.root.id || n.id === node.id || n.end >= node.start) return;
+      if (refsOf(n).some((r) => isRead(r) && refKey(r) === key)) found = true;
+    });
+    return found;
+  };
+
+  const withRefs = input.nodes.filter((n) => refsOf(n).length > 0);
+  if (input.leaves && withRefs.length > 0) {
+    const noMust = input.nodes.filter((n) => !(n.materials ?? []).some((r) => r.tier === "must"));
+    if (noMust.length > 0) facts.push(`no must: ${noMust.map(label).join(", ")}`);
+  }
+
+  input.nodes.forEach((node, index) => {
+    const unit = label(node);
+    const refs = refsOf(node);
+    const reads = refs.filter(isRead);
+    const whole = reads.filter((r) => !r.chapter && listed(r.id) && !legacy(r));
+    if (whole.length > 0) breach("whole-book", index, unit, whole, `${unit} refers to ${names(whole)} as a whole; use its chapters`);
+    const chaptered = reads.filter((r) => !whole.includes(r));
+    if (hasReservation) {
+      const outside = chaptered.filter((r) => !reservedKeys.has(refKey(r)) && !reservedWhole.has(r.id));
+      if (outside.length > 0) breach("outside", index, unit, outside, `${unit} ${verb} ${names(outside)}, which ${label(parentNode!)} did not reserve`);
+    }
+    const byHolder = new Map<string, RefLike[]>();
+    for (const r of chaptered) {
+      if (byTopic(r)) continue;
+      const sibling = siblingLast.get(refKey(r));
+      const holder = taken.get(refKey(r)) ?? (sibling !== undefined && !mayShare(node, r, index) ? label(input.nodes[sibling]) : undefined);
+      if (holder) byHolder.set(holder, [...(byHolder.get(holder) ?? []), r]);
+    }
+    for (const [holder, rs] of byHolder) breach("overlap", index, unit, rs, `${unit} ${verb} ${names(rs)}, which ${holder} holds`);
+    for (const r of reads) siblingLast.set(refKey(r), index);
+
+    const unread = refs.filter((r) => !isRead(r) && !readBefore(node, refKey(r)));
+    if (unread.length > 0) breach("review-before-read", index, unit, unread, `${unit} reviews ${names(unread)}, which no earlier unit reads`);
+
+    if (input.leaves) {
+      // Without the learner's hours only week leaves carry a budget; with them, days do too.
+      if (withRefs.length === 0 || (node.budgetHours === null && input.hoursPerWeek === undefined)) return;
+      const budget = budgetMinutes(node, input.hoursPerWeek);
+      if (budget <= 0) return;
+      const { must, should } = tierMinutes(node.materials);
+      if (must + should > budget) facts.push(`${unit} over budget: ${must + should} of ${budget} min`);
+      if (must > budget * share * SHARE_TOLERANCE + 10) {
+        breach("over-budget", index, unit, [], `${unit}'s must-reading is ${must} min against a budget of about ${Math.round(budget * share)} min`);
       }
+    } else {
+      const known = reads.reduce((sum, r) => sum + knownMinutes(r), 0);
+      const budget = budgetFor(node.len, input.hoursPerWeek) * 60 * share;
+      if (known > budget * SHARE_TOLERANCE) {
+        breach("over-budget", index, unit, [], `${unit} reserves about ${known} min of reading against a budget of about ${Math.round(budget)} min`);
+      }
+    }
+  });
+
+  if (parentNode && hasReservation) {
+    const readKeys = new Set(input.nodes.flatMap((n) => refsOf(n).filter(isRead).map(refKey)));
+    const readIds = new Set(input.nodes.flatMap((n) => refsOf(n).filter(isRead).map((r) => r.id)));
+    const unread = (parentNode.covers ?? []).filter(isRead).filter((r) => (r.chapter ? !readKeys.has(refKey(r)) : !readIds.has(r.id)));
+    if (unread.length > 0) {
+      const unit = label(parentNode);
+      breach("unread-reservation", -1, unit, unread, `${unit} reserved ${names(unread)}, which no ${input.nodes[0].level} reads`);
     }
   }
 
-  if (input.backboneId) {
-    const id = input.backboneId;
-    const steps: ChapterStep[] = input.nodes.map((n) => {
-      const refs = input.leaves ? n.materials : n.covers;
-      const note = refs?.find((r) => r.id === id)?.note;
-      return { label: label(n), chapters: parseChapters(note) };
-    });
+  const backbone = input.materials.find((m) => m.backbone);
+  if (backbone) {
+    const numbers = (n: PlanNode) => chapterNumbers(n, backbone);
+    const steps: ChapterStep[] = input.nodes.map((n) => ({ label: label(n), chapters: numbers(n) }));
     // Start from where the plan before these units left the backbone, so an expansion continues in order.
-    const before = chaptersBefore(input.root, input.nodes[0], id);
+    const before = chaptersBefore(input.root, input.nodes[0], backbone);
     facts.push(...chapterRegressions([{ label: "earlier units", chapters: before }, ...steps]));
     if (input.top && !input.leaves) {
       const gaps = chapterGaps(steps.flatMap((s) => s.chapters));
       if (gaps.length > 0) facts.push(`backbone ch. ${formatChapters(gaps)} not reserved`);
     }
   }
-  return facts;
+  return { facts, breaches };
+}
+
+/** The backbone chapter numbers a node reads: from chapter references, or from the note of a row without one. */
+function chapterNumbers(node: PlanNode, backbone: CheckMaterial): number[] {
+  const out: number[] = [];
+  for (const r of refsOf(node)) {
+    if (r.id !== backbone.id || !isRead(r)) continue;
+    if (r.chapter) out.push(chapterAt(backbone.toc, r.chapter)?.n ?? r.chapter);
+    else out.push(...parseChapters(r.note));
+  }
+  return [...new Set(out)];
 }
 
 /** Backbone chapters read by leaves that come before `node` in plan order. */
-function chaptersBefore(root: PlanNode, node: PlanNode | undefined, backboneId: string): number[] {
+function chaptersBefore(root: PlanNode, node: PlanNode | undefined, backbone: CheckMaterial): number[] {
   if (!node) return [];
   const out: number[] = [];
   let reached = false;
@@ -226,9 +423,92 @@ function chaptersBefore(root: PlanNode, node: PlanNode | undefined, backboneId: 
       reached = true;
       return;
     }
-    if (n.children === null && n.end < node.start) out.push(...parseChapters(n.materials?.find((r) => r.id === backboneId)?.note));
+    if (n.children === null && n.end < node.start) out.push(...chapterNumbers(n, backbone));
   });
   return out;
+}
+
+/**
+ * Every sibling group of a tree through `levelChecks`, in walk order. `nodes` is that walk order without the root, and
+ * each breach's `index` points into it, so `dropBreaches(nodes, breaches)` works on the whole tree.
+ */
+export function treeChecks(
+  root: PlanNode,
+  materials: CheckMaterial[],
+  opts: { granularity: Granularity; hoursPerWeek?: number; readingShare?: number | null },
+): LevelChecks & { nodes: PlanNode[] } {
+  const { granularity, ...shares } = opts;
+  const nodes: PlanNode[] = [];
+  const position = new Map<string, number>();
+  walk(root, (n) => {
+    if (n.id === root.id) return;
+    position.set(n.id, nodes.length);
+    nodes.push(n);
+  });
+  const facts: string[] = [];
+  const breaches: Breach[] = [];
+  walk(root, (n) => {
+    const group = n.children;
+    if (!group || group.length === 0) return;
+    // Leaf-ness is the level's, not the node's: a hand-split week is still a week-sized leaf of a week plan.
+    const level = group[0].level;
+    const leaves = level === "day" || (level === "week" && granularity === "week");
+    const out = levelChecks({ root, nodes: group, leaves, top: n.id === root.id, materials, unknownIds: [], ...shares });
+    facts.push(...out.facts);
+    breaches.push(...out.breaches.map((b) => ({ ...b, index: b.index < 0 ? -1 : position.get(group[b.index].id)! })));
+  });
+  return { facts, breaches, nodes };
+}
+
+/** Removes the rows of droppable breaches from `nodes[breach.index]`; one line per breach for the facts. */
+export function dropBreaches(nodes: PlanNode[], breaches: Breach[]): string[] {
+  const out: string[] = [];
+  for (const b of breaches) {
+    if (!DROPPABLE.has(b.kind) || b.index < 0) continue;
+    const node = nodes[b.index];
+    if (!node) continue;
+    const keys = new Set(b.refs.map(refKey));
+    if (node.covers) {
+      node.covers = node.covers.filter((r) => !keys.has(refKey(r)));
+      if (node.covers.length === 0) delete node.covers;
+    }
+    if (node.materials) {
+      node.materials = node.materials.filter((r) => !keys.has(refKey(r)));
+      if (node.materials.length === 0) delete node.materials;
+    }
+    out.push(`dropped ${b.names} from ${b.unit}: ${b.kind}`);
+  }
+  return out;
+}
+
+/**
+ * Chapter rows take their minutes from the list: the read rows across `nodes` that carry one chapter are rescaled so
+ * they add up to its listed size, keeping the model's proportions (rounding remainder to the last row); rows that
+ * all say zero share it evenly. Reviews and chapters without a size keep the model's minutes.
+ */
+export function sizeChapterRows(nodes: PlanNode[], materials: Pick<Material, "id" | "toc">[]): void {
+  const byId = new Map(materials.map((m) => [m.id, m]));
+  const groups = new Map<string, MaterialRef[]>();
+  for (const node of nodes) {
+    for (const row of node.materials ?? []) {
+      if (!row.chapter || (row.activity ?? "read") !== "read") continue;
+      const key = refKey(row);
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+  }
+  for (const rows of groups.values()) {
+    const size = chapterAt(byId.get(rows[0].id)?.toc, rows[0].chapter)?.minutes;
+    if (!size) continue;
+    const total = rows.reduce((sum, r) => sum + (r.minutes ?? 0), 0);
+    let given = 0;
+    rows.forEach((row, i) => {
+      if (i === rows.length - 1) row.minutes = size - given;
+      else {
+        row.minutes = total > 0 ? Math.round(((row.minutes ?? 0) * size) / total) : Math.round(size / rows.length);
+        given += row.minutes;
+      }
+    });
+  }
 }
 
 /** Where a material is used, for the remove-material confirmation. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { makeNode, makeRoot } from "@/lib/planTree";
+import { layout, makeNode, makeRoot } from "@/lib/planTree";
 import { aliasMaterials } from "@/lib/materials";
+import { AIE_MATERIALS, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 import type { ChapterList, Material } from "@/lib/schemas/material";
 import { assignRefs, buildPlanChatSystemPrompt, buildRevisionPrompt, buildUnitsPrompt, renderChapters, renderMaterials, renderRefs, renderTree } from "./planPrompt";
 
@@ -133,7 +134,7 @@ describe("materials in prompts", () => {
     expect(prompt).toContain("No tier and no minutes yet");
     expect(prompt).toContain("M1 is the backbone textbook, but its chapters are not listed: reserve it in order across the units");
     expect(prompt).toContain("Never write a chapter number or a chapter title you were not given.");
-    expect(prompt).toContain("Where a book's chapters are listed, name them as listed.");
+    expect(prompt).toContain("Each resource is read in at most one unit at this level.");
   });
 
   it("gives leaves their budget, the parent's reservation, and the must rules", () => {
@@ -142,7 +143,8 @@ describe("materials in prompts", () => {
     ]);
     const prompt = buildUnitsPrompt({ topic: "X", materials: MATERIALS, granularity: "week", level: "week", spans: [7, 7], startDay: 1, totalDays: 14, tree: root, parentId: "m1", unitsAreLeaves: true });
     expect(prompt).toContain("1. Days 1–7 (7 days) — budget about 6 h, so about 3.6 h of must-reading");
-    expect(prompt).toContain('reserved: M1 (ch. 1–4)');
+    expect(prompt).toContain("This unit's reservation, the only resources its weeks may use: M1 (ch. 1–4).");
+    expect(prompt).not.toContain("Held by other units");
     expect(prompt).toContain("at least one must per unit");
     expect(prompt).toContain("{covers M1 (ch. 1–4)}");
   });
@@ -181,10 +183,10 @@ describe("chapters in prompts", () => {
   it("renders chapter lines under the book, with sections for the backbone when asked", () => {
     expect(renderMaterials(withToc, undefined, { sections: true })).toBe(
       [
-        'M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024 <https://example.com/aie>. The backbone.',
-        '  ch. 1 "Alpha" · pp. 10–29 · about 3.3 h — A1; A2',
-        '  ch. 2 "Beta" · pp. 30–69 · about 6.7 h',
-        '  ch. 3 "Gamma" · pp. 70–99 · about 5 h — G1',
+        'M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024 <https://example.com/aie>. The backbone. Refer to its chapters by id; M1 itself is not a resource.',
+        '  M1.1 ch. 1 "Alpha" · pp. 10–29 · about 3.3 h — A1; A2',
+        '  M1.2 ch. 2 "Beta" · pp. 30–69 · about 6.7 h',
+        '  M1.3 ch. 3 "Gamma" · pp. 70–99 · about 5 h — G1',
         "  (chapters from Open Library)",
         `M2 [video · the learner's own] "Intro talk" <https://youtu.be/x>`,
       ].join("\n"),
@@ -207,13 +209,11 @@ describe("chapters in prompts", () => {
   });
   it("switches the backbone rules on the list, at both levels", () => {
     const heading = buildUnitsPrompt({ topic: "X", materials: withToc, granularity: "week", level: "month", spans: [28, 28], startDay: 1, totalDays: 56, unitsAreLeaves: false });
-    expect(heading).toContain(
-      "M1 is the backbone textbook and its chapters are listed above: reserve them in order across the units, each chapter in exactly one unit, and write the note as the chapter numbers and titles exactly as listed",
-    );
-    expect(heading).toContain('ch. 1 "Alpha"');
+    expect(heading).toContain("M1's chapters are resources of their own (M1.1, M1.2, …): reserve them in order across the units, each chapter in exactly one unit, and never refer to M1 itself.");
+    expect(heading).toContain('M1.1 ch. 1 "Alpha"');
     const leaf = buildUnitsPrompt({ topic: "X", materials: withToc, granularity: "week", level: "week", spans: [7, 7], startDay: 1, totalDays: 14, unitsAreLeaves: true });
-    expect(leaf).toContain("M1 is the backbone textbook and its chapters are listed above with their sizes");
-    expect(leaf).toContain("A unit's minutes for it are the listed size of what it reads, or that share of a chapter.");
+    expect(leaf).toContain("A chapter longer than one unit's reading time spans consecutive units");
+    expect(leaf).toContain("never refer to M1 itself");
     const leafNoList = buildUnitsPrompt({ topic: "X", materials: MATERIALS, granularity: "week", level: "week", spans: [7, 7], startDay: 1, totalDays: 14, unitsAreLeaves: true });
     expect(leafNoList).toContain("M1 is the backbone textbook, but its chapters are not listed: it runs in order across the units");
   });
@@ -230,9 +230,10 @@ describe("chapters in prompts", () => {
     expect(chat).toContain('ch. 2 "Beta"');
     expect(chat).not.toContain("— A1; A2");
   });
-  it("leaves the general chapter line out when no book is listed", () => {
+  it("says nothing about chapters when no book is listed", () => {
     const prompt = buildUnitsPrompt({ topic: "X", materials: [MATERIALS[1]], granularity: "day", level: "day", spans: [1], startDay: 1, totalDays: 1, unitsAreLeaves: true });
-    expect(prompt).not.toContain("Where a book's chapters are listed");
+    expect(prompt).not.toMatch(/chapters are not listed|never refer to|chapter number/);
+    expect(prompt).toContain("A resource is read once: do not assign what another unit reads.");
   });
 });
 
@@ -259,7 +260,7 @@ describe("time and the split in prompts", () => {
     expect(prompt).toContain("1. Days 1–7 (7 days) — budget about 10 h\n");
     expect(prompt).toContain("must minutes stay within your readingShare of the unit's budget");
     expect(prompt).not.toContain("building and practice");
-    expect(prompt).toContain("never assign more of it than it has");
+    expect(prompt).toContain("Each resource's size is in the list.");
   });
 
   it("budgets later levels from the decided split and names the practice", () => {
@@ -292,5 +293,73 @@ describe("time and the split in prompts", () => {
     expect(chat).toContain("the rest on running sessions");
     const revision = buildRevisionPrompt({ topic: "Couch to 5K", materials: [], granularity: "week", hoursPerWeek: 3, split, tree, refs: assignRefs(tree), lockBefore: 0, changeRequest: "x" });
     expect(revision).toContain("about 10% reading or watching the materials");
+  });
+});
+
+describe("chapters as resources in prompts", () => {
+  const A = aliasMaterials(AIE_MATERIALS);
+  it("renders chapter lines with aliases and the not-a-resource sentence", () => {
+    const text = renderMaterials(AIE_MATERIALS, undefined, { sections: true });
+    expect(text).toContain('"AI Engineering: Building Applications with Foundation Models" — Chip Huyen, 2024 <https://example.com/aie> · about 18.4 h. Refer to its chapters by id; M1 itself is not a resource.');
+    expect(text).toContain('  M1.2 ch. 2 "Understanding Foundation Models" · about 2.3 h — Training Data; Modeling; Post-Training; Sampling');
+    expect(text).toContain('  M1.10 ch. 10 "AI Engineering Architecture and User Feedback" · about 1.6 h');
+    expect(renderMaterials([AIE_MATERIALS[1]])).not.toContain("not a resource");
+  });
+  it("unnumbered chapters keep their alias and lose the ch. prefix", () => {
+    const m = { ...AIE_MATERIALS[0], toc: { ...AIE_TOC, chapters: AIE_TOC.chapters.slice(0, 3).map((c) => ({ ...c, n: null })) } };
+    expect(renderMaterials([m])).toContain('  M1.2 "Understanding Foundation Models" · about 2.3 h');
+  });
+  it("renders references with collapsed chapter runs and activities", () => {
+    const root = aiePlan();
+    expect(renderRefs(root.children![0], A)).toBe("covers M1.1–M1.4, M3, M4");
+    expect(renderRefs(root.children![0].children![3], A)).toBe("reviews M1.1 must 15 min; M1.2 must 15 min; M1.3 must 15 min; M1.4 must 15 min");
+    const w1 = root.children![0].children![0];
+    w1.materials![1].note = "Post-Training; Sampling";
+    expect(renderRefs(w1, A)).toBe("reads M1.1 must 107 min; M1.2 must 140 min (Post-Training; Sampling)");
+    expect(renderRefs({ covers: [{ id: "aie", chapter: 1, note: null }, { id: "agents", note: "first half", activity: "review" }] }, A)).toBe("covers M1.1 · reviews M2 (first half)");
+  });
+  it("the availability block names the reservation and what other units hold", () => {
+    const root = aiePlan();
+    const w1 = root.children![0].children![0];
+    w1.covers = w1.materials!.map((m) => ({ id: m.id, chapter: m.chapter, note: null }));
+    delete w1.materials;
+    layout(root);
+    const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "day", spans: Array(7).fill(1), startDay: 1, totalDays: 90, tree: root, parentId: "w1", unitsAreLeaves: true });
+    expect(prompt).toContain("This unit's reservation, the only resources its days may use: M1.1–M1.2.\nHeld by other units: M1.3–M1.4 (Week 2); M3, M4 (Week 3); M1.5–M1.6, M2, M5 (Month 2); M1.10, M6, M7 (Month 3).");
+    expect(prompt).not.toContain("Take them first from what the unit marked");
+    expect(prompt).not.toContain("Where a book's chapters are listed");
+  });
+  it("review covers are offered to review, never as resources to read", () => {
+    const root = aiePlan();
+    const w4 = root.children![0].children![3];
+    w4.covers = w4.materials!.map((m) => ({ id: m.id, chapter: m.chapter, note: null, activity: "review" as const }));
+    delete w4.materials;
+    layout(root);
+    const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "day", spans: Array(8).fill(1), startDay: 23, totalDays: 90, tree: root, parentId: "w4", unitsAreLeaves: true });
+    expect(prompt).toContain("This unit reserves nothing to read: its days may only review.\nTo review (activity \"review\"): M1.1–M1.4.");
+    expect(prompt).not.toContain("may use: M1.1–M1.4");
+  });
+  it("the top level is told everything is free", () => {
+    const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", level: "month", spans: [30, 30, 30], startDay: 1, totalDays: 90, unitsAreLeaves: false, decideSplit: true });
+    expect(prompt).toContain("Every resource is free. Reserve each in at most one month; the book's chapters in order.");
+    expect(prompt).toContain("Each resource is read in at most one unit at this level. M1's chapters are resources of their own (M1.1, M1.2, …): reserve them in order across the units, each chapter in exactly one unit, and never refer to M1 itself.");
+    expect(prompt).toContain('A unit may also reserve a review of resources that an earlier unit reads, with activity "review". A review is not a reading, so it may name resources another unit holds.');
+  });
+  it("leaf rules state spanning, single reading, and reviews", () => {
+    const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "week", spans: [7, 7], startDay: 1, totalDays: 14, unitsAreLeaves: true });
+    expect(prompt).toContain('Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note, activity }.');
+    expect(prompt).toContain("Each resource's size is in the list. A chapter longer than one unit's reading time spans consecutive units: list it in each with the part in the note; across those units its minutes add up to its size. A resource is read once: do not assign what another unit reads, and never refer to M1 itself.");
+    expect(prompt).toContain('A review (activity "review") revisits a resource an earlier unit read. Its minutes count for this unit, and it may name resources other units hold.');
+  });
+  it("an unlisted backbone keeps the topic-only rule at both levels", () => {
+    const m = [{ ...AIE_MATERIALS[0], toc: null }];
+    expect(buildUnitsPrompt({ topic: "t", materials: m, granularity: "week", level: "month", spans: [30], startDay: 1, totalDays: 30, unitsAreLeaves: false })).toContain("Never write a chapter number or a chapter title you were not given.");
+    expect(buildUnitsPrompt({ topic: "t", materials: m, granularity: "week", level: "week", spans: [7], startDay: 1, totalDays: 7, unitsAreLeaves: true })).toContain("its chapters are not listed");
+  });
+  it("the revision rule names chapter ids and reviews", () => {
+    const root = aiePlan();
+    expect(buildRevisionPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", tree: root, refs: assignRefs(root), lockBefore: 0, changeRequest: "x" })).toContain(
+      'Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit, and a review of something read earlier has activity "review".',
+    );
   });
 });

@@ -9,6 +9,9 @@ export type MaterialKind = (typeof MATERIAL_KINDS)[number];
 
 export const MATERIAL_TIERS = ["must", "should"] as const;
 export type MaterialTier = (typeof MATERIAL_TIERS)[number];
+/** What a unit does with a resource: reads it, or revisits one an earlier unit read. */
+export const REF_ACTIVITIES = ["read", "review"] as const;
+export type RefActivity = (typeof REF_ACTIVITIES)[number];
 
 /** Where a material's size came from: counted by code (pages, runtime, page length) or estimated by the model. */
 export const MINUTES_BASES = ["measured", "estimated"] as const;
@@ -103,6 +106,10 @@ export const materialRefSchema = z.object({
   tier: z.enum(MATERIAL_TIERS),
   minutes: z.number().int().min(0).max(6000).nullable(),
   note: z.string().max(300).nullable(),
+  /** 1-based position in the material's chapter list; null or absent for the whole resource. */
+  chapter: z.number().int().min(1).max(MAX_CHAPTERS).nullable().optional(),
+  /** "read" when absent. */
+  activity: z.enum(REF_ACTIVITIES).optional(),
 });
 export type MaterialRef = z.infer<typeof materialRefSchema>;
 
@@ -110,6 +117,8 @@ export type MaterialRef = z.infer<typeof materialRefSchema>;
 export const coverRefSchema = z.object({
   id: z.string().min(1).max(64),
   note: z.string().max(300).nullable(),
+  chapter: z.number().int().min(1).max(MAX_CHAPTERS).nullable().optional(),
+  activity: z.enum(REF_ACTIVITIES).optional(),
 });
 export type CoverRef = z.infer<typeof coverRefSchema>;
 
@@ -118,14 +127,16 @@ export type CoverRef = z.infer<typeof coverRefSchema>;
  * given as 42.5 must not fail the whole level, so bounds are applied in code (`normalizeRefs`).
  */
 export const materialRefDraftSchema = z.object({
-  id: z.string().min(1).describe("A material id from the list, e.g. M3"),
+  id: z.string().min(1).describe("A resource id from the list, e.g. M3 or M1.3"),
   tier: z.enum(MATERIAL_TIERS),
   minutes: z.number().describe("Minutes of reading or watching for this unit"),
-  note: z.string().optional().describe('Which part, e.g. "Ch. 4 §2" or "evals and guardrails sections only"'),
+  note: z.string().optional().describe('The part: for a chapter, the sections this unit covers ("Post-Training; Sampling"); otherwise the part ("§2 only", "lectures 3–4")'),
+  activity: z.enum(REF_ACTIVITIES).optional().describe('"read" (the default) or "review": revisiting a resource an earlier unit read'),
 });
 export const coverRefDraftSchema = z.object({
-  id: z.string().min(1).describe("A material id from the list, e.g. M1"),
-  note: z.string().optional().describe('Which part this unit reserves, e.g. "ch. 5–6" or "whole essay"'),
+  id: z.string().min(1).describe("A resource id from the list, e.g. M3 or M1.3"),
+  note: z.string().optional().describe('The part only for a resource without chapters ("lectures 3–4"); leave it out otherwise'),
+  activity: z.enum(REF_ACTIVITIES).optional().describe('"read" (the default) or "review": revisiting a resource an earlier unit read'),
 });
 export type MaterialRefDraft = z.infer<typeof materialRefDraftSchema>;
 export type CoverRefDraft = z.infer<typeof coverRefDraftSchema>;
@@ -136,6 +147,12 @@ export function clip(text: string | null | undefined, max: number): string | nul
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
+/** The chapter a reference points at: `chapter` is its 1-based position in the list. Null for a whole resource or past the list. */
+export function chapterAt(toc: ChapterList | null | undefined, chapter: number | null | undefined): Chapter | null {
+  if (!toc || !chapter || chapter < 1) return null;
+  return toc.chapters[chapter - 1] ?? null;
+}
+
 /** Bounds and rounds what the model wrote. Unknown ids are left for the caller to drop and report. */
 export function normalizeMaterialRef(ref: MaterialRefDraft): MaterialRef {
   return {
@@ -143,11 +160,12 @@ export function normalizeMaterialRef(ref: MaterialRefDraft): MaterialRef {
     tier: ref.tier,
     minutes: Number.isFinite(ref.minutes) ? Math.max(0, Math.min(6000, Math.round(ref.minutes))) : null,
     note: clip(ref.note, 300),
+    activity: ref.activity ?? "read",
   };
 }
 
 export function normalizeCoverRef(ref: CoverRefDraft): CoverRef {
-  return { id: ref.id.trim(), note: clip(ref.note, 300) };
+  return { id: ref.id.trim(), note: clip(ref.note, 300), activity: ref.activity ?? "read" };
 }
 
 /** `M1`, `M2`, … in list order. */

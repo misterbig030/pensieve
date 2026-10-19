@@ -18,12 +18,13 @@ import type { CoverRef, MaterialRef } from "@/lib/schemas/material";
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Groups a track's `node_materials` rows into each node's covers and Read table, in row order. */
-export function refsByNode(rows: Pick<NodeMaterialRow, "nodeId" | "sourceId" | "role" | "tier" | "minutes" | "note" | "position">[]) {
+export function refsByNode(rows: Pick<NodeMaterialRow, "nodeId" | "sourceId" | "role" | "tier" | "minutes" | "note" | "position" | "chapter" | "activity">[]) {
   const out = new Map<string, { covers: CoverRef[]; materials: MaterialRef[] }>();
   for (const row of [...rows].sort((a, b) => a.position - b.position)) {
     const entry = out.get(row.nodeId) ?? { covers: [], materials: [] };
-    if (row.role === "covers") entry.covers.push({ id: row.sourceId, note: row.note });
-    else entry.materials.push({ id: row.sourceId, tier: row.tier ?? "should", minutes: row.minutes, note: row.note });
+    const ref = { chapter: row.chapter || null, activity: row.activity };
+    if (row.role === "covers") entry.covers.push({ id: row.sourceId, note: row.note, ...ref });
+    else entry.materials.push({ id: row.sourceId, tier: row.tier ?? "should", minutes: row.minutes, note: row.note, ...ref });
     out.set(row.nodeId, entry);
   }
   return out;
@@ -71,6 +72,8 @@ export async function getTrackNodeMaterials(trackId: string, database: Pick<type
       minutes: nodeMaterials.minutes,
       note: nodeMaterials.note,
       position: nodeMaterials.position,
+      chapter: nodeMaterials.chapter,
+      activity: nodeMaterials.activity,
     })
     .from(nodeMaterials)
     .innerJoin(planNodes, eq(nodeMaterials.nodeId, planNodes.id))
@@ -87,22 +90,23 @@ export async function getPlanTree(trackId: string): Promise<PlanNode> {
 
 /**
  * A node's references as rows. Leaves keep their Read table (`assigned`), everything else its reservation
- * (`covers`); a source appears at most once per node. Only ids in `sourceIds` are written.
+ * (`covers`); a source appears at most once per node and chapter. Only ids in `sourceIds` are written.
  */
 export function refRows(nodeId: string, node: Pick<PlanNode, "covers" | "materials" | "children">, sourceIds: ReadonlySet<string>): NewNodeMaterialRow[] {
   const rows: NewNodeMaterialRow[] = [];
   const seen = new Set<string>();
+  const key = (ref: { id: string; chapter?: number | null }) => `${ref.id}#${ref.chapter ?? 0}`;
   const assigned = node.children === null ? (node.materials ?? []) : [];
   for (const [i, ref] of assigned.entries()) {
-    if (!sourceIds.has(ref.id) || seen.has(ref.id)) continue;
-    seen.add(ref.id);
-    rows.push({ nodeId, sourceId: ref.id, role: "assigned", tier: ref.tier, minutes: ref.minutes, note: ref.note, position: i });
+    if (!sourceIds.has(ref.id) || seen.has(key(ref))) continue;
+    seen.add(key(ref));
+    rows.push({ nodeId, sourceId: ref.id, role: "assigned", tier: ref.tier, minutes: ref.minutes, note: ref.note, position: i, chapter: ref.chapter ?? 0, activity: ref.activity ?? "read" });
   }
   const covers = [...(node.covers ?? []), ...(node.children !== null ? (node.materials ?? []) : [])];
   for (const [i, ref] of covers.entries()) {
-    if (!sourceIds.has(ref.id) || seen.has(ref.id)) continue;
-    seen.add(ref.id);
-    rows.push({ nodeId, sourceId: ref.id, role: "covers", tier: null, minutes: null, note: ref.note, position: i });
+    if (!sourceIds.has(ref.id) || seen.has(key(ref))) continue;
+    seen.add(key(ref));
+    rows.push({ nodeId, sourceId: ref.id, role: "covers", tier: null, minutes: null, note: ref.note, position: i, chapter: ref.chapter ?? 0, activity: ref.activity ?? "read" });
   }
   return rows;
 }
@@ -331,6 +335,8 @@ export async function getNodeReadList(nodeId: string) {
       minutes: nodeMaterials.minutes,
       note: nodeMaterials.note,
       position: nodeMaterials.position,
+      chapter: nodeMaterials.chapter,
+      activity: nodeMaterials.activity,
     })
     .from(nodeMaterials)
     .innerJoin(sources, eq(nodeMaterials.sourceId, sources.id))

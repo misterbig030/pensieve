@@ -1,20 +1,37 @@
 import { formatDuration } from "@/lib/researchProgress";
-import type { Material, MaterialRef, MaterialTier } from "@/lib/schemas/material";
+import { chapterAt, type Chapter, type Material, type MaterialRef, type MaterialTier, type RefActivity } from "@/lib/schemas/material";
 import { cn } from "@/lib/utils";
 
 export interface ReadRow {
   material: Material;
   tier: MaterialTier;
   minutes: number | null;
+  /** The part: a chapter's sections, or the part of a resource without chapters. */
   note: string | null;
+  /** The chapter this row reads, from the book's list; null for a whole resource. */
+  chapter: Chapter | null;
+  activity: RefActivity;
+  /** Unique within a node: material id and chapter position. */
+  key: string;
 }
 
 /** A node's Read table rows, in order, skipping references to materials that are not in the list. */
 export function readRowsFor(refs: MaterialRef[] | undefined, byId: ReadonlyMap<string, Material>): ReadRow[] {
   return (refs ?? []).flatMap((r) => {
     const material = byId.get(r.id);
-    return material ? [{ material, tier: r.tier, minutes: r.minutes, note: r.note }] : [];
+    return material
+      ? [{ material, tier: r.tier, minutes: r.minutes, note: r.note, chapter: chapterAt(material.toc, r.chapter), activity: r.activity ?? "read", key: `${r.id}#${r.chapter ?? 0}` }]
+      : [];
   });
+}
+
+/** "Ch. 2 Understanding Foundation Models", or the title alone for an unnumbered chapter. */
+export function chapterLabel(chapter: Pick<Chapter, "n" | "title">): string {
+  return chapter.n !== null ? `Ch. ${chapter.n} ${chapter.title}` : chapter.title;
+}
+
+export function ReviewPill() {
+  return <span className="inline-flex justify-self-start rounded-full border border-neutral-600 px-[7px] py-px text-[10.5px] font-semibold text-neutral-800">Review</span>;
 }
 
 export function sumMinutes(rows: ReadRow[]): { must: number; should: number } {
@@ -89,10 +106,16 @@ export function ReadRows({ rows, link = true }: { rows: ReadRow[]; link?: boolea
   return (
     <div className="grid grid-cols-[56px_minmax(0,1fr)_60px] items-center gap-x-2.5 gap-y-1.5 text-[12.5px]">
       {rows.map((r) => (
-        <div key={r.material.id} className="contents">
+        <div key={r.key} className="contents">
           <TierPill tier={r.tier} />
           <span className="min-w-0 truncate">
+            {r.activity === "review" && (
+              <>
+                <ReviewPill />{" "}
+              </>
+            )}
             <ItemLink material={r.material} className="font-semibold" link={link} />
+            {r.chapter && <span className="text-muted-foreground"> · {chapterLabel(r.chapter)}</span>}
             {r.note && <span className="text-muted-foreground"> · {r.note}</span>}
           </span>
           <span className="justify-self-end text-neutral-800">{r.minutes !== null ? `${r.minutes} min` : "—"}</span>
@@ -132,9 +155,12 @@ export function ReadTable({ rows, budgetMinutes, practice }: { rows: ReadRow[]; 
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.material.id} className="border-t border-foreground/10 align-top">
+              <tr key={r.key} className="border-t border-foreground/10 align-top">
                 <td className="py-3 pr-2">
-                  <TierPill tier={r.tier} />
+                  <div className="flex flex-col items-start gap-1">
+                    <TierPill tier={r.tier} />
+                    {r.activity === "review" && <ReviewPill />}
+                  </div>
                 </td>
                 <td className="px-2 py-3">
                   <div className="flex flex-col gap-0.5">
@@ -145,7 +171,7 @@ export function ReadTable({ rows, budgetMinutes, practice }: { rows: ReadRow[]; 
                       )}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {[r.material.author, r.material.kind, r.material.year].filter(Boolean).join(" · ")}
+                      {[r.chapter ? chapterLabel(r.chapter) : null, r.material.author, r.material.kind, r.material.year].filter(Boolean).join(" · ")}
                     </span>
                   </div>
                 </td>

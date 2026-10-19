@@ -196,6 +196,11 @@ export function parseOpenLibraryToc(entries: OpenLibraryTocEntry[], edition: { u
 export function withChapterSizes(toc: ChapterList, bookMinutes: number | null): ChapterList {
   if (bookMinutes === null || bookMinutes <= 0 || toc.chapters.length === 0) return toc;
   const pages = toc.chapters.map((c) => c.page);
+  // A list without positions (a web page's) shares the book evenly, the rounding remainder on the last chapter.
+  if (pages.every((p) => p === null)) {
+    const each = Math.round(bookMinutes / toc.chapters.length);
+    return { ...toc, chapters: toc.chapters.map((c, i) => ({ ...c, minutes: i === toc.chapters.length - 1 ? bookMinutes - each * (toc.chapters.length - 1) : each })) };
+  }
   if (!pages.every((p): p is number => p !== null)) return toc;
   const spans: number[] = [];
   for (let i = 0; i + 1 < pages.length; i++) spans.push(pages[i + 1] - pages[i]);

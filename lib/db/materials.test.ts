@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { ChapterList, Material } from "@/lib/schemas/material";
 
@@ -122,13 +122,14 @@ describe("persistence of materials", () => {
     const detail = (await getTrackDetail(trackId, "u1"))!;
     const [book, notes, evals] = detail.materials;
     const [week1, week2] = detail.root.children!;
-    expect(week1.covers).toEqual([{ id: book.id, note: "ch. 1–2" }]);
-    expect(week2.covers).toEqual([{ id: book.id, note: "ch. 3–4" }]);
+    // Loaded references always carry chapter (null = whole) and activity.
+    expect(week1.covers).toEqual([{ id: book.id, note: "ch. 1–2", chapter: null, activity: "read" }]);
+    expect(week2.covers).toEqual([{ id: book.id, note: "ch. 3–4", chapter: null, activity: "read" }]);
     expect(week1.children![0].materials).toEqual([
-      { id: book.id, tier: "must", minutes: 40, note: "ch. 1" },
-      { id: notes.id, tier: "should", minutes: 10, note: null },
+      { id: book.id, tier: "must", minutes: 40, note: "ch. 1", chapter: null, activity: "read" },
+      { id: notes.id, tier: "should", minutes: 10, note: null, chapter: null, activity: "read" },
     ]);
-    expect(week1.children![1].materials).toEqual([{ id: evals.id, tier: "must", minutes: 30, note: null }]);
+    expect(week1.children![1].materials).toEqual([{ id: evals.id, tier: "must", minutes: 30, note: null, chapter: null, activity: "read" }]);
   });
 
   it("clips legacy notes to the wire limits when reading them back", async () => {
@@ -153,7 +154,55 @@ describe("persistence of materials", () => {
     );
     await insertChildren(trackId, "u1", week2.id, days);
     const after = (await getTrackDetail(trackId, "u1"))!;
-    expect(after.root.children![1].children![0].materials).toEqual([{ id: book.id, tier: "must", minutes: 45, note: "ch. 3" }]);
+    expect(after.root.children![1].children![0].materials).toEqual([{ id: book.id, tier: "must", minutes: 45, note: "ch. 3", chapter: null, activity: "read" }]);
+  });
+
+  it("keeps chapter and activity through save and load, two chapters of one book on one node", async () => {
+    const root = makeRoot([
+      makeNode({
+        level: "week",
+        title: "W",
+        summary: "s",
+        len: 7,
+        budgetHours: 6,
+        materials: [
+          { id: "M1", tier: "must", minutes: 107, note: null, chapter: 1 },
+          { id: "M1", tier: "must", minutes: 140, note: "Post-Training; Sampling", chapter: 2 },
+          { id: "M3", tier: "should", minutes: 20, note: null, activity: "review" },
+        ],
+      }),
+      makeNode({ level: "month", title: "M", summary: "s", len: 28, covers: [{ id: "M1", note: null, chapter: 3 }, { id: "M1", note: null, chapter: 4, activity: "review" }] }),
+    ]);
+    const created = await createTrackWithPlan({ userId: "u-ch", title: "T", granularity: "week", root, materials: MATERIALS, hoursPerWeek: 6, split: null });
+    const detail = (await getTrackDetail(created.trackId, "u-ch"))!;
+    const [week, month] = detail.root.children!;
+    expect(week.materials!.map((r) => [r.chapter, r.activity, r.minutes])).toEqual([[1, "read", 107], [2, "read", 140], [null, "review", 20]]);
+    expect(month.covers!.map((r) => [r.chapter, r.activity])).toEqual([[3, "read"], [4, "review"]]);
+  });
+
+  it("loads rows written before chapters as whole reads", async () => {
+    const detail = (await getTrackDetail(trackId, "u1"))!;
+    const day = detail.root.children![0].children![1];
+    const notes = detail.materials.find((m) => m.title === "My notes")!;
+    // No chapter, no activity: the column defaults, as the migration gives rows saved before this change.
+    await db.insert(nodeMaterials).values({ nodeId: day.id, sourceId: notes.id, role: "assigned", tier: "should", minutes: 5, note: "ch. 2", position: 9 });
+    const again = (await getTrackDetail(trackId, "u1"))!;
+    expect(again.root.children![0].children![1].materials!.at(-1)).toEqual({ id: notes.id, tier: "should", minutes: 5, note: "ch. 2", chapter: null, activity: "read" });
+    await db.delete(nodeMaterials).where(and(eq(nodeMaterials.nodeId, day.id), eq(nodeMaterials.sourceId, notes.id)));
+  });
+
+  it("a hand-split week's chapter rows become its reservation, chapter and activity kept", async () => {
+    const root = makeRoot([
+      makeNode({ level: "week", title: "W", summary: "s", len: 7, budgetHours: 6, materials: [{ id: "M1", tier: "must", minutes: 140, note: null, chapter: 2 }, { id: "M3", tier: "should", minutes: 20, note: null, activity: "review" }] }),
+    ]);
+    const created = await createTrackWithPlan({ userId: "u-split", title: "T", granularity: "week", root, materials: MATERIALS, hoursPerWeek: 6, split: null });
+    const detail = (await getTrackDetail(created.trackId, "u-split"))!;
+    const week = detail.root.children![0];
+    const days = Array.from({ length: 7 }, (_, i) => makeNode({ level: "day", title: `Day ${i}`, summary: "d", len: 1, materials: i === 0 ? [{ id: week.materials![0].id, tier: "must", minutes: 20, note: "Sampling", chapter: 2 }] : undefined }));
+    await insertChildren(created.trackId, "u-split", week.id, days, true);
+    const after = (await getTrackDetail(created.trackId, "u-split"))!.root.children![0];
+    expect(after.covers!.map((r) => [r.chapter, r.activity])).toEqual([[2, "read"], [null, "review"]]);
+    expect(after.children![0].materials![0]).toMatchObject({ chapter: 2, activity: "read", note: "Sampling" });
   });
 
   it("removing a material in adjust mode removes its rows (cascade)", async () => {
