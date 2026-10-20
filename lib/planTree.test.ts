@@ -1,21 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  budgetFor,
-  childSpans,
-  currentLeaf,
-  doneDays,
-  labelOf,
-  layout,
-  leavesOf,
-  lockBoundary,
-  makeNode,
-  makeRoot,
-  resolveGranularity,
-  spanOf,
-  splitSpans,
-  topLevelFor,
-  topSpans,
-} from "./planTree";
+import { budgetFor, childSpans, currentLeaf, doneDays, labelOf, layout, leavesOf, lockBoundary, makeNode, makeRoot, resolveGranularity, spanOf, splitSpans, topLevelFor, topSpans, nextPlanningStep, planningStepsLeft } from "./planTree";
 
 describe("splitSpans", () => {
   it("absorbs a short tail into the other spans", () => {
@@ -122,5 +106,44 @@ describe("progress", () => {
     expect(leavesOf(root).map((l) => l.id)).toEqual(["d1", "d2", "d3", "d4", "d5", "d6", "d7", "w2"]);
     expect(currentLeaf(root)?.id).toBe("d4");
     expect(lockBoundary(root)).toBe(3);
+  });
+});
+
+describe("planning everything", () => {
+  const plan = () =>
+    layout(
+      makeRoot([
+        makeNode({
+          id: "m1",
+          level: "month",
+          title: "M1",
+          summary: "s",
+          len: 30,
+          children: [
+            makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 7, budgetHours: 6, children: [makeNode({ id: "d1", level: "day", title: "D", summary: "s", len: 7 })] }),
+            makeNode({ id: "w2", level: "week", title: "W2", summary: "s", len: 7, budgetHours: 6 }),
+            makeNode({ id: "w3", level: "week", title: "W3", summary: "s", len: 16, budgetHours: 14 }),
+          ],
+        }),
+        makeNode({ id: "m2", level: "month", title: "M2", summary: "s", len: 30 }),
+      ]),
+    );
+  it("takes the next unplanned unit in plan order: a week to split before a later month to plan", () => {
+    expect(nextPlanningStep(plan(), "week")).toEqual({ nodeId: "w2", reason: "split", label: "Splitting Week 2 of Month 1" });
+    const root = plan();
+    root.children![0].children![1].children = [makeNode({ id: "d2", level: "day", title: "D", summary: "s", len: 7 })];
+    root.children![0].children![2].children = [makeNode({ id: "d3", level: "day", title: "D", summary: "s", len: 16 })];
+    expect(nextPlanningStep(root, "week")).toEqual({ nodeId: "m2", reason: "expand", label: "Planning Month 2" });
+    root.children![1].children = [makeNode({ id: "w4", level: "week", title: "W4", summary: "s", len: 30, budgetHours: 26 })];
+    expect(nextPlanningStep(root, "week")).toEqual({ nodeId: "w4", reason: "split", label: "Splitting Week 1 of Month 2" });
+    root.children![1].children![0].children = [makeNode({ id: "d4", level: "day", title: "D", summary: "s", len: 30 })];
+    expect(nextPlanningStep(root, "week")).toBeNull();
+  });
+  it("on a day plan, weeks are headings to plan, not leaves to split", () => {
+    expect(nextPlanningStep(plan(), "day")).toEqual({ nodeId: "w2", reason: "expand", label: "Planning Week 2 of Month 1" });
+  });
+  it("counts the steps left, including the weeks an unplanned month will have", () => {
+    // Weeks 2 and 3 to split, month 2 to plan, then its four weeks to split.
+    expect(planningStepsLeft(plan())).toBe(7);
   });
 });
