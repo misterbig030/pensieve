@@ -5,7 +5,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { ChevronDown, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BudgetBar, ReadRows, readRowsFor, sumMinutes } from "@/components/pensieve/ReadTable";
+import { BudgetBar, ReadRows, readRowsFor, rowBrief, sumMinutes } from "@/components/pensieve/ReadTable";
 import { budgetMinutes } from "@/lib/materials";
 import { formatDuration } from "@/lib/researchProgress";
 import { chapterAt, type Material } from "@/lib/schemas/material";
@@ -177,7 +177,9 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
           <span className="ml-auto shrink-0 text-xs whitespace-nowrap text-muted-foreground">{node.budgetHours} h budget</span>
         )}
       </span>
-      {open && <span className="min-w-0 text-[12px] leading-snug opacity-80">{node.summary}</span>}
+      {/* A day's subtitle is what it reads, so the week's division shows at a glance; the summary opens on the chevron.
+          A day with nothing to read shows its summary instead. */}
+      {(open || (!isWeek && rows.length === 0)) && <span className="min-w-0 text-[12px] leading-snug opacity-80">{node.summary}</span>}
       {rows.length > 0 &&
         (isWeek ? (
           <span className="mt-1 flex flex-col gap-2">
@@ -185,8 +187,17 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
             <BudgetBar rows={rows} budgetMinutes={budgetMinutes(node, ctx.hoursPerWeek)} practice={ctx.practice} />
           </span>
         ) : (
-          <span className="text-[11.5px] text-muted-foreground">
-            {rows.length} material{rows.length === 1 ? "" : "s"} · {formatDuration(sumMinutes(rows).must + sumMinutes(rows).should)}
+          <span className="flex min-w-0 flex-col gap-1 text-[11.5px] leading-snug text-muted-foreground">
+            {rows.map((r) => {
+              const brief = rowBrief(r);
+              return (
+                <span key={r.key} className="flex min-w-0 flex-col" title={brief.detail ? `${brief.head} · ${brief.detail}` : brief.head}>
+                  <span className="line-clamp-2 text-neutral-800">{brief.head}</span>
+                  {brief.detail && <span className="line-clamp-2">{brief.detail}</span>}
+                </span>
+              );
+            })}
+            <span>{formatDuration(sumMinutes(rows).must + sumMinutes(rows).should)}</span>
           </span>
         ))}
       {hasMeta && (

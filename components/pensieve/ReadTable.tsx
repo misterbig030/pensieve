@@ -48,6 +48,14 @@ export function partLabel(row: Pick<ReadRow, "chapter" | "activity">): string | 
 
 const REVIEW_HINT = "A second pass over something an earlier unit read: recap, not new reading.";
 
+/**
+ * A row as a day card's subtitle: the part read ("Ch. 1 …", "Review of Ch. 2 …", or the title of a resource without
+ * chapters) and, under it, the sections or part from the note.
+ */
+export function rowBrief(row: Pick<ReadRow, "material" | "chapter" | "activity" | "note">): { head: string; detail: string | null } {
+  return { head: partLabel(row) ?? row.material.title, detail: row.note };
+}
+
 export function sumMinutes(rows: ReadRow[]): { must: number; should: number } {
   return rows.reduce((t, r) => (r.tier === "must" ? { ...t, must: t.must + (r.minutes ?? 0) } : { ...t, should: t.should + (r.minutes ?? 0) }), { must: 0, should: 0 });
 }
