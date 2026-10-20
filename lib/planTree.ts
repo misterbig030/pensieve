@@ -254,6 +254,41 @@ export function makeNode(input: NewNodeInput): PlanNode {
   };
 }
 
+export interface PlanningStep {
+  nodeId: string;
+  reason: "expand" | "split";
+  /** "Planning Month 2", "Splitting Week 2 of Month 1". */
+  label: string;
+}
+
+/** Whether units at `level` are the plan's leaves: days always, weeks on a week plan. */
+function leafLevel(level: PlanLevel, granularity: Granularity): boolean {
+  return level === "day" || (level === "week" && granularity === "week");
+}
+
+/** The next unit to plan in detail, in plan order: an unplanned heading, or a week leaf to split into days. Null when every unit is planned to days. */
+export function nextPlanningStep(root: PlanNode, granularity: Granularity): PlanningStep | null {
+  let step: PlanningStep | null = null;
+  walk(root, (node, parent) => {
+    if (step || node.id === root.id || node.level === "day" || node.children !== null) return;
+    const reason = leafLevel(node.level, granularity) ? "split" : "expand";
+    const where = parent && parent.id !== root.id ? ` of ${labelOf(root, parent)}` : "";
+    step = { nodeId: node.id, reason, label: `${reason === "split" ? "Splitting" : "Planning"} ${labelOf(root, node)}${where}` };
+  });
+  return step;
+}
+
+/** How many planning steps are left: every unplanned unit above day, plus the weeks each unplanned month will have. */
+export function planningStepsLeft(root: PlanNode): number {
+  let n = 0;
+  walk(root, (node) => {
+    if (node.id === root.id || node.level === "day" || node.children !== null) return;
+    n += 1;
+    if (node.level === "month") n += childSpans(node).length;
+  });
+  return n;
+}
+
 export function capitalize(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
