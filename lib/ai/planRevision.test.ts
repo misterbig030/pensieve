@@ -183,7 +183,7 @@ describe("applyRevision with materials", () => {
       assignRefs(original),
       {
         units: [
-          { ref: "n1", title: "Intro", summary: "a", days: 1, materials: [{ id: "M1.2", tier: "must", minutes: 40, activity: "review" }] },
+          { ref: "n1", title: "Intro", summary: "a", days: 1, materials: [{ id: "M1.2", tier: "must", minutes: 40 }] },
           { ref: "n2", title: "Metrics", summary: "b", days: 1 },
         ],
       },
@@ -191,7 +191,7 @@ describe("applyRevision with materials", () => {
       "day",
       aliases,
     );
-    expect(result.children![0].materials).toEqual([{ id: "uuid-book", tier: "must", minutes: 40, note: null, chapter: 2, activity: "review" }]);
+    expect(result.children![0].materials).toEqual([{ id: "uuid-book", tier: "must", minutes: 40, note: null, chapter: 2, activity: "read" }]);
   });
 });
 

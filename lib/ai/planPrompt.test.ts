@@ -312,11 +312,12 @@ describe("chapters as resources in prompts", () => {
   it("renders references with collapsed chapter runs and activities", () => {
     const root = aiePlan();
     expect(renderRefs(root.children![0], A)).toBe("covers M1.1–M1.4, M3, M4");
-    expect(renderRefs(root.children![0].children![3], A)).toBe("reviews M1.1 must 15 min; M1.2 must 15 min; M1.3 must 15 min; M1.4 must 15 min");
+    // Review rows from before reviews were withdrawn are not shown to the model.
+    expect(renderRefs(root.children![0].children![3], A)).toBe("");
     const w1 = root.children![0].children![0];
     w1.materials![1].note = "Post-Training; Sampling";
     expect(renderRefs(w1, A)).toBe("reads M1.1 must 107 min; M1.2 must 140 min (Post-Training; Sampling)");
-    expect(renderRefs({ covers: [{ id: "aie", chapter: 1, note: null }, { id: "agents", note: "first half", activity: "review" }] }, A)).toBe("covers M1.1 · reviews M2 (first half)");
+    expect(renderRefs({ covers: [{ id: "aie", chapter: 1, note: null }, { id: "agents", note: "first half", activity: "review" }] }, A)).toBe("covers M1.1");
   });
   it("the availability block names the reservation and what other units hold", () => {
     const root = aiePlan();
@@ -329,37 +330,40 @@ describe("chapters as resources in prompts", () => {
     expect(prompt).not.toContain("Take them first from what the unit marked");
     expect(prompt).not.toContain("Where a book's chapters are listed");
   });
-  it("review covers are offered to review, never as resources to read", () => {
+  it("review rows saved before reviews were withdrawn reserve nothing for the days, and the prompt never mentions reviewing", () => {
     const root = aiePlan();
     const w4 = root.children![0].children![3];
     w4.covers = w4.materials!.map((m) => ({ id: m.id, chapter: m.chapter, note: null, activity: "review" as const }));
     delete w4.materials;
     layout(root);
     const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "day", spans: Array(8).fill(1), startDay: 23, totalDays: 90, tree: root, parentId: "w4", unitsAreLeaves: true });
-    expect(prompt).toContain("This unit reserves nothing to read: its days may only review.\nTo review (activity \"review\"): M1.1–M1.4.");
+    expect(prompt).toContain("This unit reserves nothing to read: its days read nothing and the time is for projects.");
     expect(prompt).not.toContain("may use: M1.1–M1.4");
+    expect(prompt).not.toMatch(/review/i);
   });
   it("the top level is told everything is free", () => {
     const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", level: "month", spans: [30, 30, 30], startDay: 1, totalDays: 90, unitsAreLeaves: false, decideSplit: true });
     expect(prompt).toContain("Every resource is free. Reserve each in at most one month; the book's chapters in order.");
     expect(prompt).toContain("Each resource is read in at most one unit at this level. M1's chapters are resources of their own (M1.1, M1.2, …): reserve them in order across the units, each chapter in exactly one unit, and never refer to M1 itself.");
-    expect(prompt).toContain('A unit may also reserve a review of resources that an earlier unit reads, with activity "review". A review is not a reading, so it may name resources another unit holds.');
+    expect(prompt).toContain('list in "covers" the resources its weeks will read, as { id, note }.');
+    expect(prompt).not.toMatch(/review|activity/i);
   });
-  it("leaf rules state spanning, single reading, and reviews", () => {
+  it("leaf rules state spanning, single reading, and that a unit with nothing left reads nothing", () => {
     const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "week", spans: [7, 7], startDay: 1, totalDays: 14, unitsAreLeaves: true });
-    expect(prompt).toContain('Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note, activity }.');
+    expect(prompt).toContain('Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note }.');
     expect(prompt).toContain("Each resource's size is in the list. A chapter longer than one unit's reading time spans consecutive units: list it in each with the part in the note; across those units its minutes add up to its size. A resource is read once: do not assign what another unit reads, and never refer to M1 itself.");
-    expect(prompt).toContain('A review (activity "review") revisits a resource an earlier unit read. Its minutes count for this unit, and it may name resources other units hold.');
+    expect(prompt).toContain("A unit with nothing left to read in its reservation reads nothing: that time is for projects. Never assign a resource a unit before it already read.");
+    expect(prompt).not.toMatch(/review|activity/i);
   });
   it("an unlisted backbone keeps the topic-only rule at both levels", () => {
     const m = [{ ...AIE_MATERIALS[0], toc: null }];
     expect(buildUnitsPrompt({ topic: "t", materials: m, granularity: "week", level: "month", spans: [30], startDay: 1, totalDays: 30, unitsAreLeaves: false })).toContain("Never write a chapter number or a chapter title you were not given.");
     expect(buildUnitsPrompt({ topic: "t", materials: m, granularity: "week", level: "week", spans: [7], startDay: 1, totalDays: 7, unitsAreLeaves: true })).toContain("its chapters are not listed");
   });
-  it("the revision rule names chapter ids and reviews", () => {
+  it("the revision rule names chapter ids and the single reading", () => {
     const root = aiePlan();
     expect(buildRevisionPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", tree: root, refs: assignRefs(root), lockBefore: 0, changeRequest: "x" })).toContain(
-      'Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit, and a review of something read earlier has activity "review".',
+      "Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit.",
     );
   });
 });

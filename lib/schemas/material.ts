@@ -124,19 +124,18 @@ export type CoverRef = z.infer<typeof coverRefSchema>;
 
 /**
  * What the model writes for references. Looser than the wire schemas on purpose: a note that runs long or minutes
- * given as 42.5 must not fail the whole level, so bounds are applied in code (`normalizeRefs`).
+ * given as 42.5 must not fail the whole level, so bounds are applied in code (`normalizeRefs`). The model writes no
+ * `activity`: a plan's reviews are the learner's choice, not the planner's, so every row it writes is a reading.
  */
 export const materialRefDraftSchema = z.object({
   id: z.string().min(1).describe("A resource id from the list, e.g. M3 or M1.3"),
   tier: z.enum(MATERIAL_TIERS),
   minutes: z.number().describe("Minutes of reading or watching for this unit"),
   note: z.string().optional().describe('The part: for a chapter, the sections this unit covers ("Post-Training; Sampling"); otherwise the part ("§2 only", "lectures 3–4")'),
-  activity: z.enum(REF_ACTIVITIES).optional().describe('"read" (the default) or "review": revisiting a resource an earlier unit read'),
 });
 export const coverRefDraftSchema = z.object({
   id: z.string().min(1).describe("A resource id from the list, e.g. M3 or M1.3"),
   note: z.string().optional().describe('The part only for a resource without chapters ("lectures 3–4"); leave it out otherwise'),
-  activity: z.enum(REF_ACTIVITIES).optional().describe('"read" (the default) or "review": revisiting a resource an earlier unit read'),
 });
 export type MaterialRefDraft = z.infer<typeof materialRefDraftSchema>;
 export type CoverRefDraft = z.infer<typeof coverRefDraftSchema>;
@@ -160,12 +159,12 @@ export function normalizeMaterialRef(ref: MaterialRefDraft): MaterialRef {
     tier: ref.tier,
     minutes: Number.isFinite(ref.minutes) ? Math.max(0, Math.min(6000, Math.round(ref.minutes))) : null,
     note: clip(ref.note, 300),
-    activity: ref.activity ?? "read",
+    activity: "read",
   };
 }
 
 export function normalizeCoverRef(ref: CoverRefDraft): CoverRef {
-  return { id: ref.id.trim(), note: clip(ref.note, 300), activity: ref.activity ?? "read" };
+  return { id: ref.id.trim(), note: clip(ref.note, 300), activity: "read" };
 }
 
 /** `M1`, `M2`, … in list order. */
