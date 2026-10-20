@@ -64,22 +64,17 @@ export function describeRefs(refs: RefLike[], aliases: MaterialAliases): string 
 }
 
 /**
- * "covers M1.1–M1.4, M3 · reviews M2" for a heading; "reads M1.2 must 35 min (Post-Training; Sampling); M3 should 79 min ·
- * reviews M1.1 should 20 min" for a leaf.
+ * "covers M1.1–M1.4, M3" for a heading; "reads M1.2 must 35 min (Post-Training; Sampling); M3 should 79 min" for a leaf.
+ * Review rows, which only plans saved before reviews were withdrawn from the planner carry, are not shown: the model is
+ * not to imitate them, and they reserve nothing for reading.
  */
 export function renderRefs(node: Pick<PlanNode, "covers" | "materials">, aliases: MaterialAliases): string {
   const parts: string[] = [];
-  const covers = (node.covers ?? []).filter((r) => aliases.alias(r.id));
-  const reads = (node.materials ?? []).filter((r) => aliases.alias(r.id));
+  const covers = (node.covers ?? []).filter((r: CoverRef) => aliases.alias(r.id) && activityOf(r) === "read");
+  const reads = (node.materials ?? []).filter((r: MaterialRef) => aliases.alias(r.id) && activityOf(r) === "read");
   const row = (r: MaterialRef) => `${aliases.alias(r.id, r.chapter)} ${r.tier}${r.minutes !== null ? ` ${r.minutes} min` : ""}${refNote(r.note)}`;
-  const coversRead = covers.filter((r: CoverRef) => activityOf(r) === "read");
-  const coversReview = covers.filter((r: CoverRef) => activityOf(r) === "review");
-  const readsRead = reads.filter((r: MaterialRef) => activityOf(r) === "read");
-  const readsReview = reads.filter((r: MaterialRef) => activityOf(r) === "review");
-  if (coversRead.length > 0) parts.push(`covers ${describeRefs(coversRead, aliases)}`);
-  if (coversReview.length > 0) parts.push(`reviews ${describeRefs(coversReview, aliases)}`);
-  if (readsRead.length > 0) parts.push(`reads ${readsRead.map(row).join("; ")}`);
-  if (readsReview.length > 0) parts.push(`reviews ${readsReview.map(row).join("; ")}`);
+  if (covers.length > 0) parts.push(`covers ${describeRefs(covers, aliases)}`);
+  if (reads.length > 0) parts.push(`reads ${reads.map(row).join("; ")}`);
   return parts.join(" · ");
 }
 
@@ -303,14 +298,13 @@ export function availabilityLines(input: UnitsPromptInput, aliases: MaterialAlia
     return [`Every resource is free. ${each}${listedBackbone ? "; the book's chapters in order" : ""}.`];
   }
   const lines: string[] = [];
-  // A week split by hand passes its own Read table down as the reservation.
+  // A week split by hand passes its own Read table down as the reservation. Review rows from before reviews were
+  // withdrawn reserve nothing for reading.
   const reserved = (parent.covers ?? parent.materials ?? []).filter((r) => aliases.alias(r.id));
   const toRead = reserved.filter((r) => activityOf(r) === "read");
-  const toReview = reserved.filter((r) => activityOf(r) === "review");
   if (toRead.length > 0) lines.push(`This unit's reservation, the only resources its ${noun}s may use: ${describeRefs(toRead, aliases)}.`);
-  else if (toReview.length > 0) lines.push(`This unit reserves nothing to read: its ${noun}s may only review.`);
+  else if (reserved.length > 0) lines.push(`This unit reserves nothing to read: its ${noun}s read nothing and the time is for ${practiceOf(input)}.`);
   else lines.push(`Take them from the list above, matching each unit's ground.`);
-  if (toReview.length > 0) lines.push(`To review (activity "review"): ${describeRefs(toReview, aliases)}.`);
   const skip = new Set<string>([input.tree.id, parent.id]);
   for (let p = parentOf(input.tree, parent.id); p; p = parentOf(input.tree, p.id)) skip.add(p.id);
   const held: string[] = [];
@@ -323,12 +317,18 @@ export function availabilityLines(input: UnitsPromptInput, aliases: MaterialAlia
   return lines;
 }
 
+/** What the rest of a unit's time is for, in the plan's words. */
+function practiceOf(input: UnitsPromptInput): string {
+  if (input.decideSplit) return "the practice you named";
+  return input.split?.practice ?? "building and practice";
+}
+
 function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): string {
   const backbone = input.materials.findIndex((m) => m.backbone);
   const kids = UNIT_NOUN[childLevel(input.level) ?? "day"];
   const B = `M${backbone + 1}`;
   const lines = [
-    `Materials: for each unit, list in "covers" the resources its ${kids}s will read, as { id, activity, note }. activity is "read" (the default) or "review". note names the part only for a resource without chapters ("lectures 3–4"); leave it out otherwise. No tier and no minutes yet: the units inside are planned later from this reservation.`,
+    `Materials: for each unit, list in "covers" the resources its ${kids}s will read, as { id, note }. note names the part only for a resource without chapters ("lectures 3–4"); leave it out otherwise. No tier and no minutes yet: the units inside are planned later from this reservation.`,
   ];
   if (backbone < 0) lines.push(`Each resource is read in at most one unit at this level; spread the materials where they fit best.`);
   else if (input.materials[backbone].toc) {
@@ -340,7 +340,6 @@ function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases)
       `Each resource is read in at most one unit at this level. ${B} is the backbone textbook, but its chapters are not listed: reserve it in order across the units and name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
     );
   }
-  lines.push(`A unit may also reserve a review of resources that an earlier unit reads, with activity "review". A review is not a reading, so it may name resources another unit holds.`);
   lines.push(...availabilityLines(input, aliases));
   lines.push(`Use only ids from the list.`);
   return lines.join("\n");
@@ -355,7 +354,7 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const B = `M${backbone + 1}`;
   const where = reserved.length > 0 ? "where the reservation has material for it" : "where the list has material for it";
   const lines = [
-    `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note, activity }. tier is "must" or "should"; minutes is the reading or watching time for this unit; activity is "read" (the default) or "review"; note names the part: for a chapter, the sections this unit covers ("Post-Training; Sampling"), for anything else the part ("§2 only", "whole essay").`,
+    `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note }. tier is "must" or "should"; minutes is the reading or watching time for this unit; note names the part: for a chapter, the sections this unit covers ("Post-Training; Sampling"), for anything else the part ("§2 only", "whole essay").`,
     ...availabilityLines(input, aliases),
     input.decideSplit
       ? `Rules: at least one must per unit ${where}; must minutes stay within your readingShare of the unit's budget, because the rest of the time is for the practice you named; should items are optional extras.`
@@ -367,7 +366,7 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   lines.push(
     `${size}A chapter longer than one unit's reading time spans consecutive units: list it in each with the part in the note; across those units its minutes add up to its size. A resource is read once: do not assign what another unit reads${listed ? `, and never refer to ${B} itself` : ""}.`,
   );
-  lines.push(`A review (activity "review") revisits a resource an earlier unit read. Its minutes count for this unit, and it may name resources other units hold.`);
+  lines.push(`A unit with nothing left to read in its reservation reads nothing: that time is for ${practiceOf(input)}. Never assign a resource a unit before it already read.`);
   if (backbone >= 0 && !listed) {
     lines.push(
       `${B} is the backbone textbook, but its chapters are not listed: it runs in order across the units, continuing from where earlier units stopped. Name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
@@ -405,7 +404,7 @@ export function buildRevisionPrompt(input: RevisionPromptInput): string {
       `- Keep the total length unless the request changes it.`,
       ...(hasMaterials
         ? [
-            `- Materials: return "covers" (headings: { id, activity, note }) and "materials" (units without children: { id, tier, minutes, note, activity }) for every unit that has them, changed only as the request asks. Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit, and a review of something read earlier has activity "review". A request like "make the talk optional" changes that row's tier to "should"; it does not add or drop other rows. Leave both fields out only for units with no materials. Use only ids from the list.`,
+            `- Materials: return "covers" (headings: { id, note }) and "materials" (units without children: { id, tier, minutes, note }) for every unit that has them, changed only as the request asks. Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit. A request like "make the talk optional" changes that row's tier to "should"; it does not add or drop other rows. Leave both fields out only for units with no materials. Use only ids from the list.`,
           ]
         : []),
     ].join("\n"),

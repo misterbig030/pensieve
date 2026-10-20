@@ -59,14 +59,15 @@ describe("aliases and refs", () => {
       [
         { id: "M1.2", tier: "must", minutes: 30 },
         { id: "M1.2", tier: "should", minutes: 5 },
-        { id: "M1.3", tier: "must", minutes: 20, activity: "review" },
+        { id: "M1.3", tier: "must", minutes: 20 },
         { id: "M1", tier: "must", minutes: 10 },
         { id: "M7", tier: "must", minutes: 1 },
       ],
       aliases,
     );
     expect(unknown).toEqual(["M7"]);
-    expect(refs.map((r) => [r.chapter, r.activity, r.minutes])).toEqual([[2, "read", 30], [3, "review", 20], [null, "read", 10]]);
+    // Every row the model writes is a reading: reviews are the learner's choice, not the planner's.
+    expect(refs.map((r) => [r.chapter, r.activity, r.minutes])).toEqual([[2, "read", 30], [3, "read", 20], [null, "read", 10]]);
   });
   it("collapses runs of consecutive chapters", () => {
     expect(formatAliases([{ id: "uuid-a", chapter: 1 }, { id: "uuid-a", chapter: 2 }, { id: "uuid-a", chapter: 3 }, { id: "uuid-b", chapter: null }, { id: "uuid-a", chapter: 4 }], aliases)).toBe("M1.1–M1.3, M2, M1.4");

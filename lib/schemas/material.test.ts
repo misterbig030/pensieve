@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_CHAPTERS, MAX_HEADING, MAX_SECTIONS, chapterAt, chapterListSchema, coverRefSchema, materialRefSchema, materialSchema, normalizeCoverRef, normalizeMaterialRef, type ChapterList } from "./material";
+import { MAX_CHAPTERS, MAX_HEADING, MAX_SECTIONS, chapterAt, chapterListSchema, coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema, materialSchema, normalizeCoverRef, normalizeMaterialRef, type ChapterList } from "./material";
 
 function chapter(n: number) {
   return { n, title: `Chapter ${n}`, page: n * 10, minutes: 30, sections: ["A", "B"] };
@@ -37,7 +37,12 @@ describe("references with chapters", () => {
   });
   it("normalizes a draft to activity read and leaves the chapter to the resolver", () => {
     expect(normalizeMaterialRef({ id: " M1.3 ", tier: "must", minutes: 42.6 })).toEqual({ id: "M1.3", tier: "must", minutes: 43, note: null, activity: "read" });
-    expect(normalizeCoverRef({ id: "M2", activity: "review" })).toEqual({ id: "M2", note: null, activity: "review" });
+    expect(normalizeCoverRef({ id: "M2" })).toEqual({ id: "M2", note: null, activity: "read" });
+  });
+  it("the model cannot write a review: an activity in its answer is dropped and the row is a reading", () => {
+    expect(materialRefDraftSchema.parse({ id: "M1.2", tier: "should", minutes: 20, activity: "review" })).toEqual({ id: "M1.2", tier: "should", minutes: 20 });
+    expect(coverRefDraftSchema.parse({ id: "M1.2", activity: "review" })).toEqual({ id: "M1.2" });
+    expect(normalizeMaterialRef(materialRefDraftSchema.parse({ id: "M1.2", tier: "should", minutes: 20, activity: "review" })).activity).toBe("read");
   });
   it("chapterAt returns the chapter at a 1-based position or null", () => {
     const toc = { source: "catalogue" as const, url: "u", printPages: false, end: null, chapters: [{ n: 1, title: "A", page: null, minutes: null, sections: [] }] };

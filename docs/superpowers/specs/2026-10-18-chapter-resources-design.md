@@ -19,6 +19,13 @@ it. About $0.16 on the user's key. Observed: when a week's reservation cannot fi
 Builds on `feat/book-chapters` (PR #10, merged), which gives every verified book a chapter list. Follows the live check of 2026-10-17, in which a hand-split week
 read chapters its neighbour had reserved, and the design conversation and Open Library survey of 2026-10-18.
 
+**Reviews withdrawn, 2026-10-20.** Decision 3 is superseded: the planner no longer writes review rows. On two fully
+planned tracks the model filled every day that had nothing new to read with reviews of old material, 107 review rows
+against 31 readings, and whether a plan revisits earlier topics is the learner's call, not the planner's. The shapes
+the model writes lost `activity`, the review rules left the prompts, and a unit with nothing left in its reservation
+is told to read nothing. The column and the wire field stay, so plans saved with review rows still render as
+"Review of …" and a learner-chosen review can be added later; the review checks stay in code for those rows.
+
 ## Summary
 
 Today a book is one material, `M1`, and its chapters are lines printed under it for the model to read. Every
