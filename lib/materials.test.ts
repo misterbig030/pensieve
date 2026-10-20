@@ -230,6 +230,38 @@ describe("levelChecks", () => {
       "backbone ch. 2 after ch. 4 (Day 2)",
     ]);
   });
+  it("a day may read what its week reserved even when sibling weeks share it, as a resource too long for one week", () => {
+    const root = aiePlan();
+    const m3 = root.children![2];
+    // Month 3 planned into three weeks that each read a part of the 240-minute course; week 1 split into days.
+    m3.covers = [{ id: "rag", note: null }, { id: "agents", note: null }, ...(m3.covers ?? [])];
+    const week = (id: string, note: string, extra: MaterialRef[] = []) =>
+      makeNode({ id, level: "week", title: id, summary: "s", len: 7, budgetHours: 6, materials: [{ id: "rag", tier: "must", minutes: 80, note }, ...extra] });
+    m3.children = [week("x1", "part 1"), week("x2", "part 2", [{ id: "agents", tier: "should", minutes: 12, note: null }]), week("x3", "part 3")];
+    const w1 = m3.children[0];
+    w1.covers = w1.materials!.map((r) => ({ id: r.id, note: r.note }));
+    delete w1.materials;
+    const day = (i: number, rows: MaterialRef[]) => makeNode({ id: `x1d${i}`, level: "day", title: "D", summary: "s", len: 1, materials: rows });
+    w1.children = [1, 2, 3].map((i) => day(i, [{ id: "rag", tier: "must", minutes: 25, note: "part 1" }]));
+    layout(root);
+    expect(check(root, w1.children).breaches).toEqual([]);
+    // What the week did not reserve is still outside, and still held by week 2.
+    w1.children[2].materials!.push({ id: "agents", tier: "should", minutes: 12, note: null });
+    expect(check(root, w1.children).breaches.map((b) => b.kind)).toEqual(["outside", "overlap"]);
+  });
+  it("a chapter spanning two weeks is not lost when the first week is split", () => {
+    const materials = AIE_MATERIALS.map((m) => (m.id === "aie" ? { ...m, toc: { ...AIE_TOC, chapters: AIE_TOC.chapters.map((c) => (c.n === 2 ? { ...c, minutes: 300 } : c)) } } : m));
+    const root = aiePlan();
+    const weeks = weeksOf(root);
+    weeks[0].materials = [read(1, 107), read(2, 150)];
+    weeks[1].materials = [read(2, 150), read(3, 93)];
+    weeks[0].covers = weeks[0].materials.map((r) => ({ id: r.id, chapter: r.chapter, note: null }));
+    delete weeks[0].materials;
+    weeks[0].children = [1, 2, 3, 4].map((i) => makeNode({ id: `d${i}`, level: "day", title: "D", summary: "s", len: 1, materials: [read(i < 3 ? 1 : 2, 20)] }));
+    layout(root);
+    const out = levelChecks({ root, nodes: weeks[0].children, leaves: true, top: false, materials, unknownIds: [], ...share });
+    expect(out.breaches.filter((b) => b.kind === "overlap")).toEqual([]);
+  });
   it("dropBreaches removes the rows of droppable breaches and reports them", () => {
     const root = aiePlan();
     const placed = days(root, [{ chapter: 1 }, { chapter: 3 }]);

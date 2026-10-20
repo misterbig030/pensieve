@@ -300,12 +300,15 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   }
   // A reservation of any kind binds the children's reads; a review cover reserves nothing for reading.
   const hasReservation = (parentNode?.covers?.length ?? 0) > 0;
+  const inReservation = (r: RefLike) => reservedKeys.has(refKey(r)) || reservedWhole.has(r.id);
 
-  // What every other unit in the plan reads or reserves, keyed to the unit that holds it.
+  // What every other unit in the plan reads or reserves, keyed to the unit that holds it. What the parent reserved is
+  // left out: its own level already settled who shares it (consecutive units may share a resource too long for one),
+  // so the children may read it whatever a sibling of the parent also holds.
   const taken = new Map<string, string>();
   walk(input.root, (n) => {
     if (n.id === input.root.id || skip.has(n.id)) return;
-    for (const r of refsOf(n).filter(isRead)) if (!byTopic(r) && !taken.has(refKey(r))) taken.set(refKey(r), label(n));
+    for (const r of refsOf(n).filter(isRead)) if (!byTopic(r) && !inReservation(r) && !taken.has(refKey(r))) taken.set(refKey(r), label(n));
   });
   // Siblings: a heading holds a resource exclusively; consecutive leaves may share one that is too long for one of them.
   const siblingLast = new Map<string, number>();
