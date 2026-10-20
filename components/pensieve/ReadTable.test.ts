@@ -57,7 +57,7 @@ describe("row order", () => {
 });
 
 describe("rowBrief", () => {
-  it("names the part first and the sections under it; a whole resource by its title", () => {
+  it("names the chapter by number and the sections after it; a whole resource by its title", () => {
     const byId = new Map(AIE_MATERIALS.map((m) => [m.id, m]));
     const [chapter, review, whole] = readRowsFor(
       [
@@ -67,8 +67,9 @@ describe("rowBrief", () => {
       ],
       byId,
     );
-    expect(rowBrief(chapter)).toEqual({ head: "Ch. 1 Introduction to Building AI Applications with Foundation Models", detail: "The Rise of AI Engineering; Foundation Model Use Cases" });
-    expect(rowBrief(review)).toEqual({ head: "Review of Ch. 2 Understanding Foundation Models", detail: "Modeling; Post-Training" });
+    expect(rowBrief(chapter)).toEqual({ head: "Ch. 1", detail: "The Rise of AI Engineering; Foundation Model Use Cases" });
+    expect(rowBrief(review)).toEqual({ head: "Review of ch. 2", detail: "Modeling; Post-Training" });
     expect(rowBrief(whole)).toEqual({ head: "AI Evals: Everything You Need to Know", detail: "whole essay" });
+    expect(rowBrief({ ...chapter, chapter: { ...chapter.chapter!, n: null } })).toEqual({ head: "Introduction to Building AI Applications with Foundation Models", detail: "The Rise of AI Engineering; Foundation Model Use Cases" });
   });
 });

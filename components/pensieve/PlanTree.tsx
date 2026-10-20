@@ -5,7 +5,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { ChevronDown, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BudgetBar, ReadRows, readRowsFor, rowBrief, sumMinutes } from "@/components/pensieve/ReadTable";
+import { BudgetBar, ReadRows, partLabel, readRowsFor, rowBrief, sumMinutes } from "@/components/pensieve/ReadTable";
 import { budgetMinutes } from "@/lib/materials";
 import { formatDuration } from "@/lib/researchProgress";
 import { chapterAt, type Material } from "@/lib/schemas/material";
@@ -187,13 +187,14 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
             <BudgetBar rows={rows} budgetMinutes={budgetMinutes(node, ctx.hoursPerWeek)} practice={ctx.practice} />
           </span>
         ) : (
-          <span className="flex min-w-0 flex-col gap-1 text-[11.5px] leading-snug text-muted-foreground">
+          <span className="flex min-w-0 flex-col gap-0.5 text-[11.5px] leading-snug text-muted-foreground">
             {rows.map((r) => {
               const brief = rowBrief(r);
+              const title = r.chapter ? `${r.material.title} · ${partLabel(r)}` : r.material.title;
               return (
-                <span key={r.key} className="flex min-w-0 flex-col" title={brief.detail ? `${brief.head} · ${brief.detail}` : brief.head}>
-                  <span className="line-clamp-2 text-neutral-800">{brief.head}</span>
-                  {brief.detail && <span className="line-clamp-2">{brief.detail}</span>}
+                <span key={r.key} className="line-clamp-2" title={brief.detail ? `${title} · ${brief.detail}` : title}>
+                  <span className="text-neutral-800">{brief.head}</span>
+                  {brief.detail && <> · {brief.detail}</>}
                 </span>
               );
             })}
