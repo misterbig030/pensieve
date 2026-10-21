@@ -1,29 +1,35 @@
 import {
+  capitalize,
+  fullLabelOf,
   highestLevel,
-  labelOf,
   leavesOf,
   parentOf,
   walk,
+  weeksOf,
   type PlanLevel,
   type PlanNode,
 } from "./planTree";
+import { weeksLabel } from "./studyTime";
 
 /** The plan summary card text. Deterministic so it costs nothing and never drifts from the tree. */
-export function summarizePlan(root: PlanNode, topic: string, note?: string): string {
+export function summarizePlan(root: PlanNode, topic: string, daysPerWeek: number, note?: string): string {
   const tops = root.children ?? [];
   if (tops.length === 0) return "";
   const n = root.len;
   const leaves = leavesOf(root);
-  const weeks = Math.ceil(n / 7);
+  const weeks = weeksLabel(weeksOf(root, root, daysPerWeek));
   const level = tops[0].level;
   const first = leaves[0];
   const last = leaves[leaves.length - 1];
   const lastTitle = last && last.end === n ? last.title : tops[tops.length - 1].title;
   const titles = tops.map((t) => t.title).join(", ");
+  const opens = `Opens with "${first ? first.title : tops[0].title}" and closes on "${lastTitle}".`;
   const base =
     level === "day"
-      ? `${n} days on ${topic}, one day at a time: ${titles}. Opens with "${first.title}" and closes on "${lastTitle}".`
-      : `${n} days on ${topic}, about ${weeks} week${weeks === 1 ? "" : "s"}, in ${tops.length} ${level}s: ${titles}. Opens with "${first ? first.title : tops[0].title}" and closes on "${lastTitle}".`;
+      ? `${tops.length} days on ${topic}, one day at a time: ${titles}. ${opens}`
+      : level === "week"
+        ? `${capitalize(weeks)} on ${topic}, usually ${daysPerWeek} study day${daysPerWeek === 1 ? "" : "s"} a week: ${titles}. ${opens}`
+        : `${capitalize(weeks)} on ${topic}, in ${tops.length} ${level}s: ${titles}. ${opens}`;
   return note ? `${base} ${note}` : base;
 }
 
@@ -104,12 +110,9 @@ function movedNodes(prev: PlanNode, next: PlanNode): PlanNode[] {
   });
 }
 
-/** "Week 2 · Day 9" for a nested day, otherwise the node's own label. */
+/** "Week 2 · Day 3" for a nested day, otherwise the node's own label. */
 export function tagFor(root: PlanNode, node: PlanNode): string {
-  const own = labelOf(root, node);
-  if (node.level !== "day") return own;
-  const parent = parentOf(root, node.id);
-  return parent && parent.id !== root.id ? `${labelOf(root, parent)} · ${own}` : own;
+  return fullLabelOf(root, node);
 }
 
 function dedupe(values: string[]): string[] {

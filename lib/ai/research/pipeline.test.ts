@@ -32,7 +32,7 @@ async function collect(gen: AsyncGenerator<ResearchEvent, unknown>) {
   return { events, outcome: next.value as Awaited<ReturnType<typeof researchMaterials>> extends AsyncGenerator<unknown, infer R> ? R : never };
 }
 
-const brief = { topic: "LLM engineering", days: 30, sources: [] };
+const brief = { topic: "LLM engineering", weeks: 4, sources: [] };
 const recs = ["https://lists.bookrecs.com/best", "https://blog.readinglist.org/reading"];
 const bookUrl = "https://books.example.com/core";
 const arm: ResearchArm = async () => ({

@@ -241,7 +241,8 @@ export async function insertChildren(trackId: string, userId: string, parentId: 
     if (manualSplit) {
       const sessions = await tx.query.checkIns.findMany({ where: eq(checkIns.nodeId, parentId), columns: { id: true } });
       if (sessions.length > 0) throw new Error("This week already has sessions logged, so it can't be split into days");
-      await tx.update(planNodes).set({ manualSplit: true, budgetHours: null }).where(eq(planNodes.id, parentId));
+      // The week is as many days long as it was split into.
+      await tx.update(planNodes).set({ manualSplit: true, budgetHours: null, len: children.length }).where(eq(planNodes.id, parentId));
       // The week's Read table becomes the reservation its days were planned from.
       await tx
         .update(nodeMaterials)

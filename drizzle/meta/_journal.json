@@ -85,6 +85,13 @@
       "when": 1792368418167,
       "tag": "0011_chapter_refs",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792538970798,
+      "tag": "0012_days_per_week",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { learnerKind } from "@/lib/ai/research/verify";
-import { budgetFor, cloneTree, labelOf, parentOf, walk, type Granularity, type PlanNode } from "@/lib/planTree";
+import { budgetFor, cloneTree, daysInWeekOf, fullLabelOf, parentOf, walk, weeksOf, type Granularity, type PlanNode } from "@/lib/planTree";
 import { dayMinutes } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
@@ -157,13 +157,13 @@ export function tierMinutes(refs: MaterialRef[] | undefined): { must: number; sh
 }
 
 /**
- * The leaf's time budget in minutes: a week leaf's hours, or a day's share of the learner's weekly hours (about an
- * hour when the hours are not known).
+ * The leaf's time budget in minutes: a week leaf's hours, or a day's share of the learner's weekly hours over the
+ * `daysInWeek` days of its week (about an hour when the hours are not known).
  */
-export function budgetMinutes(node: Pick<PlanNode, "level" | "budgetHours">, hoursPerWeek?: number): number {
+export function budgetMinutes(node: Pick<PlanNode, "level" | "budgetHours">, hoursPerWeek?: number, daysInWeek?: number): number {
   if (node.budgetHours !== null) return node.budgetHours * 60;
   if (node.level !== "day") return 0;
-  return hoursPerWeek === undefined ? 60 : dayMinutes(hoursPerWeek);
+  return hoursPerWeek === undefined ? 60 : dayMinutes(hoursPerWeek, daysInWeek);
 }
 
 /** The share of a leaf's budget its `must` reading should take: the rest is building. */
@@ -237,6 +237,8 @@ export interface LevelCheckInput {
   unknownIds: string[];
   /** The learner's weekly hours. With them, day leaves are checked against a day's share of the week. */
   hoursPerWeek?: number;
+  /** The learner's usual study days a week, for weeks and months not planned yet. */
+  daysPerWeek: number;
   /** The plan's reading share (0–1); `MUST_SHARE` stands in when it is not decided yet. */
   readingShare?: number | null;
 }
@@ -261,7 +263,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   if (input.unknownIds.length > 0) facts.push(`dropped unknown ${[...new Set(input.unknownIds)].join(", ")}`);
   if (input.nodes.length === 0) return { facts, breaches };
 
-  const label = (n: PlanNode) => labelOf(input.root, n);
+  const label = (n: PlanNode) => fullLabelOf(input.root, n);
   const aliases = aliasMaterials(input.materials);
   const byId = new Map(input.materials.map((m) => [m.id, m]));
   const listed = (id: string) => (byId.get(id)?.toc?.chapters.length ?? 0) > 0;
@@ -279,6 +281,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     return m?.minutes ?? 0;
   };
   const share = input.readingShare ?? MUST_SHARE;
+  const leafBudget = (node: PlanNode) => budgetMinutes(node, input.hoursPerWeek, daysInWeekOf(input.root, node, input.daysPerWeek));
   const verb = input.leaves ? "reads" : "reserves";
   const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
   const breach = (kind: BreachKind, index: number, unit: string, refs: RefLike[], text: string) => breaches.push({ kind, index, unit, refs: refs.map(toResolved), names: names(refs), text });
@@ -318,7 +321,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     const last = siblingLast.get(refKey(r));
     if (last === undefined || last !== index - 1) return false;
     const size = sizeOf(r);
-    const budget = node.budgetHours === null && input.hoursPerWeek === undefined ? 0 : budgetMinutes(node, input.hoursPerWeek);
+    const budget = node.budgetHours === null && input.hoursPerWeek === undefined ? 0 : leafBudget(node);
     return size === null || budget <= 0 || size > budget * share;
   };
   const readBefore = (node: PlanNode, key: string): boolean => {
@@ -363,7 +366,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     if (input.leaves) {
       // Without the learner's hours only week leaves carry a budget; with them, days do too.
       if (withRefs.length === 0 || (node.budgetHours === null && input.hoursPerWeek === undefined)) return;
-      const budget = budgetMinutes(node, input.hoursPerWeek);
+      const budget = leafBudget(node);
       if (budget <= 0) return;
       const { must, should } = tierMinutes(node.materials);
       if (must + should > budget) facts.push(`${unit} over budget: ${must + should} of ${budget} min`);
@@ -372,7 +375,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       }
     } else {
       const known = reads.reduce((sum, r) => sum + knownMinutes(r), 0);
-      const budget = budgetFor(node.len, input.hoursPerWeek) * 60 * share;
+      const budget = budgetFor(weeksOf(input.root, node, input.daysPerWeek), input.hoursPerWeek) * 60 * share;
       if (known > budget * SHARE_TOLERANCE) {
         breach("over-budget", index, unit, [], `${unit} reserves about ${known} min of reading against a budget of about ${Math.round(budget)} min`);
       }
@@ -438,7 +441,7 @@ function chaptersBefore(root: PlanNode, node: PlanNode | undefined, backbone: Ch
 export function treeChecks(
   root: PlanNode,
   materials: CheckMaterial[],
-  opts: { granularity: Granularity; hoursPerWeek?: number; readingShare?: number | null },
+  opts: { granularity: Granularity; hoursPerWeek?: number; daysPerWeek: number; readingShare?: number | null },
 ): LevelChecks & { nodes: PlanNode[] } {
   const { granularity, ...shares } = opts;
   const nodes: PlanNode[] = [];
@@ -519,8 +522,8 @@ export function assignmentsOf(root: PlanNode, id: string): { node: PlanNode; lab
   const out: { node: PlanNode; label: string; role: "covers" | "assigned" }[] = [];
   walk(root, (n) => {
     if (n.id === root.id) return;
-    if (n.covers?.some((r) => r.id === id)) out.push({ node: n, label: labelOf(root, n), role: "covers" });
-    if (n.materials?.some((r) => r.id === id)) out.push({ node: n, label: labelOf(root, n), role: "assigned" });
+    if (n.covers?.some((r) => r.id === id)) out.push({ node: n, label: fullLabelOf(root, n), role: "covers" });
+    if (n.materials?.some((r) => r.id === id)) out.push({ node: n, label: fullLabelOf(root, n), role: "assigned" });
   });
   return out;
 }

@@ -7,7 +7,7 @@ import { sources } from "@/lib/db/schema";
 import { getTrackDetail, sourceToMaterial } from "@/lib/db/queries";
 import { getLeafWithContent, getNodeReadList } from "@/lib/db/planQueries";
 import { budgetMinutes } from "@/lib/materials";
-import { budgetFor, findNode, labelOf, spanOf } from "@/lib/planTree";
+import { budgetFor, daysInWeekOf, findNode, fullLabelOf } from "@/lib/planTree";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { byTier, type ReadRow } from "@/components/pensieve/ReadTable";
 import { chapterAt } from "@/lib/schemas/material";
@@ -35,10 +35,10 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
   const node = findNode(detail.root, nodeId);
   if (!node || node.children !== null) notFound();
 
-  const label = labelOf(detail.root, node);
-  const kicker = node.level === "day" ? label : `${label} · ${spanOf(node)}`;
+  const kicker = fullLabelOf(detail.root, node);
   const isWeek = node.level !== "day";
   const hours = detail.track.hoursPerWeek;
+  const days = daysInWeekOf(detail.root, node, detail.track.daysPerWeek);
   const sessions = leaf.sessions.filter((s) => s.hours !== null);
   // The lesson's videos are the leaf's own when it has a Read table; older plans fall back to every video on the track.
   const youtubeSources =
@@ -63,7 +63,7 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
           trackId={id}
           nodeId={nodeId}
           unit={isWeek ? "week" : "day"}
-          budgetHours={isWeek ? (node.budgetHours ?? budgetFor(node.len, hours)) : null}
+          budgetHours={isWeek ? (node.budgetHours ?? budgetFor(1, hours)) : null}
           initialSessions={sessions.map((s) => ({ hours: s.hours as number }))}
           initialContent={
             leaf.content
@@ -72,7 +72,7 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
           }
           youtubeSources={youtubeSources}
           readRows={readRows}
-          budgetMinutes={budgetMinutes({ level: node.level, budgetHours: isWeek ? (node.budgetHours ?? budgetFor(node.len, hours)) : null }, hours)}
+          budgetMinutes={budgetMinutes({ level: node.level, budgetHours: isWeek ? (node.budgetHours ?? budgetFor(1, hours)) : null }, hours, days)}
           practice={detail.track.split?.practice}
           isCompleted={node.status === "completed"}
         />

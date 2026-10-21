@@ -60,7 +60,7 @@ describe("streamPlanDraft with materials", () => {
     const events: PlanDraftEvent[] = [];
     for await (const event of streamPlanDraft({
       topic: "LLM engineering",
-      days: 28,
+      weeks: 4, daysPerWeek: 7,
       granularity: "day",
       materials: [material("M1", { kind: "book", backbone: true }), material("M2")],
       log: { onCall: (c) => void calls.push(c) },
@@ -82,7 +82,7 @@ describe("streamPlanDraft with materials", () => {
       { id: "M2", tier: "should", minutes: 10, note: null, chapter: null, activity: "read" },
     ]);
     expect(calls[0].facts).toEqual(expect.arrayContaining(["dropped unknown M9", "backbone ch. 3, 4 not reserved"]));
-    expect(calls[1].facts).toEqual(expect.arrayContaining(["no must: Day 2, Day 3, Day 4, Day 5, Day 6, Day 7"]));
+    expect(calls[1].facts).toEqual(expect.arrayContaining(["no must: Week 1 · Day 2, Week 1 · Day 3, Week 1 · Day 4, Week 1 · Day 5, Week 1 · Day 6, Week 1 · Day 7"]));
     // The prompt for the week's days carries the week's reservation.
     const secondPrompt = mockedStreamObject.mock.calls[1][0] as { prompt: string };
     expect(secondPrompt.prompt).toContain("This unit's reservation, the only resources its days may use: M1 (ch. 1–2), M2.");
@@ -106,7 +106,7 @@ describe("streamPlanDraft and the time split", () => {
     mockedStreamObject.mockReturnValueOnce(fakeTop(weeks(4), { readingShare: 84.6, practice: "writing summaries.", reason: "A knowledge topic." }));
     const calls: ModelCall[] = [];
     const events: PlanDraftEvent[] = [];
-    for await (const event of streamPlanDraft({ topic: "The French Revolution", days: 28, granularity: "week", hoursPerWeek: 10, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+    for await (const event of streamPlanDraft({ topic: "The French Revolution", weeks: 4, daysPerWeek: 7, granularity: "week", hoursPerWeek: 10, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
 
     expect(events.find((e) => e.type === "split")).toEqual({ type: "split", split: { readingShare: 85, practice: "writing summaries", reason: "A knowledge topic." } });
     const finish = events.at(-1);
@@ -129,7 +129,7 @@ describe("streamPlanDraft and the time split", () => {
     const events: PlanDraftEvent[] = [];
     for await (const event of streamPlanDraft({
       topic: "T",
-      days: 28,
+      weeks: 4, daysPerWeek: 7,
       granularity: "week",
       materials: [],
       hoursPerWeek: 6,
@@ -163,7 +163,7 @@ describe("streamPlanDraft and the time split", () => {
       } as unknown as ReturnType<typeof streamObject>;
     });
     await expect(async () => {
-      for await (const _ of streamPlanDraft({ topic: "T", days: 28, granularity: "week", materials: [], hoursPerWeek: 6 })) void _;
+      for await (const _ of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], hoursPerWeek: 6 })) void _;
     }).rejects.toBe(refusal);
   });
 
@@ -171,7 +171,7 @@ describe("streamPlanDraft and the time split", () => {
     mockedStreamObject.mockReturnValueOnce(fakeTop(weeks(4), undefined));
     const calls: ModelCall[] = [];
     const events: PlanDraftEvent[] = [];
-    for await (const event of streamPlanDraft({ topic: "T", days: 28, granularity: "week", materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+    for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
     expect(events.some((e) => e.type === "split")).toBe(false);
     expect(events.at(-1)?.type).toBe("finish");
     expect(calls[0].facts).toContain("no split returned");
@@ -182,7 +182,7 @@ describe("streamPlanDraft and the time split", () => {
     const calls: ModelCall[] = [];
     const split = { readingShare: 50, practice: "building", reason: "" };
     const events: PlanDraftEvent[] = [];
-    for await (const event of streamPlanDraft({ topic: "T", days: 28, granularity: "week", split, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+    for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", split, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
     expect(events.some((e) => e.type === "split")).toBe(false);
     expect(calls[0].prompt).not.toContain('as "split"');
   });
@@ -207,7 +207,7 @@ describe("breaches while drafting", () => {
   beforeEach(() => {
     mockedStreamObject.mockReset();
   });
-  const ctx = { topic: "AI engineering", days: 7, granularity: "day" as const, materials: AIE_MATERIALS, hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" } };
+  const ctx = { topic: "AI engineering", weeks: 1, daysPerWeek: 7, granularity: "day" as const, materials: AIE_MATERIALS, hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" } };
   const dayUnits = (chapters: number[]) => chapters.map((c, i) => ({ title: `D${i + 1}`, summary: "s", materials: [{ id: `M1.${c}`, tier: "must" as const, minutes: 20 }] }));
   /** The fixture with week 1 as a hand-split week: its Read table has become its reservation. */
   const tree = () => {
@@ -227,11 +227,11 @@ describe("breaches while drafting", () => {
     expect(events.filter((e) => e.type === "child")).toHaveLength(6); // the last unit arrives with done, and the retry streamed nothing
     const retryPrompt = (mockedStreamObject.mock.calls[1][0] as { prompt: string }).prompt;
     expect(retryPrompt).toContain("Your previous answer broke these rules; return all 7 units again, corrected:\n- ");
-    expect(retryPrompt).toContain("- Day 5 reads M1.3, which Week 1 did not reserve");
+    expect(retryPrompt).toContain("- Week 1 · Day 5 reads M1.3, which Week 1 did not reserve");
     // Sized before the check, two 20-minute rows on a 107-minute chapter are 54 and 53 minutes against a 20-minute share.
-    expect(retryPrompt).toContain("- Day 1's must-reading is 54 min against a budget of about 20 min");
+    expect(retryPrompt).toContain("- Week 1 · Day 1's must-reading is 54 min against a budget of about 20 min");
     expect(calls.map((c) => c.label)).toEqual(["Week 1 · 7 days", "Week 1 · 7 days (retry)"]);
-    expect(calls[0].facts).toContain("breach: Day 5 reads M1.3, which Week 2 holds");
+    expect(calls[0].facts).toContain("breach: Week 1 · Day 5 reads M1.3, which Week 2 holds");
     const finish = events.at(-1);
     if (finish?.type !== "finish") throw new Error("no finish");
     expect(finish.children.map((d) => d.materials![0].chapter)).toEqual([1, 1, 1, 2, 2, 2, 2]);
@@ -244,7 +244,7 @@ describe("breaches while drafting", () => {
     for await (const e of streamExpandNode({ ...ctx, tree: aiePlan(), nodeId: "w1", reason: "split", log: { onCall: (c) => void calls.push(c) } })) void e;
     const firstPrompt = (mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt;
     expect(firstPrompt).toContain("This unit's reservation, the only resources its days may use: M1.1–M1.2.");
-    expect(calls[0].facts).toContain("breach: Day 2 reads M1.3, which Week 1 did not reserve");
+    expect(calls[0].facts).toContain("breach: Week 1 · Day 2 reads M1.3, which Week 1 did not reserve");
     expect(mockedStreamObject).toHaveBeenCalledTimes(2);
   });
   it("sizes chapter rows from the list before judging the budget", async () => {
@@ -253,7 +253,7 @@ describe("breaches while drafting", () => {
     const weeks = [week("W1", ["M1.1", "M1.2"], [60, 60]), week("W2", ["M1.3"], [60]), week("W3", ["M1.4"], [60]), week("W4", ["M1.5"], [60])];
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks)).mockReturnValueOnce(fakeStream(weeks));
     const calls: ModelCall[] = [];
-    for await (const _ of streamPlanDraft({ ...ctx, days: 28, granularity: "week", log: { onCall: (c) => void calls.push(c) } })) void _;
+    for await (const _ of streamPlanDraft({ ...ctx, weeks: 4, daysPerWeek: 7, granularity: "week", log: { onCall: (c) => void calls.push(c) } })) void _;
     expect(mockedStreamObject).toHaveBeenCalledTimes(2);
     expect(calls[0].facts).toContain("breach: Week 1's must-reading is 247 min against a budget of about 144 min");
   });
@@ -263,17 +263,30 @@ describe("breaches while drafting", () => {
     let children: PlanNode[] = [];
     for await (const e of streamExpandNode({ ...ctx, tree: tree(), nodeId: "w1", reason: "split", log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") children = e.children;
     expect(children[1].materials).toBeUndefined();
-    expect(calls[1].facts).toEqual(expect.arrayContaining(["dropped M1.3 from Day 2: outside", "dropped M1.3 from Day 2: overlap"]));
+    expect(calls[1].facts).toEqual(expect.arrayContaining(["dropped M1.3 from Week 1 · Day 2: outside", "dropped M1.3 from Week 1 · Day 2: overlap"]));
   });
   it("an over-budget leaf triggers the retry and then stays a fact", async () => {
     const week = (title: string, ids: string[], minutes: number[]) => ({ title, summary: "s", materials: ids.map((id, i) => ({ id, tier: "must" as const, minutes: minutes[i] })) });
     const weeks = [week("W1", ["M1.1", "M1.2"], [107, 140]), week("W2", ["M1.3"], [93]), week("W3", ["M1.4"], [126]), week("W4", ["M1.5"], [98])];
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks)).mockReturnValueOnce(fakeStream(weeks));
     const calls: ModelCall[] = [];
-    for await (const _ of streamPlanDraft({ ...ctx, days: 28, granularity: "week", log: { onCall: (c) => void calls.push(c) } })) void _;
+    for await (const _ of streamPlanDraft({ ...ctx, weeks: 4, daysPerWeek: 7, granularity: "week", log: { onCall: (c) => void calls.push(c) } })) void _;
     expect(mockedStreamObject).toHaveBeenCalledTimes(2);
     expect(calls[1].facts).toContain("breach: Week 1's must-reading is 247 min against a budget of about 144 min");
     expect(calls[1].facts.some((f) => f.startsWith("dropped"))).toBe(false);
+  });
+  it("splits a week into the number of days picked, each a share of that week", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(dayUnits([1, 1, 2])));
+    const calls: ModelCall[] = [];
+    let children: PlanNode[] = [];
+    for await (const e of streamExpandNode({ ...ctx, tree: tree(), nodeId: "w1", reason: "split", splitDays: 3, log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") children = e.children;
+    const prompt = mockedStreamObject.mock.calls[0][0].prompt as string;
+    expect(prompt).toContain("Its 3 days cover, in order:");
+    // Six hours over three days is two hours a day, 40% of it must-reading.
+    expect(prompt).toContain("3. Day 3 — budget about 2 h, so about 50 min of must-reading");
+    expect(prompt).not.toContain("4. Day 4");
+    expect(children.map((c) => c.len)).toEqual([1, 1, 1]);
+    expect(calls[0].facts).toContain("3 of 3 units");
   });
   it("a failed retry keeps the first answer with its drops on the app's key and rethrows a refusal on the user's", async () => {
     const refusal = new APICallError({ message: "credit balance is too low", url: "u", requestBodyValues: {}, statusCode: 400, responseBody: "", isRetryable: false });

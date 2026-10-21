@@ -2,7 +2,7 @@ import { streamText, tool, stepCountIs, type LanguageModelUsage, type ModelMessa
 import { z } from "zod";
 import type { PlanChatEvent, PlanChatRequest } from "@/lib/planChat";
 import { diffChangedNodes, type ChangedNodes } from "@/lib/planSummary";
-import { cloneTree, layout, type PlanNode } from "@/lib/planTree";
+import { cloneTree, layout, weeksOf, type PlanNode } from "@/lib/planTree";
 import { buildGenerationLogRow, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { DEFAULT_CHAT_MODEL } from "./models";
 import { buildPlanChatSystemPrompt, renderTree } from "./planPrompt";
@@ -16,7 +16,7 @@ const revisePlanInput = z.object({
     .string()
     .min(1)
     .describe(
-      'A precise, self-contained instruction for revising the plan, naming units by label, e.g. "Swap Week 3 and Week 4; leave the days inside each untouched." or "Inside Week 2, move Day 10 (quantization) before Day 9 (roofline)."',
+      'A precise, self-contained instruction for revising the plan, naming units by label, e.g. "Swap Week 3 and Week 4; leave the days inside each untouched." or "Inside Week 2, move Day 4 (quantization) before Day 3 (roofline)."',
     ),
 });
 
@@ -55,6 +55,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
         materials: req.materials,
         granularity: req.granularity,
         hoursPerWeek: req.hoursPerWeek,
+        daysPerWeek: req.daysPerWeek,
         split: req.split,
         tree,
         lockBefore,
@@ -66,10 +67,10 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
       const changed = diffChangedNodes(tree, result.tree);
       revised = { tree: result.tree, changed };
       return {
-        totalDays: result.tree.len,
+        weeks: Math.round(weeksOf(result.tree, result.tree, req.daysPerWeek)),
         changedLevel: changed.level,
         changedUnits: changed.tags,
-        plan: renderTree(result.tree),
+        plan: renderTree(result.tree, { daysPerWeek: req.daysPerWeek }),
       };
     },
   });
@@ -82,6 +83,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
     materials: req.materials,
     granularity: req.granularity,
     hoursPerWeek: req.hoursPerWeek,
+    daysPerWeek: req.daysPerWeek,
     split: req.split,
     tree,
     lockBefore,

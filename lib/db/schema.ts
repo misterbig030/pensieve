@@ -29,6 +29,8 @@ export const tracks = pgTable("tracks", {
   granularity: text("granularity", { enum: ["day", "week"] }).notNull().default("day"),
   /** How many hours a week the learner said they can give. Every unit's budget derives from it. */
   hoursPerWeek: integer("hours_per_week").notNull().default(6),
+  /** The learner's usual study days a week: unplanned weeks have this many days. Tracks from before it existed have 7. */
+  daysPerWeek: integer("days_per_week").notNull().default(7),
   /** How the plan divides that time between reading and practice. Null on plans drafted before it existed. */
   split: jsonb("split").$type<PlanSplit>(),
   status: text("status", { enum: ["active", "completed", "archived"] })

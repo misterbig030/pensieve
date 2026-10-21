@@ -116,8 +116,10 @@ describe("estimateCostUsd / pairs", () => {
 
 describe("briefFromPrompt", () => {
   it("rebuilds the brief from a recorded candidate prompt's header", () => {
-    expect(briefFromPrompt(PROMPT)).toEqual({ topic: "X", days: 90, hoursPerWeek: 6, sources: [] });
-    expect(briefFromPrompt("Plan length: 30 days at about 1 hour a week: 4 hours of study in all\nTopic: Y")).toEqual({ topic: "Y", days: 30, hoursPerWeek: 1, sources: [] });
+    // A prompt recorded before plans were set in weeks gives the length in days.
+    expect(briefFromPrompt(PROMPT)).toEqual({ topic: "X", weeks: 13, hoursPerWeek: 6, sources: [] });
+    expect(briefFromPrompt("Plan length: 30 days at about 1 hour a week: 4 hours of study in all\nTopic: Y")).toEqual({ topic: "Y", weeks: 4, hoursPerWeek: 1, sources: [] });
+    expect(briefFromPrompt("Plan length: 6 weeks at about 5 hours a week, over 5 study days: 30 hours of study in all\nTopic: Z")).toEqual({ topic: "Z", weeks: 6, hoursPerWeek: 5, sources: [] });
     expect(() => briefFromPrompt("nothing here")).toThrow(/Topic/);
   });
 });

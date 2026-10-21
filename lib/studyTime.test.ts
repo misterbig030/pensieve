@@ -1,20 +1,31 @@
 import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot } from "@/lib/planTree";
-import { clampHours, dayMinutes, hoursInText, normalizeSplit, presetFor, readingShareOf, rebudget, totalHours } from "./studyTime";
+import { clampHours, dayMinutes, formatDayTime, hoursInText, normalizeSplit, presetFor, readingShareOf, rebudget, totalHours, weeksLabel } from "./studyTime";
 
 describe("hours", () => {
-  it("totals the plan's hours", () => {
-    expect(totalHours(84, 6)).toBe(72);
-    expect(totalHours(84)).toBe(72);
-    expect(totalHours(7, 3)).toBe(3);
-    expect(totalHours(84, 30)).toBe(360);
-    expect(totalHours(1, 1)).toBe(1);
+  it("totals the plan's hours over its weeks", () => {
+    expect(totalHours(12, 6)).toBe(72);
+    expect(totalHours(12)).toBe(72);
+    expect(totalHours(1, 3)).toBe(3);
+    expect(totalHours(12, 30)).toBe(360);
+    expect(totalHours(0.1, 1)).toBe(1);
   });
 
-  it("gives a day its share of the week, to five minutes", () => {
-    expect(dayMinutes(6)).toBe(50);
-    expect(dayMinutes(30)).toBe(255);
-    expect(dayMinutes(1)).toBe(10);
+  it("gives a day its share of its week, to five minutes", () => {
+    expect(dayMinutes(6, 7)).toBe(50);
+    expect(dayMinutes(6, 5)).toBe(70);
+    expect(dayMinutes(6)).toBe(70);
+    expect(dayMinutes(6, 3)).toBe(120);
+    expect(dayMinutes(30, 7)).toBe(255);
+    expect(dayMinutes(1, 7)).toBe(10);
+  });
+
+  it("writes a day's time and the plan's length the way the form shows them", () => {
+    expect(formatDayTime(70)).toBe("1 h 10 min");
+    expect(formatDayTime(120)).toBe("2 h");
+    expect(formatDayTime(45)).toBe("45 min");
+    expect(weeksLabel(1)).toBe("1 week");
+    expect(weeksLabel(5.8)).toBe("6 weeks");
   });
 
   it("clamps and names presets", () => {

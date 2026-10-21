@@ -11,7 +11,7 @@ import { fromTreeInput } from "@/lib/planInput";
 import { materialListSchema, type Material } from "@/lib/schemas/material";
 import { granularitySchema, planTreeInputSchema, type PlanTreeInput } from "@/lib/schemas/plan";
 import type { Granularity } from "@/lib/planTree";
-import { DEFAULT_HOURS_PER_WEEK, hoursPerWeekSchema, planSplitSchema, type PlanSplit } from "@/lib/studyTime";
+import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema, planSplitSchema, type PlanSplit } from "@/lib/studyTime";
 
 const topicSchema = z.string().trim().min(1).max(200);
 
@@ -20,6 +20,7 @@ export async function confirmTrackAction(input: {
   instructions?: string;
   granularity: Granularity;
   hoursPerWeek?: number;
+  daysPerWeek?: number;
   split?: PlanSplit | null;
   materials: Material[];
   tree: PlanTreeInput;
@@ -43,6 +44,7 @@ export async function confirmTrackAction(input: {
     summary: input.summary,
     granularity,
     hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK),
+    daysPerWeek: daysPerWeekSchema.parse(input.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK),
     split: planSplitSchema.nullable().parse(input.split ?? null),
     materials,
     root,

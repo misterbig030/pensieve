@@ -60,7 +60,7 @@ function hangingModel(parts: LanguageModelV4StreamPart[]) {
   });
 }
 
-const brief = { topic: "X", days: 7, sources: [] };
+const brief = { topic: "X", weeks: 1, sources: [] };
 const smallCaps = { steps: 4, searches: 3, fetches: 6, wallMs: 150 };
 
 describe("arm C", () => {

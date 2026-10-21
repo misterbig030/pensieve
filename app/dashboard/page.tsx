@@ -45,7 +45,7 @@ export default async function DashboardPage() {
               <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-foreground/60">
                 <Badge variant={STATUS_VARIANT[track.status]}>{STATUS_LABEL[track.status]}</Badge>
                 <span>
-                  Day {done} of {total}
+                  {done} of {total} days complete
                 </span>
                 <StreakChip days={computeStreak(checkInDates)} />
               </span>

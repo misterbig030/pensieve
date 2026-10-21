@@ -4,7 +4,7 @@
  *
  *   npx tsx evals/research/effort-bench.ts --export ~/Downloads/model-calls-<ts>.json --dry-run
  *   npx tsx evals/research/effort-bench.ts --export ~/Downloads/model-calls-<ts>.json --efforts low,medium,high
- *   npx tsx evals/research/effort-bench.ts --topic "AI engineer interview preparation" --days 90 --hours 6
+ *   npx tsx evals/research/effort-bench.ts --topic "AI engineer interview preparation" --weeks 13 --hours 6
  *
  * Options: --efforts a,b  --arm W|A  --out path. Env (.env.local): AI_GATEWAY_API_KEY, TAVILY_API_KEY.
  * Output: one block per effort (workers, candidate step, gate, list) and a JSON file with every call and every list.
@@ -27,7 +27,7 @@ const { values } = parseArgs({
   options: {
     export: { type: "string" },
     topic: { type: "string" },
-    days: { type: "string" },
+    weeks: { type: "string" },
     hours: { type: "string" },
     efforts: { type: "string", default: "low,medium,high" },
     model: { type: "string", default: DEFAULT_RESEARCH_MODEL },
@@ -57,8 +57,8 @@ function brief(): ResearchBrief {
     const calls = JSON.parse(readFileSync(values.export, "utf8")) as ExportedCall[];
     return briefFromPrompt(pickCall(calls, "Research · candidates").prompt);
   }
-  if (!values.topic || !values.days) throw new Error("Pass --export <model-calls JSON>, or --topic and --days (and --hours)");
-  return { topic: values.topic, days: Number(values.days), hoursPerWeek: values.hours ? Number(values.hours) : undefined, sources: [] };
+  if (!values.topic || !values.weeks) throw new Error("Pass --export <model-calls JSON>, or --topic and --weeks (and --hours)");
+  return { topic: values.topic, weeks: Number(values.weeks), hoursPerWeek: values.hours ? Number(values.hours) : undefined, sources: [] };
 }
 
 interface EffortRun {
@@ -128,7 +128,7 @@ async function main() {
   if (values.arm !== "W" && values.arm !== "A") throw new Error("--arm is W or A");
   const model = values.model as AiModelId;
   if (!AVAILABLE_MODELS.some((m) => m.id === model)) throw new Error(`Unknown model ${values.model}; use one of ${AVAILABLE_MODELS.map((m) => m.id).join(", ")}`);
-  console.log(`Brief: "${b.topic}", ${b.days} days at ${b.hoursPerWeek ?? "default"} hours a week. Arm ${values.arm} on ${model} at ${efforts.join(", ")}.`);
+  console.log(`Brief: "${b.topic}", ${b.weeks} weeks at ${b.hoursPerWeek ?? "default"} hours a week. Arm ${values.arm} on ${model} at ${efforts.join(", ")}.`);
   console.log(`${efforts.length} full research runs, one per effort, in sequence. On Sonnet 5.5 a run cost $0.08 at low and $0.17 at high; Opus 5.5 is twice the price per token.`);
   if (values["dry-run"]) {
     console.log("Dry run: nothing was called.");

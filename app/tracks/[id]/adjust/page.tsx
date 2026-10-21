@@ -20,6 +20,7 @@ export default async function AdjustTrackPage({ params }: { params: Promise<{ id
         trackTitle={detail.track.title}
         granularity={detail.track.granularity}
         hoursPerWeek={detail.track.hoursPerWeek}
+        daysPerWeek={detail.track.daysPerWeek}
         split={detail.track.split}
         instructions={detail.track.instructions ?? undefined}
         materials={detail.materials}

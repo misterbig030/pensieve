@@ -5,6 +5,7 @@ import { ChevronRight, Lock, MessageCircle, PencilLine, Send, Undo2 } from "luci
 import { Badge } from "@/components/ui/badge";
 import { hasUserTurn, undoableChangeId, type ChatMessage } from "@/lib/planChat";
 import type { SourceInput, SourceType } from "@/lib/schemas/source";
+import { weeksLabel } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 const SOURCE_CHIP: Record<SourceType, { kicker: string; variant: "accent2" | "tagOutline" | "accent" | "neutral" }> = {
@@ -206,9 +207,13 @@ function MessageView({
           <div className="flex flex-col gap-2 rounded-[28px] rounded-br-md bg-accent-100 px-3.5 py-2.5 text-[13.5px] leading-normal">
             <span className="font-heading text-sm leading-tight">{m.topic}</span>
             <BriefRow label="Length">
-              {m.days} days · {m.granularity} units
+              {weeksLabel(m.weeks)} · {m.granularity} units
             </BriefRow>
-            {m.hoursPerWeek && <BriefRow label="Time">{m.hoursPerWeek} h a week</BriefRow>}
+            {m.hoursPerWeek && (
+              <BriefRow label="Time">
+                {m.hoursPerWeek} h a week · {m.daysPerWeek} day{m.daysPerWeek === 1 ? "" : "s"} a week
+              </BriefRow>
+            )}
             {m.focus?.trim() && <BriefRow label="Focus">{m.focus}</BriefRow>}
             {m.materials.length > 0 && (
               <BriefRow label="Materials">

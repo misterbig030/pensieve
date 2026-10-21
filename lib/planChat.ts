@@ -6,7 +6,7 @@ import type { ChangedNodes } from "@/lib/planSummary";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanTreeInput } from "@/lib/schemas/plan";
 import type { SourceInput } from "@/lib/schemas/source";
-import type { PlanSplit } from "@/lib/studyTime";
+import { weeksLabel, type PlanSplit } from "@/lib/studyTime";
 
 export type { ModelCall, ResearchEvent };
 
@@ -16,7 +16,7 @@ export type CallEvent = { type: "call"; call: ModelCall };
 /** Messages shown in the conversation rail. Kept as plain data so the rail is a pure render of this list. */
 export type ChatMessage =
   | { id: string; kind: "sys"; text: string }
-  | { id: string; kind: "brief"; topic: string; days: number; granularity: Granularity; hoursPerWeek?: number; focus?: string; materials: SourceInput[] }
+  | { id: string; kind: "brief"; topic: string; weeks: number; daysPerWeek: number; granularity: Granularity; hoursPerWeek?: number; focus?: string; materials: SourceInput[] }
   | { id: string; kind: "user"; text: string }
   | { id: string; kind: "answer"; text: string; streaming: boolean }
   | {
@@ -39,8 +39,10 @@ export interface TranscriptTurn {
 
 interface PlanContext {
   topic: string;
-  /** Total length of the plan in days. */
-  days: number;
+  /** Length of the plan in weeks. */
+  weeks: number;
+  /** The learner's usual study days a week: unplanned weeks have this many days. */
+  daysPerWeek: number;
   granularity: Granularity;
   instructions?: string;
   /** Hours a week the learner can give; six when not stated. Every unit's budget derives from it. */
@@ -79,6 +81,8 @@ export interface PlanExpandRequest extends PlanContext {
   nodeId: string;
   /** `split` turns a week leaf into day leaves by hand; `expand` plans a heading's children. */
   reason: "expand" | "split";
+  /** `split` only: how many days this week becomes. The week's own length when absent. */
+  splitDays?: number;
 }
 
 export type PlanExpandEvent =
@@ -115,7 +119,7 @@ export function nextMessageId(): string {
 }
 
 export function describeBrief(m: Extract<ChatMessage, { kind: "brief" }>): string {
-  const lines = [`Topic: ${m.topic}`, `Length: ${m.days} days, planned in ${m.granularity} units`];
+  const lines = [`Topic: ${m.topic}`, `Length: ${weeksLabel(m.weeks)}, ${m.daysPerWeek} study days a week, planned in ${m.granularity} units`];
   if (m.hoursPerWeek) lines.push(`Time: about ${m.hoursPerWeek} hours a week`);
   if (m.focus?.trim()) lines.push(`Focus: ${m.focus.trim()}`);
   if (m.materials.length > 0) lines.push(`Materials: ${m.materials.map((s) => s.title ?? s.url).join("; ")}`);

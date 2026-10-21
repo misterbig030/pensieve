@@ -7,7 +7,7 @@ import {
   childSpans,
   cloneTree,
   findNode,
-  labelOf,
+  fullLabelOf,
   layout,
   makeNode,
   makeRoot,
@@ -42,7 +42,7 @@ export function nodeFor(unit: UnitDraft, level: PlanLevel, len: number, granular
     title: unit.title,
     summary: unit.summary,
     len,
-    budgetHours: leaf && level !== "day" ? budgetFor(len, hoursPerWeek) : null,
+    budgetHours: leaf && level !== "day" ? budgetFor(1, hoursPerWeek) : null,
     children: null,
   });
   if (aliases) applyUnitRefs(node, unit, leaf, aliases);
@@ -155,13 +155,21 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
 }
 
 interface DraftLevelInput {
-  ctx: { topic: string; instructions?: string; materials: Material[]; granularity: Granularity; hoursPerWeek?: number; split?: PlanSplit | null; outlineModel: ResolvedModel };
+  ctx: {
+    topic: string;
+    instructions?: string;
+    materials: Material[];
+    granularity: Granularity;
+    weeks: number;
+    daysPerWeek: number;
+    hoursPerWeek?: number;
+    split?: PlanSplit | null;
+    outlineModel: ResolvedModel;
+  };
   /** The top level of a new plan: the drafter decides the time split in this call. */
   decideSplit?: boolean;
   level: PlanLevel;
   spans: number[];
-  startDay: number;
-  totalDays: number;
   tree?: PlanNode;
   parentId?: string;
   log?: GenerationLogContext;
@@ -193,18 +201,18 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     materials: ctx.materials,
     granularity: ctx.granularity,
     hoursPerWeek: ctx.hoursPerWeek,
+    daysPerWeek: ctx.daysPerWeek,
     split: ctx.split,
     decideSplit: input.decideSplit,
     level,
     spans: input.spans,
-    startDay: input.startDay,
-    totalDays: input.totalDays,
+    weeks: ctx.weeks,
     tree: input.tree,
     parentId: input.parentId,
     unitsAreLeaves: leaf,
   };
   const parentNode = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
-  const where = input.tree && parentNode ? labelOf(input.tree, parentNode) : "Top level";
+  const where = input.tree && parentNode ? fullLabelOf(input.tree, parentNode) : "Top level";
   const n = input.spans.length;
   const label = `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
   const nodes: PlanNode[] = [];
@@ -223,7 +231,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       node.summary = unit.summary;
       node.len = spans[i];
       node.end = node.start + node.len - 1;
-      if (node.budgetHours !== null) node.budgetHours = budgetFor(node.len, ctx.hoursPerWeek);
+      if (node.budgetHours !== null) node.budgetHours = budgetFor(1, ctx.hoursPerWeek);
       if (aliases) unknown.push(...applyUnitRefs(node, unit, leaf, aliases));
       return node;
     });
@@ -232,7 +240,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     if (leaf) sizeChapterRows(final, ctx.materials);
     const { root, placed } = placeForChecks(input.tree, input.parentId, final);
     // While the split is decided in this same call, there is no share to hold the units to yet.
-    const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, readingShare: input.decideSplit ? null : readingShareOf(ctx.split) });
+    const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, readingShare: input.decideSplit ? null : readingShareOf(ctx.split) });
     breaches = checks.breaches;
     const facts = [...checks.facts, ...breaches.map((b) => `breach: ${b.text}`)];
     if (attempt === 2) {
@@ -296,8 +304,7 @@ export interface StreamPlanDraftInput extends Omit<PlanDraftRequest, "materials"
  * the first branch is still made of headings. Later units stay headings until the learner reaches them.
  */
 export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenerator<PlanDraftEvent> {
-  const total = input.days;
-  const topLevel = topLevelFor(total);
+  const topLevel = topLevelFor(input.weeks);
   const root = makeRoot([]);
   let costUsd = 0;
 
@@ -307,7 +314,7 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
 
   const tops: PlanNode[] = [];
   const ctx = { ...input, outlineModel: input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL) };
-  for await (const event of draftLevel({ ctx, decideSplit, level: topLevel, spans: topSpans(total), startDay: 1, totalDays: total, log: input.log })) {
+  for await (const event of draftLevel({ ctx, decideSplit, level: topLevel, spans: topSpans(input.weeks, input.daysPerWeek), log: input.log })) {
     if (event.type === "node") {
       tops.push(event.node);
       root.children = tops;
@@ -328,9 +335,9 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
   let parent: PlanNode | undefined = root.children?.[0];
   while (parent && !unitsAreLeaves(parent.level, input.granularity)) {
     const level = childLevel(parent.level)!;
-    const spans = childSpans(parent);
+    const spans = childSpans(parent, input.daysPerWeek);
     const kids: PlanNode[] = [];
-    for await (const event of draftLevel({ ctx: deeper, level, spans, startDay: parent.start, totalDays: root.len, tree: root, parentId: parent.id, log: input.log })) {
+    for await (const event of draftLevel({ ctx: deeper, level, spans, tree: root, parentId: parent.id, log: input.log })) {
       if (event.type === "node") {
         kids.push(event.node);
         parent.children = kids;
@@ -369,11 +376,16 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
     delete node.materials;
     node.manualSplit = true;
   }
+  // A week split into a number of days other than its own takes that length before its days are planned.
+  if (input.reason === "split" && input.splitDays && input.splitDays !== node.len) {
+    node.len = input.splitDays;
+    layout(root);
+  }
   const granularity: Granularity = input.reason === "split" ? "day" : input.granularity;
   const ctx = { ...input, granularity, outlineModel: input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL) };
-  const spans = childSpans(node);
+  const spans = childSpans(node, input.daysPerWeek);
   const kids: PlanNode[] = [];
-  for await (const event of draftLevel({ ctx, level, spans, startDay: node.start, totalDays: root.len, tree: root, parentId: node.id, log: input.log })) {
+  for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: node.id, log: input.log })) {
     if (event.type === "node") {
       kids.push(event.node);
       yield { type: "child", node: event.node };
@@ -400,7 +412,7 @@ export interface StreamResearchedDraftInput extends PlanDraftRequest {
  */
 export async function* streamResearchedPlanDraft(input: StreamResearchedDraftInput): AsyncGenerator<PlanDraftEvent> {
   const outcome = yield* researchMaterials({
-    brief: { topic: input.topic, instructions: input.instructions, days: input.days, hoursPerWeek: input.hoursPerWeek, sources: input.materials },
+    brief: { topic: input.topic, instructions: input.instructions, weeks: input.weeks, daysPerWeek: input.daysPerWeek, hoursPerWeek: input.hoursPerWeek, sources: input.materials },
     arm: input.arm,
     signal: input.signal,
     log: input.log,

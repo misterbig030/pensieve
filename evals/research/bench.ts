@@ -53,9 +53,11 @@ export function pickCall(calls: ExportedCall[], label: string): RecordedCall {
  */
 export function briefFromPrompt(prompt: string): ResearchBrief {
   const topic = prompt.match(/^Topic: (.+)$/m)?.[1]?.trim();
-  const plan = prompt.match(/^Plan length: (\d+) days at about (\d+) hours? a week/m);
+  // Prompts recorded before plans were set in weeks state the length in days.
+  const plan = prompt.match(/^Plan length: (\d+) (days|weeks?) at about (\d+) hours? a week/m);
   if (!topic || !plan) throw new Error('The prompt has no "Topic:" and "Plan length:" header to rebuild the brief from');
-  return { topic, days: Number(plan[1]), hoursPerWeek: Number(plan[2]), sources: [] };
+  const n = Number(plan[1]);
+  return { topic, weeks: plan[2] === "days" ? Math.max(1, Math.round(n / 7)) : n, hoursPerWeek: Number(plan[3]), sources: [] };
 }
 
 // ---------------------------------------------------------------------------------------------------------------

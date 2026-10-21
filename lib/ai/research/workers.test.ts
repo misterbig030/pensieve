@@ -118,8 +118,8 @@ const LIST: CandidateList = {
   ],
 };
 
-/** 84 days at six hours a week: the 100-hour band (6 searches, 12 reads), where the backbone worker has four steps. */
-const brief = { topic: "LLM engineering", days: 84, sources: [{ url: "https://learner.example.com/mine", type: "link" as const }] };
+/** 12 weeks at six hours a week: the 100-hour band (6 searches, 12 reads), where the backbone worker has four steps. */
+const brief = { topic: "LLM engineering", weeks: 12, sources: [{ url: "https://learner.example.com/mine", type: "link" as const }] };
 
 const SCRIPTS: Record<WorkerDirection, Step[]> = {
   backbone: [
@@ -260,7 +260,7 @@ describe("arm W through the pipeline", () => {
     const { model, calls } = directedModel(SCRIPTS, [LIST]);
     const { fetcher } = fetcherFor();
     const { events, outcome } = await collect(
-      researchMaterials({ brief: { ...brief, days: 7, hoursPerWeek: 3 }, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }),
+      researchMaterials({ brief: { ...brief, weeks: 1, hoursPerWeek: 3 }, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }),
     );
     expect(events[0]).toEqual({ type: "research.start", caps: { searches: 3, fetches: 6, steps: 8 } });
     expect(outcome.arm?.workers?.map((w) => w.direction)).toEqual(["backbone", "canonical"]);
@@ -281,8 +281,8 @@ describe("arm W through the pipeline", () => {
     );
     const provider = fakeProvider();
     const { fetcher, fetchPage } = fetcherFor();
-    // No learner links, so the counts are the workers' alone; 30 days is the 40-hour band: shares 3, 1 and 1.
-    const { outcome } = await collect(researchMaterials({ brief: { ...brief, days: 30, sources: [] }, arm: createWorkersArm({ provider, model }), fetcher, books }));
+    // No learner links, so the counts are the workers' alone; 4 weeks is the 40-hour band: shares 3, 1 and 1.
+    const { outcome } = await collect(researchMaterials({ brief: { ...brief, weeks: 4, sources: [] }, arm: createWorkersArm({ provider, model }), fetcher, books }));
     // backbone 3 of 5 asked, canonical 1 of 2 asked, current 1: the band's five.
     expect(provider.search).toHaveBeenCalledTimes(5);
     expect(provider.search.mock.calls.map((c) => c[0] as string).filter((q) => q.startsWith("b"))).toHaveLength(3);

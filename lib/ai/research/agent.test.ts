@@ -95,7 +95,7 @@ const LIST: CandidateList = {
   ],
 };
 
-const brief = { topic: "LLM engineering", days: 30, sources: [{ url: "https://learner.example.com/mine", type: "link" as const }] };
+const brief = { topic: "LLM engineering", weeks: 4, sources: [{ url: "https://learner.example.com/mine", type: "link" as const }] };
 
 async function collect(gen: AsyncGenerator<ResearchEvent, unknown>) {
   const events: ResearchEvent[] = [];
@@ -327,9 +327,9 @@ describe("thin research", () => {
 
 describe("research prompts", () => {
   it("states the learner's total hours and asks for sizes and coverage, not a count", () => {
-    expect(briefLines({ topic: "T", days: 84, hoursPerWeek: 6, sources: [] })[1]).toBe("Plan length: 84 days at about 6 hours a week: 72 hours of study in all");
-    expect(briefLines({ topic: "T", days: 7, sources: [] })[1]).toContain("6 hours of study in all");
-    const prompt = buildFinalPrompt({ topic: "T", days: 84, hoursPerWeek: 30, sources: [] }, "notes");
+    expect(briefLines({ topic: "T", weeks: 12, hoursPerWeek: 6, sources: [] })[1]).toBe("Plan length: 12 weeks at about 6 hours a week: 72 hours of study in all");
+    expect(briefLines({ topic: "T", weeks: 1, sources: [] })[1]).toContain("6 hours of study in all");
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 12, hoursPerWeek: 30, sources: [] }, "notes");
     expect(prompt).not.toMatch(/12 to 25/);
     expect(prompt).toContain("must not exceed 360 hours");
     expect(prompt).toContain('"coverage"');
@@ -339,15 +339,15 @@ describe("research prompts", () => {
   it("scales the caps to the plan's hours unless the arm was given its own", async () => {
     const { model } = scriptedModel([{ text: "Done." }], [LIST]);
     const { fetcher } = fetcherFor();
-    const { events } = await collect(researchMaterials({ brief: { ...brief, days: 7, hoursPerWeek: 3 }, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
+    const { events } = await collect(researchMaterials({ brief: { ...brief, weeks: 1, hoursPerWeek: 3 }, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
     expect(events[0]).toEqual({ type: "research.start", caps: { searches: 3, fetches: 6, steps: 8 } });
     expect(capsFor(72)).toEqual(RESEARCH_CAPS);
     expect(capsFor(360).fetches).toBe(16);
   });
 
   it("says when the notes are grouped by direction, and only then", () => {
-    const plain = buildFinalPrompt({ topic: "T", days: 7, sources: [] }, "notes");
-    const grouped = buildFinalPrompt({ topic: "T", days: 7, sources: [] }, "notes", { grouped: true });
+    const plain = buildFinalPrompt({ topic: "T", weeks: 1, sources: [] }, "notes");
+    const grouped = buildFinalPrompt({ topic: "T", weeks: 1, sources: [] }, "notes", { grouped: true });
     expect(plain).not.toContain("grouped by the research direction");
     expect(grouped).toContain("Notes are grouped by the research direction that found them; a material found by more than one appears once in your list.");
     expect(grouped.indexOf("Research notes")).toBeLessThan(grouped.indexOf("grouped by the research direction"));
