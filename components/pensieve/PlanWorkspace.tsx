@@ -44,9 +44,10 @@ import {
   lowerFirst,
   makeRoot,
   relength,
+  replaceNode,
+  settledWeeks,
   topLevelFor,
   topSpans,
-  weeksOf,
   type Granularity,
   type PlanLevel,
   type PlanNode,
@@ -252,7 +253,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   }, [initialTree, streamDraft]);
 
   const lockNote = isAdjust && lockBefore > 0 ? `${lockedRange(lockBefore)} locked.` : "";
-  const planWeeks = tree.children && tree.children.length > 0 ? weeksOf(tree, tree, daysPerWeek) : weeks;
+  // While the draft streams in, the plan is the length the learner set; units still planning count as they were.
+  const planWeeks = drafting || !tree.children || tree.children.length === 0 ? weeks : settledWeeks(tree, Object.keys(pending), daysPerWeek);
   const note = [lockNote, summaryNote].filter(Boolean).join(" ");
   const summary = drafting ? "" : summarizePlan(tree, topic, daysPerWeek, note || undefined);
 
@@ -262,6 +264,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     const days = reason === "split" ? (splitDays ?? node.len) : undefined;
     const slots = days !== undefined ? { count: days, groups: false } : slotsFor(node, granularity, daysPerWeek);
     if (!slots) return;
+    // A split that fails puts the week back as it was: its length, its Read table, no partial days.
+    const before = cloneTree(node);
     // A week split into another number of days takes that length now, so the days stream into the right span.
     if (days !== undefined && days !== node.len) {
       setTree((t) => {
@@ -358,6 +362,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         delete next[nodeId];
         return next;
       });
+      if (reason === "split") setTree((t) => layout(replaceNode(t, before)));
       setError(err instanceof Error ? err.message : "Planning failed. Try again.");
       setErrorCode(codeOf(err));
     } finally {
@@ -616,7 +621,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             split={split}
             deciding={drafting && !split}
             onChangeHours={changeHours}
-            onChangeDays={changeDays}
+            // A one-week plan is its days: a different number is a change to ask for in the conversation.
+            onChangeDays={topLevel === "day" ? undefined : changeDays}
             onChangeSplit={changeSplit}
             disabled={streaming || busy || confirming}
           />

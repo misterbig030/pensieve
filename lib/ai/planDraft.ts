@@ -11,7 +11,6 @@ import {
   layout,
   makeNode,
   makeRoot,
-  splitSpans,
   topLevelFor,
   topSpans,
   type Granularity,
@@ -67,14 +66,18 @@ export function applyUnitRefs(node: PlanNode, unit: UnitDraft, leaf: boolean, al
 }
 
 /**
- * When the model returns a different number of units than asked, re-derive spans so the parent's length is kept
- * for week/month units and the count is honoured for days.
+ * When the model returns a different number of units than asked, re-derive spans so the count is honoured and every
+ * unit stays whole weeks of the usual length: days are one day each, weeks the usual number of days, and months
+ * share the asked weeks between them (at least a week each).
  */
-export function reconcileSpans(spans: number[], count: number, level: PlanLevel): number[] {
+export function reconcileSpans(spans: number[], count: number, level: PlanLevel, daysPerWeek: number): number[] {
   if (count === spans.length) return spans;
   if (level === "day") return Array.from({ length: count }, () => 1);
-  const total = spans.reduce((a, b) => a + b, 0);
-  return splitSpans(total, Math.max(1, Math.floor(total / count)));
+  if (level === "week") return Array.from({ length: count }, () => daysPerWeek);
+  const weeks = Math.max(count, Math.round(spans.reduce((a, b) => a + b, 0) / daysPerWeek));
+  const base = Math.floor(weeks / count);
+  const extra = weeks % count;
+  return Array.from({ length: count }, (_, i) => (base + (i >= count - extra ? 1 : 0)) * daysPerWeek);
 }
 
 interface StreamUnitsInput {
@@ -223,7 +226,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   // Reconciles spans and references once the whole level has validated, and states the checks in code. On the
   // retry, rows that still breach are dropped; on either attempt, chapter rows take their minutes from the list.
   const check = (units: UnitDraft[]): string[] => {
-    const spans = reconcileSpans(input.spans, units.length, level);
+    const spans = reconcileSpans(input.spans, units.length, level, ctx.daysPerWeek);
     const unknown: string[] = [];
     final = units.map((unit, i) => {
       const node = nodes[i] ?? nodeFor(unit, level, spans[i], ctx.granularity, undefined, ctx.hoursPerWeek);

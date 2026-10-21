@@ -104,13 +104,15 @@ export function applyRevision(
 
 /**
  * A unit's length in study days, whatever the model wrote for it: a day is one; a week the model kept keeps its days
- * and a new one has the usual number; a month is whole weeks. A planned unit's length is its children's, set by
- * `layout`.
+ * and a new one has the usual number; a month keeps its days unless the model changed them, and is otherwise whole
+ * weeks. A planned unit's length is its children's, set by `layout`.
  */
 export function spanFor(level: PlanLevel, days: number, kept: PlanNode | undefined, daysPerWeek: number): number {
   if (level === "day") return 1;
-  if (kept && kept.level === level) return kept.len;
-  if (level === "week") return daysPerWeek;
+  const same = kept && kept.level === level;
+  if (level === "week") return same ? kept.len : daysPerWeek;
+  // A month can be made longer or shorter ("the last month should be 2 weeks"); one left as it was keeps its days.
+  if (same && Math.round(days) === kept.len) return kept.len;
   return Math.max(1, Math.round(days / daysPerWeek)) * daysPerWeek;
 }
 

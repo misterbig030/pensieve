@@ -13,6 +13,9 @@ import {
   makeNode,
   makeRoot,
   relength,
+  replaceNode,
+  settledWeeks,
+  cloneTree,
   resolveGranularity,
   spanOf,
   splitSpans,
@@ -178,6 +181,34 @@ describe("relength", () => {
     expect(next.children![2].start).toBe(11);
     expect(next.len).toBe(35);
     expect(root.children![2].len).toBe(7);
+  });
+});
+
+describe("while planning", () => {
+  const plan = () =>
+    makeRoot([
+      makeNode({ id: "w1", level: "week", title: "W", summary: "", len: 5, materials: [{ id: "M1", tier: "must", minutes: 30, note: null }] }),
+      makeNode({ id: "m1", level: "month", title: "M", summary: "", len: 20 }),
+    ]);
+  it("counts a unit still being planned as it was, not by its first children", () => {
+    const root = plan();
+    root.children![1].children = [makeNode({ id: "x1", level: "week", title: "X", summary: "", len: 5 })];
+    layout(root, 1, new Set(["m1"]));
+    expect(weeksOf(root, root, 5)).toBe(2);
+    expect(settledWeeks(root, ["m1"], 5)).toBe(5);
+    expect(settledWeeks(root, ["root"], 5)).toBe(2);
+  });
+  it("puts a unit back as it was before a change that failed", () => {
+    const root = plan();
+    const before = cloneTree(root.children![0]);
+    const week = root.children![0];
+    week.len = 3;
+    week.children = [makeNode({ id: "d1", level: "day", title: "D", summary: "", len: 1 })];
+    delete week.materials;
+    const restored = layout(replaceNode(root, before));
+    expect(restored.children![0]).toMatchObject({ id: "w1", len: 5, children: null, materials: [{ id: "M1" }] });
+    expect(restored.children![1].start).toBe(6);
+    expect(root.children![0].len).toBe(3);
   });
 });
 

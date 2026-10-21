@@ -144,7 +144,7 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
     current && "border-accent-300 bg-accent-100 opacity-100",
     changed && "border-accent-400 bg-accent-100 opacity-100",
     locked && "opacity-50",
-    href && "cursor-pointer hover:shadow-sm",
+    href && "relative cursor-pointer hover:shadow-sm",
   );
 
   const toggle = (e: MouseEvent) => {
@@ -170,7 +170,7 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") toggle(e as unknown as MouseEvent);
             }}
-            className="inline-flex size-5 items-center justify-center rounded-full text-accent-700 hover:bg-accent-100"
+            className="relative z-10 inline-flex size-5 items-center justify-center rounded-full text-accent-700 hover:bg-accent-100"
           >
             <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} strokeWidth={2.75} />
           </span>
@@ -209,9 +209,11 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
     </>
   );
 
-  // The status row sits outside the card's link, so the split menu inside it is not a control within a link.
+  // The status row sits outside the card's link, so the split menu inside it is not a control within a link. The link
+  // still covers the whole card (its ::after spans it); the row's buttons sit above it, and the rest lets clicks
+  // through to the link.
   const meta = hasMeta && (
-    <span className="mt-[3px] flex flex-wrap items-center gap-1.5">
+    <span className="pointer-events-none relative z-10 mt-[3px] flex flex-wrap items-center gap-1.5 [&_button]:pointer-events-auto">
       {node.budgetHours !== null && rows.length === 0 && (
         <Badge variant="neutral" className="text-[11px]">
           about {node.budgetHours} hours
@@ -234,7 +236,7 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
   return (
     <div className={classes}>
       {href ? (
-        <Link href={href} className="flex min-w-0 flex-col gap-[5px]">
+        <Link href={href} className="flex min-w-0 flex-col gap-[5px] after:absolute after:inset-0 after:rounded-2xl after:content-['']">
           {body}
         </Link>
       ) : (

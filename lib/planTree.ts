@@ -121,6 +121,29 @@ export function weeksOf(root: PlanNode, node: PlanNode, daysPerWeek: number): nu
   return node.len / daysPerWeek;
 }
 
+/**
+ * The plan's weeks while the units in `planning` are being planned: each counts as it was before, since its streamed
+ * children are only part of it.
+ */
+export function settledWeeks(root: PlanNode, planning: readonly string[], daysPerWeek: number): number {
+  const ids = planning.filter((id) => id !== root.id);
+  if (ids.length === 0) return weeksOf(root, root, daysPerWeek);
+  const copy = cloneTree(root);
+  for (const id of ids) {
+    const node = findNode(copy, id);
+    if (node) node.children = null;
+  }
+  return weeksOf(copy, copy, daysPerWeek);
+}
+
+/** The tree with the node of `snapshot`'s id put back as the snapshot, as it was before a change that failed. */
+export function replaceNode<T extends PlanNode>(root: T, snapshot: PlanNode): T {
+  const next = cloneTree(root);
+  const parent = parentOf(next, snapshot.id);
+  if (parent?.children) parent.children = parent.children.map((c) => (c.id === snapshot.id ? cloneTree(snapshot) : c));
+  return next;
+}
+
 /** Study days in the week a day belongs to: its week's length, or the usual number at the top of a one-week plan. */
 export function daysInWeekOf(root: PlanNode, node: PlanNode, daysPerWeek: number): number {
   const parent = parentOf(root, node.id);
@@ -233,7 +256,8 @@ export function currentLeaf(root: PlanNode): PlanNode | null {
 
 /**
  * The tree with every open week and month that is not planned yet re-lengthened for a new usual number of days.
- * Weeks already split keep their days; completed and locked units keep theirs.
+ * Weeks already split keep their days; completed and locked units keep theirs. The days at the top of a one-week plan
+ * are its units, not a length, so they are left alone; the time card does not offer a new number there.
  */
 export function relength<T extends PlanNode>(root: T, from: number, to: number, lockBefore = 0): T {
   const next = cloneTree(root);

@@ -127,21 +127,31 @@ describe("applyRevision", () => {
     );
     expect(result.children!.map((c) => c.len)).toEqual([3, 5]);
     expect(spanFor("month", 23, undefined, 5)).toBe(25);
-    expect(spanFor("month", 7, original.children![1], 5)).toBe(20);
+    // A kept month the model left alone keeps its days, even a month saved before the setting; one it resized takes whole weeks.
+    expect(spanFor("month", 20, original.children![1], 5)).toBe(20);
+    expect(spanFor("month", 30, makeNode({ id: "old", level: "month", title: "M", summary: "m", len: 30 }), 7)).toBe(30);
+    expect(spanFor("month", 10, original.children![1], 5)).toBe(10);
+    expect(spanFor("month", 7, original.children![1], 5)).toBe(5);
     expect(spanFor("day", 4, undefined, 5)).toBe(1);
   });
 });
 
 describe("reconcileSpans", () => {
   it("keeps spans when the count matches", () => {
-    expect(reconcileSpans([7, 7, 8, 8], 4, "week")).toEqual([7, 7, 8, 8]);
+    expect(reconcileSpans([7, 7, 8, 8], 4, "week", 7)).toEqual([7, 7, 8, 8]);
   });
-  it("re-splits the same total when the model returned a different number of weeks", () => {
-    expect(reconcileSpans([7, 7, 8, 8], 5, "week")).toEqual([6, 6, 6, 6, 6]);
-    expect(reconcileSpans([7, 7, 8, 8], 3, "week")).toEqual([10, 10, 10]);
+  it("gives every week the usual number of days when the model returned a different number of weeks", () => {
+    expect(reconcileSpans([5, 5, 5, 5, 5, 5], 5, "week", 5)).toEqual([5, 5, 5, 5, 5]);
+    expect(reconcileSpans([5, 5, 5, 5, 5, 5], 7, "week", 5)).toEqual([5, 5, 5, 5, 5, 5, 5]);
+  });
+  it("shares the asked weeks between a different number of months, in whole weeks", () => {
+    // Twelve weeks at five days asked as three months; the model wrote two.
+    expect(reconcileSpans([20, 20, 20], 2, "month", 5)).toEqual([30, 30]);
+    expect(reconcileSpans([20, 20, 20], 7, "month", 5)).toEqual([5, 5, 10, 10, 10, 10, 10]);
+    expect(reconcileSpans([20, 20, 20], 13, "month", 5).every((s) => s === 5)).toBe(true);
   });
   it("honours the count for days", () => {
-    expect(reconcileSpans([1, 1, 1, 1, 1, 1, 1], 6, "day")).toEqual([1, 1, 1, 1, 1, 1]);
+    expect(reconcileSpans([1, 1, 1, 1, 1, 1, 1], 6, "day", 7)).toEqual([1, 1, 1, 1, 1, 1]);
   });
 });
 
