@@ -375,7 +375,7 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
   if (!level) throw new Error("A day cannot be planned in more detail");
   // A week split by hand: its Read table is the reservation its days are planned from, whatever the client sent.
   if (input.reason === "split" && node.materials) {
-    node.covers = node.materials.map(({ id, note, chapter, activity }) => ({ id, note, chapter, activity }));
+    node.covers = node.materials.map(({ id, note, chapter, activity, tier, minutes }) => ({ id, note, chapter, activity, tier, minutes }));
     delete node.materials;
     node.manualSplit = true;
   }

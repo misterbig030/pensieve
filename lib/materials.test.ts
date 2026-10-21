@@ -19,6 +19,7 @@ import {
   sizeChapterRows,
   tierMinutes,
   treeChecks,
+  keptReadTable,
 } from "./materials";
 
 describe("parseChapters", () => {
@@ -333,6 +334,24 @@ describe("sizeChapterRows", () => {
     const unsized = [day("a", [row(1, 20)])];
     sizeChapterRows(unsized, [{ id: "aie", toc: { ...AIE_TOC, chapters: AIE_TOC.chapters.map((c) => ({ ...c, minutes: null })) } }]);
     expect(unsized[0].materials![0].minutes).toBe(20);
+  });
+});
+
+describe("keptReadTable", () => {
+  it("reads a split week's Read table back from its reservation", () => {
+    expect(
+      keptReadTable([
+        { id: "M1", note: null, chapter: 2, tier: "must", minutes: 140 },
+        { id: "M3", note: "§2", activity: "review", tier: "should" },
+      ]),
+    ).toEqual([
+      { id: "M1", note: null, chapter: 2, tier: "must", minutes: 140 },
+      { id: "M3", note: "§2", activity: "review", tier: "should", minutes: null },
+    ]);
+  });
+  it("is empty for a heading's reservation and a week split before tiers were kept", () => {
+    expect(keptReadTable([{ id: "M1", note: "ch. 1–2" }])).toEqual([]);
+    expect(keptReadTable(undefined)).toEqual([]);
   });
 });
 

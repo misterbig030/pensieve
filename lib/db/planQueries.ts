@@ -23,7 +23,7 @@ export function refsByNode(rows: Pick<NodeMaterialRow, "nodeId" | "sourceId" | "
   for (const row of [...rows].sort((a, b) => a.position - b.position)) {
     const entry = out.get(row.nodeId) ?? { covers: [], materials: [] };
     const ref = { chapter: row.chapter || null, activity: row.activity };
-    if (row.role === "covers") entry.covers.push({ id: row.sourceId, note: row.note, ...ref });
+    if (row.role === "covers") entry.covers.push({ id: row.sourceId, note: row.note, ...ref, ...(row.tier ? { tier: row.tier, minutes: row.minutes } : {}) });
     else entry.materials.push({ id: row.sourceId, tier: row.tier ?? "should", minutes: row.minutes, note: row.note, ...ref });
     out.set(row.nodeId, entry);
   }
@@ -102,11 +102,12 @@ export function refRows(nodeId: string, node: Pick<PlanNode, "covers" | "materia
     seen.add(key(ref));
     rows.push({ nodeId, sourceId: ref.id, role: "assigned", tier: ref.tier, minutes: ref.minutes, note: ref.note, position: i, chapter: ref.chapter ?? 0, activity: ref.activity ?? "read" });
   }
-  const covers = [...(node.covers ?? []), ...(node.children !== null ? (node.materials ?? []) : [])];
+  const covers: CoverRef[] = [...(node.covers ?? []), ...(node.children !== null ? (node.materials ?? []) : [])];
   for (const [i, ref] of covers.entries()) {
     if (!sourceIds.has(ref.id) || seen.has(key(ref))) continue;
     seen.add(key(ref));
-    rows.push({ nodeId, sourceId: ref.id, role: "covers", tier: null, minutes: null, note: ref.note, position: i, chapter: ref.chapter ?? 0, activity: ref.activity ?? "read" });
+    // A hand-split week's reservation keeps its Read table's tier and minutes.
+    rows.push({ nodeId, sourceId: ref.id, role: "covers", tier: ref.tier ?? null, minutes: ref.tier ? (ref.minutes ?? null) : null, note: ref.note, position: i, chapter: ref.chapter ?? 0, activity: ref.activity ?? "read" });
   }
   return rows;
 }
@@ -243,10 +244,10 @@ export async function insertChildren(trackId: string, userId: string, parentId: 
       if (sessions.length > 0) throw new Error("This week already has sessions logged, so it can't be split into days");
       // The week is as many days long as it was split into.
       await tx.update(planNodes).set({ manualSplit: true, budgetHours: null, len: children.length }).where(eq(planNodes.id, parentId));
-      // The week's Read table becomes the reservation its days were planned from.
+      // The week's Read table becomes the reservation its days were planned from, keeping its tiers and minutes.
       await tx
         .update(nodeMaterials)
-        .set({ role: "covers", tier: null, minutes: null })
+        .set({ role: "covers" })
         .where(and(eq(nodeMaterials.nodeId, parentId), eq(nodeMaterials.role, "assigned")));
     }
     const rows: NewPlanNodeRow[] = children.map((child, i) => ({
