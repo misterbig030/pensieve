@@ -116,8 +116,9 @@ export const planNodes = pgTable(
 export const MATERIAL_ROLES = ["covers", "assigned"] as const;
 
 /**
- * Which materials a node uses. Headings reserve coverage (`covers`, no tier or minutes); leaves assign (`assigned`,
- * a row in their Read table). Removing a material or a node removes its rows.
+ * Which materials a node uses. Headings reserve coverage (`covers`, no tier or minutes, except a week split by hand,
+ * which keeps its Read table's); leaves assign (`assigned`, a row in their Read table). Removing a material or a node
+ * removes its rows.
  */
 export const nodeMaterials = pgTable(
   "node_materials",
