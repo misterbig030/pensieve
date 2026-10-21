@@ -1,0 +1,1 @@
+ALTER TABLE "tracks" ADD COLUMN "days_per_week" integer DEFAULT 7 NOT NULL;

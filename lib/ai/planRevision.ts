@@ -3,12 +3,15 @@ import {
   childLevel,
   cloneTree,
   findNode,
+  fullLabelOf,
   isLocked,
   layout,
   makeNode,
   makeRoot,
+  MAX_DAYS_PER_WEEK,
   topLevelFor,
   walk,
+  weeksOf,
   type Granularity,
   type PlanLevel,
   type PlanNode,
@@ -53,13 +56,14 @@ export function applyRevision(
   granularity: Granularity,
   aliases?: MaterialAliases,
   hoursPerWeek?: number,
+  daysPerWeek: number = MAX_DAYS_PER_WEEK,
 ): PlanNode {
   const byRef = new Map<string, PlanNode>();
   for (const [id, ref] of refs) {
     const node = findNode(original, id);
     if (node) byRef.set(ref, node);
   }
-  const topLevel: PlanLevel = original.children?.[0]?.level ?? topLevelFor(original.len);
+  const topLevel: PlanLevel = original.children?.[0]?.level ?? topLevelFor(weeksOf(original, original, daysPerWeek));
   const seen = new Set<string>();
 
   const convert = (unit: RevisedUnit, level: PlanLevel): PlanNode => {
@@ -68,7 +72,7 @@ export function applyRevision(
     if (kept && isLocked(kept, lockBefore)) return cloneTree(kept);
     const below = childLevel(level);
     const children = unit.children && below ? unit.children.map((c) => convert(c, below)) : null;
-    const len = level === "day" ? 1 : Math.max(1, Math.round(unit.days));
+    const len = spanFor(level, unit.days, kept, daysPerWeek);
     const leafWeek = children === null && level !== "day" && granularity === "week";
     const leaf = children === null && (level === "day" || leafWeek);
     const covers = aliases && unit.covers !== undefined ? resolveCoverRefs(unit.covers, aliases).refs : kept?.covers;
@@ -80,7 +84,7 @@ export function applyRevision(
       summary: unit.summary,
       len,
       status: kept?.status ?? "pending",
-      budgetHours: leafWeek ? (kept?.budgetHours ?? budgetFor(len, hoursPerWeek)) : null,
+      budgetHours: leafWeek ? (kept?.budgetHours ?? budgetFor(1, hoursPerWeek)) : null,
       manualSplit: kept?.manualSplit ?? false,
       children,
       covers: leaf ? undefined : covers,
@@ -98,8 +102,22 @@ export function applyRevision(
   return layout(root);
 }
 
+/**
+ * A unit's length in study days, whatever the model wrote for it: a day is one; a week the model kept keeps its days
+ * and a new one has the usual number; a month keeps its days unless the model changed them, and is otherwise whole
+ * weeks. A planned unit's length is its children's, set by `layout`.
+ */
+export function spanFor(level: PlanLevel, days: number, kept: PlanNode | undefined, daysPerWeek: number): number {
+  if (level === "day") return 1;
+  const same = kept && kept.level === level;
+  if (level === "week") return same ? kept.len : daysPerWeek;
+  // A month can be made longer or shorter ("the last month should be 2 weeks"); one left as it was keeps its days.
+  if (same && Math.round(days) === kept.len) return kept.len;
+  return Math.max(1, Math.round(days / daysPerWeek)) * daysPerWeek;
+}
+
 function describe(root: PlanNode, node: PlanNode): string {
-  return node.level === "day" ? `Day ${node.start}` : `"${node.title}"`;
+  return node.level === "day" ? fullLabelOf(root, node) : `"${node.title}"`;
 }
 
 export interface RevisePlanInput extends PlanPromptContext {
@@ -130,13 +148,13 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
   let failure: unknown;
   const check = (object: RevisedTree): string[] => {
     try {
-      revised = applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek);
+      revised = applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek, input.daysPerWeek);
     } catch (error) {
       failure = error;
       return [];
     }
     if (!aliases) return [];
-    const checks = treeChecks(revised, input.materials, { granularity: input.granularity, hoursPerWeek: input.hoursPerWeek, readingShare: readingShareOf(input.split) });
+    const checks = treeChecks(revised, input.materials, { granularity: input.granularity, hoursPerWeek: input.hoursPerWeek, daysPerWeek: input.daysPerWeek, readingShare: readingShareOf(input.split) });
     const dropped = dropBreaches(checks.nodes, checks.breaches);
     return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...dropped];
   };

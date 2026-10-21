@@ -1,18 +1,21 @@
 import { MUST_SHARE, aliasMaterials, formatAliases, type MaterialAliases, type ResolvedAlias } from "@/lib/materials";
 import {
   budgetFor,
+  capitalize,
   childLevel,
   findNode,
+  fullLabelOf,
   labelOf,
   parentOf,
   spanOf,
   walk,
+  weeksOf,
   type Granularity,
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
 import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialRef, type RefActivity } from "@/lib/schemas/material";
-import { dayMinutes, readingShareOf, type PlanSplit } from "@/lib/studyTime";
+import { dayMinutes, readingShareOf, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 
 export interface PlanPromptContext {
   topic: string;
@@ -22,11 +25,15 @@ export interface PlanPromptContext {
   granularity: Granularity;
   /** Hours a week the learner can give. Left out, prompts say nothing about time and budgets assume six. */
   hoursPerWeek?: number;
+  /** The learner's usual study days a week: weeks not split yet have this many days. */
+  daysPerWeek: number;
   /** How the plan divides the learner's time, once decided. */
   split?: PlanSplit | null;
 }
 
 export interface RenderTreeOptions {
+  /** The learner's usual study days a week, to count the weeks of a month not planned yet. */
+  daysPerWeek: number;
   /** Node id → short ref shown as `[n3]`, for prompts whose answer must echo refs. */
   refs?: Map<string, string>;
   /** Days on or before this are completed and locked. */
@@ -79,7 +86,7 @@ export function renderRefs(node: Pick<PlanNode, "covers" | "materials">, aliases
 }
 
 /** Renders the tree as indented text the model can read: labels, spans, titles, summaries, done/locked marks. */
-export function renderTree(root: PlanNode, opts: RenderTreeOptions = {}): string {
+export function renderTree(root: PlanNode, opts: RenderTreeOptions): string {
   const lines: string[] = [];
   walk(root, (node, parent) => {
     if (node.id === root.id) return;
@@ -94,7 +101,7 @@ export function renderTree(root: PlanNode, opts: RenderTreeOptions = {}): string
     const mark = marks.length > 0 ? ` [${marks.join("; ")}]` : "";
     const prefix = opts.markId === node.id ? ">> " : "";
     const label = labelOf(root, node);
-    const span = node.len === 1 ? "" : ` (${spanOf(node)}, ${node.len} days)`;
+    const span = node.level === "day" ? "" : ` (${spanOf(root, node, opts.daysPerWeek)})`;
     const refs = opts.aliases ? renderRefs(node, opts.aliases) : "";
     lines.push(`${indent}${prefix}${label}${ref ? ` [${ref}]` : ""}${span}: "${node.title}" — ${node.summary}${mark}${refs ? ` {${refs}}` : ""}`);
     void parent;
@@ -187,10 +194,12 @@ function contextLines(ctx: PlanPromptContext, options: RenderMaterialsOptions = 
   return parts;
 }
 
-/** What the prompt says about the learner's time: the weekly hours, and the plan's split once it is decided. */
-function timeLines(ctx: Pick<PlanPromptContext, "hoursPerWeek" | "split">): string[] {
+/** What the prompt says about the learner's time: the weekly hours and days, and the plan's split once it is decided. */
+function timeLines(ctx: Pick<PlanPromptContext, "hoursPerWeek" | "daysPerWeek" | "split">): string[] {
   const lines: string[] = [];
-  if (ctx.hoursPerWeek !== undefined) lines.push(`The learner's time: about ${ctx.hoursPerWeek} hour${ctx.hoursPerWeek === 1 ? "" : "s"} a week. This setting is what the plan is budgeted from, whatever the instructions say about time.`);
+  const days = `${ctx.daysPerWeek} study day${ctx.daysPerWeek === 1 ? "" : "s"} a week`;
+  if (ctx.hoursPerWeek !== undefined) lines.push(`The learner's time: about ${ctx.hoursPerWeek} hour${ctx.hoursPerWeek === 1 ? "" : "s"} a week, over ${days}. This setting is what the plan is budgeted from, whatever the instructions say about time.`);
+  else lines.push(`The learner studies ${ctx.daysPerWeek} day${ctx.daysPerWeek === 1 ? "" : "s"} a week.`);
   if (ctx.split) lines.push(`How this plan spends that time: about ${ctx.split.readingShare}% reading or watching the materials, the rest on ${ctx.split.practice}.`);
   return lines;
 }
@@ -200,12 +209,10 @@ const UNIT_NOUN: Record<PlanLevel, string> = { month: "month", week: "week", day
 export interface UnitsPromptInput extends PlanPromptContext {
   /** The level of the units being written. */
   level: PlanLevel;
-  /** Span of each unit in days, in order. */
+  /** Span of each unit in study days, in order. */
   spans: number[];
-  /** Day index of the first unit's first day. */
-  startDay: number;
-  /** Whole plan length in days. */
-  totalDays: number;
+  /** Whole plan length in weeks. */
+  weeks: number;
   /** When expanding, the tree so far and the node being planned. */
   tree?: PlanNode;
   parentId?: string;
@@ -224,26 +231,25 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   const hasMaterials = input.materials.length > 0;
   parts.push(`You are designing a self-study curriculum, one unit at a time.`);
   parts.push(...contextLines(input, { sections: true }));
-  parts.push(`The whole plan is ${input.totalDays} days long.`);
+  parts.push(`The whole plan is ${weeksLabel(input.weeks)} long. Each week's days are numbered from Day 1.`);
   // While the split is being decided in this same call there is no share to state yet.
   const share = input.decideSplit ? null : (readingShareOf(input.split) ?? MUST_SHARE);
 
   if (input.tree && input.parentId) {
     parts.push(`Here is the plan so far. Lines marked done are behind the learner; use what they covered to plan what comes next.${hasMaterials ? " Braces show the materials each unit reserves or reads." : ""}`);
-    parts.push(renderTree(input.tree, { markId: input.parentId, aliases: hasMaterials ? aliases : undefined }));
+    parts.push(renderTree(input.tree, { daysPerWeek: input.daysPerWeek, markId: input.parentId, aliases: hasMaterials ? aliases : undefined }));
     parts.push(`Plan the ${noun}s inside the unit marked ">>" in detail. Its ${n} ${noun}s cover, in order:`);
   } else {
     parts.push(`Split the plan into ${n} ${noun}${n === 1 ? "" : "s"}, easiest and most foundational first, hardest and most applied last. They cover, in order:`);
   }
 
-  let day = input.startDay;
+  // Days are the days of one week, so the week's day count is the number of units asked for.
+  const daysInWeek = input.level === "day" ? n : input.daysPerWeek;
   input.spans.forEach((len, i) => {
-    const end = day + len - 1;
-    const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, len, input.hoursPerWeek) : null;
+    const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, daysInWeek, input.hoursPerWeek) : null;
     const must = share === null || minutes === null ? "" : `, so about ${formatMinutes(Math.round((minutes * share) / 5) * 5)} of must-reading`;
     const budget = hasMaterials && minutes !== null ? ` — budget about ${formatMinutes(minutes)}${must}` : "";
-    parts.push(`${i + 1}. ${len === 1 ? `Day ${day}` : `Days ${day}–${end} (${len} days)`}${budget}`);
-    day = end + 1;
+    parts.push(`${i + 1}. ${unitLine(input.level, i, len, input.daysPerWeek)}${budget}`);
   });
 
   if (input.unitsAreLeaves) {
@@ -251,7 +257,7 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
       input.level === "day"
         ? input.hoursPerWeek === undefined
           ? `Each day is one focused lesson of roughly 45–60 minutes.`
-          : `Each day is one focused session of about ${formatMinutes(dayMinutes(input.hoursPerWeek))}.`
+          : `Each day is one focused session of about ${formatMinutes(dayMinutes(input.hoursPerWeek, daysInWeek))}.`
         : `Each ${noun} is a goal the learner works toward across several sessions of their own choosing; describe the whole ${noun}'s ground, not a day-by-day list.`,
     );
   } else {
@@ -272,9 +278,19 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   return parts.join("\n");
 }
 
-function leafBudgetMinutes(level: PlanLevel, len: number, hoursPerWeek?: number): number {
-  if (level === "day") return hoursPerWeek === undefined ? 60 : dayMinutes(hoursPerWeek);
-  return budgetFor(len, hoursPerWeek) * 60;
+/** A leaf's budget: a day's share of a week of `daysInWeek` days, or a whole week. */
+function leafBudgetMinutes(level: PlanLevel, daysInWeek: number, hoursPerWeek?: number): number {
+  if (level === "day") return hoursPerWeek === undefined ? 60 : dayMinutes(hoursPerWeek, daysInWeek);
+  return budgetFor(1, hoursPerWeek) * 60;
+}
+
+/** "Day 3", "Week 2 (5 study days)", "Month 1 (4 weeks)": one unit of the list the drafter is asked to fill. */
+function unitLine(level: PlanLevel, index: number, len: number, daysPerWeek: number): string {
+  const label = `${capitalize(level)} ${index + 1}`;
+  if (level === "day") return label;
+  if (level === "week") return `${label} (${len} study day${len === 1 ? "" : "s"})`;
+  const weeks = Math.max(1, Math.round(len / daysPerWeek));
+  return `${label} (${weeks} week${weeks === 1 ? "" : "s"})`;
 }
 
 function formatMinutes(minutes: number): string {
@@ -311,7 +327,7 @@ export function availabilityLines(input: UnitsPromptInput, aliases: MaterialAlia
   walk(input.tree, (n) => {
     if (skip.has(n.id)) return;
     const reads = [...(n.covers ?? []), ...(n.materials ?? [])].filter((r) => activityOf(r) === "read" && aliases.alias(r.id));
-    if (reads.length > 0) held.push(`${describeRefs(reads, aliases)} (${labelOf(input.tree!, n)})`);
+    if (reads.length > 0) held.push(`${describeRefs(reads, aliases)} (${fullLabelOf(input.tree!, n)})`);
   });
   if (held.length > 0) lines.push(`Held by other units: ${held.join("; ")}.`);
   return lines;
@@ -389,8 +405,8 @@ export function buildRevisionPrompt(input: RevisionPromptInput): string {
   parts.push(`You are revising a self-study plan. The plan is a tree: months contain weeks, weeks contain days. A unit with no children is a heading that gets planned in detail later, or the finest unit the learner works at.`);
   parts.push(...contextLines(input, { sections: true }));
   const hasMaterials = input.materials.length > 0;
-  parts.push(`Current plan (${input.tree.len} days). Every unit has a ref in square brackets${hasMaterials ? "; braces show the materials a heading reserves (covers) or a unit reads (materials)" : ""}:`);
-  parts.push(renderTree(input.tree, { refs: input.refs, lockBefore: input.lockBefore, aliases: hasMaterials ? aliasMaterials(input.materials) : undefined }));
+  parts.push(`Current plan (${planLength(input.tree, input.daysPerWeek)}). Every unit has a ref in square brackets${hasMaterials ? "; braces show the materials a heading reserves (covers) or a unit reads (materials)" : ""}:`);
+  parts.push(renderTree(input.tree, { daysPerWeek: input.daysPerWeek, refs: input.refs, lockBefore: input.lockBefore, aliases: hasMaterials ? aliasMaterials(input.materials) : undefined }));
   parts.push(`The learner asks: "${input.changeRequest}"`);
   parts.push(
     [
@@ -398,7 +414,7 @@ export function buildRevisionPrompt(input: RevisionPromptInput): string {
       `Rules:`,
       `- Keep the ref of every unit you keep, even if you move it or edit its title. Leave the ref out for brand-new units.`,
       `- Units marked done or locked must come back unchanged, with the same ref, in the same place. Never drop or edit them.`,
-      `- "days" is a unit's span. A day unit has days = 1. A week or month heading's days is its whole span. The days of a unit's children must add up to that unit's days.`,
+      `- "days" is a unit's span in study days. A day unit has days = 1. A week has as many days as the learner studies that week: ${input.daysPerWeek} for a new week, and a week already split keeps its number of days. A month's days is the sum of its weeks' days. The days of a unit's children must add up to that unit's days.`,
       `- Change only what the request asks for. Do not plan headings in detail unless asked; do not fold planned units back into headings unless asked.`,
       `- Keep the same depth: a unit's children stay at the level below it (month → week → day).`,
       `- Keep the total length unless the request changes it.`,
@@ -410,6 +426,11 @@ export function buildRevisionPrompt(input: RevisionPromptInput): string {
     ].join("\n"),
   );
   return parts.join("\n");
+}
+
+/** "6 weeks, usually 5 study days a week": the plan's length as prompts state it. */
+function planLength(tree: PlanNode, daysPerWeek: number): string {
+  return `${weeksLabel(weeksOf(tree, tree, daysPerWeek))}, usually ${daysPerWeek} study day${daysPerWeek === 1 ? "" : "s"} a week`;
 }
 
 export interface ChatPromptInput extends PlanPromptContext {
@@ -430,21 +451,21 @@ export function buildPlanChatSystemPrompt(input: ChatPromptInput): string {
     parts.push(`The plan's materials (the learner's own, plus what research found and checked):`);
     parts.push(renderMaterials(input.materials));
   }
-  parts.push(`Plan length: ${input.tree.len} days, planned in ${input.granularity} units.`);
+  parts.push(`Plan length: ${planLength(input.tree, input.daysPerWeek)}, planned in ${input.granularity} units. Each week's days are numbered from Day 1.`);
   if (input.mode === "adjust") {
     parts.push(
       input.lockBefore > 0
-        ? `This is an existing track. ${input.lockBefore === 1 ? "Day 1 is" : `Days 1–${input.lockBefore} are`} completed and locked; only later units can change. Never propose changes to locked units.`
+        ? `This is an existing track. Units marked done or locked are completed; only later units can change. Never propose changes to locked units.`
         : `This is an existing track with nothing completed yet; everything can change.`,
     );
   }
   parts.push(`Current plan:`);
-  parts.push(renderTree(input.tree, { lockBefore: input.lockBefore, aliases: hasMaterials ? aliasMaterials(input.materials) : undefined }));
+  parts.push(renderTree(input.tree, { daysPerWeek: input.daysPerWeek, lockBefore: input.lockBefore, aliases: hasMaterials ? aliasMaterials(input.materials) : undefined }));
   parts.push(
     [
       `There are two kinds of turns.`,
       `1. Questions about the plan ("why is X first", "why does this matter", "how long per day"): answer in 2–5 sentences of plain prose, grounded in the specific units above. Do not call any tool. If the learner might wonder, end by noting that the plan is unchanged.`,
-      `2. Requests to change the plan (add, remove, drop, move, swap, split, merge, rework, shorten, extend, reorder, expand or plan a unit in detail, collapse a unit back to a heading, focus more on something): call revisePlan exactly once. Write the changeRequest as a precise instruction that captures the whole conversation's intent, including anything agreed in earlier turns, and name the units by their labels ("Week 3", "Month 2 · Week 1", "Day 9"). After the tool returns, write a 1–2 sentence change note in plain prose that starts by naming the level the change happened at ("Changed at the week level: …" / "Changed days inside Week 2: …"), says what moved, split or was dropped, and says whether the units inside are untouched. Never describe a change you did not make with the tool.`,
+      `2. Requests to change the plan (add, remove, drop, move, swap, split, merge, rework, shorten, extend, reorder, expand or plan a unit in detail, collapse a unit back to a heading, focus more on something): call revisePlan exactly once. Write the changeRequest as a precise instruction that captures the whole conversation's intent, including anything agreed in earlier turns, and name the units by their labels ("Week 3", "Month 2 · Week 1", "Week 2 · Day 4"). After the tool returns, write a 1–2 sentence change note in plain prose that starts by naming the level the change happened at ("Changed at the week level: …" / "Changed days inside Week 2: …"), says what moved, split or was dropped, and says whether the units inside are untouched. Never describe a change you did not make with the tool.`,
       ...(hasMaterials
         ? [
             `Changing which materials a unit reads, or a row's tier, minutes or note, is a change: call revisePlan. Adding a material that is not in the list is not possible here yet; say so and suggest the closest material in the list.`,

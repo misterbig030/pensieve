@@ -10,14 +10,16 @@ import { guardUserKey } from "@/lib/ai/userKeyError";
 import { ndjsonResponse } from "@/lib/ndjson";
 import { granularitySchema } from "@/lib/schemas/plan";
 import { sourceInputSchema } from "@/lib/schemas/source";
-import { DEFAULT_HOURS_PER_WEEK, hoursPerWeekSchema } from "@/lib/studyTime";
+import { MAX_WEEKS } from "@/lib/planTree";
+import { DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema } from "@/lib/studyTime";
 
 // Research (a minute or two at most) runs before drafting in the same request.
 export const maxDuration = 300;
 
 const bodySchema = z.object({
   topic: z.string().trim().min(1).max(200),
-  days: z.number().int().min(1).max(365),
+  weeks: z.number().int().min(1).max(MAX_WEEKS),
+  daysPerWeek: daysPerWeekSchema,
   granularity: granularitySchema,
   instructions: z.string().trim().max(2000).optional(),
   materials: z.array(sourceInputSchema).max(50),
@@ -40,7 +42,8 @@ export async function POST(request: Request) {
       guardUserKey(
         streamResearchedPlanDraft({
           topic: body.topic,
-          days: body.days,
+          weeks: body.weeks,
+          daysPerWeek: body.daysPerWeek,
           granularity: body.granularity,
           instructions: body.instructions || undefined,
           materials: body.materials,

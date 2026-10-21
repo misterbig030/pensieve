@@ -7,7 +7,7 @@ import { checkIns, planNodes } from "@/lib/db/schema";
 import { getTrackDetail, getCheckInDatesForTrack } from "@/lib/db/queries";
 import { computeStreak } from "@/lib/streak";
 import { summarizePlan } from "@/lib/planSummary";
-import { doneDays, walk } from "@/lib/planTree";
+import { doneDays, walk, weeksOf } from "@/lib/planTree";
 import { MaterialsList } from "@/components/pensieve/MaterialsList";
 import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ export default async function TrackDetailPage({ params }: { params: Promise<{ id
   const total = root.len;
   const done = doneDays(root);
   const streak = computeStreak(checkInDates);
-  const summary = track.summary ?? summarizePlan(root, track.title);
+  const summary = track.summary ?? summarizePlan(root, track.title, track.daysPerWeek);
 
   return (
     <PageShell>
@@ -72,14 +72,14 @@ export default async function TrackDetailPage({ params }: { params: Promise<{ id
       <Progress value={total > 0 ? (done / total) * 100 : 0} className="mb-6 max-w-[320px]" />
       <PlanSummaryCard summary={summary} className="mb-6" />
       <div className="mb-6">
-        <TimeSplitCard days={root.len} hoursPerWeek={track.hoursPerWeek} split={track.split} />
+        <TimeSplitCard weeks={weeksOf(root, root, track.daysPerWeek)} hoursPerWeek={track.hoursPerWeek} daysPerWeek={track.daysPerWeek} split={track.split} />
       </div>
       {materials.length > 0 && (
         <div className="mb-6">
           <MaterialsList topic={track.title} materials={materials} initialShown={4} />
         </div>
       )}
-      <TrackPlan trackId={track.id} root={root} granularity={track.granularity} materials={materials} hoursPerWeek={track.hoursPerWeek} practice={track.split?.practice} />
+      <TrackPlan trackId={track.id} root={root} granularity={track.granularity} materials={materials} hoursPerWeek={track.hoursPerWeek} daysPerWeek={track.daysPerWeek} practice={track.split?.practice} />
     </PageShell>
   );
 }

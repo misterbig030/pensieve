@@ -3,19 +3,24 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DaysPerWeekPicker } from "@/components/pensieve/DaysPerWeekPicker";
 import { capitalize } from "@/lib/planTree";
 import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, SPLIT_SET_BY_LEARNER, clampHours, presetFor, totalHours, type PlanSplit } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 export interface TimeSplitCardProps {
-  days: number;
+  /** The plan's length in weeks. */
+  weeks: number;
   hoursPerWeek: number;
+  /** The learner's usual study days a week. */
+  daysPerWeek: number;
   /** Null while the first units are still drafting, and on plans saved before splits existed. */
   split: PlanSplit | null;
   /** True while the top level is drafting: the split is on its way. */
   deciding?: boolean;
-  /** Omit both for a read-only card. */
+  /** Omit all three for a read-only card. */
   onChangeHours?: (hours: number) => void;
+  onChangeDays?: (days: number) => void;
   onChangeSplit?: (split: PlanSplit) => void;
   disabled?: boolean;
 }
@@ -24,11 +29,11 @@ export interface TimeSplitCardProps {
  * The learner's weekly hours and how the plan divides them. The split is the drafter's decision, shown with its
  * reason; the learner can overrule it and change the hours.
  */
-export function TimeSplitCard({ days, hoursPerWeek, split, deciding = false, onChangeHours, onChangeSplit, disabled = false }: TimeSplitCardProps) {
+export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, deciding = false, onChangeHours, onChangeDays, onChangeSplit, disabled = false }: TimeSplitCardProps) {
   const [editing, setEditing] = useState(false);
-  const total = totalHours(days, hoursPerWeek);
+  const total = totalHours(weeks, hoursPerWeek);
   const preset = presetFor(hoursPerWeek);
-  const editable = !!onChangeHours || !!onChangeSplit;
+  const editable = !!onChangeHours || !!onChangeDays || !!onChangeSplit;
   const reading = split ? Math.round((total * split.readingShare) / 100) : 0;
 
   return (
@@ -43,7 +48,7 @@ export function TimeSplitCard({ days, hoursPerWeek, split, deciding = false, onC
           </span>
         )}
         <span className="ml-auto text-[12.5px] text-muted-foreground max-[640px]:ml-0">
-          {hoursPerWeek} h a week{preset ? ` · ${preset.label.toLowerCase()}` : ""}
+          {hoursPerWeek} h a week · {daysPerWeek} day{daysPerWeek === 1 ? "" : "s"} a week{preset ? ` · ${preset.label.toLowerCase()}` : ""}
         </span>
         {editable && (
           <Button
@@ -122,6 +127,15 @@ export function TimeSplitCard({ days, hoursPerWeek, split, deciding = false, onC
                   <span className="text-muted-foreground">hours a week</span>
                 </label>
               </div>
+            </div>
+          )}
+          {onChangeDays && (
+            <div className="flex flex-col gap-2">
+              <span id="days-change-label" className="text-[11px] tracking-wide text-muted-foreground uppercase">
+                Days a week
+              </span>
+              <DaysPerWeekPicker labelId="days-change-label" value={daysPerWeek} onChange={onChangeDays} disabled={disabled} />
+              <p className="m-0 text-xs leading-normal text-muted-foreground">Applies to weeks you split from now on. Weeks already split keep their days.</p>
             </div>
           )}
           {onChangeSplit && split && (

@@ -10,7 +10,8 @@ import { ndjsonResponse } from "@/lib/ndjson";
 import { fromTreeInput } from "@/lib/planInput";
 import { granularitySchema, planTreeInputSchema } from "@/lib/schemas/plan";
 import { materialListSchema } from "@/lib/schemas/material";
-import { DEFAULT_HOURS_PER_WEEK, hoursPerWeekSchema, planSplitSchema } from "@/lib/studyTime";
+import { weeksOf } from "@/lib/planTree";
+import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema, planSplitSchema } from "@/lib/studyTime";
 
 const bodySchema = z.object({
   topic: z.string().trim().min(1).max(200),
@@ -18,6 +19,8 @@ const bodySchema = z.object({
   instructions: z.string().trim().max(2000).optional(),
   materials: materialListSchema,
   hoursPerWeek: hoursPerWeekSchema.optional(),
+  daysPerWeek: daysPerWeekSchema.optional(),
+  splitDays: daysPerWeekSchema.optional(),
   split: planSplitSchema.nullable().optional(),
   tree: planTreeInputSchema,
   nodeId: z.string().min(1),
@@ -33,6 +36,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return new Response("Invalid request", { status: 400 });
   const body = parsed.data;
   const tree = fromTreeInput(body.tree);
+  const daysPerWeek = body.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK;
   const debug = body.debug === true && isAdminUserId(userId);
   const models = await resolveModels(userId);
 
@@ -41,7 +45,8 @@ export async function POST(request: Request) {
       guardUserKey(
         streamExpandNode({
           topic: body.topic,
-          days: tree.len,
+          weeks: weeksOf(tree, tree, daysPerWeek),
+          daysPerWeek,
           granularity: body.granularity,
           instructions: body.instructions || undefined,
           materials: body.materials,
@@ -50,6 +55,7 @@ export async function POST(request: Request) {
           tree,
           nodeId: body.nodeId,
           reason: body.reason,
+          splitDays: body.splitDays,
           outlineModel: models.outline,
           log,
         }),

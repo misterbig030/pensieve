@@ -2,7 +2,7 @@
 
 import { PlanWorkspace } from "@/components/pensieve/PlanWorkspace";
 import { toTreeInput } from "@/lib/planInput";
-import type { Granularity, PlanNode } from "@/lib/planTree";
+import { weeksOf, type Granularity, type PlanNode } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 import { confirmRevisionAction } from "../actions";
@@ -12,6 +12,7 @@ interface AdjustPlanProps {
   trackTitle: string;
   granularity: Granularity;
   hoursPerWeek: number;
+  daysPerWeek: number;
   split: PlanSplit | null;
   instructions?: string;
   materials: Material[];
@@ -19,12 +20,13 @@ interface AdjustPlanProps {
   lockBefore: number;
 }
 
-export function AdjustPlan({ trackId, trackTitle, granularity, hoursPerWeek, split, instructions, materials, root, lockBefore }: AdjustPlanProps) {
+export function AdjustPlan({ trackId, trackTitle, granularity, hoursPerWeek, daysPerWeek, split, instructions, materials, root, lockBefore }: AdjustPlanProps) {
   return (
     <PlanWorkspace
       mode="adjust"
       topic={trackTitle}
-      days={root.len}
+      weeks={weeksOf(root, root, daysPerWeek)}
+      daysPerWeek={daysPerWeek}
       granularity={granularity}
       hoursPerWeek={hoursPerWeek}
       initialSplit={split}
@@ -39,7 +41,14 @@ export function AdjustPlan({ trackId, trackTitle, granularity, hoursPerWeek, spl
       heading="Adjust your plan"
       subtext="Only the days you haven't finished will change."
       onConfirm={(tree, _summary, kept, time) =>
-        confirmRevisionAction({ trackId, tree: toTreeInput(tree), materialIds: kept.map((m) => m.id), hoursPerWeek: time.hoursPerWeek, split: time.split })
+        confirmRevisionAction({
+          trackId,
+          tree: toTreeInput(tree),
+          materialIds: kept.map((m) => m.id),
+          hoursPerWeek: time.hoursPerWeek,
+          daysPerWeek: time.daysPerWeek,
+          split: time.split,
+        })
       }
     />
   );

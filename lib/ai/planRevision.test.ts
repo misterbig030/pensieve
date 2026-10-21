@@ -7,7 +7,7 @@ import { layout, makeNode, makeRoot } from "@/lib/planTree";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
 import type { ModelCall } from "./logged";
 import { assignRefs } from "./planPrompt";
-import { applyRevision, LockedNodeError, revisePlanTree } from "./planRevision";
+import { applyRevision, LockedNodeError, revisePlanTree, spanFor } from "./planRevision";
 import { reconcileSpans } from "./planDraft";
 
 const mockedGenerateObject = vi.mocked(generateObject);
@@ -93,7 +93,7 @@ describe("applyRevision", () => {
     ).toThrow(LockedNodeError);
   });
 
-  it("forces day units to one day and gives week leaves a budget on week plans", () => {
+  it("forces day units to one day and gives week leaves a week's budget on week plans", () => {
     const original = layout(makeRoot([makeNode({ id: "w1", level: "week", title: "A", summary: "a", len: 7, budgetHours: 6 })]));
     const refs = assignRefs(original);
     const result = applyRevision(
@@ -102,25 +102,56 @@ describe("applyRevision", () => {
       { units: [{ ref: "n1", title: "A", summary: "a", days: 7 }, { title: "B", summary: "b", days: 8 }, { title: "C", summary: "c", days: 3, children: [{ title: "C1", summary: "c1", days: 2 }] }] },
       0,
       "week",
+      undefined,
+      10,
     );
     expect(result.children![0].budgetHours).toBe(6);
-    expect(result.children![1].budgetHours).toBe(7);
+    expect(result.children![1].budgetHours).toBe(10);
     expect(result.children![2].budgetHours).toBeNull();
     expect(result.children![2].children![0].len).toBe(1);
     expect(result.children![2].len).toBe(1);
+  });
+
+  it("gives a new week the usual number of days and a kept week its own, whatever the model wrote", () => {
+    const original = layout(makeRoot([makeNode({ id: "w1", level: "week", title: "A", summary: "a", len: 3 }), makeNode({ id: "m1", level: "month", title: "M", summary: "m", len: 20 })]));
+    const refs = assignRefs(original);
+    const result = applyRevision(
+      original,
+      refs,
+      { units: [{ ref: "n1", title: "A", summary: "a", days: 7 }, { title: "B", summary: "b", days: 7 }] },
+      0,
+      "day",
+      undefined,
+      6,
+      5,
+    );
+    expect(result.children!.map((c) => c.len)).toEqual([3, 5]);
+    expect(spanFor("month", 23, undefined, 5)).toBe(25);
+    // A kept month the model left alone keeps its days, even a month saved before the setting; one it resized takes whole weeks.
+    expect(spanFor("month", 20, original.children![1], 5)).toBe(20);
+    expect(spanFor("month", 30, makeNode({ id: "old", level: "month", title: "M", summary: "m", len: 30 }), 7)).toBe(30);
+    expect(spanFor("month", 10, original.children![1], 5)).toBe(10);
+    expect(spanFor("month", 7, original.children![1], 5)).toBe(5);
+    expect(spanFor("day", 4, undefined, 5)).toBe(1);
   });
 });
 
 describe("reconcileSpans", () => {
   it("keeps spans when the count matches", () => {
-    expect(reconcileSpans([7, 7, 8, 8], 4, "week")).toEqual([7, 7, 8, 8]);
+    expect(reconcileSpans([7, 7, 8, 8], 4, "week", 7)).toEqual([7, 7, 8, 8]);
   });
-  it("re-splits the same total when the model returned a different number of weeks", () => {
-    expect(reconcileSpans([7, 7, 8, 8], 5, "week")).toEqual([6, 6, 6, 6, 6]);
-    expect(reconcileSpans([7, 7, 8, 8], 3, "week")).toEqual([10, 10, 10]);
+  it("gives every week the usual number of days when the model returned a different number of weeks", () => {
+    expect(reconcileSpans([5, 5, 5, 5, 5, 5], 5, "week", 5)).toEqual([5, 5, 5, 5, 5]);
+    expect(reconcileSpans([5, 5, 5, 5, 5, 5], 7, "week", 5)).toEqual([5, 5, 5, 5, 5, 5, 5]);
+  });
+  it("shares the asked weeks between a different number of months, in whole weeks", () => {
+    // Twelve weeks at five days asked as three months; the model wrote two.
+    expect(reconcileSpans([20, 20, 20], 2, "month", 5)).toEqual([30, 30]);
+    expect(reconcileSpans([20, 20, 20], 7, "month", 5)).toEqual([5, 5, 10, 10, 10, 10, 10]);
+    expect(reconcileSpans([20, 20, 20], 13, "month", 5).every((s) => s === 5)).toBe(true);
   });
   it("honours the count for days", () => {
-    expect(reconcileSpans([1, 1, 1, 1, 1, 1, 1], 6, "day")).toEqual([1, 1, 1, 1, 1, 1]);
+    expect(reconcileSpans([1, 1, 1, 1, 1, 1, 1], 6, "day", 7)).toEqual([1, 1, 1, 1, 1, 1]);
   });
 });
 
@@ -218,7 +249,7 @@ describe("revisePlanTree checks the whole tree", () => {
       finishReason: "stop",
     } as unknown as Awaited<ReturnType<typeof generateObject>>);
     const calls: ModelCall[] = [];
-    const { tree } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, tree: legacy, lockBefore: 0, changeRequest: "rename day 2", log: { onCall: (c) => void calls.push(c) } });
+    const { tree } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, daysPerWeek: 7, tree: legacy, lockBefore: 0, changeRequest: "rename day 2", log: { onCall: (c) => void calls.push(c) } });
     expect(calls[0].facts.filter((f) => f.startsWith("dropped"))).toEqual([]);
     expect(tree.children!.map((d) => d.materials?.length)).toEqual([1, 1]);
   });
@@ -241,7 +272,7 @@ describe("revisePlanTree checks the whole tree", () => {
       finishReason: "stop",
     } as unknown as Awaited<ReturnType<typeof generateObject>>);
     const calls: ModelCall[] = [];
-    const { tree } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, tree: two, lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
+    const { tree } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, daysPerWeek: 7, tree: two, lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
     expect(calls).toHaveLength(1);
     expect(calls[0].facts).toEqual(
       expect.arrayContaining(["breach: Day 2 reads M2, which Day 1 holds", "breach: Day 2 refers to M1 as a whole; use its chapters", "dropped M2 from Day 2: overlap", "dropped M1 from Day 2: whole-book"]),

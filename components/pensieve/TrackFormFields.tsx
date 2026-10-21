@@ -5,12 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { GranularityChoice } from "@/lib/planTree";
+import { DaysPerWeekPicker } from "@/components/pensieve/DaysPerWeekPicker";
+import { MAX_WEEKS, type GranularityChoice } from "@/lib/planTree";
 import { detectSourceType, type SourceInput, type SourceType } from "@/lib/schemas/source";
-import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, clampHours, hoursInText, presetFor, totalHours } from "@/lib/studyTime";
+import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, clampHours, dayMinutes, formatDayTime, hoursInText, presetFor, totalHours, weeksLabel } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
-const DAY_PRESETS = [7, 30, 90, 180];
+const WEEK_PRESETS = [1, 4, 8, 12];
 
 const GRANULARITY_OPTIONS: { key: GranularityChoice; label: string }[] = [
   { key: "day", label: "Day" },
@@ -38,17 +39,15 @@ function sourceLabel(source: SourceInput): string {
 
 export interface TrackFormValue {
   topic: string;
-  days: number | "";
+  /** The plan's length in weeks; empty while the custom field is being typed. */
+  weeks: number | "";
   granularity: GranularityChoice;
   /** Hours a week the learner can give; empty while the custom field is being typed. */
   hoursPerWeek: number | "";
+  /** The learner's usual study days a week. */
+  daysPerWeek: number;
   instructions: string;
   sources: SourceInput[];
-}
-
-/** "12 weeks" for whole weeks, otherwise "30 days". */
-function lengthLabel(days: number): string {
-  return days % 7 === 0 && days >= 14 ? `${days / 7} weeks` : `${days} day${days === 1 ? "" : "s"}`;
 }
 
 interface TrackFormFieldsProps {
@@ -92,35 +91,35 @@ export function TrackFormFields({ value, onChange, topicPlaceholder }: TrackForm
         <div className="flex flex-col gap-1.5">
           <label className="text-[11px] tracking-wide text-muted-foreground uppercase">Length</label>
           <div className="flex flex-wrap items-center gap-2">
-            {DAY_PRESETS.map((n) => (
+            {WEEK_PRESETS.map((n) => (
               <button
                 key={n}
                 type="button"
-                onClick={() => onChange({ ...value, days: n })}
+                onClick={() => onChange({ ...value, weeks: n })}
                 className={cn(
                   "rounded-full border px-[18px] py-[7px] text-[13px]",
-                  value.days === n
+                  value.weeks === n
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-transparent text-foreground hover:bg-accent-100",
                 )}
               >
-                {n} days
+                {weeksLabel(n)}
               </button>
             ))}
             <span className="inline-flex items-center gap-2">
               <Input
                 type="number"
                 min={1}
-                max={365}
+                max={MAX_WEEKS}
                 placeholder="Custom"
                 className="w-[90px]"
-                value={DAY_PRESETS.includes(value.days as number) ? "" : value.days}
+                value={WEEK_PRESETS.includes(value.weeks as number) ? "" : value.weeks}
                 onChange={(e) => {
                   const n = e.target.value ? Number(e.target.value) : "";
-                  onChange({ ...value, days: n === "" ? "" : Math.min(Math.max(n, 1), 365) });
+                  onChange({ ...value, weeks: n === "" ? "" : Math.min(Math.max(Math.round(n), 1), MAX_WEEKS) });
                 }}
               />
-              <span className="text-[13px] text-muted-foreground">days</span>
+              <span className="text-[13px] text-muted-foreground">weeks</span>
             </span>
           </div>
         </div>
@@ -185,10 +184,18 @@ export function TrackFormFields({ value, onChange, topicPlaceholder }: TrackForm
             <span className="text-[13px] text-muted-foreground">hours a week</span>
           </label>
         </div>
-        {hours !== "" && value.days !== "" && (
+        <div className="flex flex-col gap-1.5">
+          <span id="days-label" className="text-[11px] tracking-wide text-muted-foreground uppercase">
+            Days a week
+          </span>
+          <DaysPerWeekPicker labelId="days-label" value={value.daysPerWeek} onChange={(daysPerWeek) => onChange({ ...value, daysPerWeek })} />
+          <span className="text-xs text-muted-foreground">Your usual. You can pick a different number for any single week when you split it.</span>
+        </div>
+        {hours !== "" && value.weeks !== "" && (
           <p role="status" className="m-0 text-[13.5px] leading-normal text-neutral-800">
             <strong className="font-semibold">
-              {capitalizeFirst(lengthLabel(value.days))} at {hours} h a week is about {totalHours(value.days, hours)} hours.
+              {capitalizeFirst(weeksLabel(value.weeks))} at {hours} h a week, over {value.daysPerWeek} day{value.daysPerWeek === 1 ? "" : "s"}, is about{" "}
+              {totalHours(value.weeks, hours)} hours, about {formatDayTime(dayMinutes(hours, value.daysPerWeek))} a day.
             </strong>{" "}
             Pensieve finds and sizes material for the topic, then the plan decides how those hours are spent: reading, practice, or whatever the topic calls for.
           </p>

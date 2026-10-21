@@ -1,6 +1,6 @@
 import { ToolLoopAgent, isStepCount, type LanguageModel } from "ai";
 import type { SourceInput } from "@/lib/schemas/source";
-import { DEFAULT_HOURS_PER_WEEK, totalHours } from "@/lib/studyTime";
+import { DEFAULT_HOURS_PER_WEEK, totalHours, weeksLabel } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, loggedGenerateObject, type GenerationLogContext } from "../logged";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, RESEARCH_LOOP_EFFORT, type AiModelId, type ReasoningEffort } from "../models";
 import { providerError } from "../providerError";
@@ -20,15 +20,18 @@ import { candidateListSchema, normalizeCoverage, type Candidate, type CandidateL
 export interface ResearchBrief {
   topic: string;
   instructions?: string;
-  days: number;
+  /** Length of the plan in weeks. */
+  weeks: number;
+  /** Study days a week; seven when not stated. */
+  daysPerWeek?: number;
   /** Hours a week the learner can give. Research sizes its list against the total; six when not stated. */
   hoursPerWeek?: number;
   sources: SourceInput[];
 }
 
 /** Study hours over the whole plan: the ceiling research sizes its list against. */
-export function briefHours(brief: Pick<ResearchBrief, "days" | "hoursPerWeek">): number {
-  return totalHours(brief.days, brief.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK);
+export function briefHours(brief: Pick<ResearchBrief, "weeks" | "hoursPerWeek">): number {
+  return totalHours(brief.weeks, brief.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK);
 }
 
 export interface ArmInput {
@@ -79,7 +82,8 @@ export type ResearchArm = (input: ArmInput) => Promise<ArmResult>;
 
 export function briefLines(brief: ResearchBrief): string[] {
   const hours = brief.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK;
-  const lines = [`Topic: ${brief.topic}`, `Plan length: ${brief.days} days at about ${hours} hour${hours === 1 ? "" : "s"} a week: ${briefHours(brief)} hours of study in all`];
+  const days = brief.daysPerWeek ? `, over ${brief.daysPerWeek} study day${brief.daysPerWeek === 1 ? "" : "s"}` : "";
+  const lines = [`Topic: ${brief.topic}`, `Plan length: ${weeksLabel(brief.weeks)} at about ${hours} hour${hours === 1 ? "" : "s"} a week${days}: ${briefHours(brief)} hours of study in all`];
   if (brief.instructions?.trim()) lines.push(`The learner's focus & instructions: "${brief.instructions.trim()}"`);
   if (brief.sources.length > 0) {
     lines.push(`Sources the learner provided (always kept):`);

@@ -6,25 +6,34 @@ import { PlanWorkspace } from "@/components/pensieve/PlanWorkspace";
 import { TrackFormFields, type TrackFormValue } from "@/components/pensieve/TrackFormFields";
 import { toTreeInput } from "@/lib/planInput";
 import { resolveGranularity } from "@/lib/planTree";
-import { DEFAULT_HOURS_PER_WEEK } from "@/lib/studyTime";
+import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK } from "@/lib/studyTime";
 import { confirmTrackAction } from "./actions";
 
-const EMPTY_FORM: TrackFormValue = { topic: "", days: 30, granularity: "auto", hoursPerWeek: DEFAULT_HOURS_PER_WEEK, instructions: "", sources: [] };
+const EMPTY_FORM: TrackFormValue = {
+  topic: "",
+  weeks: 4,
+  granularity: "auto",
+  hoursPerWeek: DEFAULT_HOURS_PER_WEEK,
+  daysPerWeek: DEFAULT_DAYS_PER_WEEK,
+  instructions: "",
+  sources: [],
+};
 
 export function NewTrackForm() {
   const [form, setForm] = useState<TrackFormValue>(EMPTY_FORM);
   const [brief, setBrief] = useState<TrackFormValue | null>(null);
 
-  if (brief && brief.days) {
+  if (brief && brief.weeks) {
     const topic = brief.topic.trim();
-    const days = brief.days;
-    const granularity = resolveGranularity(brief.granularity, days);
+    const weeks = brief.weeks;
+    const granularity = resolveGranularity(brief.granularity, weeks);
     const instructions = brief.instructions.trim() || undefined;
     return (
       <PlanWorkspace
         mode="create"
         topic={topic}
-        days={days}
+        weeks={weeks}
+        daysPerWeek={brief.daysPerWeek}
         granularity={granularity}
         hoursPerWeek={brief.hoursPerWeek || DEFAULT_HOURS_PER_WEEK}
         instructions={instructions}
@@ -39,6 +48,7 @@ export function NewTrackForm() {
             instructions,
             granularity,
             hoursPerWeek: time.hoursPerWeek,
+            daysPerWeek: time.daysPerWeek,
             split: time.split,
             materials,
             tree: toTreeInput(tree),
@@ -58,7 +68,7 @@ export function NewTrackForm() {
         </p>
       </div>
       <TrackFormFields value={form} onChange={setForm} />
-      <Button className="mt-2 w-full" onClick={() => setBrief(form)} disabled={!form.topic.trim() || !form.days || !form.hoursPerWeek}>
+      <Button className="mt-2 w-full" onClick={() => setBrief(form)} disabled={!form.topic.trim() || !form.weeks || !form.hoursPerWeek}>
         Generate outline
       </Button>
     </div>

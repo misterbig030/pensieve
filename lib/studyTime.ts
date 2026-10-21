@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { DEFAULT_HOURS_PER_WEEK, budgetFor, cloneTree, isLocked, walk, type PlanNode } from "@/lib/planTree";
+import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, MAX_DAYS_PER_WEEK, budgetFor, cloneTree, isLocked, walk, type PlanNode } from "@/lib/planTree";
 
 /**
  * The learner's time: hours a week, what that comes to over the plan, and how the plan divides it between reading
  * and everything else. Pure and client-safe; the form, the prompts and the checks all read from here.
  */
 
-export { DEFAULT_HOURS_PER_WEEK };
+export { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK };
 export const MIN_HOURS_PER_WEEK = 1;
 export const MAX_HOURS_PER_WEEK = 80;
 
@@ -28,14 +28,30 @@ export function presetFor(hours: number): HoursPreset | null {
   return HOURS_PRESETS.find((p) => p.hours === hours) ?? null;
 }
 
+export const daysPerWeekSchema = z.number().int().min(1).max(MAX_DAYS_PER_WEEK);
+
 /** Study hours over the whole plan. */
-export function totalHours(days: number, hoursPerWeek: number = DEFAULT_HOURS_PER_WEEK): number {
-  return Math.max(1, Math.round((days * hoursPerWeek) / 7));
+export function totalHours(weeks: number, hoursPerWeek: number = DEFAULT_HOURS_PER_WEEK): number {
+  return Math.max(1, Math.round(weeks * hoursPerWeek));
 }
 
-/** One day's share of the week, to the nearest five minutes. */
-export function dayMinutes(hoursPerWeek: number = DEFAULT_HOURS_PER_WEEK): number {
-  return Math.max(10, Math.round((hoursPerWeek * 60) / 7 / 5) * 5);
+/** One day's share of a week of `daysInWeek` study days, to the nearest five minutes. */
+export function dayMinutes(hoursPerWeek: number = DEFAULT_HOURS_PER_WEEK, daysInWeek: number = DEFAULT_DAYS_PER_WEEK): number {
+  return Math.max(10, Math.round((hoursPerWeek * 60) / Math.max(1, daysInWeek) / 5) * 5);
+}
+
+/** The plan's length as the learner set it: "1 week", "6 weeks". */
+export function weeksLabel(weeks: number): string {
+  const n = Math.round(weeks);
+  return `${n} week${n === 1 ? "" : "s"}`;
+}
+
+/** "1 h 10 min", "45 min", "2 h": a day's time as the form and the split list show it. */
+export function formatDayTime(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
 const PER = String.raw`(?:\/|a|an|per|each|every)`;
@@ -108,7 +124,7 @@ export function rebudget<T extends PlanNode>(root: T, hoursPerWeek: number, lock
   walk(next, (node) => {
     if (node.children !== null || node.budgetHours === null) return;
     if (node.status === "completed" || isLocked(node, lockBefore)) return;
-    node.budgetHours = budgetFor(node.len, hoursPerWeek);
+    node.budgetHours = budgetFor(1, hoursPerWeek);
   });
   return next;
 }

@@ -2,6 +2,10 @@
  * The plan is a tree of nodes. A node with children is a group (a month or a week); a node without children is a
  * leaf that holds content and check-ins. Leaves are usually days, but on week-granularity tracks a whole week is a
  * leaf with a time budget. Spans (`start`/`end`) are derived by `layout`, never stored.
+ *
+ * Lengths count study days. A plan is so many weeks long and each week has its own number of study days: the
+ * learner's usual number, or the one they picked when they split it. Time is counted in weeks, whatever a week's day
+ * count (see `weeksOf`).
  */
 
 import type { CoverRef, MaterialRef } from "@/lib/schemas/material";
@@ -16,7 +20,7 @@ export interface PlanNode {
   level: PlanLevel;
   title: string;
   summary: string;
-  /** Span in days. For groups this is recomputed from the children by `layout`. */
+  /** Span in study days. For groups this is recomputed from the children by `layout`. */
   len: number;
   status: NodeStatus;
   /** Week leaves carry a time budget in hours. */
@@ -31,15 +35,19 @@ export interface PlanNode {
   materials?: MaterialRef[];
   /** Track pages attach the sessions logged against a week leaf. */
   sessions?: { count: number; hours: number };
-  /** 1-based day index of the first day, set by `layout`. */
+  /** 1-based index of the first study day across the plan, set by `layout`. Internal: the learner sees days by week. */
   start: number;
-  /** 1-based day index of the last day, set by `layout`. */
+  /** 1-based index of the last study day across the plan, set by `layout`. */
   end: number;
 }
 
 export const ROOT_ID = "root";
-export const WEEK_DAYS = 7;
-export const MONTH_DAYS = 28;
+/** Study days in a week for a learner who has not said otherwise. Tracks saved before the setting existed have 7. */
+export const DEFAULT_DAYS_PER_WEEK = 5;
+export const MAX_DAYS_PER_WEEK = 7;
+/** Weeks in a month-sized heading. */
+export const MONTH_WEEKS = 4;
+export const MAX_WEEKS = 52;
 
 const LEVEL_RANK: Record<PlanLevel, number> = { day: 0, week: 1, month: 2 };
 
@@ -57,15 +65,15 @@ export function splitSpans(total: number, size: number): number[] {
   return Array.from({ length: count }, (_, i) => base + (i >= count - extra ? 1 : 0));
 }
 
-/** The unit the top of the plan is made of: days for a short plan, weeks for a month or two, months beyond. */
-export function topLevelFor(days: number): PlanLevel {
-  if (days <= 14) return "day";
-  if (days <= 70) return "week";
+/** The unit the top of the plan is made of: days for a one-week plan, weeks up to ten weeks, months beyond. */
+export function topLevelFor(weeks: number): PlanLevel {
+  if (weeks <= 1) return "day";
+  if (weeks <= 10) return "week";
   return "month";
 }
 
-export function resolveGranularity(choice: GranularityChoice, days: number): Granularity {
-  if (choice === "auto") return days > 60 ? "week" : "day";
+export function resolveGranularity(choice: GranularityChoice, weeks: number): Granularity {
+  if (choice === "auto") return weeks > 8 ? "week" : "day";
   return choice;
 }
 
@@ -75,27 +83,71 @@ export function childLevel(level: PlanLevel): PlanLevel | null {
   return null;
 }
 
-/** Spans of the children a group of this level would have. */
-export function childSpans(node: { level: PlanLevel; len: number }): number[] {
-  if (node.level === "month") return splitSpans(node.len, WEEK_DAYS);
+/**
+ * Spans of the children a group of this level would have: a month's weeks of `daysPerWeek` days each, a week's days.
+ * A month saved before the setting existed may not be whole weeks; its tail is spread over its weeks.
+ */
+export function childSpans(node: { level: PlanLevel; len: number }, daysPerWeek: number): number[] {
+  if (node.level === "month") return splitSpans(node.len, daysPerWeek);
   if (node.level === "week") return Array.from({ length: node.len }, () => 1);
   return [];
 }
 
-/** Spans of the top-level units for a plan of `days` days. */
-export function topSpans(days: number): number[] {
-  const level = topLevelFor(days);
-  if (level === "day") return Array.from({ length: days }, () => 1);
-  if (level === "week") return splitSpans(days, WEEK_DAYS);
-  return splitSpans(days, MONTH_DAYS);
+/** Spans of the top-level units for a plan of `weeks` weeks at `daysPerWeek` study days each. */
+export function topSpans(weeks: number, daysPerWeek: number): number[] {
+  const level = topLevelFor(weeks);
+  if (level === "day") return Array.from({ length: daysPerWeek }, () => 1);
+  if (level === "week") return Array.from({ length: weeks }, () => daysPerWeek);
+  return splitSpans(weeks, MONTH_WEEKS).map((w) => w * daysPerWeek);
 }
 
 /** What a learner who has not said otherwise is assumed to study: six hours a week. */
 export const DEFAULT_HOURS_PER_WEEK = 6;
 
-/** Hours a week-sized leaf is budgeted for: the learner's weekly hours, scaled to the leaf's span. */
-export function budgetFor(len: number, hoursPerWeek: number = DEFAULT_HOURS_PER_WEEK): number {
-  return Math.max(1, Math.round((len * hoursPerWeek) / 7));
+/** Hours a unit spanning `weeks` weeks is budgeted for: the learner's weekly hours, times the weeks. */
+export function budgetFor(weeks: number, hoursPerWeek: number = DEFAULT_HOURS_PER_WEEK): number {
+  return Math.max(1, Math.round(weeks * hoursPerWeek));
+}
+
+/**
+ * How many weeks of the learner's time a node spans. A week is one week whatever its day count; a day is its week's
+ * share (at the top of a one-week plan, a share of the usual week); a month is its weeks, counted from its children
+ * once planned and from its length before. The root is the whole plan.
+ */
+export function weeksOf(root: PlanNode, node: PlanNode, daysPerWeek: number): number {
+  if (node.level === "week" && node.id !== ROOT_ID) return 1;
+  if (node.level === "day") return 1 / daysInWeekOf(root, node, daysPerWeek);
+  if (node.children && node.children.length > 0) return node.children.reduce((sum, c) => sum + weeksOf(root, c, daysPerWeek), 0);
+  return node.len / daysPerWeek;
+}
+
+/**
+ * The plan's weeks while the units in `planning` are being planned: each counts as it was before, since its streamed
+ * children are only part of it.
+ */
+export function settledWeeks(root: PlanNode, planning: readonly string[], daysPerWeek: number): number {
+  const ids = planning.filter((id) => id !== root.id);
+  if (ids.length === 0) return weeksOf(root, root, daysPerWeek);
+  const copy = cloneTree(root);
+  for (const id of ids) {
+    const node = findNode(copy, id);
+    if (node) node.children = null;
+  }
+  return weeksOf(copy, copy, daysPerWeek);
+}
+
+/** The tree with the node of `snapshot`'s id put back as the snapshot, as it was before a change that failed. */
+export function replaceNode<T extends PlanNode>(root: T, snapshot: PlanNode): T {
+  const next = cloneTree(root);
+  const parent = parentOf(next, snapshot.id);
+  if (parent?.children) parent.children = parent.children.map((c) => (c.id === snapshot.id ? cloneTree(snapshot) : c));
+  return next;
+}
+
+/** Study days in the week a day belongs to: its week's length, or the usual number at the top of a one-week plan. */
+export function daysInWeekOf(root: PlanNode, node: PlanNode, daysPerWeek: number): number {
+  const parent = parentOf(root, node.id);
+  return parent && parent.level === "week" && parent.id !== root.id ? Math.max(1, parent.len) : daysPerWeek;
 }
 
 export function isLeaf(node: PlanNode): boolean {
@@ -160,16 +212,27 @@ export function doneDays(node: PlanNode): number {
   return node.children.reduce((sum, child) => sum + doneDays(child), 0);
 }
 
-/** "Day 9" for a day leaf, otherwise "Week 2" / "Month 1" by position among its siblings. */
+/** "Day 3" / "Week 2" / "Month 1" by position among its siblings: a week's days run from Day 1. */
 export function labelOf(root: PlanNode, node: PlanNode): string {
-  if (node.level === "day") return `Day ${node.start}`;
   const parent = parentOf(root, node.id);
   const ordinal = parent ? parent.children!.indexOf(node) + 1 : 1;
   return `${capitalize(node.level)} ${ordinal}`;
 }
 
-export function spanOf(node: { start: number; end: number; len: number }): string {
-  return node.len === 1 ? `Day ${node.start}` : `Day ${node.start}–${node.end}`;
+/** "Week 2 · Day 3" for a day inside a week, otherwise the node's own label: how a day is named outside its week. */
+export function fullLabelOf(root: PlanNode, node: PlanNode): string {
+  const own = labelOf(root, node);
+  if (node.level !== "day") return own;
+  const parent = parentOf(root, node.id);
+  return parent && parent.id !== root.id && parent.level === "week" ? `${labelOf(root, parent)} · ${own}` : own;
+}
+
+/** "5 days" for a week, "4 weeks" for a month, empty for a day. */
+export function spanOf(root: PlanNode, node: PlanNode, daysPerWeek: number): string {
+  if (node.level === "day") return "";
+  const n = node.level === "week" ? node.len : Math.round(weeksOf(root, node, daysPerWeek));
+  const noun = node.level === "week" ? "day" : "week";
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
 }
 
 /** A node is locked when every day in it is on or before the last completed day. */
@@ -189,6 +252,22 @@ export function lockBoundary(root: PlanNode): number {
 /** The first leaf that is not completed, in plan order. */
 export function currentLeaf(root: PlanNode): PlanNode | null {
   return leavesOf(root).find((leaf) => leaf.status !== "completed") ?? null;
+}
+
+/**
+ * The tree with every open week and month that is not planned yet re-lengthened for a new usual number of days.
+ * Weeks already split keep their days; completed and locked units keep theirs. The days at the top of a one-week plan
+ * are its units, not a length, so they are left alone; the time card does not offer a new number there.
+ */
+export function relength<T extends PlanNode>(root: T, from: number, to: number, lockBefore = 0): T {
+  const next = cloneTree(root);
+  if (from === to) return next;
+  walk(next, (node) => {
+    if (node.id === ROOT_ID || node.children !== null || node.level === "day") return;
+    if (node.status === "completed" || isLocked(node, lockBefore)) return;
+    node.len = node.level === "week" ? to : Math.max(1, Math.round(node.len / from)) * to;
+  });
+  return layout(next);
 }
 
 export function highestLevel(levels: PlanLevel[]): PlanLevel {
@@ -279,12 +358,12 @@ export function nextPlanningStep(root: PlanNode, granularity: Granularity): Plan
 }
 
 /** How many planning steps are left: every unplanned unit above day, plus the weeks each unplanned month will have. */
-export function planningStepsLeft(root: PlanNode): number {
+export function planningStepsLeft(root: PlanNode, daysPerWeek: number): number {
   let n = 0;
   walk(root, (node) => {
     if (node.id === root.id || node.level === "day" || node.children !== null) return;
     n += 1;
-    if (node.level === "month") n += childSpans(node).length;
+    if (node.level === "month") n += childSpans(node, daysPerWeek).length;
   });
   return n;
 }

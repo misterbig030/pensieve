@@ -28,17 +28,17 @@ function weekPlan() {
 
 describe("summarizePlan", () => {
   it("describes a flat day plan", () => {
-    expect(summarizePlan(dayPlan(), "Regex")).toBe(
+    expect(summarizePlan(dayPlan(), "Regex", 5)).toBe(
       '3 days on Regex, one day at a time: Literals, Quantifiers, Anchors. Opens with "Literals" and closes on "Anchors".',
     );
   });
   it("describes a week plan with the top-level titles and closes on the last unit", () => {
-    expect(summarizePlan(weekPlan(), "AI infra")).toBe(
-      '30 days on AI infra, about 5 weeks, in 4 weeks: Inference fundamentals, GPUs and memory, Serving systems, Mock rounds. Opens with "Topic 1" and closes on "Mock rounds".',
+    expect(summarizePlan(weekPlan(), "AI infra", 7)).toBe(
+      '4 weeks on AI infra, usually 7 study days a week: Inference fundamentals, GPUs and memory, Serving systems, Mock rounds. Opens with "Topic 1" and closes on "Mock rounds".',
     );
   });
   it("appends a note", () => {
-    expect(summarizePlan(dayPlan(), "Regex", "Latest change: x.")).toMatch(/\. Latest change: x\.$/);
+    expect(summarizePlan(dayPlan(), "Regex", 5, "Latest change: x.")).toMatch(/\. Latest change: x\.$/);
     expect(latestChangeNote("Swapped weeks 3 and 4.")).toBe("Latest change: swapped weeks 3 and 4.");
     expect(latestChangeNote("  ")).toBe("");
   });

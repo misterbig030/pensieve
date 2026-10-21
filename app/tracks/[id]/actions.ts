@@ -15,9 +15,9 @@ import { getTrackDetail, updateTrackStudyTime, updateTrackSummary } from "@/lib/
 import { insertChildren, logSession, markLeafComplete, replacePlanTree } from "@/lib/db/planQueries";
 import { fromTreeInput } from "@/lib/planInput";
 import { summarizePlan } from "@/lib/planSummary";
-import { findNode, lockBoundary, type PlanNode } from "@/lib/planTree";
+import { findNode, lockBoundary, weeksOf, type PlanNode } from "@/lib/planTree";
 import { planTreeInputSchema, type PlanTreeInput } from "@/lib/schemas/plan";
-import { hoursPerWeekSchema, planSplitSchema, type PlanSplit } from "@/lib/studyTime";
+import { daysPerWeekSchema, hoursPerWeekSchema, planSplitSchema, type PlanSplit } from "@/lib/studyTime";
 import { z } from "zod";
 
 /**
@@ -30,6 +30,8 @@ export async function confirmRevisionAction(input: {
   materialIds: string[];
   /** The learner's weekly hours and the plan's split as the adjust page left them; left out, both stay as saved. */
   hoursPerWeek?: number;
+  /** The learner's usual study days a week as the adjust page left it; left out, it stays as saved. */
+  daysPerWeek?: number;
   split?: PlanSplit | null;
 }): Promise<void> {
   const { userId } = await auth();
@@ -49,11 +51,12 @@ export async function confirmRevisionAction(input: {
   if (input.hoursPerWeek !== undefined) {
     await updateTrackStudyTime(input.trackId, userId, {
       hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek),
+      daysPerWeek: input.daysPerWeek === undefined ? undefined : daysPerWeekSchema.parse(input.daysPerWeek),
       split: input.split === undefined ? detail.track.split : planSplitSchema.nullable().parse(input.split),
     });
   }
   const fresh = await getTrackDetail(input.trackId, userId);
-  await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title));
+  await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title, fresh!.track.daysPerWeek));
   revalidatePath(`/tracks/${input.trackId}`);
   revalidatePath("/dashboard");
   redirect(`/tracks/${input.trackId}`);
@@ -78,7 +81,7 @@ export type ExpandNodeResult =
   | { ok: true; costUsd: number; calls?: ModelCall[] }
   | { ok: false; message: string; code: KeyErrorKind; calls?: ModelCall[] };
 
-export async function expandNodeAction(input: { trackId: string; nodeId: string; reason: "expand" | "split" }): Promise<ExpandNodeResult> {
+export async function expandNodeAction(input: { trackId: string; nodeId: string; reason: "expand" | "split"; splitDays?: number }): Promise<ExpandNodeResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
   const admin = isAdminUserId(userId);
@@ -94,7 +97,8 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
     for await (const event of guardUserKey(
       streamExpandNode({
         topic: detail.track.title,
-        days: detail.root.len,
+        weeks: weeksOf(detail.root, detail.root, detail.track.daysPerWeek),
+        daysPerWeek: detail.track.daysPerWeek,
         granularity: detail.track.granularity,
         instructions: detail.track.instructions ?? undefined,
         materials: detail.materials,
@@ -103,6 +107,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
         tree: detail.root,
         nodeId: input.nodeId,
         reason: input.reason,
+        splitDays: input.splitDays === undefined ? undefined : daysPerWeekSchema.parse(input.splitDays),
         outlineModel: models.outline,
         log: collectCalls(admin, { userId, trackId: input.trackId, onLog: insertGenerationLog, keyOwner: models.outline.keyOwner }, calls),
       }),
@@ -123,7 +128,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
 
   await insertChildren(input.trackId, userId, input.nodeId, children, input.reason === "split");
   const fresh = await getTrackDetail(input.trackId, userId);
-  await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title));
+  await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title, fresh!.track.daysPerWeek));
   revalidatePath(`/tracks/${input.trackId}`);
   return { ok: true, costUsd, ...extra };
 }

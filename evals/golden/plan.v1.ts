@@ -17,8 +17,20 @@ export type GoldenTag = "capability" | "regression";
  * the sampler builds one offline with `learnerMaterials`, so drafting is measured on its own and no run touches the
  * network. (Type-only change, Oct 2: the records themselves are unchanged.)
  */
-export type DraftInput = Omit<PlanDraftRequest, "materials"> & { sources: SourceInput[] };
-export type ReviseInput = Omit<RevisePlanInput, "log" | "materials"> & { sources: SourceInput[] };
+export type DraftInput = Omit<PlanDraftRequest, "materials" | "weeks" | "daysPerWeek"> & { days: number; sources: SourceInput[] };
+export type ReviseInput = Omit<RevisePlanInput, "log" | "materials" | "daysPerWeek"> & { sources: SourceInput[] };
+
+/**
+ * The records predate plans set in weeks and give a length in days (Oct 20). They run as seven-day weeks, so 30 days
+ * is 4 weeks and 180 is 26; a plan shorter than a week is one week of that many days.
+ */
+export function draftRequestOf<T extends { days: number }>(input: T): Omit<T, "days"> & { weeks: number; daysPerWeek: number } {
+  const { days, ...rest } = input;
+  return days < 7 ? { ...rest, weeks: 1, daysPerWeek: days } : { ...rest, weeks: Math.round(days / 7), daysPerWeek: GOLDEN_DAYS_PER_WEEK };
+}
+
+/** The revision records' trees are seven-day weeks. */
+export const GOLDEN_DAYS_PER_WEEK = 7;
 
 export interface DraftRecord {
   id: string;

@@ -28,7 +28,7 @@ import { childSpans, layout, leavesOf, topSpans, type PlanNode } from "@/lib/pla
 import type { Material } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
 import type { PlanSplit } from "@/lib/studyTime";
-import { GOLDEN_V1, isMandarin, type GoldenRecord } from "../golden/plan.v1";
+import { GOLDEN_DAYS_PER_WEEK, GOLDEN_V1, draftRequestOf, isMandarin, type GoldenRecord } from "../golden/plan.v1";
 
 config({ path: ".env.local", quiet: true });
 
@@ -98,14 +98,15 @@ function duplicateIds(root: PlanNode): string[] {
 }
 
 /** Counts along the first branch next to what the span rules asked for, e.g. "top 4/4 · week 7/7". */
-function draftFacts(root: PlanNode, days: number): string {
-  const parts = [`top ${root.children?.length ?? 0}/${topSpans(days).length}`];
+function draftFacts(root: PlanNode, weeks: number, daysPerWeek: number): string {
+  const spans = topSpans(weeks, daysPerWeek);
+  const parts = [`top ${root.children?.length ?? 0}/${spans.length}`];
   let node = root.children?.[0];
   while (node?.children) {
-    parts.push(`${node.level} ${node.children.length}/${childSpans(node).length}`);
+    parts.push(`${node.level} ${node.children.length}/${childSpans(node, daysPerWeek).length}`);
     node = node.children[0];
   }
-  parts.push(`len ${root.len}/${days}`);
+  parts.push(`len ${root.len}/${spans.reduce((a, b) => a + b, 0)}`);
   return parts.join(" · ");
 }
 
@@ -145,20 +146,21 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
 
   try {
     if (record.kind === "draft") {
-      for await (const event of streamPlanDraft({ ...withMaterials(record.input, materials), log })) {
+      const input = draftRequestOf(record.input);
+      for await (const event of streamPlanDraft({ ...withMaterials(input, materials), log })) {
         if (event.type === "finish") tree = event.root;
         if (event.type === "split") split = event.split;
         if (event.type === "error") throw new Error(event.message);
       }
       if (!tree) throw new Error("streamPlanDraft ended without a finish event");
       split ??= null;
-      facts = draftFacts(tree, record.input.days);
+      facts = draftFacts(tree, input.weeks, input.daysPerWeek);
       facts += split ? ` · split ${split.readingShare}% reading / ${split.practice}` : " · NO SPLIT";
       if (isMandarin(record)) facts += ` · cjk ${Math.round(cjkShare(tree) * 100)}%`;
     } else {
       const original = layout(record.input.tree);
-      before = renderTree(original, { lockBefore: record.input.lockBefore, aliases });
-      const result = await revisePlanTree({ ...withMaterials(record.input, materials), log });
+      before = renderTree(original, { daysPerWeek: GOLDEN_DAYS_PER_WEEK, lockBefore: record.input.lockBefore, aliases });
+      const result = await revisePlanTree({ ...withMaterials(record.input, materials), daysPerWeek: GOLDEN_DAYS_PER_WEEK, log });
       tree = result.tree;
       const diff = diffChangedNodes(original, tree);
       changed = { level: diff.level, tags: diff.tags };
@@ -181,7 +183,7 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
     error,
     split,
     tree,
-    text: tree ? renderTree(tree, { aliases, ...(record.kind === "revise" ? { lockBefore: record.input.lockBefore } : {}) }) : "",
+    text: tree ? renderTree(tree, { daysPerWeek: GOLDEN_DAYS_PER_WEEK, aliases, ...(record.kind === "revise" ? { lockBefore: record.input.lockBefore } : {}) }) : "",
     before,
     changed,
     calls,

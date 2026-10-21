@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { MouseEvent, ReactNode } from "react";
 import { ChevronDown, Lock } from "lucide-react";
+import { Menu } from "@base-ui/react/menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BudgetBar, ReadRows, partLabel, readRowsFor, rowBrief, sumMinutes } from "@/components/pensieve/ReadTable";
@@ -15,9 +16,11 @@ import {
   doneDays,
   isLocked,
   labelOf,
+  MAX_DAYS_PER_WEEK,
   spanOf,
   type PlanNode,
 } from "@/lib/planTree";
+import { dayMinutes, formatDayTime } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 export type PlanTreeMode = "create" | "adjust" | "track";
@@ -44,12 +47,15 @@ export interface PlanTreeProps {
   onToggle: (id: string) => void;
   onToggleChip: (id: string) => void;
   onExpand: (id: string) => void;
-  onSplit: (id: string) => void;
+  /** Splits a week leaf into `days` days. */
+  onSplit: (id: string, days: number) => void;
   leafHref?: (node: PlanNode) => string;
   /** The plan's materials; node references resolve against them. */
   materials?: Material[];
   /** The learner's weekly hours: a day's budget is its share of them. */
   hoursPerWeek?: number;
+  /** The learner's usual study days a week: what a week splits into unless they pick another number. */
+  daysPerWeek: number;
   /** What the plan spends non-reading time on, for the budget lines. */
   practice?: string;
 }
@@ -120,12 +126,11 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
   const done = node.status === "completed";
   const current = ctx.currentLeafId === node.id;
   const open = ctx.openChips.has(node.id);
-  const label = labelOf(root, node);
-  const kicker = node.level === "day" ? label : `${label} · ${spanOf(node)}`;
+  const kicker = labelOf(root, node);
   const showStatus = mode === "track";
   const sessions = node.sessions;
   const hasSessions = mode === "track" && !!sessions && sessions.count > 0;
-  const canSplit = node.len > 1 && !locked && !done && !hasSessions && !ctx.busy;
+  const canSplit = node.level === "week" && !locked && !done && !hasSessions && !ctx.busy;
   const rows = readRowsFor(node.materials, ctx.byId);
   const isWeek = node.level !== "day";
   const hasMeta = (node.budgetHours !== null && rows.length === 0) || showStatus || hasSessions || canSplit;
@@ -139,7 +144,7 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
     current && "border-accent-300 bg-accent-100 opacity-100",
     changed && "border-accent-400 bg-accent-100 opacity-100",
     locked && "opacity-50",
-    href && "cursor-pointer hover:shadow-sm",
+    href && "relative cursor-pointer hover:shadow-sm",
   );
 
   const toggle = (e: MouseEvent) => {
@@ -165,7 +170,7 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") toggle(e as unknown as MouseEvent);
             }}
-            className="inline-flex size-5 items-center justify-center rounded-full text-accent-700 hover:bg-accent-100"
+            className="relative z-10 inline-flex size-5 items-center justify-center rounded-full text-accent-700 hover:bg-accent-100"
           >
             <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} strokeWidth={2.75} />
           </span>
@@ -201,49 +206,45 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
             <span>{formatDuration(sumMinutes(rows).must + sumMinutes(rows).should)}</span>
           </span>
         ))}
-      {hasMeta && (
-        <span className="mt-[3px] flex flex-wrap items-center gap-1.5">
-          {node.budgetHours !== null && rows.length === 0 && (
-            <Badge variant="neutral" className="text-[11px]">
-              about {node.budgetHours} hours
-            </Badge>
-          )}
-          {showStatus && (
-            <Badge variant={done ? "accent2" : node.status === "generated" ? "accent" : "neutral"} className="text-[11px]">
-              {done ? "Done" : node.status === "generated" ? "Ready" : "Not started"}
-            </Badge>
-          )}
-          {hasSessions && sessions && (
-            <span className="text-[11.5px] opacity-60">
-              {sessions.count} session{sessions.count > 1 ? "s" : ""} · {formatHours(sessions.hours)} h logged
-            </span>
-          )}
-          {canSplit && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                ctx.onSplit(node.id);
-              }}
-              className="text-[11.5px] text-accent-700 underline underline-offset-2 hover:text-accent-800"
-            >
-              Split into days
-            </button>
-          )}
-        </span>
-      )}
     </>
   );
 
-  if (href) {
-    return (
-      <Link href={href} className={classes}>
-        {body}
-      </Link>
-    );
-  }
-  return <div className={classes}>{body}</div>;
+  // The status row sits outside the card's link, so the split menu inside it is not a control within a link. The link
+  // still covers the whole card (its ::after spans it); the row's buttons sit above it, and the rest lets clicks
+  // through to the link.
+  const meta = hasMeta && (
+    <span className="pointer-events-none relative z-10 mt-[3px] flex flex-wrap items-center gap-1.5 [&_button]:pointer-events-auto">
+      {node.budgetHours !== null && rows.length === 0 && (
+        <Badge variant="neutral" className="text-[11px]">
+          about {node.budgetHours} hours
+        </Badge>
+      )}
+      {showStatus && (
+        <Badge variant={done ? "accent2" : node.status === "generated" ? "accent" : "neutral"} className="text-[11px]">
+          {done ? "Done" : node.status === "generated" ? "Ready" : "Not started"}
+        </Badge>
+      )}
+      {hasSessions && sessions && (
+        <span className="text-[11.5px] opacity-60">
+          {sessions.count} session{sessions.count > 1 ? "s" : ""} · {formatHours(sessions.hours)} h logged
+        </span>
+      )}
+      {canSplit && <SplitControl usual={ctx.daysPerWeek} hoursPerWeek={ctx.hoursPerWeek} onSplit={(days) => ctx.onSplit(node.id, days)} />}
+    </span>
+  );
+
+  return (
+    <div className={classes}>
+      {href ? (
+        <Link href={href} className="flex min-w-0 flex-col gap-[5px] after:absolute after:inset-0 after:rounded-2xl after:content-['']">
+          {body}
+        </Link>
+      ) : (
+        body
+      )}
+      {meta}
+    </div>
+  );
 }
 
 function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx }) {
@@ -282,7 +283,7 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
         <span className="shrink-0 font-heading text-[11px] text-accent-700">{label}</span>
         <h3 className={cn("m-0 min-w-0 font-heading font-normal", depth === 0 ? "text-[17px]" : "text-[15px]", allDone && "opacity-75")}>{node.title}</h3>
         <Badge variant="tagOutline" className="text-[11px]">
-          {spanOf(node)}
+          {spanOf(root, node, ctx.daysPerWeek)}
         </Badge>
         {changed && <Badge variant="accent" className="text-[11px]">Changed</Badge>}
         {allDone && <Badge variant="accent2" className="text-[11px]">Done</Badge>}
@@ -395,6 +396,58 @@ function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, M
 function containsLeaf(node: PlanNode, leafId: string): boolean {
   if (node.id === leafId) return true;
   return (node.children ?? []).some((c) => containsLeaf(c, leafId));
+}
+
+const SPLIT_CHOICES = Array.from({ length: MAX_DAYS_PER_WEEK }, (_, i) => i + 1);
+
+/**
+ * "Split into [5 ▾] days". The words split the week into the learner's usual number of days; the number is a chip
+ * that opens 1–7 days with the time each comes to, for a week that should have a different number.
+ */
+function SplitControl({ usual, hoursPerWeek, onSplit }: { usual: number; hoursPerWeek?: number; onSplit: (days: number) => void }) {
+  const words = "text-[11.5px] text-accent-700 underline underline-offset-2 hover:text-accent-800";
+  const perDay = (n: number) => (n === usual ? "usual" : hoursPerWeek === undefined ? null : `${formatDayTime(dayMinutes(hoursPerWeek, n))} a day`);
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button type="button" className={words} onClick={() => onSplit(usual)}>
+        Split into
+      </button>
+      <Menu.Root>
+        <Menu.Trigger
+          aria-label={`Split into ${usual} days, or choose another number`}
+          className="inline-flex h-[18px] items-center gap-0.5 rounded-full bg-accent-100 px-1.5 text-[11.5px] font-semibold text-accent-800 transition-colors hover:bg-accent-200 data-popup-open:bg-accent-200"
+        >
+          {usual}
+          <ChevronDown className="size-2.5 opacity-70" strokeWidth={3} />
+        </Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Positioner side="bottom" align="start" sideOffset={6} className="isolate z-50">
+            <Menu.Popup className="min-w-44 origin-(--transform-origin) rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95">
+              {SPLIT_CHOICES.map((n) => (
+                <Menu.Item
+                  key={n}
+                  label={`${n}`}
+                  onClick={() => onSplit(n)}
+                  className={cn(
+                    "flex cursor-default items-center justify-between gap-4 rounded-lg px-2.5 py-1.5 text-[12.5px] outline-none select-none data-highlighted:bg-accent-100",
+                    n === usual && "font-semibold",
+                  )}
+                >
+                  <span>
+                    {n} day{n === 1 ? "" : "s"}
+                  </span>
+                  {perDay(n) && <span className="text-[11.5px] font-normal text-muted-foreground">{perDay(n)}</span>}
+                </Menu.Item>
+              ))}
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
+      <button type="button" className={words} onClick={() => onSplit(usual)}>
+        days
+      </button>
+    </span>
+  );
 }
 
 function ChangedPill() {

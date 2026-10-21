@@ -5,6 +5,7 @@ import { titleMatches, titleTokens } from "@/lib/ai/research/verify";
 import { recencyShare } from "@/lib/materials";
 import type { Material } from "@/lib/schemas/material";
 import { totalHours } from "@/lib/studyTime";
+import { draftRequestOf } from "../golden/plan.v1";
 import type { ResearchGoldenRecord } from "./golden.v3";
 
 export type ArmName = "A" | "C" | "W";
@@ -138,7 +139,7 @@ export function runMetrics(input: {
     notice: outcome.notice ?? null,
     ...checkCounts(input.calls),
     ...sizeMetrics(outcome.materials),
-    totalHours: totalHours(record.input.days, record.input.hoursPerWeek),
+    totalHours: totalHours(draftRequestOf(record.input).weeks, record.input.hoursPerWeek),
     coverage: outcome.coverage ? { covered: outcome.coverage.covered.length, open: outcome.coverage.open.length } : null,
     costUsd: input.rows.reduce((sum, r) => sum + r.costUsd, 0) + (input.extraCostUsd ?? 0),
     latencyMs: input.latencyMs,

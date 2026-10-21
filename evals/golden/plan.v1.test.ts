@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { leavesOf, lockBoundary, topSpans } from "@/lib/planTree";
-import { GOLDEN_V1, isMandarin, twinId } from "./plan.v1";
+import { leavesOf, lockBoundary, topLevelFor } from "@/lib/planTree";
+import { GOLDEN_V1, draftRequestOf, isMandarin, twinId } from "./plan.v1";
 
 describe("golden set v1", () => {
   it("has unique, stable ids", () => {
@@ -24,7 +24,7 @@ describe("golden set v1", () => {
 
   it("covers every plan shape and every source type", () => {
     const drafts = GOLDEN_V1.filter((r) => r.kind === "draft");
-    const shapes = new Set(drafts.map((r) => `${topSpans(r.input.days).length > 0 && r.input.days <= 14 ? "day" : r.input.days <= 70 ? "week" : "month"}/${r.input.granularity}`));
+    const shapes = new Set(drafts.map((r) => `${topLevelFor(draftRequestOf(r.input).weeks)}/${r.input.granularity}`));
     expect([...shapes].sort()).toEqual(["day/day", "month/day", "month/week", "week/day", "week/week"]);
     const types = new Set(drafts.flatMap((r) => r.input.sources.map((s) => s.type)));
     expect([...types].sort()).toEqual(["file", "link", "note", "youtube"]);

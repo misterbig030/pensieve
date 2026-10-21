@@ -16,6 +16,7 @@ interface TrackPlanProps {
   granularity: Granularity;
   materials: Material[];
   hoursPerWeek: number;
+  daysPerWeek: number;
   practice?: string;
 }
 
@@ -29,7 +30,7 @@ interface PlanAll {
 }
 
 /** The saved plan as a tree. Expanding or splitting runs on the server and the page refreshes with the new rows. */
-export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek, practice }: TrackPlanProps) {
+export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek, daysPerWeek, practice }: TrackPlanProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     // Finished groups start folded so the current work is what you see first.
     const done = new Set<string>();
@@ -53,22 +54,22 @@ export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek,
   const current = currentLeaf(root);
   const tops = root.children ?? [];
   const label = tops[0] && tops[0].level !== "day" ? "Plan" : "Plan at a glance";
-  const stepsLeft = planningStepsLeft(root);
+  const stepsLeft = planningStepsLeft(root, daysPerWeek);
 
   const run = useCallback(
-    (nodeId: string, reason: "expand" | "split") => {
+    (nodeId: string, reason: "expand" | "split", splitDays?: number) => {
       const node = findNode(root, nodeId);
       if (!node || isPending) return;
       const below = childLevel(node.level);
       if (!below) return;
       const groups = reason === "expand" && below !== "day" && !(below === "week" && granularity === "week");
-      const slots: PendingSlots = { count: childSpans(node).length, groups };
+      const slots: PendingSlots = { count: splitDays ?? childSpans(node, daysPerWeek).length, groups };
       setPending({ [nodeId]: slots });
       setError(null);
       setErrorLink(false);
       startTransition(async () => {
         try {
-          const result = await expandNodeAction({ trackId, nodeId, reason });
+          const result = await expandNodeAction({ trackId, nodeId, reason, splitDays });
           if (result.calls) pushModelCalls(result.calls);
           if (!result.ok) {
             setError(result.message);
@@ -86,7 +87,7 @@ export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek,
         }
       });
     },
-    [root, isPending, granularity, trackId],
+    [root, isPending, granularity, daysPerWeek, trackId],
   );
 
   // Planning everything is a run of single steps. Each step saves itself and the page refreshes with the new rows, and
@@ -147,6 +148,7 @@ export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek,
         root={root}
         materials={materials}
         hoursPerWeek={hoursPerWeek}
+        daysPerWeek={daysPerWeek}
         practice={practice}
         mode="track"
         highlight={new Set()}
@@ -173,7 +175,7 @@ export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek,
           })
         }
         onExpand={(id) => run(id, "expand")}
-        onSplit={(id) => run(id, "split")}
+        onSplit={(id, days) => run(id, "split", days)}
         leafHref={(node) => `/tracks/${trackId}/nodes/${node.id}`}
       />
       {lastCost !== null && <p className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(lastCost)}</p>}

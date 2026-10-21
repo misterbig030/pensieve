@@ -13,7 +13,8 @@ import { ndjsonResponse } from "@/lib/ndjson";
 import { fromTreeInput } from "@/lib/planInput";
 import { granularitySchema, planTreeInputSchema } from "@/lib/schemas/plan";
 import { materialListSchema } from "@/lib/schemas/material";
-import { DEFAULT_HOURS_PER_WEEK, hoursPerWeekSchema, planSplitSchema } from "@/lib/studyTime";
+import { weeksOf } from "@/lib/planTree";
+import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema, planSplitSchema } from "@/lib/studyTime";
 
 const bodySchema = z.object({
   mode: z.enum(["create", "adjust"]),
@@ -22,6 +23,7 @@ const bodySchema = z.object({
   instructions: z.string().trim().max(2000).optional(),
   materials: materialListSchema,
   hoursPerWeek: hoursPerWeekSchema.optional(),
+  daysPerWeek: daysPerWeekSchema.optional(),
   split: planSplitSchema.nullable().optional(),
   tree: planTreeInputSchema,
   lockBefore: z.number().int().min(0).optional(),
@@ -53,13 +55,14 @@ export async function POST(request: Request) {
   }
 
   const tree = fromTreeInput(body.tree);
+  const daysPerWeek = body.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK;
   const debug = body.debug === true && isAdminUserId(userId);
   const models = await resolveModels(userId);
   return ndjsonResponse(
     withCallEvents(debug, { userId, trackId: body.trackId, onLog: insertGenerationLog, keyOwner: models.chat.keyOwner }, (log) =>
       guardUserKey(
         runPlanChat(
-          { ...body, days: tree.len, instructions: body.instructions || undefined, hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK, split: body.split ?? null, tree },
+          { ...body, weeks: weeksOf(tree, tree, daysPerWeek), daysPerWeek, instructions: body.instructions || undefined, hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK, split: body.split ?? null, tree },
           { log, model: models.chat, outlineModel: models.outline },
         ),
         { userId, models },

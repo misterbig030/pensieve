@@ -23,6 +23,7 @@ import { searchProviderFromEnv } from "@/lib/ai/research/tools";
 import { createWorkersArm } from "@/lib/ai/research/workers";
 import type { PlanNode } from "@/lib/planTree";
 import type { PlanSplit } from "@/lib/studyTime";
+import { draftRequestOf } from "../golden/plan.v1";
 import { GOLDEN_V3, type ResearchGoldenRecord } from "./golden.v3";
 import { decide, decideWorkers, pct, runMetrics, summarize, type ArmName, type RunMetrics } from "./metrics";
 import { WEB_SEARCH_USD, createProviderArm } from "./providerArm";
@@ -81,7 +82,8 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
   const log = { onLog: (row: GenerationLogRow) => void rows.push(row), onCall: (call: ModelCall) => void calls.push(call) };
   const started = performance.now();
 
-  const research = researchMaterials({ brief: { ...record.input }, arm: armFor(arm), log });
+  const input = draftRequestOf(record.input);
+  const research = researchMaterials({ brief: { ...input }, arm: armFor(arm), log });
   let next = await research.next();
   while (!next.done) next = await research.next();
   const outcome = next.value;
@@ -89,7 +91,7 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
 
   let plan: PlanNode | null = null;
   let split: PlanSplit | null = null;
-  for await (const event of streamPlanDraft({ ...record.input, materials: outcome.materials, log })) {
+  for await (const event of streamPlanDraft({ ...input, materials: outcome.materials, log })) {
     if (event.type === "finish") plan = event.root;
     if (event.type === "split") split = event.split;
   }
