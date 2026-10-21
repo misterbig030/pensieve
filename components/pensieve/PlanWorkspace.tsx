@@ -761,7 +761,7 @@ function splitWeek(week: PlanNode): void {
   week.manualSplit = true;
   week.budgetHours = null;
   if (week.materials) {
-    week.covers = week.materials.map((r) => ({ id: r.id, note: r.note, chapter: r.chapter, activity: r.activity }));
+    week.covers = week.materials.map((r) => ({ id: r.id, note: r.note, chapter: r.chapter, activity: r.activity, tier: r.tier, minutes: r.minutes }));
     delete week.materials;
   }
 }

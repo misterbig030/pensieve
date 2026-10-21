@@ -16,7 +16,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import { aliasMaterials, dropBreaches, resolveCoverRefs, resolveMaterialRefs, treeChecks, type MaterialAliases } from "@/lib/materials";
+import { aliasMaterials, dropBreaches, keepCoverTiers, resolveCoverRefs, resolveMaterialRefs, treeChecks, type MaterialAliases } from "@/lib/materials";
 import type { CoverRefDraft, MaterialRefDraft } from "@/lib/schemas/material";
 import { revisedTreeSchema, type RevisedTree } from "@/lib/schemas/plan";
 import { readingShareOf } from "@/lib/studyTime";
@@ -75,7 +75,7 @@ export function applyRevision(
     const len = spanFor(level, unit.days, kept, daysPerWeek);
     const leafWeek = children === null && level !== "day" && granularity === "week";
     const leaf = children === null && (level === "day" || leafWeek);
-    const covers = aliases && unit.covers !== undefined ? resolveCoverRefs(unit.covers, aliases).refs : kept?.covers;
+    const covers = aliases && unit.covers !== undefined ? keepCoverTiers(resolveCoverRefs(unit.covers, aliases).refs, kept?.covers) : kept?.covers;
     const materials = aliases && unit.materials !== undefined ? resolveMaterialRefs(unit.materials, aliases).refs : kept?.materials;
     return makeNode({
       id: kept?.id,

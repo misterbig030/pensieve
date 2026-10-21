@@ -191,18 +191,31 @@ describe("persistence of materials", () => {
     await db.delete(nodeMaterials).where(and(eq(nodeMaterials.nodeId, day.id), eq(nodeMaterials.sourceId, notes.id)));
   });
 
-  it("a hand-split week's chapter rows become its reservation, chapter and activity kept", async () => {
+  it("a hand-split week's Read table becomes its reservation, chapter, activity, tier and minutes kept", async () => {
     const root = makeRoot([
       makeNode({ level: "week", title: "W", summary: "s", len: 7, budgetHours: 6, materials: [{ id: "M1", tier: "must", minutes: 140, note: null, chapter: 2 }, { id: "M3", tier: "should", minutes: 20, note: null, activity: "review" }] }),
     ]);
     const created = await createTrackWithPlan({ userId: "u-split", title: "T", granularity: "week", root, materials: MATERIALS, hoursPerWeek: 6, split: null });
     const detail = (await getTrackDetail(created.trackId, "u-split"))!;
     const week = detail.root.children![0];
-    const days = Array.from({ length: 7 }, (_, i) => makeNode({ level: "day", title: `Day ${i}`, summary: "d", len: 1, materials: i === 0 ? [{ id: week.materials![0].id, tier: "must", minutes: 20, note: "Sampling", chapter: 2 }] : undefined }));
+    // Split into three days: the week takes that length.
+    const days = Array.from({ length: 3 }, (_, i) => makeNode({ level: "day", title: `Day ${i}`, summary: "d", len: 1, materials: i === 0 ? [{ id: week.materials![0].id, tier: "must", minutes: 20, note: "Sampling", chapter: 2 }] : undefined }));
     await insertChildren(created.trackId, "u-split", week.id, days, true);
     const after = (await getTrackDetail(created.trackId, "u-split"))!.root.children![0];
-    expect(after.covers!.map((r) => [r.chapter, r.activity])).toEqual([[2, "read"], [null, "review"]]);
+    expect(after.covers!.map((r) => [r.chapter, r.activity, r.tier, r.minutes])).toEqual([
+      [2, "read", "must", 140],
+      [null, "review", "should", 20],
+    ]);
+    expect(after.len).toBe(3);
     expect(after.children![0].materials![0]).toMatchObject({ chapter: 2, activity: "read", note: "Sampling" });
+    // Saved again (adjust mode), the reservation keeps its tiers and minutes.
+    const saved = (await getTrackDetail(created.trackId, "u-split"))!;
+    await replacePlanTree(created.trackId, "u-split", saved.root, saved.materials.map((m) => m.id));
+    const resaved = (await getTrackDetail(created.trackId, "u-split"))!.root.children![0];
+    expect(resaved.covers!.map((r) => [r.tier, r.minutes])).toEqual([
+      ["must", 140],
+      ["should", 20],
+    ]);
   });
 
   it("removing a material in adjust mode removes its rows (cascade)", async () => {

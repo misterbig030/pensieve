@@ -528,6 +528,27 @@ export function assignmentsOf(root: PlanNode, id: string): { node: PlanNode; lab
   return out;
 }
 
+/**
+ * The Read table a week split by hand was planned with: its reservation's rows that kept a tier. Empty for weeks split
+ * before tiers were kept, and for headings.
+ */
+export function keptReadTable(covers: CoverRef[] | undefined): MaterialRef[] {
+  return (covers ?? []).flatMap(({ tier, minutes, ...ref }) => (tier ? [{ ...ref, tier, minutes: minutes ?? null }] : []));
+}
+
+/**
+ * A reservation the model wrote back, with the tier and minutes of the rows it had before. The model sees and writes
+ * only ids and notes, so a split week's kept Read table would otherwise be lost on any revision.
+ */
+export function keepCoverTiers(next: CoverRef[], before: CoverRef[] | undefined): CoverRef[] {
+  const old = new Map((before ?? []).filter((r) => r.tier).map((r) => [refKey(r), r]));
+  if (old.size === 0) return next;
+  return next.map((r) => {
+    const o = old.get(refKey(r));
+    return o?.tier ? { ...r, tier: o.tier, minutes: o.minutes ?? null } : r;
+  });
+}
+
 /** A copy of the tree without any reference to `id`. */
 export function removeMaterialRefs(root: PlanNode, id: string): PlanNode {
   const next = cloneTree(root);

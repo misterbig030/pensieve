@@ -188,6 +188,49 @@ describe("applyRevision with materials", () => {
     expect(result.children![1].materials).toEqual([{ id: "uuid-book", tier: "must", minutes: 40, note: "ch. 1" }]);
   });
 
+  it("keeps a split week's Read table when the model writes its covers back", () => {
+    const original = layout(
+      makeRoot([
+        makeNode({
+          id: "w1",
+          level: "week",
+          title: "Split",
+          summary: "s",
+          len: 2,
+          manualSplit: true,
+          covers: [
+            { id: "uuid-book", note: null, chapter: 2, tier: "must", minutes: 140 },
+            { id: "uuid-talk", note: null, tier: "should", minutes: 20 },
+          ],
+          children: [makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1 }), makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1 })],
+        }),
+        makeNode({ id: "w2", level: "week", title: "Later", summary: "l", len: 5, covers: [{ id: "uuid-book", note: null, chapter: 3 }] }),
+      ]),
+    );
+    const result = applyRevision(
+      original,
+      assignRefs(original),
+      {
+        units: [
+          // The model sees and writes only ids and notes; it rewrote the talk's note.
+          { ref: "n1", title: "Split", summary: "s", days: 2, covers: [{ id: "M1.2" }, { id: "M2", note: "first half" }], children: [{ ref: "n2", title: "A", summary: "a", days: 1 }, { ref: "n3", title: "B, lighter", summary: "b", days: 1 }] },
+          { ref: "n4", title: "Later", summary: "l", days: 5, covers: [{ id: "M1.3" }, { id: "M1.4" }] },
+        ],
+      },
+      0,
+      "day",
+      aliases,
+      6,
+      5,
+    );
+    expect(result.children![0].covers!.map((r) => [r.id, r.chapter, r.note, r.tier, r.minutes])).toEqual([
+      ["uuid-book", 2, null, "must", 140],
+      ["uuid-talk", null, "first half", "should", 20],
+    ]);
+    // A heading's reservation stays a reservation: no tier for its rows, old or new.
+    expect(result.children![1].covers!.every((r) => r.tier === undefined)).toBe(true);
+  });
+
   it("drops unknown ids and keeps covers only on headings", () => {
     const original = withRefs();
     const result = applyRevision(

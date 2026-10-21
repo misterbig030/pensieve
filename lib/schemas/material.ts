@@ -113,12 +113,17 @@ export const materialRefSchema = z.object({
 });
 export type MaterialRef = z.infer<typeof materialRefSchema>;
 
-/** A heading's reservation: material the units inside it will read, with no tier or minutes yet. */
+/**
+ * A heading's reservation: material the units inside it will read, with no tier or minutes yet. A week split by hand
+ * keeps its Read table's tier and minutes here, so the week still shows the list it was planned with.
+ */
 export const coverRefSchema = z.object({
   id: z.string().min(1).max(64),
   note: z.string().max(300).nullable(),
   chapter: z.number().int().min(1).max(MAX_CHAPTERS).nullable().optional(),
   activity: z.enum(REF_ACTIVITIES).optional(),
+  tier: z.enum(MATERIAL_TIERS).optional(),
+  minutes: z.number().int().min(0).max(6000).nullable().optional(),
 });
 export type CoverRef = z.infer<typeof coverRefSchema>;
 

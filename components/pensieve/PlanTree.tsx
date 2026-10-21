@@ -7,12 +7,13 @@ import { Menu } from "@base-ui/react/menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BudgetBar, ReadRows, partLabel, readRowsFor, rowBrief, sumMinutes } from "@/components/pensieve/ReadTable";
-import { budgetMinutes } from "@/lib/materials";
+import { budgetMinutes, keptReadTable } from "@/lib/materials";
 import { formatDuration } from "@/lib/researchProgress";
 import { chapterAt, type Material } from "@/lib/schemas/material";
 import {
   capitalize,
   childLevel,
+  budgetFor,
   doneDays,
   isLocked,
   labelOf,
@@ -263,6 +264,9 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
   const unit = childLevel(node.level) ?? "day";
   const canExpand = !locked && !ctx.busy && !slots;
   const pct = node.len > 0 ? Math.round((done / node.len) * 100) : 0;
+  // A week split by hand still shows the Read table it was planned with; weeks split before tiers were kept show
+  // their reservation instead.
+  const kept = node.manualSplit ? readRowsFor(keptReadTable(node.covers), ctx.byId) : [];
 
   const headClick = () => {
     if (expanded) ctx.onToggle(node.id);
@@ -304,7 +308,14 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
         )}
       </div>
       <p className="m-0 text-[13px] leading-normal opacity-65">{node.summary}</p>
-      <CoversRow node={node} byId={ctx.byId} />
+      {kept.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <ReadRows rows={kept} />
+          <BudgetBar rows={kept} budgetMinutes={budgetFor(1, ctx.hoursPerWeek) * 60} practice={ctx.practice} />
+        </div>
+      ) : (
+        <CoversRow node={node} byId={ctx.byId} />
+      )}
       {open && (
         <div className={cn("grid", gridClass(kids, slots))}>
           {kids.map((child) => (
