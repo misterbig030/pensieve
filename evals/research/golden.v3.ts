@@ -141,4 +141,24 @@ export const GOLDEN_V3: ResearchGoldenRecord[] = [
     why: "Physical training: almost no reading. The split should be nearly all sessions and research should come back short.",
     input: { topic: "Couch to 5K", days: 56, granularity: "week", hoursPerWeek: 3, sources: [] },
   },
+  // Interview prep (added Oct 21, ahead of practice formats). Each loop has several kinds of round, and preparing for
+  // them is mostly practice. No instructions: the topic alone should tell the planner which rounds to prepare for.
+  {
+    id: "int-56d-nosrc-sde-01",
+    why: "A full senior SDE loop: coding, system design and behavioral rounds. Research should find practice sources (problem lists, design questions with solutions), not only reading, and the plan should prepare all three rounds.",
+    input: { topic: "Senior SDE interview", days: 56, granularity: "day", hoursPerWeek: 10, sources: [] },
+    labels: { mustInclude: [{ title: "System Design Interview" }] },
+  },
+  {
+    id: "int-42d-nosrc-aiproduct-01",
+    why: "An AI product engineer loop, like the owner's own tracks: LLM, RAG, agents and evals questions, AI system design, a project deep dive and often a coding round. Question banks should come with answers.",
+    input: { topic: "Interview for engineers building AI products", days: 42, granularity: "day", sources: [] },
+    labels: { expectedBackbone: { title: "AI Engineering", author: "Chip Huyen" } },
+  },
+  {
+    id: "int-56d-nosrc-mle-01",
+    why: "An MLE loop: ML fundamentals, ML system design, coding and a project deep dive. The balance differs from SDE: less algorithm drilling, more ML concepts and design.",
+    input: { topic: "MLE interview", days: 56, granularity: "week", hoursPerWeek: 8, sources: [] },
+    labels: { mustInclude: [{ title: "Introduction to Machine Learning Interviews" }] },
+  },
 ];
