@@ -262,7 +262,7 @@ describe("time and the split in prompts", () => {
     const prompt = buildUnitsPrompt({ ...base, hoursPerWeek: 6, split });
     expect(prompt).toContain("How this plan spends that time: about 85% reading or watching the materials, the rest on writing summaries.");
     expect(prompt).toContain("— budget about 6 h, so about 5.1 h of must-reading");
-    expect(prompt).toContain("must minutes stay within about 85% of the unit's budget, because the rest of the time is for writing summaries");
+    expect(prompt).toContain("must minutes stay within the must-reading on the unit's line, because the rest of the time is for writing summaries");
     expect(prompt).not.toContain('as "split"');
   });
 
@@ -419,6 +419,13 @@ describe("practice in prompts", () => {
     const prompt = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "week", level: "week", spans: [7, 7], weeks: 2, daysPerWeek: 7, hoursPerWeek: 6, split, unitsAreLeaves: true });
     expect(prompt).toContain("1. Week 1 (7 study days) — budget about 6 h, so about 3 h of must-reading; practice: Problems 1.8 h, Recall 72 min");
     expect(prompt).toContain('- Problems (format "problem-set"): about 1.8 h a week, aimed at arrays and hashing.');
+  });
+  it("states a week leaf's reading once: its line's must-reading is the practice rules' reading, a sourceless pick's time included", () => {
+    const withLab = { ...split, formats: [pick("problem-set", 50, "arrays"), pick("lab", 50, "git")] };
+    const prompt = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "week", level: "week", spans: [7, 7], weeks: 2, daysPerWeek: 7, hoursPerWeek: 6, split: withLab, unitsAreLeaves: true });
+    expect(prompt).toContain("is about 4.5 h of reading and, by format:");
+    expect(prompt).toContain("1. Week 1 (7 study days) — budget about 6 h, so about 4.5 h of must-reading; practice: Problems 1.5 h");
+    expect(prompt).not.toContain(`about ${withLab.readingShare}% of the unit's budget`);
   });
   it("asks headings to reserve each pick's sources in order, with the part in the note", () => {
     const prompt = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "month", spans: [20, 20], weeks: 8, daysPerWeek: 5, hoursPerWeek: 6, split, unitsAreLeaves: false });

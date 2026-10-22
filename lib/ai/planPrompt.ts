@@ -1,4 +1,4 @@
-import { MUST_SHARE, aliasMaterials, formatAliases, pickSources, practiceBudgets, type MaterialAliases, type PickSources, type ResolvedAlias } from "@/lib/materials";
+import { aliasMaterials, formatAliases, pickSources, practiceBudgets, type MaterialAliases, type PickSources, type ResolvedAlias } from "@/lib/materials";
 import { PRACTICE_REGISTRY, type PracticeFormat, type PracticeGenerated } from "@/lib/practice";
 import {
   budgetFor,
@@ -16,7 +16,7 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialRef, type PracticeCover, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
-import { dayMinutes, readingShareOf, weeksLabel, type PlanSplit } from "@/lib/studyTime";
+import { dayMinutes, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 
 export interface PlanPromptContext {
   topic: string;
@@ -261,7 +261,6 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   parts.push(`You are designing a self-study curriculum, one unit at a time.`);
   parts.push(...contextLines(input, { sections: true }));
   parts.push(`The whole plan is ${weeksLabel(input.weeks)} long. Each week's days are numbered from Day 1.`);
-  const share = readingShareOf(input.split) ?? MUST_SHARE;
 
   if (input.tree && input.parentId) {
     parts.push(`Here is the plan so far. Lines marked done are behind the learner; use what they covered to plan what comes next.${hasMaterials ? " Braces show the materials each unit reserves or reads." : ""}`);
@@ -280,10 +279,13 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
     input.unitsAreLeaves && input.level !== "day" && picks.length > 0
       ? `; practice: ${picks.map((p) => `${PRACTICE_REGISTRY[p.pick.format].label} ${formatMinutes(weekMinutes[p.pick.format] ?? 0)}`).join(", ")}`
       : "";
+  // A week leaf's must-reading is the week's reading budget, as the practice rules and the checks have it: the one
+  // place the prompt states it.
+  const weekReading = Math.round(weekBudgetsOf(input).reading / 5) * 5;
   input.spans.forEach((len, i) => {
     const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, daysInWeek, input.hoursPerWeek) : null;
     // A day's must-reading is budgeted over its week (the rules say how much), so its line gives only its total.
-    const must = minutes === null || !hasMaterials || input.level === "day" ? "" : `, so about ${formatMinutes(Math.round((minutes * share) / 5) * 5)} of must-reading`;
+    const must = minutes === null || !hasMaterials || input.level === "day" ? "" : `, so about ${formatMinutes(weekReading)} of must-reading`;
     const budget = (hasMaterials || picks.length > 0) && minutes !== null ? ` — budget about ${formatMinutes(minutes)}${must}${weekPractice}` : "";
     parts.push(`${i + 1}. ${unitLine(input.level, i, len, input.daysPerWeek)}${budget}`);
   });
@@ -508,9 +510,7 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const rules =
     input.level === "day"
       ? `Rules: the week has about ${reading} of reading; the rest of its time is for ${practiceOf(input)}. Across the week, the days' must minutes add up to no more than about ${reading}. A day may be all reading or all practice, but each day's must, should and practice minutes fit within its own budget. A day that reads has at least one must; should items are optional extras.`
-      : input.split
-        ? `Rules: at least one must per unit ${where}; must minutes stay within about ${input.split.readingShare}% of the unit's budget, because the rest of the time is for ${input.split.practice}; should items are optional extras.`
-        : `Rules: at least one must per unit; must minutes stay within about ${Math.round(MUST_SHARE * 100)}% of the unit's budget, because the rest of the time is for building and practice; should items are optional extras.`;
+      : `Rules: at least one must per unit${input.split ? ` ${where}` : ""}; must minutes stay within the must-reading on the unit's line, because the rest of the time is for ${practiceOf(input)}; should items are optional extras.`;
   const lines = [
     `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note }. tier is "must" or "should"; minutes is the reading or watching time for this unit; note names the part: for a chapter, the sections this unit covers ("Post-Training; Sampling"), for anything else the part ("§2 only", "whole essay").`,
     ...availabilityLines(input, aliases),
