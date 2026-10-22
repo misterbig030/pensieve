@@ -131,6 +131,14 @@ export function practiceLabelOf(split: PlanSplit): string {
   return labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
+/**
+ * Whether the split spends nothing on practice: all of it is reading, or it is the all-reading fallback with no picks
+ * (`formats: []`). A split from before picks (no `formats`) still names its practice.
+ */
+export function isAllReading(split: PlanSplit): boolean {
+  return split.readingShare >= 100 || split.formats?.length === 0;
+}
+
 /** The reading share as a fraction, or null when the plan has no split (older plans fall back to a fixed share). */
 export function readingShareOf(split: PlanSplit | null | undefined): number | null {
   return split ? split.readingShare / 100 : null;

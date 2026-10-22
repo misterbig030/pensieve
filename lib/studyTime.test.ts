@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot } from "@/lib/planTree";
-import { clampHours, dayMinutes, formatDayTime, hoursInText, normalizeSplit, planSplitSchema, practiceLabelOf, presetFor, readingShareOf, rebudget, totalHours, weeksLabel } from "./studyTime";
+import { clampHours, dayMinutes, formatDayTime, hoursInText, isAllReading, normalizeSplit, planSplitSchema, practiceLabelOf, presetFor, readingShareOf, rebudget, totalHours, weeksLabel } from "./studyTime";
 
 describe("hours", () => {
   it("totals the plan's hours over its weeks", () => {
@@ -105,6 +105,15 @@ describe("split", () => {
     expect(practiceLabelOf({ ...base, formats: [pick("problem-set"), pick("mock")] })).toBe("problems and mock");
     expect(practiceLabelOf({ ...base, formats: [pick("problem-set"), pick("design-exercise"), pick("mock")] })).toBe("problems, design and mock");
     expect(practiceLabelOf({ ...base, formats: [] })).toBe("practice");
+  });
+
+  it("knows an all-reading split, so nothing is said of the rest", () => {
+    const pick = { format: "problem-set" as const, share: 100, focus: "f", reason: "" };
+    expect(isAllReading({ readingShare: 100, practice: "reading", reason: "", formats: [] })).toBe(true);
+    expect(isAllReading({ readingShare: 80, practice: "reading", reason: "", formats: [] })).toBe(true);
+    expect(isAllReading({ readingShare: 100, practice: "projects", reason: "" })).toBe(true);
+    expect(isAllReading({ readingShare: 60, practice: "projects", reason: "" })).toBe(false);
+    expect(isAllReading({ readingShare: 60, practice: "problems", reason: "", formats: [pick] })).toBe(false);
   });
 
   it("is null without a share or a practice", () => {
