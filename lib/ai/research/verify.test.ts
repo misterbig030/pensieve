@@ -548,6 +548,45 @@ describe("practice through the gate", () => {
     expect(result.materials[0].practice).toEqual({ format: "problem-set", items: 6, perItemMinutes: 10, minutes: 60, answers: true });
   });
 
+  it("keeps the reading size when the practice-only candidate is listed first", async () => {
+    const f = page();
+    const result = await gate(f, {
+      candidates: [
+        candidate({ url, title: "Exercises", practice: { format: "problem-set", items: 6, perItemMinutes: null, answers: true } }),
+        candidate({ url, title: "Exercises", minutes: 90, uses: "ch. 2" }),
+      ],
+    });
+    expect(result.materials).toHaveLength(1);
+    expect(result.materials[0]).toMatchObject({ minutes: 90, minutesBasis: "estimated", uses: "ch. 2" });
+    expect(result.materials[0].practice).toMatchObject({ format: "problem-set", minutes: 60 });
+  });
+
+  it("does not overwrite a reading size the kept material already has", async () => {
+    const f = page();
+    const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", minutes: 90 }), candidate({ url, title: "Exercises", minutes: 20 })] });
+    expect(result.materials[0].minutes).toBe(90);
+  });
+
+  it("does not overwrite a practice the learner's source already has", async () => {
+    const f = page();
+    const result = await gate(f, {
+      learner: [{ url, type: "link" }],
+      learnerNotes: [{ url, kind: "docs", why: "Theirs", practice: { format: "recall", items: 10, perItemMinutes: null, answers: true } }],
+      candidates: [candidate({ url, title: "Exercises", practice: { format: "problem-set", items: 4, perItemMinutes: null, answers: true } })],
+    });
+    expect(result.materials[0].practice?.format).toBe("recall");
+  });
+
+  it("keeps a learner's source and leaves practice off when the note's draft is unusable", async () => {
+    const f = page();
+    const result = await gate(f, {
+      learner: [{ url, type: "link" }],
+      learnerNotes: [{ url, kind: "docs", why: "Theirs", practice: { format: "problem-set", items: 10, perItemMinutes: null, answers: false } }],
+    });
+    expect(result.materials).toHaveLength(1);
+    expect(result.materials[0].practice ?? null).toBeNull();
+  });
+
   it("does not overwrite a practice the kept material already has", async () => {
     const f = page();
     const result = await gate(f, {

@@ -633,6 +633,9 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     if (dup) {
       dup.material.recommendedBy = [...new Set([...dup.material.recommendedBy, ...recommendedBy])].slice(0, 10);
       dup.wantsBackbone ||= c.backbone;
+      // Reading fields the kept material lacks come from this candidate, whichever was listed first; set ones stay.
+      if (!dup.material.minutes) Object.assign(dup.material, size);
+      if (toc && !dup.material.toc) dup.material.toc = withChapterSizes(toc, dup.material.minutes ?? null);
       if (practice && !dup.material.practice) dup.material.practice = practice;
       return;
     }
