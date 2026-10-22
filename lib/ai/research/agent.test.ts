@@ -307,6 +307,9 @@ describe("thin research", () => {
     expect(isThin(8, { covered: ["History", "Basic stitches"], open: ["Advanced stitches", "Finishing"] })).toBe(true);
     expect(isThin(8, { covered: ["Foundations", "Agents", "Evals"], open: ["Retrieval"] })).toBe(false);
     expect(isThin(8, { covered: ["Foundations"], open: [] })).toBe(false);
+    // Open practice picks are not topic areas.
+    expect(isThin(8, { covered: ["Foundations", "Agents", "Evals"], open: ["practice: Problems", "practice: Mock", "practice: Design"] })).toBe(false);
+    expect(isThin(8, { covered: ["Foundations"], open: ["Evals", "practice: Problems"] })).toBe(true);
   });
 
   it("carries the arm's coverage and the list's size to the done event", async () => {

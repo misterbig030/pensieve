@@ -18,9 +18,10 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Coverage, DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
+import { PRACTICE_OPEN_PREFIX, type Coverage, type DroppedMaterial, type ResearchNotice } from "@/lib/ai/research/events";
+import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { approxDuration } from "@/lib/researchProgress";
-import { KIND_LABEL, KIND_ORDER, hostOf, type Material, type MaterialKind } from "@/lib/schemas/material";
+import { KIND_LABEL, KIND_ORDER, hostOf, type Material, type MaterialKind, type MaterialPractice } from "@/lib/schemas/material";
 import { cn } from "@/lib/utils";
 
 const KIND_ICON: Record<MaterialKind, ComponentType<{ className?: string; strokeWidth?: number }>> = {
@@ -67,12 +68,12 @@ export function MaterialsList(props: MaterialsListProps) {
 
   const backbone = materials.find((m) => m.backbone) ?? null;
   const rest = materials.filter((m) => m !== backbone);
-  const ordered = KIND_ORDER.flatMap((kind) => rest.filter((m) => m.kind === kind));
+  const ordered = [...KIND_ORDER.flatMap((kind) => rest.filter((m) => m.kind === kind && !isPracticeOnly(m))), ...rest.filter(isPracticeOnly)];
   const shown = showAll ? ordered : ordered.slice(0, initialShown);
   const researched = materials.filter((m) => m.origin === "research").length;
   const yours = materials.length - researched;
-  const sized = materials.reduce((sum, m) => sum + (m.minutes ?? 0), 0);
-  const unsized = materials.filter((m) => !m.minutes).length;
+  const { readingMinutes: sized, practiceMinutes } = materialTotals(materials);
+  const unsized = materials.filter((m) => !m.minutes && !m.practice?.minutes).length;
 
   return (
     <div className="flex flex-col gap-3">
@@ -93,9 +94,9 @@ export function MaterialsList(props: MaterialsListProps) {
             <span className="ml-auto text-[12.5px] text-muted-foreground max-[640px]:ml-0 max-[640px]:basis-full">Gather these up front. Each week assigns a slice.</span>
           </div>
 
-          {sized > 0 && (
+          {sized + practiceMinutes > 0 && (
             <p className="m-0 text-[13px] leading-normal text-neutral-800">
-              <strong className="font-semibold">{approxDuration(sized)} of material</strong>
+              <strong className="font-semibold">{totalsLine(sized, practiceMinutes)}</strong>
               {props.totalHours ? ` for a plan of about ${props.totalHours} hours` : ""}
               {unsized > 0 ? `, not counting ${unsized} with no size` : ""}. Sizes are for the part the plan uses. How much of it is required is the plan&apos;s call, week by week.
             </p>
@@ -111,8 +112,8 @@ export function MaterialsList(props: MaterialsListProps) {
           <div className="flex flex-col gap-0.5">
             {shown.map((m, i) => (
               <div key={m.id} className="contents">
-                {(i === 0 || shown[i - 1].kind !== m.kind) && (
-                  <span className="px-1 pt-1.5 pb-1 text-[11px] tracking-wide text-muted-foreground uppercase">{KIND_LABEL[m.kind]}</span>
+                {(i === 0 || groupLabel(shown[i - 1]) !== groupLabel(m)) && (
+                  <span className="px-1 pt-1.5 pb-1 text-[11px] tracking-wide text-muted-foreground uppercase">{groupLabel(m)}</span>
                 )}
                 <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
               </div>
@@ -160,6 +161,45 @@ export function MaterialsList(props: MaterialsListProps) {
   );
 }
 
+/** A source that is practice and nothing to read: it goes in the "Practice" group instead of a kind group. */
+function isPracticeOnly(m: Material): boolean {
+  return !m.minutes && !!m.practice;
+}
+
+function groupLabel(m: Material): string {
+  return isPracticeOnly(m) ? "Practice" : KIND_LABEL[m.kind];
+}
+
+/** What a kind of practice item is called in a count. */
+const ITEM_NOUN: Partial<Record<PracticeFormat, string>> = { "problem-set": "problem", recall: "question", lab: "step" };
+
+/** "Problems · 150 problems · answers included": what the source is as practice, how much of it, and whether it checks you. */
+export function practiceTag(p: MaterialPractice): string {
+  const noun = ITEM_NOUN[p.format] ?? "item";
+  return [PRACTICE_REGISTRY[p.format].label, p.items ? `${p.items} ${noun}${p.items === 1 ? "" : "s"}` : null, p.answers ? "answers included" : null].filter(Boolean).join(" · ");
+}
+
+/** Minutes of reading and minutes of practice over the list. A source counts toward each role it has. */
+export function materialTotals(materials: Material[]): { readingMinutes: number; practiceMinutes: number } {
+  return {
+    readingMinutes: materials.reduce((sum, m) => sum + (m.minutes ?? 0), 0),
+    practiceMinutes: materials.reduce((sum, m) => sum + (m.practice?.minutes ?? 0), 0),
+  };
+}
+
+/** "≈ 5 h 35 of reading + 9 h of practice"; a list with no practice stays "≈ 5 h 35 of material". */
+function totalsLine(readingMinutes: number, practiceMinutes: number): string {
+  if (practiceMinutes === 0) return `${approxDuration(readingMinutes)} of material`;
+  if (readingMinutes === 0) return `${approxDuration(practiceMinutes)} of practice`;
+  return `${approxDuration(readingMinutes)} of reading + ${approxDuration(practiceMinutes).replace("≈ ", "")} of practice`;
+}
+
+/** Separates the practice picks research found no source for (as their labels) from the topic areas it left open. */
+export function splitCoverage(open: string[]): { areas: string[]; practice: string[] } {
+  const practice = open.filter((a) => a.startsWith(PRACTICE_OPEN_PREFIX)).map((a) => a.slice(PRACTICE_OPEN_PREFIX.length));
+  return { areas: open.filter((a) => !a.startsWith(PRACTICE_OPEN_PREFIX)), practice };
+}
+
 function byline(m: Material, withKind = false): string {
   return [m.author, hostOf(m.url) && m.kind !== "note" && !m.author ? hostOf(m.url) : null, m.year, withKind ? m.kind : null].filter(Boolean).join(" · ");
 }
@@ -188,6 +228,7 @@ function BackboneCard({ material: m, onRemove }: { material: Material; onRemove?
         <span className="text-[12.5px] text-muted-foreground">{byline(m, true)}</span>
         {m.why && <p className="m-0 text-[13px] leading-normal text-neutral-800">{m.why}</p>}
         <SizeLine material={m} />
+        <PracticeLine material={m} />
       </div>
       <div className="flex shrink-0 items-start gap-1 self-start">
         <VerifiedButton material={m} prominent />
@@ -216,6 +257,7 @@ function MaterialRow({ material: m, onRemove }: { material: Material; onRemove?:
         </span>
         {m.why && <span className="text-neutral-800">{m.why}</span>}
         <SizeLine material={m} />
+        <PracticeLine material={m} />
       </div>
       <div className="flex items-center gap-1 justify-self-end max-[640px]:col-start-2 max-[640px]:-ml-2.5 max-[640px]:justify-self-start">
         <VerifiedButton material={m} />
@@ -243,7 +285,14 @@ function SizeLine({ material: m }: { material: Material }) {
   );
 }
 
+/** "Problems · 150 problems · answers included · ≈ 25 h": the source's role as practice, with the time it takes to do. */
+function PracticeLine({ material: m }: { material: Material }) {
+  if (!m.practice) return null;
+  return <span className="text-xs text-muted-foreground">{[practiceTag(m.practice), m.practice.minutes ? approxDuration(m.practice.minutes) : null].filter(Boolean).join(" · ")}</span>;
+}
+
 function CoverageChips({ coverage }: { coverage: Coverage }) {
+  const { areas, practice } = splitCoverage(coverage.open);
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
       {coverage.covered.length > 0 && <span className="text-muted-foreground">Covered</span>}
@@ -252,12 +301,13 @@ function CoverageChips({ coverage }: { coverage: Coverage }) {
           {area}
         </span>
       ))}
-      {coverage.open.length > 0 && <span className={cn("text-muted-foreground", coverage.covered.length > 0 && "ml-2")}>Not covered</span>}
-      {coverage.open.map((area) => (
+      {areas.length > 0 && <span className={cn("text-muted-foreground", coverage.covered.length > 0 && "ml-2")}>Not covered</span>}
+      {areas.map((area) => (
         <span key={`o-${area}`} className="rounded-full border border-dashed border-neutral-600 px-2.5 py-1 text-neutral-800">
           {area}
         </span>
       ))}
+      {practice.length > 0 && <span className="basis-full text-muted-foreground">No practice source found for: {practice.join(", ")}</span>}
     </div>
   );
 }
@@ -404,7 +454,7 @@ function ResearchNoticeBanner({
     <div role="status" className="flex gap-3 rounded-[20px] bg-accent-200 px-4 py-3.5 text-[13px] leading-normal text-accent-900">
       <CircleAlert className="mt-px size-[18px] shrink-0 text-accent-700" strokeWidth={2.5} />
       <span>
-        {thinText({ researched, sizedMinutes, open: coverage?.open ?? [], hasBackbone })} for <strong className="font-semibold">{topic}</strong>.{" "}
+        {thinText({ researched, sizedMinutes, open: splitCoverage(coverage?.open ?? []).areas, hasBackbone })} for <strong className="font-semibold">{topic}</strong>.{" "}
         {researched === 0 ? "The plan uses your own sources" : "The plan uses what was found plus your own sources"} and leans on practice where there is nothing to read. Paste links in the
         conversation to have them checked the same way.
       </span>

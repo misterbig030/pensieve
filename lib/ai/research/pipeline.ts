@@ -5,7 +5,7 @@ import type { AiModelId } from "../models";
 import { providerError } from "../providerError";
 import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type ResearchBrief } from "./agent";
 import { createChapterFinder, type ChapterFinder, type ChapterFinderResult } from "./chapterFinder";
-import type { Coverage, DroppedMaterial, ResearchEvent, ResearchNotice } from "./events";
+import { PRACTICE_OPEN_PREFIX, type Coverage, type DroppedMaterial, type ResearchEvent, type ResearchNotice } from "./events";
 import { SourceFetcher, capsFor, searchProviderFromEnv, type ResearchCaps } from "./tools";
 import { createOpenLibraryLookup, runGate, sizedMinutes, type BookLookup } from "./verify";
 import { createWorkersArm } from "./workers";
@@ -15,11 +15,14 @@ export const THIN_BELOW = 3;
 
 /**
  * Research is thin when it verified almost nothing, or when it left at least as many of the topic's main areas
- * open as it covered. A short list that covers the topic is not thin: a week-long plan needs only a handful.
+ * open as it covered. A short list that covers the topic is not thin: a week-long plan needs only a handful. Open
+ * practice picks are not areas of the topic, so they do not count.
  */
 export function isThin(verified: number, coverage: Coverage | null | undefined): boolean {
   if (verified < THIN_BELOW) return true;
-  return !!coverage && coverage.open.length > 0 && coverage.open.length >= coverage.covered.length;
+  if (!coverage) return false;
+  const open = coverage.open.filter((a) => !a.startsWith(PRACTICE_OPEN_PREFIX)).length;
+  return open > 0 && open >= coverage.covered.length;
 }
 
 export interface ResearchOutcome {

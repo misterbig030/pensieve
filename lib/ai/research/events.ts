@@ -9,6 +9,9 @@ export interface Coverage {
   open: string[];
 }
 
+/** Research marks a practice pick it found no source for in `Coverage.open` as "practice: <label>". */
+export const PRACTICE_OPEN_PREFIX = "practice: ";
+
 /** The research direction an arm W worker runs. Absent on arm A's and arm C's events. */
 export type WorkerDirection = "backbone" | "canonical" | "current" | "practice";
 
