@@ -111,6 +111,7 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
     researchMs,
     extraCostUsd: arm === "C" ? (outcome.arm?.counts.searches ?? 0) * WEB_SEARCH_USD : 0,
     split,
+    plan,
   });
   return { metrics, materials: outcome.materials, dropped: outcome.dropped, plan, split, coverage: outcome.coverage, facts: calls.flatMap((c) => c.facts.map((f) => `${c.label}: ${f}`)) };
 }
@@ -134,7 +135,7 @@ async function main() {
           const m = result.metrics;
           const time = result.split ? `, split ${result.split.readingShare}% reading / ${result.split.practice}` : "";
           const hit = m.formatHit ? ` · missing ${m.formatHit.missing.join(", ") || "—"} · unwanted ${m.formatHit.unwanted.join(", ") || "—"}` : "";
-          const picks = `\n    picks ${m.picks.join(", ") || "—"}${hit}`;
+          const picks = `\n    picks ${m.picks.join(", ") || "—"}${hit} · ${pct(m.practiceSourcedShare)} of practice rows sourced · ${m.openPicks ?? "—"} picks left open`;
           const who = m.workers ? `, workers ${m.workers.map((w) => `${w.direction.slice(0, 3)}:${w.steps}/${w.stoppedBy}`).join(" ")}` : "";
           console.log(`verified ${m.verified}/${m.proposed}, backbone ${m.backboneHit ?? "—"}, sized ${m.sizedHours} of ${m.totalHours} h (${pct(m.measuredShare)} measured)${time}${who}, $${m.costUsd.toFixed(3)}, ${(m.latencyMs / 1000).toFixed(0)} s (research ${(m.researchMs / 1000).toFixed(0)} s)${picks}`);
         } catch (error) {
@@ -146,11 +147,12 @@ async function main() {
 
   const all = results.map((r) => r.metrics);
   const summaries = arms.map((arm) => summarize(arm, all));
-  console.log("\narm  runs  verified  backbone  mustInclude  recency  unknownRefs  overBudget  regressions  cost/run  latency  research  dup   searches  reads");
+  console.log("\narm  runs  verified  backbone  mustInclude  recency  unknownRefs  overBudget  regressions  sourced  openPicks  cost/run  latency  research  dup   searches  reads");
   for (const s of summaries) {
     console.log(
       [s.arm.padEnd(4), String(s.runs).padEnd(5), pct(s.verifiedRate).padEnd(9), pct(s.backboneHit).padEnd(9), pct(s.mustIncludeRecall).padEnd(12), pct(s.recency).padEnd(8),
         (s.unknownRefs ?? 0).toFixed(1).padEnd(12), (s.overBudgetLeaves ?? 0).toFixed(1).padEnd(11), (s.chapterRegressions ?? 0).toFixed(1).padEnd(12),
+        pct(s.practiceSourcedShare).padEnd(8), (s.openPicks === null ? "—" : s.openPicks.toFixed(1)).padEnd(10),
         `$${(s.costUsd ?? 0).toFixed(3)}`.padEnd(9), `${((s.latencyMs ?? 0) / 1000).toFixed(0)} s`.padEnd(8), `${((s.researchMedianMs ?? 0) / 1000).toFixed(0)} s`.padEnd(9),
         (s.duplicateShare === null ? "—" : pct(s.duplicateShare)).padEnd(5), (s.searches ?? 0).toFixed(1).padEnd(9), (s.fetches ?? 0).toFixed(1)].join(" "),
     );

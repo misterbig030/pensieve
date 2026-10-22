@@ -1,8 +1,10 @@
 import type { GenerationLogRow, ModelCall } from "@/lib/ai/logged";
 import type { WorkerSummary } from "@/lib/ai/research/agent";
+import { isPracticeOpen, type Coverage } from "@/lib/ai/research/events";
 import type { ResearchOutcome } from "@/lib/ai/research/pipeline";
 import { titleMatches, titleTokens } from "@/lib/ai/research/verify";
 import { recencyShare } from "@/lib/materials";
+import { walk, type PlanNode } from "@/lib/planTree";
 import type { PracticeFormat, PracticePick } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
 import { totalHours, type PlanSplit } from "@/lib/studyTime";
@@ -30,7 +32,7 @@ export interface RunMetrics {
   overBudgetLeaves: number;
   chapterRegressions: number;
   unreservedChapters: number;
-  /** Leaves whose must-reading ran well past the plan's own reading share. */
+  /** Weeks whose must-reading ran well past the week's reading budget (an over-budget breach on must-reading). */
   overShareLeaves: number;
   /** Hours of material on the list (over the materials that have a size) and the plan's study hours in all. */
   sizedHours: number;
@@ -58,6 +60,10 @@ export interface RunMetrics {
   picks: PracticeFormat[];
   /** Labelled formats the picks missed and excluded ones they took; null when the record has no format labels. */
   formatHit: { missing: PracticeFormat[]; unwanted: PracticeFormat[] } | null;
+  /** Sourced practice rows ÷ all practice rows in the drafted plan; null when it has none. */
+  practiceSourcedShare: number | null;
+  /** Practice picks research found no source for; null without coverage. */
+  openPicks: number | null;
 }
 
 /** Where the backbone's chapter list came from; null without a backbone or a list. */
@@ -79,6 +85,25 @@ export function formatHit(picks: PracticePick[], labels: FormatLabels | undefine
     missing: (labels.include ?? []).filter((f) => !picked.has(f)),
     unwanted: (labels.exclude ?? []).filter((f) => picked.has(f)),
   };
+}
+
+/** Sourced practice rows ÷ all practice rows across the plan's units; null without a plan or without practice. */
+export function practiceSourcedShare(plan: PlanNode | null | undefined): number | null {
+  if (!plan) return null;
+  let rows = 0;
+  let sourced = 0;
+  walk(plan, (n) => {
+    for (const r of n.practice ?? []) {
+      rows += 1;
+      if (!r.generated) sourced += 1;
+    }
+  });
+  return rows === 0 ? null : sourced / rows;
+}
+
+/** How many practice picks research left open (`Coverage.open`'s "practice: " entries); null without coverage. */
+export function openPicks(coverage: Coverage | null | undefined): number | null {
+  return coverage ? coverage.open.filter(isPracticeOpen).length : null;
 }
 
 function authorMatches(expected: string, author: string | null): boolean {
@@ -115,7 +140,7 @@ export function checkCounts(calls: ModelCall[]): Pick<RunMetrics, "unknownRefs" 
       const unknown = fact.match(/^dropped unknown (.+)$/);
       if (unknown) unknownRefs += unknown[1].split(",").length;
       else if (/ over budget: /.test(fact)) overBudgetLeaves += 1;
-      else if (/ must-reading over the plan's share: /.test(fact)) overShareLeaves += 1;
+      else if (/^breach: .+'s must-reading is \d+ min against a budget/.test(fact)) overShareLeaves += 1;
       else if (/^backbone ch\. \d+ after ch\./.test(fact)) chapterRegressions += 1;
       else if (/^backbone ch\. .* not reserved$/.test(fact)) unreservedChapters += 1;
     }
@@ -147,6 +172,8 @@ export function runMetrics(input: {
   extraCostUsd?: number;
   /** The split the practice pick chose and the draft kept, when there was one. */
   split?: PlanSplit | null;
+  /** The drafted plan, for its practice rows. */
+  plan?: PlanNode | null;
 }): RunMetrics {
   const { outcome, record } = input;
   const picks = input.split?.formats ?? [];
@@ -175,6 +202,8 @@ export function runMetrics(input: {
     duplicateShare: outcome.arm?.duplicateShare ?? null,
     picks: picks.map((p) => p.format),
     formatHit: formatHit(picks, record.labels?.formats),
+    practiceSourcedShare: practiceSourcedShare(input.plan),
+    openPicks: openPicks(outcome.coverage),
   };
 }
 
@@ -213,6 +242,10 @@ export interface ArmSummary {
   fetches: number | null;
   /** Share of runs with a backbone whose chapter list was found; null when no run had a backbone. */
   chaptersFound: number | null;
+  /** Mean sourced share of practice rows, over runs whose plan had practice. */
+  practiceSourcedShare: number | null;
+  /** Mean practice picks left open per run, over runs with coverage. */
+  openPicks: number | null;
 }
 
 export function summarize(arm: ArmName, runs: RunMetrics[]): ArmSummary {
@@ -236,6 +269,8 @@ export function summarize(arm: ArmName, runs: RunMetrics[]): ArmSummary {
     searches: mean(mine.map((r) => r.toolCalls.searches)),
     fetches: mean(mine.map((r) => r.toolCalls.fetches)),
     chaptersFound: mean(mine.filter((r) => r.backboneHit !== false).map((r) => (r.chaptersSource === null ? 0 : 1))),
+    practiceSourcedShare: mean(mine.map((r) => r.practiceSourcedShare)),
+    openPicks: mean(mine.map((r) => r.openPicks)),
   };
 }
 
