@@ -502,6 +502,22 @@ describe("practice rows and reservations", () => {
     expect(refs).toEqual([{ format: "recall", id: "book", task: "Six questions on sampling", done: "checked against ch. 2", minutes: 18, generated: true }]);
     expect(refused).toEqual(['Recall "Questions on the essay": not written from this unit\'s reading', 'Recall "Questions from nowhere": not written from this unit\'s reading']);
   });
+  it("keeps a generated recall row citing a dual-role book on the unit's Read list, chapter or whole, whatever its practice role", () => {
+    const chapters = { source: "catalogue" as const, url: "u", printPages: false, end: null, chapters: [1, 2, 3].map((n) => ({ n, title: `C${n}`, page: null, minutes: null, sections: [] })) };
+    // M1 is a book read as reading that also serves as a problem list.
+    const dual = aliasMaterials([{ id: "book", toc: chapters, practice: source("problem-set") }, { id: "neet", practice: source("problem-set") }]);
+    const drafts = [
+      { format: "recall", id: "M1.2", task: "Six questions on ch. 2", done: "checked against ch. 2", minutes: 15 },
+      { format: "recall", id: "M1", task: "Questions on the book", done: "checked", minutes: 10 },
+      { format: "recall", id: "M2", task: "Recall the patterns", done: "checked", minutes: 10 },
+    ];
+    const { refs, refused } = resolvePracticeRefs(drafts, dual, split, ["book"]);
+    expect(refs.map((r) => [r.id, r.generated])).toEqual([
+      ["book", true],
+      ["book", true],
+    ]);
+    expect(refused).toEqual(['Recall "Recall the patterns": M2 serves Problems, not Recall']);
+  });
   it("refuses a format the split did not pick, and reports an id not in the list as unknown", () => {
     const { refs, unknown, refused } = resolvePracticeRefs(
       [
@@ -579,6 +595,11 @@ describe("practice budgets", () => {
     expect(practiceBudgets({ readingShare: 40, practice: "projects", reason: "" }, 360, materials)).toEqual({ reading: 144, practice: {} });
     expect(practiceBudgets({ readingShare: 100, practice: "reading", reason: "", formats: [] }, 360, materials)).toEqual({ reading: 360, practice: {} });
     expect(practiceBudgets(null, 360, materials)).toEqual({ reading: 216, practice: {} });
+  });
+  it("keeps recall's share when the only reading on the list is a book that also serves as practice", () => {
+    const dual = [{ id: "book", minutes: 600, practice: { format: "problem-set" as const, items: 10, perItemMinutes: 10, minutes: null, answers: true } }];
+    expect(practiceBudgets(split, 360, dual)).toEqual({ reading: 225, practice: { "problem-set": 90, recall: 45 } });
+    expect(noSourceFacts(split, dual)).toEqual(["no source for Lab: its time goes to reading"]);
   });
   it("gives recall's time to reading when the list has no reading to write it from", () => {
     const practiceOnly = [materials[1]];

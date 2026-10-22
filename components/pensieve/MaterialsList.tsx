@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PRACTICE_OPEN_PREFIX, type Coverage, type DroppedMaterial, type ResearchNotice } from "@/lib/ai/research/events";
+import { isPracticeOnly } from "@/lib/materials";
 import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { approxDuration } from "@/lib/researchProgress";
 import { KIND_LABEL, KIND_ORDER, hostOf, type Material, type MaterialKind, type MaterialPractice } from "@/lib/schemas/material";
@@ -161,11 +162,7 @@ export function MaterialsList(props: MaterialsListProps) {
   );
 }
 
-/** A source that is practice and nothing to read: it goes in the "Practice" group instead of a kind group. */
-function isPracticeOnly(m: Material): boolean {
-  return !m.minutes && !!m.practice;
-}
-
+/** A practice-only source goes in the "Practice" group instead of a kind group. */
 function groupLabel(m: Material): string {
   return isPracticeOnly(m) ? "Practice" : KIND_LABEL[m.kind];
 }

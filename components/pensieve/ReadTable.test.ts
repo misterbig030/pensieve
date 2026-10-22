@@ -132,9 +132,14 @@ describe("coverPracticeRows", () => {
     expect(row.generated).toBe(true);
     expect(row.material?.id).toBe("aie");
   });
-  it("marks a cover whose id is a practice source as not generated", () => {
-    const [row] = coverPracticeRows([{ format: "recall", id: "drills", note: null, task: "Question bank", minutes: 30 }], byId);
+  it("marks a cover whose id is a practice source of its format as not generated", () => {
+    const [row] = coverPracticeRows([{ format: "problem-set", id: "drills", note: null, task: "Problems 21-40", minutes: 30 }], byId);
     expect(row.generated).toBe(false);
+    expect(row.material?.id).toBe("drills");
+  });
+  it("marks a recall cover whose id is a book that also serves as practice as generated from that reading", () => {
+    const [row] = coverPracticeRows([{ format: "recall", id: "drills", note: null, task: "Questions on ch. 2", minutes: 30 }], byId);
+    expect(row.generated).toBe(true);
     expect(row.material?.id).toBe("drills");
   });
 });

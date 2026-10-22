@@ -155,9 +155,9 @@ function rowName(format: string, task: string): string {
  * Resolves the model's practice rows. A row of a format the split did not pick is refused. A row naming a practice
  * source of its own format keeps it; one whose source serves another format is refused. A row with no id is one the
  * model wrote (`generated`), refused when its format is never written. Recall written from reading must name a
- * resource the unit itself reads (`reads`, its Read table's ids), so a recall row with no id, or citing other reading,
- * is refused. An id not in the list is unknown; a reading id on any other format is refused, since it is no practice
- * source.
+ * resource the unit itself reads (`reads`, its Read table's ids), whatever that resource's practice role, so a recall
+ * row with no id, or citing other reading, is refused. An id not in the list is unknown; a reading id on any other
+ * format is refused, since it is no practice source.
  */
 export function resolvePracticeRefs(
   drafts: PracticeRefDraft[] | undefined,
@@ -188,11 +188,13 @@ export function resolvePracticeRefs(
     }
     const spec = PRACTICE_REGISTRY[format];
     const serves = resolved ? aliases.practice(resolved.id) : null;
-    if (serves !== null && serves !== format) {
+    // Being on the unit's Read list is what makes a resource reading, so recall may be written from it whatever else it serves.
+    const fromReading = format === "recall" && serves !== format && resolved !== undefined && reads.includes(resolved.id);
+    if (serves !== null && serves !== format && !fromReading) {
       refused.push(`${name}: ${alias} serves ${PRACTICE_REGISTRY[serves].label}, not ${spec.label}`);
       continue;
     }
-    const generated = serves === null;
+    const generated = serves !== format;
     if (generated) {
       const why =
         format === "recall"
@@ -249,9 +251,15 @@ export interface PickSources {
   assignable: boolean;
 }
 
+/** A source that is practice and nothing to read: it has a practice role and no reading time. */
+export function isPracticeOnly(m: Pick<Material, "minutes" | "practice">): boolean {
+  return !m.minutes && !!m.practice;
+}
+
 /** The split's picks with their sources. Empty when the plan is all reading. */
-export function pickSources(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice">[]): PickSources[] {
-  const hasReading = materials.some((m) => !m.practice);
+export function pickSources(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice" | "minutes">[]): PickSources[] {
+  // A source that also serves as practice is still reading, so recall can be written from it.
+  const hasReading = materials.some((m) => !isPracticeOnly(m));
   return (split?.formats ?? []).map((pick) => {
     const sources = materials.filter((m) => m.practice?.format === pick.format).map((m) => m.id);
     const rule = PRACTICE_REGISTRY[pick.format].generated;
@@ -268,7 +276,7 @@ export function pickSources(split: PlanSplit | null | undefined, materials: Pick
 export function practiceBudgets(
   split: PlanSplit | null | undefined,
   weekMinutes: number,
-  materials: Pick<Material, "id" | "practice">[],
+  materials: Pick<Material, "id" | "practice" | "minutes">[],
 ): ReturnType<typeof weekBudgets> {
   if ((split?.formats ?? []).length === 0) return { reading: Math.round(weekMinutes * (readingShareOf(split) ?? MUST_SHARE)), practice: {} };
   const budgets = weekBudgets(split, weekMinutes);
@@ -281,7 +289,7 @@ export function practiceBudgets(
 }
 
 /** One fact per pick that can't be assigned, for the drafting call's facts. */
-export function noSourceFacts(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice">[]): string[] {
+export function noSourceFacts(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice" | "minutes">[]): string[] {
   return pickSources(split, materials)
     .filter((p) => !p.assignable)
     .map((p) => `no source for ${PRACTICE_REGISTRY[p.pick.format].label}: its time goes to reading`);

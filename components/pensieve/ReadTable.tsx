@@ -64,8 +64,9 @@ export function practiceRowsFor(refs: PracticeRef[] | undefined, byId: ReadonlyM
 export function coverPracticeRows(covers: PracticeCover[] | undefined, byId: ReadonlyMap<string, Material>): PracticeRow[] {
   return practiceRowsFor(
     (covers ?? []).flatMap((c) =>
-      // A cover keeps its row's id, so a generated recall row carries its reading's id: only a practice source is not generated.
-      c.task && c.minutes ? [{ format: c.format, id: c.id, task: c.task, done: "", minutes: c.minutes, generated: c.id === null || !byId.get(c.id)?.practice }] : [],
+      // A cover keeps its row's id, so a generated recall row carries its reading's id: only a practice source of the
+      // cover's own format is not generated, since a book can be reading and serve another format too.
+      c.task && c.minutes ? [{ format: c.format, id: c.id, task: c.task, done: "", minutes: c.minutes, generated: c.id === null || byId.get(c.id)?.practice?.format !== c.format }] : [],
     ),
     byId,
   );
