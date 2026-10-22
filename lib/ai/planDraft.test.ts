@@ -491,6 +491,18 @@ describe("practice while drafting", () => {
     expect(calls[0].facts).toContain('refused Problems "Problems of my own": no source, and this format is never written; Lab "A git lab": no source, and this format is never written');
   });
 
+  it("checks practice written without a source when the plan has no materials", async () => {
+    const design = { readingShare: 50, practice: "design", reason: "r", formats: [{ format: "design-exercise" as const, share: 100, focus: "systems", reason: "" }] };
+    const day = (title: string, minutes: number): UnitDraft => ({ title, summary: "s", practice: [{ format: "design-exercise", task: "Design a cache", done: "covers eviction and consistency", minutes }] });
+    const first = [day("D1", 200), day("D2", 30), day("D3", 30), day("D4", 30), day("D5", 30)];
+    mockedStreamObject.mockReturnValueOnce(fakeStream(first)).mockReturnValueOnce(fakeStream(first));
+    const calls: ModelCall[] = [];
+    for await (const _ of streamPlanDraft({ topic: "Systems", weeks: 1, daysPerWeek: 5, granularity: "day", materials: [], hoursPerWeek: 6, split: design, log: { onCall: (c) => void calls.push(c) } })) void _;
+    // Six hours over five days is 70 min a day: a 200-minute day breaches, and the level is asked again.
+    expect(mockedStreamObject).toHaveBeenCalledTimes(2);
+    expect(calls[0].facts).toContain("breach: Day 1 is 200 min of reading and practice against a budget of about 70 min");
+  });
+
   it("reserves practice sources on headings", () => {
     const node = nodeFor(
       { title: "Month", summary: "s", covers: [{ id: "M1" }], practiceCovers: [{ format: "problem-set", id: "M2", note: "Arrays & Hashing" }], practice: [{ format: "problem-set", id: "M2", task: "t", done: "d", minutes: 5 }] },

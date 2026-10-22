@@ -273,7 +273,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     });
     if (!aliases) return [];
     const practiceFacts = [...noSourceFacts(ctx.split, ctx.materials), ...(refused.length > 0 ? [`refused ${refused.join("; ")}`] : [])];
-    if (ctx.materials.length === 0) return [...(unknown.length > 0 ? [`dropped unknown ${[...new Set(unknown)].join(", ")}`] : []), ...practiceFacts];
+    // The checks run without materials too: a plan with no sources can still have practice written without one.
     // Chapter rows take their minutes from the list before the budget is judged, so the checks see real sizes.
     if (leaf) sizeChapterRows(final, ctx.materials);
     const { root, placed } = placeForChecks(input.tree, input.parentId, final);
