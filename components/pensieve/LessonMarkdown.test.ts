@@ -16,6 +16,12 @@ describe("LessonMarkdown", () => {
     expect(html).not.toContain("<pre");
   });
 
+  it("matches the answers fence in any case", () => {
+    const html = render(["```Answers", "1. Keys and values.", "```"].join("\n"));
+    expect(html).toMatch(/<summary[^>]*>Answers<\/summary>/);
+    expect(html).not.toContain("<pre");
+  });
+
   it("renders other code fences exactly as plain markdown does", () => {
     for (const markdown of ["```python\nprint('hi')\n```", "```\nplain\n```", "- Use `answers` inline."]) {
       expect(render(markdown)).toBe(renderToStaticMarkup(createElement(ReactMarkdown, null, markdown)));

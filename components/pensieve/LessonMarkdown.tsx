@@ -31,6 +31,6 @@ function answersOf(pre: Element | undefined): string | null {
   const code = pre?.children[0];
   if (code?.type !== "element" || code.tagName !== "code") return null;
   const classes = code.properties.className;
-  if (!Array.isArray(classes) || !classes.includes(`language-${ANSWERS_FENCE}`)) return null;
+  if (!Array.isArray(classes) || !classes.some((c) => String(c).toLowerCase() === `language-${ANSWERS_FENCE}`)) return null;
   return code.children.map((c) => (c.type === "text" ? c.value : "")).join("");
 }
