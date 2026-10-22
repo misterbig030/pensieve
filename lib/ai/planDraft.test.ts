@@ -8,10 +8,11 @@ vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof impor
 import { generateObject, streamObject } from "ai";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelCall } from "./logged";
-import { streamExpandNode, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
+import { nodeFor, streamExpandNode, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
 import type { ResolvedModel } from "./resolve";
 import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
-import type { PlanNode } from "@/lib/planTree";
+import { aliasMaterials } from "@/lib/materials";
+import { makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import { AIE_MATERIALS, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 
 const mockedStreamObject = vi.mocked(streamObject);
@@ -425,5 +426,80 @@ describe("breaches while drafting", () => {
         for await (const _ of streamExpandNode({ ...ctx, outlineModel, tree: tree(), nodeId: "w1", reason: "split" })) void _;
       })(),
     ).rejects.toBe(refusal);
+  });
+});
+
+describe("practice while drafting", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+  });
+  const problems = material("M2", { kind: "course", practice: { format: "problem-set", items: 150, perItemMinutes: 10, minutes: null, answers: true } });
+  const materials = [material("M1"), problems];
+  const split = {
+    readingShare: 50,
+    practice: "problems and labs",
+    reason: "r",
+    formats: [
+      { format: "problem-set" as const, share: 50, focus: "arrays", reason: "" },
+      { format: "lab" as const, share: 50, focus: "git", reason: "" },
+    ],
+  };
+  const ctx = { topic: "Interviews", weeks: 1, daysPerWeek: 7, granularity: "week" as const, materials, hoursPerWeek: 6, split };
+  /** A one-week plan whose week leaf is split by hand: it reads M1 and practises M2. */
+  const tree = () =>
+    makeRoot([
+      makeNode({
+        id: "w1",
+        level: "week",
+        title: "Arrays",
+        summary: "s",
+        len: 7,
+        budgetHours: 6,
+        materials: [{ id: "M1", tier: "must", minutes: 60, note: null }],
+        practice: [{ format: "problem-set", id: "M2", task: "Arrays 1–6", done: "all pass", minutes: 40, generated: false }],
+      }),
+    ]);
+
+  it("puts practice rows on days, refuses what the rules forbid, and gives a sourceless lab's time to reading", async () => {
+    const units: UnitDraft[] = [
+      {
+        title: "D1",
+        summary: "s",
+        materials: [{ id: "M1", tier: "must", minutes: 60 }],
+        practice: [
+          { format: "problem-set", id: "M2", task: "Arrays 1–3", done: "all pass", minutes: 20 },
+          { format: "problem-set", task: "Problems of my own", done: "solved", minutes: 10 },
+        ],
+      },
+      { title: "D2", summary: "s", practice: [{ format: "problem-set", id: "M2", task: "Arrays 4–6", done: "all pass", minutes: 20 }, { format: "lab", task: "A git lab", done: "passes", minutes: 30 }] },
+      { title: "D3", summary: "s" },
+    ];
+    mockedStreamObject.mockReturnValueOnce(fakeStream(units)).mockReturnValueOnce(fakeStream(units));
+    const calls: ModelCall[] = [];
+    let children: PlanNode[] = [];
+    for await (const e of streamExpandNode({ ...ctx, tree: tree(), nodeId: "w1", reason: "split", splitDays: 3, log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") children = e.children;
+    const prompt = (mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt;
+    // The split week's practice row is the reservation its days are planned from.
+    expect(prompt).toContain("Reserved for this unit: M2 40 min: Arrays 1–6.");
+    expect(prompt).not.toContain("Lab");
+    expect(children[0].practice).toEqual([{ format: "problem-set", id: "M2", task: "Arrays 1–3", done: "all pass", minutes: 20, generated: false }]);
+    expect(children[1].practice).toEqual([{ format: "problem-set", id: "M2", task: "Arrays 4–6", done: "all pass", minutes: 20, generated: false }]);
+    expect(children[2].practice).toBeUndefined();
+    expect(calls[0].facts).toContain("no source for Lab: its time goes to reading");
+    expect(calls[0].facts).toContain('refused Problems "Problems of my own": no source, and this format is never written; Lab "A git lab": no source, and this format is never written');
+  });
+
+  it("reserves practice sources on headings", () => {
+    const node = nodeFor(
+      { title: "Month", summary: "s", covers: [{ id: "M1" }], practiceCovers: [{ format: "problem-set", id: "M2", note: "Arrays & Hashing" }], practice: [{ format: "problem-set", id: "M2", task: "t", done: "d", minutes: 5 }] },
+      "month",
+      28,
+      "week",
+      aliasMaterials(materials),
+      6,
+      split,
+    );
+    expect(node.practiceCovers).toEqual([{ format: "problem-set", id: "M2", note: "Arrays & Hashing" }]);
+    expect(node.practice).toBeUndefined();
   });
 });

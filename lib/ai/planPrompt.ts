@@ -1,4 +1,5 @@
-import { MUST_SHARE, aliasMaterials, formatAliases, type MaterialAliases, type ResolvedAlias } from "@/lib/materials";
+import { MUST_SHARE, aliasMaterials, formatAliases, pickSources, practiceBudgets, type MaterialAliases, type PickSources, type ResolvedAlias } from "@/lib/materials";
+import { PRACTICE_REGISTRY, type PracticeFormat, type PracticeGenerated } from "@/lib/practice";
 import {
   budgetFor,
   capitalize,
@@ -14,7 +15,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialRef, type RefActivity } from "@/lib/schemas/material";
+import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialRef, type PracticeCover, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
 import { dayMinutes, readingShareOf, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 
 export interface PlanPromptContext {
@@ -71,17 +72,45 @@ export function describeRefs(refs: RefLike[], aliases: MaterialAliases): string 
 }
 
 /**
- * "covers M1.1–M1.4, M3" for a heading; "reads M1.2 must 35 min (Post-Training; Sampling); M3 should 79 min" for a leaf.
- * Review rows, which only plans saved before reviews were withdrawn from the planner carry, are not shown: the model is
- * not to imitate them, and they reserve nothing for reading.
+ * One practice row or reservation without its format: "M2 40 min: Arrays 1–6", "generated 15 min: Six questions",
+ * "M2 (Arrays & Hashing)". A row the model wrote says so; one whose source is not in the list is left out (null).
  */
-export function renderRefs(node: Pick<PlanNode, "covers" | "materials">, aliases: MaterialAliases): string {
+function practiceItem(r: { id: string | null; task?: string; minutes?: number; note?: string | null; generated?: boolean }, aliases: MaterialAliases): string | null {
+  const alias = r.id === null ? null : aliases.alias(r.id);
+  if (alias === undefined) return null;
+  const generated = r.id === null || r.generated;
+  const who = [alias, generated ? "generated" : null].filter(Boolean).join(" ");
+  return `${who}${r.minutes ? ` ${r.minutes} min` : ""}${r.task ? `: ${r.task}` : ""}${refNote(r.note ?? null)}`;
+}
+
+/** "Problems M2 40 min: Arrays 1–6; Recall M1 generated 15 min: Six questions": rows of any formats, each named by its format. */
+function describePractice(rows: (PracticeRef | PracticeCover)[], aliases: MaterialAliases): string {
+  return rows
+    .map((r) => {
+      const item = practiceItem(r, aliases);
+      return item === null ? null : `${PRACTICE_REGISTRY[r.format].label} ${item}`;
+    })
+    .filter((s): s is string => s !== null)
+    .join("; ");
+}
+
+/**
+ * "covers M1.1–M1.4, M3" for a heading; "reads M1.2 must 35 min (Post-Training; Sampling); M3 should 79 min" for a leaf,
+ * then the practice it reserves ("practice covers Problems M2 (Arrays & Hashing)") or does ("practises Problems M2 40
+ * min: Arrays 1–6"). Review rows, which only plans saved before reviews were withdrawn from the planner carry, are not
+ * shown: the model is not to imitate them, and they reserve nothing for reading.
+ */
+export function renderRefs(node: Pick<PlanNode, "covers" | "materials" | "practice" | "practiceCovers">, aliases: MaterialAliases): string {
   const parts: string[] = [];
   const covers = (node.covers ?? []).filter((r: CoverRef) => aliases.alias(r.id) && activityOf(r) === "read");
   const reads = (node.materials ?? []).filter((r: MaterialRef) => aliases.alias(r.id) && activityOf(r) === "read");
   const row = (r: MaterialRef) => `${aliases.alias(r.id, r.chapter)} ${r.tier}${r.minutes !== null ? ` ${r.minutes} min` : ""}${refNote(r.note)}`;
   if (covers.length > 0) parts.push(`covers ${describeRefs(covers, aliases)}`);
   if (reads.length > 0) parts.push(`reads ${reads.map(row).join("; ")}`);
+  const practiceCovers = describePractice(node.practiceCovers ?? [], aliases);
+  const practice = describePractice(node.practice ?? [], aliases);
+  if (practiceCovers) parts.push(`practice covers ${practiceCovers}`);
+  if (practice) parts.push(`practises ${practice}`);
   return parts.join(" · ");
 }
 
@@ -166,12 +195,14 @@ export function renderChapters(toc: ChapterList, options: { sections: boolean; a
 
 /**
  * One line per material: `M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024 · about 22 h. Why: …`, followed by
- * its chapter lines when it has a list, each a resource of its own (`M1.3`), in which case the book line says so.
+ * its chapter lines when it has a list, each a resource of its own (`M1.3`), in which case the book line says so. A
+ * practice source is tagged with the format it serves (`practice: Problems`).
  */
 export function renderMaterials(materials: Material[], aliases: MaterialAliases = aliasMaterials(materials), options: RenderMaterialsOptions = {}): string {
   return materials
     .flatMap((m) => {
-      const tags = [m.kind, m.backbone ? "backbone" : null, m.origin === "learner" ? "the learner's own" : null].filter(Boolean).join(" · ");
+      const practice = m.practice ? `practice: ${PRACTICE_REGISTRY[m.practice.format].label}` : null;
+      const tags = [m.kind, m.backbone ? "backbone" : null, practice, m.origin === "learner" ? "the learner's own" : null].filter(Boolean).join(" · ");
       const byline = [m.author, m.year].filter(Boolean).join(", ");
       const where = m.type === "note" || m.type === "file" ? "" : ` <${m.url}>`;
       const alias = aliases.alias(m.id);
@@ -242,10 +273,17 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
 
   // Days are the days of one week, so the week's day count is the number of units asked for.
   const daysInWeek = input.level === "day" ? n : input.daysPerWeek;
+  const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
+  // A week leaf holds its whole week's practice, so its line says each pick's share of it.
+  const weekMinutes = weekBudgetsOf(input).practice;
+  const weekPractice =
+    input.unitsAreLeaves && input.level !== "day" && picks.length > 0
+      ? `; practice: ${picks.map((p) => `${PRACTICE_REGISTRY[p.pick.format].label} ${formatMinutes(weekMinutes[p.pick.format] ?? 0)}`).join(", ")}`
+      : "";
   input.spans.forEach((len, i) => {
     const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, daysInWeek, input.hoursPerWeek) : null;
-    const must = minutes === null ? "" : `, so about ${formatMinutes(Math.round((minutes * share) / 5) * 5)} of must-reading`;
-    const budget = hasMaterials && minutes !== null ? ` — budget about ${formatMinutes(minutes)}${must}` : "";
+    const must = minutes === null || !hasMaterials ? "" : `, so about ${formatMinutes(Math.round((minutes * share) / 5) * 5)} of must-reading`;
+    const budget = (hasMaterials || picks.length > 0) && minutes !== null ? ` — budget about ${formatMinutes(minutes)}${must}${weekPractice}` : "";
     parts.push(`${i + 1}. ${unitLine(input.level, i, len, input.daysPerWeek)}${budget}`);
   });
 
@@ -264,7 +302,114 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
     `Return exactly ${n} units in that order. Title: a short noun phrase (at most 8 words) with no "Week 1:" or "Day 3:" prefix. Summary: one sentence on what it covers and why it comes here.`,
   );
   if (hasMaterials) parts.push(input.unitsAreLeaves ? leafMaterialRules(input, aliases) : headingMaterialRules(input, aliases));
+  const practice = input.unitsAreLeaves ? leafPracticeRules(input, aliases) : headingPracticeRules(input, aliases);
+  if (practice) parts.push(practice);
   return parts.join("\n");
+}
+
+/** A week's reading and per-pick practice minutes, with a pick that can't be assigned given back to reading. */
+function weekBudgetsOf(input: UnitsPromptInput) {
+  return practiceBudgets(input.split, budgetFor(1, input.hoursPerWeek) * 60, input.materials);
+}
+
+/** How a format's rows may be written without a source, as an instruction; null when they never may. */
+const WRITE_YOURSELF: Record<PracticeGenerated, string | null> = {
+  never: null,
+  "from-reading": 'write the questions yourself from that unit\'s own reading, with id set to a resource the unit reads (an id from its "materials"); the reading holds the answers.',
+  "with-rubric": "write one prompt yourself (leave id out), with a rubric in done: what a strong answer covers.",
+  milestones: "write one milestone per unit of a build the plan names (leave id out), with done saying what runs or exists.",
+  "interview-only": "write a mock yourself (leave id out) only for an interview, with the prompt in task and a rubric in done; never for an exam.",
+  "from-programme": "write a session yourself (leave id out) only from a programme in the list or the unit's own reading.",
+};
+
+/** `Problems (format "problem-set")`: a pick as the practice rules name it. */
+function pickName(format: PracticeFormat): string {
+  return `${PRACTICE_REGISTRY[format].label} (format "${format}")`;
+}
+
+/** The parent's practice reservation of one format, when the units are planned inside a heading that has one. */
+function reservedPractice(input: UnitsPromptInput, format: PracticeFormat): PracticeCover[] {
+  const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
+  return (parent?.practiceCovers ?? []).filter((c) => c.format === format);
+}
+
+/** "Other units have: M2 (Two Pointers) in Month 2." for one format: what the rest of the plan reserves or does of its sources. */
+function practiceHeld(input: UnitsPromptInput, aliases: MaterialAliases, format: PracticeFormat): string {
+  const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
+  if (!input.tree || !parent) return "";
+  const skip = new Set<string>([input.tree.id, parent.id]);
+  for (let p = parentOf(input.tree, parent.id); p; p = parentOf(input.tree, p.id)) skip.add(p.id);
+  const held: string[] = [];
+  walk(input.tree, (n) => {
+    if (skip.has(n.id)) return;
+    const rows = [...(n.practiceCovers ?? []), ...(n.practice ?? [])].filter((r) => r.format === format && r.id !== null);
+    const items = rows.map((r) => practiceItem(r, aliases)).filter((s): s is string => s !== null);
+    if (items.length > 0) held.push(`${items.join("; ")} in ${fullLabelOf(input.tree!, n)}`);
+  });
+  return held.length > 0 ? ` Other units have: ${held.join("; ")}.` : "";
+}
+
+/** Where one pick's rows come from at a leaf level: the reservation, the list's sources, or the model's own. */
+function leafPickSources(input: UnitsPromptInput, aliases: MaterialAliases, { pick, sources }: PickSources): string {
+  const write = WRITE_YOURSELF[PRACTICE_REGISTRY[pick.format].generated];
+  const reserved = reservedPractice(input, pick.format)
+    .map((c) => practiceItem(c, aliases))
+    .filter((s): s is string => s !== null);
+  const from =
+    reserved.length > 0
+      ? `Reserved for this unit: ${reserved.join("; ")}.`
+      : sources.length > 0
+        ? `Sources: ${sources.map((id) => aliases.alias(id)).join(", ")}.`
+        : null;
+  if (from === null) return `No source in the list: ${write}`;
+  const rule = write === null ? "Every row names one of them; never write rows of this format yourself." : `When none fits, ${write}`;
+  return `${from}${practiceHeld(input, aliases, pick.format)} ${rule}`;
+}
+
+/**
+ * The practice rules for leaves: the week's reading and each pick's minutes (a pick that can't be assigned is left out
+ * and its minutes go to reading), each pick's focus, what it is, where its rows come from and when one is done, then
+ * the row shape and the rule that keeps a long task whole.
+ */
+function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): string | null {
+  const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
+  if (picks.length === 0) return null;
+  const days = input.level === "day";
+  const budgets = weekBudgetsOf(input);
+  const week = budgetFor(1, input.hoursPerWeek) * 60;
+  const daysInWeek = days ? input.spans.length : input.daysPerWeek;
+  const half = Math.round(leafBudgetMinutes("day", daysInWeek, input.hoursPerWeek) / 2 / 5) * 5;
+  const lines = [`Practice: ${days ? "the" : "each"} week's time, about ${formatMinutes(week)}, is about ${formatMinutes(budgets.reading)} of reading and, by format:`];
+  for (const p of picks) {
+    const spec = PRACTICE_REGISTRY[p.pick.format];
+    const minutes = formatMinutes(budgets.practice[p.pick.format] ?? 0);
+    lines.push(`- ${pickName(p.pick.format)}: about ${minutes} ${days ? "this week" : "a week"}, aimed at ${p.pick.focus}. The learner ${spec.prompt}. ${leafPickSources(input, aliases, p)} Done when: ${spec.doneWhen}.`);
+  }
+  lines.push(
+    `For each unit, list its practice rows in "practice" as { format, id, task, done, minutes }: format is one of the formats above; id is the row's source (leave it out for a row you write yourself); task says exactly what to do, with the part ("NeetCode 150 · Arrays & Hashing, problems 1–6"); done says how the learner knows it is finished; minutes is the doing time.`,
+  );
+  lines.push(`${days ? "Across the week" : "Within each week"}, each format's minutes add up to about its time. Place a task longer than half a day's budget (about ${formatMinutes(half)}) on a day of its own.`);
+  return lines.join("\n");
+}
+
+/** The practice rules for headings: each pick's sources to reserve in order, with the part in the note. None when no pick has a source. */
+function headingPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): string | null {
+  const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
+  if (!picks.some((p) => p.sources.length > 0)) return null;
+  const kids = UNIT_NOUN[childLevel(input.level) ?? "day"];
+  const lines = [
+    `Practice: for each unit, list in "practiceCovers" the practice sources its ${kids}s will use, as { format, id, note }: take each format's sources in order across the units, with the part this unit takes in note ("Arrays & Hashing; Two Pointers"). A source too long for one unit runs on in the next, a different part in each.`,
+  ];
+  for (const p of picks) {
+    const name = `- ${pickName(p.pick.format)}, aimed at ${p.pick.focus}`;
+    const reserved = reservedPractice(input, p.pick.format)
+      .map((c) => practiceItem(c, aliases))
+      .filter((s): s is string => s !== null);
+    if (reserved.length > 0) lines.push(`${name}: from this unit's reservation, ${reserved.join("; ")}.${practiceHeld(input, aliases, p.pick.format)}`);
+    else if (p.sources.length > 0) lines.push(`${name}: ${p.sources.map((id) => aliases.alias(id)).join(", ")}.${practiceHeld(input, aliases, p.pick.format)}`);
+    else lines.push(`${name}: no source; its rows are written ${p.pick.format === "recall" ? "from the reading " : ""}later, so reserve nothing for it.`);
+  }
+  return lines.join("\n");
 }
 
 /** A leaf's budget: a day's share of a week of `daysInWeek` days, or a whole week. */
@@ -356,7 +501,9 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const backbone = input.materials.findIndex((m) => m.backbone);
   const listed = backbone >= 0 && !!input.materials[backbone].toc;
   const B = `M${backbone + 1}`;
-  const where = reserved.length > 0 ? "where the reservation has material for it" : "where the list has material for it";
+  // With practice picked, a day may go to one long practice task and read nothing.
+  const longTask = input.level === "day" && pickSources(input.split, input.materials).some((p) => p.assignable) ? ", except a day given to one long practice task" : "";
+  const where = `${reserved.length > 0 ? "where the reservation has material for it" : "where the list has material for it"}${longTask}`;
   const lines = [
     `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note }. tier is "must" or "should"; minutes is the reading or watching time for this unit; note names the part: for a chapter, the sections this unit covers ("Post-Training; Sampling"), for anything else the part ("§2 only", "whole essay").`,
     ...availabilityLines(input, aliases),

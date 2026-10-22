@@ -1,6 +1,7 @@
 import { learnerKind } from "@/lib/ai/research/verify";
 import { budgetFor, cloneTree, daysInWeekOf, fullLabelOf, parentOf, walk, weeksOf, type Granularity, type PlanNode } from "@/lib/planTree";
-import { dayMinutes } from "@/lib/studyTime";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY, weekBudgets, type PracticeFormat, type PracticePick } from "@/lib/practice";
+import { dayMinutes, type PlanSplit } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
   normalizeMaterialRef,
@@ -9,6 +10,10 @@ import {
   type Material,
   type MaterialRef,
   type MaterialRefDraft,
+  type PracticeCover,
+  type PracticeCoverDraft,
+  type PracticeRef,
+  type PracticeRefDraft,
   clip,
   hostOf,
   shortId,
@@ -33,19 +38,23 @@ export interface MaterialAliases {
   resolve(alias: string): ResolvedAlias | undefined;
   /** How many chapters the material's list has; 0 without a list. */
   chapters(id: string): number;
+  /** The format a practice source serves; null for a material that is reading only. */
+  practice(id: string): PracticeFormat | null;
 }
 
 const ALIAS_RE = /^\[?\s*(m\d+)(?:\.(\d+))?\s*\]?$/i;
 
-export function aliasMaterials(materials: Pick<Material, "id" | "toc">[]): MaterialAliases {
+export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practice">[]): MaterialAliases {
   const toAlias = new Map<string, string>();
   const fromAlias = new Map<string, string>();
   const counts = new Map<string, number>();
+  const formats = new Map<string, PracticeFormat>();
   materials.forEach((m, i) => {
     const alias = `M${i + 1}`;
     toAlias.set(m.id, alias);
     fromAlias.set(alias.toLowerCase(), m.id);
     counts.set(m.id, m.toc?.chapters.length ?? 0);
+    if (m.practice) formats.set(m.id, m.practice.format);
   });
   return {
     alias: (id, chapter) => {
@@ -62,6 +71,7 @@ export function aliasMaterials(materials: Pick<Material, "id" | "toc">[]): Mater
       return chapter >= 1 && chapter <= (counts.get(id) ?? 0) ? { id, chapter } : undefined;
     },
     chapters: (id) => counts.get(id) ?? 0,
+    practice: (id) => formats.get(id) ?? null,
   };
 }
 
@@ -124,6 +134,137 @@ export function resolveCoverRefs(refs: CoverRefDraft[] | undefined, aliases: Mat
     out.push({ ...normalizeCoverRef(draft), ...resolved });
   }
   return { refs: out, unknown };
+}
+
+/** The format the model wrote, if it is one the split picked. */
+function pickedFormat(format: string, split: PlanSplit | null | undefined): PracticeFormat | null {
+  const f = format.trim().toLowerCase();
+  if (!(PRACTICE_FORMATS as readonly string[]).includes(f)) return null;
+  return (split?.formats ?? []).some((p) => p.format === f) ? (f as PracticeFormat) : null;
+}
+
+/** "Problems "Arrays 1–6"": a refused row as the facts name it. */
+function rowName(format: string, task: string): string {
+  const f = format.trim().toLowerCase();
+  const label = (PRACTICE_FORMATS as readonly string[]).includes(f) ? PRACTICE_REGISTRY[f as PracticeFormat].label : format.trim();
+  const t = task.trim();
+  return `${label} "${t.length > 60 ? `${t.slice(0, 59)}…` : t}"`;
+}
+
+/**
+ * Resolves the model's practice rows. A row of a format the split did not pick is refused. A row naming a practice
+ * source keeps it. A row with no id is one the model wrote (`generated`), refused when its format is never written;
+ * recall written from reading must name a resource the unit itself reads (`reads`, its Read table's ids), so a recall
+ * row with no id, or citing other reading, is refused. An id not in the list is unknown; a reading id on any other
+ * format is refused, since it is no practice source.
+ */
+export function resolvePracticeRefs(
+  drafts: PracticeRefDraft[] | undefined,
+  aliases: MaterialAliases,
+  split: PlanSplit | null | undefined,
+  reads: readonly string[] = [],
+): { refs: PracticeRef[]; unknown: string[]; refused: string[] } {
+  const refs: PracticeRef[] = [];
+  const unknown: string[] = [];
+  const refused: string[] = [];
+  for (const draft of drafts ?? []) {
+    const name = rowName(draft.format, draft.task);
+    const format = pickedFormat(draft.format, split);
+    if (!format) {
+      refused.push(`${name}: not one of the plan's picks`);
+      continue;
+    }
+    const task = clip(draft.task, 300);
+    if (!task) {
+      refused.push(`${name}: no task`);
+      continue;
+    }
+    const alias = draft.id?.trim();
+    const resolved = alias ? aliases.resolve(alias) : undefined;
+    if (alias && !resolved) {
+      unknown.push(alias);
+      continue;
+    }
+    const spec = PRACTICE_REGISTRY[format];
+    const generated = !resolved || aliases.practice(resolved.id) === null;
+    if (generated) {
+      const why =
+        format === "recall"
+          ? resolved && reads.includes(resolved.id)
+            ? null
+            : "not written from this unit's reading"
+          : resolved
+            ? `${alias} is not a practice source`
+            : spec.generated === "never"
+              ? "no source, and this format is never written"
+              : null;
+      if (why) {
+        refused.push(`${name}: ${why}`);
+        continue;
+      }
+    }
+    const minutes = Number.isFinite(draft.minutes) ? Math.max(1, Math.min(600, Math.round(draft.minutes))) : 1;
+    refs.push({ format, id: resolved?.id ?? null, task, done: clip(draft.done, 300) ?? spec.doneWhen, minutes, generated });
+  }
+  return { refs, unknown, refused };
+}
+
+/** Resolves a heading's practice reservations. One whose format is not a pick, or whose material is no practice source, is dropped into `unknown`. */
+export function resolvePracticeCovers(
+  drafts: PracticeCoverDraft[] | undefined,
+  aliases: MaterialAliases,
+  split: PlanSplit | null | undefined,
+): { refs: PracticeCover[]; unknown: string[] } {
+  const refs: PracticeCover[] = [];
+  const unknown: string[] = [];
+  for (const draft of drafts ?? []) {
+    const resolved = aliases.resolve(draft.id);
+    const format = pickedFormat(draft.format, split);
+    if (!resolved || !format || aliases.practice(resolved.id) === null) {
+      unknown.push(draft.id);
+      continue;
+    }
+    refs.push({ format, id: resolved.id, note: clip(draft.note, 300) });
+  }
+  return { refs, unknown };
+}
+
+/** One picked format as the drafter sees it: the practice sources in the list that serve it, in list order. */
+export interface PickSources {
+  pick: PracticePick;
+  sources: string[];
+  /** False when nothing can be assigned: no source, and the format is never written. Its time goes to reading. */
+  assignable: boolean;
+}
+
+/** The split's picks with their sources. Empty when the plan is all reading. */
+export function pickSources(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice">[]): PickSources[] {
+  return (split?.formats ?? []).map((pick) => {
+    const sources = materials.filter((m) => m.practice?.format === pick.format).map((m) => m.id);
+    return { pick, sources, assignable: sources.length > 0 || PRACTICE_REGISTRY[pick.format].generated !== "never" };
+  });
+}
+
+/** A week's budgets as the drafter is given them: `weekBudgets`, with the minutes of a pick that can't be assigned moved to reading. */
+export function practiceBudgets(
+  split: PlanSplit | null | undefined,
+  weekMinutes: number,
+  materials: Pick<Material, "id" | "practice">[],
+): ReturnType<typeof weekBudgets> {
+  const budgets = weekBudgets(split, weekMinutes);
+  for (const { pick, assignable } of pickSources(split, materials)) {
+    if (assignable) continue;
+    budgets.reading += budgets.practice[pick.format] ?? 0;
+    delete budgets.practice[pick.format];
+  }
+  return budgets;
+}
+
+/** One fact per pick that can't be assigned, for the drafting call's facts. */
+export function noSourceFacts(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice">[]): string[] {
+  return pickSources(split, materials)
+    .filter((p) => !p.assignable)
+    .map((p) => `no source for ${PRACTICE_REGISTRY[p.pick.format].label}: its time goes to reading`);
 }
 
 /** Chapter numbers a note names: "Ch. 4 §2" → [4], "ch. 5–6" → [5, 6], "chapters 3, 7 and 9" → [3, 7, 9]. */

@@ -755,13 +755,17 @@ function countExpected(root: PlanNode, pending: Record<string, PendingSlots>): n
   return countArrived(root) + Object.values(pending).reduce((sum, s) => sum + s.count, 0);
 }
 
-/** A week split into days by hand: its Read table becomes the reservation its days were planned from. */
+/** A week split into days by hand: its Read table and practice rows become the reservation its days were planned from. */
 function splitWeek(week: PlanNode): void {
   week.manualSplit = true;
   week.budgetHours = null;
   if (week.materials) {
     week.covers = week.materials.map((r) => ({ id: r.id, note: r.note, chapter: r.chapter, activity: r.activity, tier: r.tier, minutes: r.minutes }));
     delete week.materials;
+  }
+  if (week.practice) {
+    week.practiceCovers = week.practice.map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes }));
+    delete week.practice;
   }
 }
 

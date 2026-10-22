@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layout, makeNode, makeRoot } from "@/lib/planTree";
+import { layout, makeNode, makeRoot, type NewNodeInput } from "@/lib/planTree";
 import { aliasMaterials } from "@/lib/materials";
 import { AIE_MATERIALS, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 import type { ChapterList, Material } from "@/lib/schemas/material";
@@ -362,5 +362,83 @@ describe("chapters as resources in prompts", () => {
     expect(buildRevisionPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", daysPerWeek: 7, tree: root, refs: assignRefs(root), lockBefore: 0, changeRequest: "x" })).toContain(
       "Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit.",
     );
+  });
+});
+
+describe("practice in prompts", () => {
+  const PROBLEMS: Material = { ...MATERIALS[1], id: "M3", kind: "course", title: "NeetCode 150", practice: { format: "problem-set", items: 150, perItemMinutes: 10, minutes: null, answers: true } };
+  const materials = [MATERIALS[0], PROBLEMS];
+  const pick = (format: "problem-set" | "recall" | "lab" | "design-exercise", share: number, focus: string) => ({ format, share, focus, reason: "" });
+  const split = { readingShare: 50, practice: "problems and recall", reason: "", formats: [pick("problem-set", 60, "arrays and hashing"), pick("recall", 40, "key terms")] };
+  const week = (extra: Partial<NewNodeInput> = {}) => makeRoot([makeNode({ id: "w1", level: "week", title: "Arrays", summary: "s", len: 5, ...extra })]);
+  const days = (extra: Partial<Parameters<typeof buildUnitsPrompt>[0]> = {}) =>
+    buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "day", spans: [1, 1, 1, 1, 1], weeks: 1, daysPerWeek: 5, hoursPerWeek: 6, split, tree: week(), parentId: "w1", unitsAreLeaves: true, ...extra });
+
+  it("tells the days of a week each pick's minutes that week, its focus, its sources, its done condition and the half-a-day rule", () => {
+    const prompt = days();
+    // Six hours: three of reading, three of practice shared 60/40.
+    expect(prompt).toContain("Practice: the week's time, about 6 h, is about 3 h of reading and, by format:");
+    expect(prompt).toContain('- Problems (format "problem-set"): about 1.8 h this week, aimed at arrays and hashing. The learner solves many small problems, each with an answer to check against. Sources: M2. Every row names one of them; never write rows of this format yourself. Done when: solved and checked against the solution.');
+    expect(prompt).toContain('- Recall (format "recall"): about 72 min this week, aimed at key terms.');
+    expect(prompt).toContain('No source in the list: write the questions yourself from that unit\'s own reading, with id set to a resource the unit reads (an id from its "materials"); the reading holds the answers.');
+    expect(prompt).toContain('list its practice rows in "practice" as { format, id, task, done, minutes }');
+    // A day is 70 min (six hours over five days, to the nearest 5 min).
+    expect(prompt).toContain("Place a task longer than half a day's budget (about 35 min) on a day of its own.");
+  });
+  it("lists what a split week reserved for its days", () => {
+    const covers = [
+      { format: "problem-set" as const, id: "M3", note: null, task: "Arrays 1–6", minutes: 40 },
+      { format: "recall" as const, id: null, note: null, task: "Six questions on hashing", minutes: 15 },
+    ];
+    const prompt = days({ tree: week({ practiceCovers: covers }) });
+    expect(prompt).toContain("Reserved for this unit: M2 40 min: Arrays 1–6.");
+    expect(prompt).toContain("Reserved for this unit: generated 15 min: Six questions on hashing.");
+  });
+  it("asks for no rows of a pick with no source that is never written, and gives its time to reading", () => {
+    const prompt = days({ split: { ...split, formats: [pick("problem-set", 50, "arrays"), pick("lab", 50, "git")] } });
+    expect(prompt).not.toContain("Lab");
+    expect(prompt).toContain("is about 4.5 h of reading and, by format:");
+    expect(prompt).toContain('- Problems (format "problem-set"): about 1.5 h this week');
+  });
+  it("puts each pick's week minutes on the lines of week leaves", () => {
+    const prompt = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "week", level: "week", spans: [7, 7], weeks: 2, daysPerWeek: 7, hoursPerWeek: 6, split, unitsAreLeaves: true });
+    expect(prompt).toContain("1. Week 1 (7 study days) — budget about 6 h, so about 3 h of must-reading; practice: Problems 1.8 h, Recall 72 min");
+    expect(prompt).toContain('- Problems (format "problem-set"): about 1.8 h a week, aimed at arrays and hashing.');
+  });
+  it("asks headings to reserve each pick's sources in order, with the part in the note", () => {
+    const prompt = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "month", spans: [20, 20], weeks: 8, daysPerWeek: 5, hoursPerWeek: 6, split, unitsAreLeaves: false });
+    expect(prompt).toContain('list in "practiceCovers" the practice sources its weeks will use, as { format, id, note }');
+    expect(prompt).toContain('- Problems (format "problem-set"), aimed at arrays and hashing: M2.');
+    expect(prompt).toContain('- Recall (format "recall"), aimed at key terms: no source; its rows are written from the reading later, so reserve nothing for it.');
+    expect(prompt).not.toContain('"practice" as');
+  });
+  it("says nothing about practice when the plan is all reading", () => {
+    for (const s of [{ readingShare: 100, practice: "reading", reason: "", formats: [] }, { readingShare: 60, practice: "projects", reason: "" }]) {
+      const leaf = days({ split: s });
+      const heading = buildUnitsPrompt({ topic: "t", materials, granularity: "day", level: "month", spans: [20], weeks: 4, daysPerWeek: 5, split: s, unitsAreLeaves: false });
+      for (const prompt of [leaf, heading]) {
+        expect(prompt).not.toContain("Practice:");
+        expect(prompt).not.toMatch(/"practice(Covers)?"/);
+        expect(prompt).not.toContain("half a day");
+      }
+    }
+  });
+  it("tags practice sources in the materials list", () => {
+    expect(renderMaterials(materials)).toContain('M2 [course · practice: Problems · the learner\'s own] "NeetCode 150"');
+  });
+  it("renders practice rows and reservations under prompt aliases", () => {
+    const A = aliasMaterials([{ id: "uuid-0" }, { id: "uuid-1" }]);
+    expect(renderRefs({ practiceCovers: [{ format: "problem-set", id: "uuid-1", note: "Arrays & Hashing" }] }, A)).toBe("practice covers Problems M2 (Arrays & Hashing)");
+    expect(
+      renderRefs(
+        {
+          practice: [
+            { format: "problem-set", id: "uuid-1", task: "Arrays 1–6", done: "all pass", minutes: 40, generated: false },
+            { format: "recall", id: "uuid-0", task: "Six questions", done: "checked", minutes: 15, generated: true },
+          ],
+        },
+        A,
+      ),
+    ).toBe("practises Problems M2 40 min: Arrays 1–6; Recall M1 generated 15 min: Six questions");
   });
 });

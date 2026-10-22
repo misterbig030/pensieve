@@ -190,6 +190,23 @@ export const coverRefDraftSchema = z.object({
 export type MaterialRefDraft = z.infer<typeof materialRefDraftSchema>;
 export type CoverRefDraft = z.infer<typeof coverRefDraftSchema>;
 
+/** What the model writes for a leaf's practice row. Code decides `generated`: a row with no source is one the model wrote. */
+export const practiceRefDraftSchema = z.object({
+  format: z.string().describe(`One of the plan's picked formats: ${PRACTICE_FORMATS.join(", ")}`),
+  id: z.string().nullable().optional().describe("The practice source's id, or the unit's reading for recall written from it; left out for a row you write"),
+  task: z.string().describe('Exactly what to do and which part ("NeetCode 150 · Arrays & Hashing, problems 1–6")'),
+  done: z.string().describe("How the learner knows it is finished"),
+  minutes: z.number().describe("Minutes of doing"),
+});
+/** What the model writes for a heading's reservation of a practice source. */
+export const practiceCoverDraftSchema = z.object({
+  format: z.string().describe("The picked format this source serves"),
+  id: z.string().describe("A practice source's id from the list"),
+  note: z.string().optional().describe('The part this unit takes ("Arrays & Hashing; Two Pointers")'),
+});
+export type PracticeRefDraft = z.infer<typeof practiceRefDraftSchema>;
+export type PracticeCoverDraft = z.infer<typeof practiceCoverDraftSchema>;
+
 export function clip(text: string | null | undefined, max: number): string | null {
   const t = text?.trim();
   if (!t) return null;

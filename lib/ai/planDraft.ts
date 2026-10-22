@@ -1,5 +1,17 @@
 import { streamObject } from "ai";
-import { aliasMaterials, dropBreaches, levelChecks, resolveCoverRefs, resolveMaterialRefs, sizeChapterRows, type Breach, type MaterialAliases } from "@/lib/materials";
+import {
+  aliasMaterials,
+  dropBreaches,
+  levelChecks,
+  noSourceFacts,
+  resolveCoverRefs,
+  resolveMaterialRefs,
+  resolvePracticeCovers,
+  resolvePracticeRefs,
+  sizeChapterRows,
+  type Breach,
+  type MaterialAliases,
+} from "@/lib/materials";
 import type { PlanDraftEvent, PlanDraftRequest, PlanExpandEvent, PlanExpandRequest } from "@/lib/planChat";
 import {
   budgetFor,
@@ -35,7 +47,15 @@ export function unitsAreLeaves(level: PlanLevel, granularity: Granularity): bool
 }
 
 /** Builds a node for a drafted unit: leaves get a time budget when they are week-sized. */
-export function nodeFor(unit: UnitDraft, level: PlanLevel, len: number, granularity: Granularity, aliases?: MaterialAliases, hoursPerWeek?: number): PlanNode {
+export function nodeFor(
+  unit: UnitDraft,
+  level: PlanLevel,
+  len: number,
+  granularity: Granularity,
+  aliases?: MaterialAliases,
+  hoursPerWeek?: number,
+  split?: PlanSplit | null,
+): PlanNode {
   const leaf = unitsAreLeaves(level, granularity);
   const node = makeNode({
     level,
@@ -45,25 +65,38 @@ export function nodeFor(unit: UnitDraft, level: PlanLevel, len: number, granular
     budgetHours: leaf && level !== "day" ? budgetFor(1, hoursPerWeek) : null,
     children: null,
   });
-  if (aliases) applyUnitRefs(node, unit, leaf, aliases);
+  if (aliases) applyUnitRefs(node, unit, leaf, aliases, split);
   return node;
 }
 
 /**
- * Puts what the model wrote for references onto the node: leaves keep `materials` (their Read table), headings keep
- * `covers` (their reservation). Returns the ids that are not in the list; they are dropped.
+ * Puts what the model wrote for references onto the node: leaves keep `materials` (their Read table) and `practice`
+ * (their practice rows), headings keep `covers` and `practiceCovers` (their reservations). Returns the ids that are not
+ * in the list and the practice rows the rules refuse; both are dropped.
  */
-export function applyUnitRefs(node: PlanNode, unit: UnitDraft, leaf: boolean, aliases: MaterialAliases): string[] {
+export function applyUnitRefs(
+  node: PlanNode,
+  unit: UnitDraft,
+  leaf: boolean,
+  aliases: MaterialAliases,
+  split?: PlanSplit | null,
+): { unknown: string[]; refused: string[] } {
   delete node.covers;
   delete node.materials;
+  delete node.practice;
+  delete node.practiceCovers;
   if (leaf) {
-    const { refs, unknown } = resolveMaterialRefs(unit.materials, aliases);
-    if (refs.length > 0) node.materials = refs;
-    return unknown;
+    const reading = resolveMaterialRefs(unit.materials, aliases);
+    if (reading.refs.length > 0) node.materials = reading.refs;
+    const practice = resolvePracticeRefs(unit.practice, aliases, split, reading.refs.map((r) => r.id));
+    if (practice.refs.length > 0) node.practice = practice.refs;
+    return { unknown: [...reading.unknown, ...practice.unknown], refused: practice.refused };
   }
-  const { refs, unknown } = resolveCoverRefs(unit.covers, aliases);
-  if (refs.length > 0) node.covers = refs;
-  return unknown;
+  const reading = resolveCoverRefs(unit.covers, aliases);
+  if (reading.refs.length > 0) node.covers = reading.refs;
+  const practice = resolvePracticeCovers(unit.practiceCovers, aliases, split);
+  if (practice.refs.length > 0) node.practiceCovers = practice.refs;
+  return { unknown: [...reading.unknown, ...practice.unknown], refused: [] };
 }
 
 /**
@@ -192,7 +225,8 @@ function placeForChecks(tree: PlanNode | undefined, parentId: string | undefined
 async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; costUsd: number }> {
   const { ctx, level } = input;
   const leaf = unitsAreLeaves(level, ctx.granularity);
-  const aliases = ctx.materials.length > 0 ? aliasMaterials(ctx.materials) : undefined;
+  // References are resolved when there are materials, or practice to assign (rows written without a source).
+  const aliases = ctx.materials.length > 0 || (ctx.split?.formats ?? []).length > 0 ? aliasMaterials(ctx.materials) : undefined;
   const promptInput: UnitsPromptInput = {
     topic: ctx.topic,
     instructions: ctx.instructions,
@@ -222,6 +256,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   const check = (units: UnitDraft[]): string[] => {
     const spans = reconcileSpans(input.spans, units.length, level, ctx.daysPerWeek);
     const unknown: string[] = [];
+    const refused: string[] = [];
     final = units.map((unit, i) => {
       const node = nodes[i] ?? nodeFor(unit, level, spans[i], ctx.granularity, undefined, ctx.hoursPerWeek);
       node.title = unit.title;
@@ -229,16 +264,22 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       node.len = spans[i];
       node.end = node.start + node.len - 1;
       if (node.budgetHours !== null) node.budgetHours = budgetFor(1, ctx.hoursPerWeek);
-      if (aliases) unknown.push(...applyUnitRefs(node, unit, leaf, aliases));
+      if (aliases) {
+        const out = applyUnitRefs(node, unit, leaf, aliases, ctx.split);
+        unknown.push(...out.unknown);
+        refused.push(...out.refused);
+      }
       return node;
     });
     if (!aliases) return [];
+    const practiceFacts = [...noSourceFacts(ctx.split, ctx.materials), ...(refused.length > 0 ? [`refused ${refused.join("; ")}`] : [])];
+    if (ctx.materials.length === 0) return [...(unknown.length > 0 ? [`dropped unknown ${[...new Set(unknown)].join(", ")}`] : []), ...practiceFacts];
     // Chapter rows take their minutes from the list before the budget is judged, so the checks see real sizes.
     if (leaf) sizeChapterRows(final, ctx.materials);
     const { root, placed } = placeForChecks(input.tree, input.parentId, final);
     const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, readingShare: readingShareOf(ctx.split) });
     breaches = checks.breaches;
-    const facts = [...checks.facts, ...breaches.map((b) => `breach: ${b.text}`)];
+    const facts = [...checks.facts, ...practiceFacts, ...breaches.map((b) => `breach: ${b.text}`)];
     if (attempt === 2) {
       // Rows that still breach are dropped, the drops recorded, and the surviving chapter rows resized.
       facts.push(...dropBreaches(final, breaches));
@@ -253,7 +294,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   for await (const event of streamUnits({ ...base, prompt, label })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
-      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek);
+      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split);
       nodes.push(node);
       yield { type: "node", node };
     } else {
@@ -373,10 +414,16 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
   if (node.children) throw new Error("This unit is already planned in detail");
   const level = childLevel(node.level);
   if (!level) throw new Error("A day cannot be planned in more detail");
-  // A week split by hand: its Read table is the reservation its days are planned from, whatever the client sent.
+  // A week split by hand: its Read table and practice rows are the reservation its days are planned from, whatever the
+  // client sent. Reading keeps its tier and minutes; practice keeps its task and minutes.
   if (input.reason === "split" && node.materials) {
     node.covers = node.materials.map(({ id, note, chapter, activity, tier, minutes }) => ({ id, note, chapter, activity, tier, minutes }));
     delete node.materials;
+    node.manualSplit = true;
+  }
+  if (input.reason === "split" && node.practice) {
+    node.practiceCovers = node.practice.map(({ format, id, task, minutes }) => ({ format, id, note: null, task, minutes }));
+    delete node.practice;
     node.manualSplit = true;
   }
   // A week split into a number of days other than its own takes that length before its days are planned.

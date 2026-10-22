@@ -16,6 +16,10 @@ import {
   remapTreeRefs,
   removeMaterialRefs,
   resolveMaterialRefs,
+  resolvePracticeCovers,
+  resolvePracticeRefs,
+  noSourceFacts,
+  practiceBudgets,
   sizeChapterRows,
   tierMinutes,
   treeChecks,
@@ -458,5 +462,95 @@ describe("learnerMaterials", () => {
   it("keeps one material per url", () => {
     const out = learnerMaterials([{ url: "https://example.com/a", type: "link" }, { url: "https://example.com/a", type: "link", title: "Again" }]);
     expect(out).toHaveLength(1);
+  });
+});
+
+describe("practice rows and reservations", () => {
+  const source = (format: "problem-set" | "lab" | "recall") => ({ format, items: 150, perItemMinutes: 10, minutes: null, answers: true });
+  // M1 is reading, M2 a problem list, M3 a lab, M4 more reading.
+  const aliases = aliasMaterials([{ id: "book" }, { id: "neet", practice: source("problem-set") }, { id: "git-lab", practice: source("lab") }, { id: "essay" }]);
+  const split = {
+    readingShare: 50,
+    practice: "problems and recall",
+    reason: "",
+    formats: [
+      { format: "problem-set" as const, share: 60, focus: "arrays", reason: "" },
+      { format: "recall" as const, share: 40, focus: "key terms", reason: "" },
+    ],
+  };
+
+  it("keeps a sourced row under the material's real id and bounds what the model wrote", () => {
+    const { refs, unknown, refused } = resolvePracticeRefs([{ format: "Problem-Set", id: "M2", task: " Arrays 1–6 ", done: "all pass", minutes: 42.4 }], aliases, split);
+    expect(refs).toEqual([{ format: "problem-set", id: "neet", task: "Arrays 1–6", done: "all pass", minutes: 42, generated: false }]);
+    expect(unknown).toEqual([]);
+    expect(refused).toEqual([]);
+  });
+  it("refuses a problem-set row with no id: problems are never written by the drafter", () => {
+    const { refs, refused } = resolvePracticeRefs([{ format: "problem-set", task: "Five array problems", done: "solved", minutes: 30 }], aliases, split);
+    expect(refs).toEqual([]);
+    expect(refused).toEqual(['Problems "Five array problems": no source, and this format is never written']);
+  });
+  it("accepts a generated recall row whose id is the unit's reading, and refuses one citing other reading", () => {
+    const drafts = [
+      { format: "recall", id: "M1.2", task: "Six questions on sampling", done: "checked against ch. 2", minutes: 18 },
+      { format: "recall", id: "M4", task: "Questions on the essay", done: "checked", minutes: 9 },
+      { format: "recall", task: "Questions from nowhere", done: "checked", minutes: 9 },
+    ];
+    const { refs, refused } = resolvePracticeRefs(drafts, aliasMaterials([{ id: "book", toc: { source: "catalogue", url: "u", printPages: false, end: null, chapters: [1, 2, 3].map((n) => ({ n, title: `C${n}`, page: null, minutes: null, sections: [] })) } }, { id: "neet", practice: source("problem-set") }, { id: "git-lab", practice: source("lab") }, { id: "essay" }]), split, ["book"]);
+    expect(refs).toEqual([{ format: "recall", id: "book", task: "Six questions on sampling", done: "checked against ch. 2", minutes: 18, generated: true }]);
+    expect(refused).toEqual(['Recall "Questions on the essay": not written from this unit\'s reading', 'Recall "Questions from nowhere": not written from this unit\'s reading']);
+  });
+  it("refuses a format the split did not pick, and reports an id not in the list as unknown", () => {
+    const { refs, unknown, refused } = resolvePracticeRefs(
+      [
+        { format: "lab", id: "M3", task: "Branching lab", done: "the lab's check passes", minutes: 30 },
+        { format: "problem-set", id: "M9", task: "Problems", done: "solved", minutes: 30 },
+      ],
+      aliases,
+      split,
+    );
+    expect(refs).toEqual([]);
+    expect(refused).toEqual(['Lab "Branching lab": not one of the plan\'s picks']);
+    expect(unknown).toEqual(["M9"]);
+    expect(resolvePracticeRefs([{ format: "problem-set", id: "M2", task: "t", done: "d", minutes: 5 }], aliases, null).refused).toHaveLength(1);
+  });
+  it("refuses a sourced row whose id is reading, not a practice source", () => {
+    const { refs, refused } = resolvePracticeRefs([{ format: "problem-set", id: "M4", task: "The essay's exercises", done: "solved", minutes: 20 }], aliases, split);
+    expect(refs).toEqual([]);
+    expect(refused).toEqual(['Problems "The essay\'s exercises": M4 is not a practice source']);
+  });
+  it("reserves practice sources of picked formats, and drops a cover that is not a pick or not a source into unknown", () => {
+    const { refs, unknown } = resolvePracticeCovers(
+      [
+        { format: "problem-set", id: "M2", note: " Arrays & Hashing " },
+        { format: "lab", id: "M3" },
+        { format: "problem-set", id: "M1" },
+        { format: "problem-set", id: "M7" },
+      ],
+      aliases,
+      split,
+    );
+    expect(refs).toEqual([{ format: "problem-set", id: "neet", note: "Arrays & Hashing" }]);
+    expect(unknown).toEqual(["M3", "M1", "M7"]);
+  });
+});
+
+describe("practice budgets", () => {
+  const split = {
+    readingShare: 50,
+    practice: "problems, recall and lab",
+    reason: "",
+    formats: [
+      { format: "problem-set" as const, share: 50, focus: "arrays", reason: "" },
+      { format: "recall" as const, share: 25, focus: "terms", reason: "" },
+      { format: "lab" as const, share: 25, focus: "git", reason: "" },
+    ],
+  };
+  const materials = [{ id: "book" }, { id: "neet", practice: { format: "problem-set" as const, items: 10, perItemMinutes: 10, minutes: null, answers: true } }];
+  it("gives a pick that can't be assigned back to reading, and says so", () => {
+    // Recall has no source but may be written from the reading; Lab has none and is never written.
+    expect(practiceBudgets(split, 360, materials)).toEqual({ reading: 225, practice: { "problem-set": 90, recall: 45 } });
+    expect(noSourceFacts(split, materials)).toEqual(["no source for Lab: its time goes to reading"]);
+    expect(noSourceFacts(null, materials)).toEqual([]);
   });
 });

@@ -1,5 +1,14 @@
 import { z } from "zod";
-import { coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema, practiceCoverSchema, practiceRefSchema } from "./material";
+import {
+  coverRefDraftSchema,
+  coverRefSchema,
+  materialRefDraftSchema,
+  materialRefSchema,
+  practiceCoverDraftSchema,
+  practiceCoverSchema,
+  practiceRefDraftSchema,
+  practiceRefSchema,
+} from "./material";
 
 export const PLAN_LEVELS = ["month", "week", "day"] as const;
 export const planLevelSchema = z.enum(PLAN_LEVELS);
@@ -7,14 +16,17 @@ export const granularityChoiceSchema = z.enum(["day", "week", "auto"]);
 export const granularitySchema = z.enum(["day", "week"]);
 
 /**
- * What the model writes for one unit whose span the server already decided. Headings reserve materials (`covers`);
- * leaves assign them (`materials`). Both are left out when the plan has no materials.
+ * What the model writes for one unit whose span the server already decided. Headings reserve materials (`covers`) and
+ * practice sources (`practiceCovers`); leaves assign them (`materials`, `practice`). Each is left out when the plan has
+ * nothing for it.
  */
 export const unitDraftSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
   covers: z.array(coverRefDraftSchema).optional().describe("Headings only: materials this unit reserves, by id"),
   materials: z.array(materialRefDraftSchema).optional().describe("Leaves only: this unit's Read table"),
+  practiceCovers: z.array(practiceCoverDraftSchema).optional().describe("Headings only: practice sources this unit reserves, by id"),
+  practice: z.array(practiceRefDraftSchema).optional().describe("Leaves only: this unit's practice rows"),
 });
 export const unitListSchema = z.object({
   units: z.array(unitDraftSchema).min(1).max(40),
