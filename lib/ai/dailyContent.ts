@@ -1,4 +1,4 @@
-import { dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
+import { ANSWERS_FENCE, dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
 import type { Chapter, MaterialKind, MaterialTier, RefActivity } from "@/lib/schemas/material";
 import type { PracticeFormat } from "@/lib/practice";
 import type { SourceType } from "@/lib/schemas/source";
@@ -79,7 +79,7 @@ function practiceSection(practice: LessonPractice[]): string[] {
   ];
   if (practice.some((p) => p.generated && p.format === "recall")) {
     parts.push(
-      `For each generated Recall task, write its questions with their answers inside a collapsed <details><summary>Answers</summary>…</details> block, drawn only from this unit's reading above.`,
+      `For each generated Recall task, write its questions, then their answers in a fenced code block with the info string "${ANSWERS_FENCE}" (\`\`\`${ANSWERS_FENCE}), written as markdown inside the fence; the lesson shows that block collapsed, so the learner answers first. Draw the questions and answers only from this unit's reading above.`,
     );
   }
   if (practice.some((p) => p.generated && p.format !== "recall")) {

@@ -129,18 +129,19 @@ describe("buildDailyContentPrompt", () => {
       expect(prompt).toContain("- Lab: Set up a proxy (45 min) — done when: requests balance across two servers — generated");
     });
 
-    it("asks for a generated recall task's questions with answers in a collapsed details block, drawn from the reading", () => {
+    it("asks for a generated recall task's answers in an answers fence, as markdown, drawn from the reading", () => {
       const prompt = buildDailyContentPrompt({ ...input, practice: [recall] });
       expect(prompt).toContain("- Recall: Answer questions on the reading (20 min) — done when: every answer matches the reading — generated from the reading: AI Engineering (https://example.com/ai-eng)");
-      expect(prompt).toContain("<details><summary>Answers</summary>");
+      expect(prompt).toContain('then their answers in a fenced code block with the info string "answers" (```answers), written as markdown inside the fence');
+      expect(prompt).not.toContain("<details>");
       expect(prompt).toMatch(/only from this unit's reading/);
     });
 
-    it("asks for the details block only for generated recall, and for other generated tasks gives how-to guidance only", () => {
-      expect(buildDailyContentPrompt({ ...input, practice: [problems, lab] })).not.toContain("<details>");
+    it("asks for the answers fence only for generated recall, and for other generated tasks gives how-to guidance only", () => {
+      expect(buildDailyContentPrompt({ ...input, practice: [problems, lab] })).not.toContain("```answers");
       expect(buildDailyContentPrompt({ ...input, practice: [problems, lab] })).toMatch(/generated tasks of any other format[^\n]*guidance only/i);
       expect(buildDailyContentPrompt({ ...input, practice: [problems] })).not.toMatch(/generated tasks/i);
-      expect(buildDailyContentPrompt({ ...input, practice: [{ ...recall, generated: false }] })).not.toContain("<details>");
+      expect(buildDailyContentPrompt({ ...input, practice: [{ ...recall, generated: false }] })).not.toContain("```answers");
     });
   });
 
