@@ -63,7 +63,10 @@ export function practiceRowsFor(refs: PracticeRef[] | undefined, byId: ReadonlyM
 /** A split week's kept practice reservations as Do rows. Only reservations that carry a task and minutes show; they have no done line. */
 export function coverPracticeRows(covers: PracticeCover[] | undefined, byId: ReadonlyMap<string, Material>): PracticeRow[] {
   return practiceRowsFor(
-    (covers ?? []).flatMap((c) => (c.task && c.minutes ? [{ format: c.format, id: c.id, task: c.task, done: "", minutes: c.minutes, generated: c.id === null }] : [])),
+    (covers ?? []).flatMap((c) =>
+      // A cover keeps its row's id, so a generated recall row carries its reading's id: only a practice source is not generated.
+      c.task && c.minutes ? [{ format: c.format, id: c.id, task: c.task, done: "", minutes: c.minutes, generated: c.id === null || !byId.get(c.id)?.practice }] : [],
+    ),
     byId,
   );
 }
@@ -226,9 +229,9 @@ export function DoRows({ rows, link = true }: { rows: PracticeRow[]; link?: bool
             <span className="truncate font-semibold" title={r.task}>
               {r.task}
             </span>
-            <span className="truncate text-[11.5px] text-muted-foreground">
-              {r.done && `${r.done} · `}
+            <span className="truncate text-[11.5px] text-muted-foreground" title={r.done || undefined}>
               <PracticeSource row={r} link={link} />
+              {r.done && ` · ${r.done}`}
             </span>
           </span>
           <span className="justify-self-end text-neutral-800">{r.minutes} min</span>
@@ -305,8 +308,8 @@ export function ReadTable({ rows, practice = [], budgetMinutes }: { rows: ReadRo
                   <div className="flex flex-col gap-0.5">
                     <span className="font-semibold">{r.task}</span>
                     <span className="text-xs text-muted-foreground">
-                      {r.done && `${r.done} · `}
                       <PracticeSource row={r} />
+                      {r.done && ` · ${r.done}`}
                     </span>
                   </div>
                 </td>

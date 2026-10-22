@@ -111,13 +111,14 @@ describe("practiceRowsFor", () => {
 });
 
 describe("coverPracticeRows", () => {
-  const byId = new Map(AIE_MATERIALS.map((m) => [m.id, m]));
+  const practiceSource = { ...AIE_MATERIALS.find((m) => m.id === "evals")!, id: "drills", practice: { format: "problem-set" as const, items: 100, perItemMinutes: 10, minutes: null, answers: true } };
+  const byId = new Map([...AIE_MATERIALS, practiceSource].map((m) => [m.id, m]));
   it("shows a split week's kept reservations as rows without a done line, skipping covers that carry no task", () => {
     const rows = coverPracticeRows(
       [
-        { format: "problem-set", id: "evals", note: null, task: "Problems 1-20", minutes: 90 },
+        { format: "problem-set", id: "drills", note: null, task: "Problems 1-20", minutes: 90 },
         { format: "mock", id: null, note: null, task: "Mock interview", minutes: 45 },
-        { format: "lab", id: "evals", note: "ch. 2" },
+        { format: "lab", id: "drills", note: "ch. 2" },
       ],
       byId,
     );
@@ -125,5 +126,15 @@ describe("coverPracticeRows", () => {
       ["Problems 1-20", 90, "", false],
       ["Mock interview", 45, "", true],
     ]);
+  });
+  it("marks a recall cover whose id is a reading as generated and keeps the reading", () => {
+    const [row] = coverPracticeRows([{ format: "recall", id: "aie", note: null, task: "20 questions", minutes: 60 }], byId);
+    expect(row.generated).toBe(true);
+    expect(row.material?.id).toBe("aie");
+  });
+  it("marks a cover whose id is a practice source as not generated", () => {
+    const [row] = coverPracticeRows([{ format: "recall", id: "drills", note: null, task: "Question bank", minutes: 30 }], byId);
+    expect(row.generated).toBe(false);
+    expect(row.material?.id).toBe("drills");
   });
 });
