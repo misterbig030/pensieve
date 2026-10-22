@@ -9,7 +9,7 @@ import { getLeafWithContent, getNodeReadList } from "@/lib/db/planQueries";
 import { budgetMinutes } from "@/lib/materials";
 import { budgetFor, daysInWeekOf, findNode, fullLabelOf } from "@/lib/planTree";
 import { PageShell } from "@/components/pensieve/PageShell";
-import { byTier, type ReadRow } from "@/components/pensieve/ReadTable";
+import { byTier, practiceRowsFor, type ReadRow } from "@/components/pensieve/ReadTable";
 import { chapterAt } from "@/lib/schemas/material";
 import { LeafView } from "./LeafView";
 
@@ -34,6 +34,9 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
 
   const node = findNode(detail.root, nodeId);
   if (!node || node.children !== null) notFound();
+
+  const trackMaterials = new Map(trackSources.map((s) => [s.id, sourceToMaterial(s)]));
+  const practiceRows = practiceRowsFor(node.practice, trackMaterials);
 
   const kicker = fullLabelOf(detail.root, node);
   const isWeek = node.level !== "day";
@@ -72,6 +75,7 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
           }
           youtubeSources={youtubeSources}
           readRows={readRows}
+          practiceRows={practiceRows}
           budgetMinutes={budgetMinutes({ level: node.level, budgetHours: isWeek ? (node.budgetHours ?? budgetFor(1, hours)) : null }, hours, days)}
           isCompleted={node.status === "completed"}
         />

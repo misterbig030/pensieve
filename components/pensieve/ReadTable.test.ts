@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
-import { budgetLine, byTier, chapterLabel, partLabel, readRowsFor, rowBrief } from "./ReadTable";
+import { budgetLine, byTier, chapterLabel, coverPracticeRows, partLabel, practiceRowsFor, readRowsFor, rowBrief } from "./ReadTable";
 
 describe("readRowsFor", () => {
   it("fills chapter, activity and a key per row", () => {
@@ -80,5 +80,50 @@ describe("budgetLine", () => {
   });
   it("says reading against the budget when the unit has no practice rows", () => {
     expect(budgetLine({ readingMinutes: 191, practiceMinutes: 0, budgetMinutes: 360 })).toBe("3 h 11 of 6 h reading");
+  });
+});
+
+describe("practiceRowsFor", () => {
+  const byId = new Map(AIE_MATERIALS.map((m) => [m.id, m]));
+  it("keeps a source's row with its material and a generated row with none", () => {
+    const rows = practiceRowsFor(
+      [
+        { format: "problem-set", id: "evals", task: "Problems 1-20", done: "checked against the solutions", minutes: 90, generated: false },
+        { format: "design-exercise", id: null, task: "Design a rate limiter", done: "compared with the rubric", minutes: 50, generated: true },
+      ],
+      byId,
+    );
+    expect(rows.map((r) => [r.format, r.label, r.task, r.minutes, r.material?.id ?? null, r.generated])).toEqual([
+      ["problem-set", "Problems", "Problems 1-20", 90, "evals", false],
+      ["design-exercise", "Design", "Design a rate limiter", 50, null, true],
+    ]);
+    expect(new Set(rows.map((r) => r.key)).size).toBe(2);
+  });
+  it("links a generated recall row to the reading it was made from", () => {
+    const [row] = practiceRowsFor([{ format: "recall", id: "aie", task: "20 questions", done: "checked against the reading", minutes: 60, generated: true }], byId);
+    expect(row.material?.id).toBe("aie");
+    expect(row.generated).toBe(true);
+  });
+  it("drops a row whose source is not in the list, and reads nothing from no rows", () => {
+    expect(practiceRowsFor([{ format: "lab", id: "gone", task: "Lab 1", done: "the check passes", minutes: 30, generated: false }], byId)).toEqual([]);
+    expect(practiceRowsFor(undefined, byId)).toEqual([]);
+  });
+});
+
+describe("coverPracticeRows", () => {
+  const byId = new Map(AIE_MATERIALS.map((m) => [m.id, m]));
+  it("shows a split week's kept reservations as rows without a done line, skipping covers that carry no task", () => {
+    const rows = coverPracticeRows(
+      [
+        { format: "problem-set", id: "evals", note: null, task: "Problems 1-20", minutes: 90 },
+        { format: "mock", id: null, note: null, task: "Mock interview", minutes: 45 },
+        { format: "lab", id: "evals", note: "ch. 2" },
+      ],
+      byId,
+    );
+    expect(rows.map((r) => [r.task, r.minutes, r.done, r.generated])).toEqual([
+      ["Problems 1-20", 90, "", false],
+      ["Mock interview", 45, "", true],
+    ]);
   });
 });

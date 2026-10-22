@@ -6,7 +6,7 @@ import { ChevronDown, Lock } from "lucide-react";
 import { Menu } from "@base-ui/react/menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BudgetBar, ReadRows, partLabel, readRowsFor, rowBrief, sumMinutes } from "@/components/pensieve/ReadTable";
+import { BudgetBar, DoRows, ReadRows, coverPracticeRows, partLabel, practiceRowsFor, readRowsFor, rowBrief, sumMinutes, sumPracticeMinutes } from "@/components/pensieve/ReadTable";
 import { budgetMinutes, keptReadTable } from "@/lib/materials";
 import { formatDuration } from "@/lib/researchProgress";
 import { chapterAt, type Material } from "@/lib/schemas/material";
@@ -131,8 +131,11 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
   const hasSessions = mode === "track" && !!sessions && sessions.count > 0;
   const canSplit = node.level === "week" && !locked && !done && !hasSessions && !ctx.busy;
   const rows = readRowsFor(node.materials, ctx.byId);
+  const practice = practiceRowsFor(node.practice, ctx.byId);
+  const hasWork = rows.length > 0 || practice.length > 0;
+  const practiceMinutes = sumPracticeMinutes(practice);
   const isWeek = node.level !== "day";
-  const hasMeta = (node.budgetHours !== null && rows.length === 0) || showStatus || hasSessions || canSplit;
+  const hasMeta = (node.budgetHours !== null && !hasWork) || showStatus || hasSessions || canSplit;
   const href = mode === "track" && ctx.leafHref ? ctx.leafHref(node) : undefined;
 
   const classes = cn(
@@ -176,19 +179,20 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
         </span>
       </span>
       <span className="flex items-baseline gap-2">
-        <span className={cn("leading-snug", isWeek && rows.length > 0 ? "text-sm font-semibold" : "text-[13px]")}>{node.title}</span>
-        {isWeek && rows.length > 0 && node.budgetHours !== null && (
+        <span className={cn("leading-snug", isWeek && hasWork ? "text-sm font-semibold" : "text-[13px]")}>{node.title}</span>
+        {isWeek && hasWork && node.budgetHours !== null && (
           <span className="ml-auto shrink-0 text-xs whitespace-nowrap text-muted-foreground">{node.budgetHours} h budget</span>
         )}
       </span>
       {/* A day's subtitle is what it reads, so the week's division shows at a glance; the summary opens on the chevron.
           A day with nothing to read shows its summary instead. */}
-      {(open || (!isWeek && rows.length === 0)) && <span className="min-w-0 text-[12px] leading-snug opacity-80">{node.summary}</span>}
-      {rows.length > 0 &&
+      {(open || (!isWeek && !hasWork)) && <span className="min-w-0 text-[12px] leading-snug opacity-80">{node.summary}</span>}
+      {hasWork &&
         (isWeek ? (
           <span className="mt-1 flex flex-col gap-2">
-            <ReadRows rows={rows} link={!href} />
-            <BudgetBar rows={rows} budgetMinutes={budgetMinutes(node, ctx.hoursPerWeek)} />
+            {rows.length > 0 && <ReadRows rows={rows} link={!href} />}
+            {practice.length > 0 && <DoRows rows={practice} link={!href} />}
+            <BudgetBar rows={rows} practiceMinutes={practiceMinutes} budgetMinutes={budgetMinutes(node, ctx.hoursPerWeek)} />
           </span>
         ) : (
           <span className="flex min-w-0 flex-col gap-0.5 text-[11.5px] leading-snug text-muted-foreground">
@@ -202,7 +206,12 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
                 </span>
               );
             })}
-            <span>{formatDuration(sumMinutes(rows).must + sumMinutes(rows).should)}</span>
+            {practice.map((p) => (
+              <span key={p.key} className="line-clamp-2" title={`${p.label} · ${p.task} · ${p.minutes} min`}>
+                <span className="text-neutral-800">{p.label}</span> · {p.task} · {p.minutes} min
+              </span>
+            ))}
+            <span>{formatDuration(sumMinutes(rows).must + sumMinutes(rows).should + practiceMinutes)}</span>
           </span>
         ))}
     </>
@@ -213,7 +222,7 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
   // through to the link.
   const meta = hasMeta && (
     <span className="pointer-events-none relative z-10 mt-[3px] flex flex-wrap items-center gap-1.5 [&_button]:pointer-events-auto">
-      {node.budgetHours !== null && rows.length === 0 && (
+      {node.budgetHours !== null && !hasWork && (
         <Badge variant="neutral" className="text-[11px]">
           about {node.budgetHours} hours
         </Badge>
@@ -265,6 +274,7 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
   // A week split by hand still shows the Read table it was planned with; weeks split before tiers were kept show
   // their reservation instead.
   const kept = node.manualSplit ? readRowsFor(keptReadTable(node.covers), ctx.byId) : [];
+  const keptPractice = node.manualSplit ? coverPracticeRows(node.practiceCovers, ctx.byId) : [];
 
   const headClick = () => {
     if (expanded) ctx.onToggle(node.id);
@@ -306,10 +316,11 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
         )}
       </div>
       <p className="m-0 text-[13px] leading-normal opacity-65">{node.summary}</p>
-      {kept.length > 0 ? (
+      {kept.length > 0 || keptPractice.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <ReadRows rows={kept} />
-          <BudgetBar rows={kept} budgetMinutes={budgetFor(1, ctx.hoursPerWeek) * 60} />
+          {kept.length > 0 && <ReadRows rows={kept} />}
+          {keptPractice.length > 0 && <DoRows rows={keptPractice} />}
+          <BudgetBar rows={kept} practiceMinutes={sumPracticeMinutes(keptPractice)} budgetMinutes={budgetFor(1, ctx.hoursPerWeek) * 60} />
         </div>
       ) : (
         <CoversRow node={node} byId={ctx.byId} />
