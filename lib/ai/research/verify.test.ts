@@ -6,6 +6,7 @@ import { SourceFetcher, type PageFetcher } from "./tools";
 import {
   BookLookupUnavailable,
   canonicalUrl,
+  createOpenLibraryLookup,
   kindProblem,
   mainTitle,
   normalizeCoverage,
@@ -14,6 +15,7 @@ import {
   registrableDomain,
   reverifyMaterial,
   runGate,
+  searchTitle,
   sizeMaterial,
   sizedMinutes,
   titleMatches,
@@ -107,6 +109,33 @@ describe("Open Library match", () => {
     const doc = { title: "AI Engineering", author_name: ["Chip Huyen"] };
     expect(pickBookMatch("AI Engineering", null, [{ ...doc, key: "//evil.example/works/OL1W" }])?.key).toBeNull();
     expect(pickBookMatch("AI Engineering", null, [doc])?.key).toBeNull();
+  });
+  // Open Library's own order for title "System Design Interview", author "Alex Xu" (2026-10-22).
+  const xuDocs = [
+    { key: "/works/OL34313663W", title: "Machine Learning System Design Interview", author_name: ["Ali Aminian", "Alex Xu"] },
+    { key: "/works/OL21947791W", title: "System Design Interview - an Insider's Guide", author_name: ["Alex Xu", "Sahn Lam"] },
+  ];
+  it("picks the closest title, not the first that contains the claim", () => {
+    expect(pickBookMatch("System Design Interview – An Insider's Guide", "Alex Xu", xuDocs)?.key).toBe("/works/OL21947791W");
+    expect(pickBookMatch("System Design Interview", "Alex Xu", xuDocs)?.key).toBe("/works/OL21947791W");
+    expect(pickBookMatch("Machine Learning System Design Interview", "Alex Xu", xuDocs)?.key).toBe("/works/OL34313663W");
+  });
+  it("searches by the title without a subtitle or an aside in brackets", () => {
+    expect(searchTitle("Designing Data-Intensive Applications (DDIA) — an O’Reilly book by Martin Kleppmann (The Wild Boar Book)")).toBe("Designing Data-Intensive Applications");
+    expect(searchTitle("Introduction to Algorithms [3rd edition]")).toBe("Introduction to Algorithms");
+    expect(searchTitle("(Untitled)")).toBe("(Untitled)");
+  });
+  it("finds a book whose claimed title carries a page's aside", async () => {
+    const ddia = { key: "/works/OL19293745W", title: "Designing Data-Intensive Applications", author_name: ["Martin Kleppmann"], first_publish_year: 2015 };
+    // Open Library finds nothing for a title that still holds "(DDIA)".
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      const title = new URL(String(url)).searchParams.get("title");
+      return { ok: true, status: 200, json: async () => ({ docs: title === "Designing Data-Intensive Applications" ? [ddia] : [] }) } as unknown as Response;
+    });
+    const claimed = "Designing Data-Intensive Applications (DDIA) — an O’Reilly book by Martin Kleppmann (The Wild Boar Book)";
+    const match = await createOpenLibraryLookup(fetchImpl).find(claimed, "Martin Kleppmann");
+    expect(match).toMatchObject({ key: "/works/OL19293745W", title: "Designing Data-Intensive Applications" });
+    expect(new URL(String(fetchImpl.mock.calls[0][0])).searchParams.get("author")).toBe("Martin Kleppmann");
   });
 });
 
