@@ -86,6 +86,7 @@ export function sourceToMaterial(row: Source): Material {
     minutesBasis: row.minutesBasis,
     uses: row.uses,
     toc: row.toc ?? null,
+    practice: row.practice ?? null,
   };
 }
 
@@ -121,6 +122,7 @@ export function materialsToRows(trackId: string, materials: Material[]): { rows:
       minutesBasis: m.minutes ? (m.minutesBasis ?? "estimated") : null,
       uses: m.uses ?? null,
       toc: m.toc ?? null,
+      practice: m.practice ?? null,
     };
   });
   return { rows, ids };

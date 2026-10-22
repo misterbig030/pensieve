@@ -9,6 +9,7 @@ import {
   kindProblem,
   mainTitle,
   normalizeCoverage,
+  normalizePractice,
   pickBookMatch,
   recommendingDomains,
   registrableDomain,
@@ -499,5 +500,105 @@ describe("chapters through the gate", () => {
     expect(result.materials).toHaveLength(1);
     expect(result.materials[0]).toMatchObject({ origin: "learner", toc: { source: "catalogue" } });
     expect(f.events.filter((e) => e.type === "research.chapters")).toHaveLength(1);
+  });
+});
+
+describe("normalizePractice", () => {
+  it("sizes a counted format by items times its minutes per item, the draft's own when it gives one", () => {
+    expect(normalizePractice({ format: "problem-set", items: 12, perItemMinutes: null, answers: true })).toEqual({
+      format: "problem-set",
+      items: 12,
+      perItemMinutes: 10,
+      minutes: 120,
+      answers: true,
+    });
+    expect(normalizePractice({ format: "problem-set", items: 12, perItemMinutes: 5, answers: true })?.minutes).toBe(60);
+  });
+  it("uses the registry's fixed minutes for a block format, and none for an unsized one", () => {
+    expect(normalizePractice({ format: "mock", items: null, perItemMinutes: null, answers: true })?.minutes).toBe(75);
+    expect(normalizePractice({ format: "project", items: null, perItemMinutes: null, answers: false })?.minutes).toBeNull();
+  });
+  it("rejects an unknown format, and a format that needs answers when the source has none", () => {
+    expect(normalizePractice({ format: "quiz", items: 5, perItemMinutes: 2, answers: true })).toBeNull();
+    expect(normalizePractice({ format: "problem-set", items: 20, perItemMinutes: null, answers: false })).toBeNull();
+    expect(normalizePractice({ format: "lab", items: 4, perItemMinutes: null, answers: false })?.minutes).toBe(20);
+  });
+  it("bounds items and minutes per item", () => {
+    expect(normalizePractice({ format: "recall", items: 99999, perItemMinutes: 9999, answers: true })).toMatchObject({ items: 5000, perItemMinutes: 600, minutes: 60000 });
+    expect(normalizePractice({ format: "recall", items: 0, perItemMinutes: null, answers: true })?.items).toBeNull();
+  });
+});
+
+describe("practice through the gate", () => {
+  const gate = (f: ReturnType<typeof gateFixture>, over: Partial<Parameters<typeof runGate>[0]>) =>
+    runGate({ candidates: [], learner: [], learnerNotes: [], fetcher: f.fetcher, books: f.books, seenUrls: new Set(), emit: f.emit, secret: SECRET, ...over });
+  const url = "https://example.com/exercises";
+  const page = () => gateFixture({ [url]: info(url, "Exercises") });
+
+  it("merges the reading and practice proposals for one URL into one material with both", async () => {
+    const f = page();
+    const result = await gate(f, {
+      candidates: [
+        candidate({ url, title: "Exercises", minutes: 90 }),
+        candidate({ url, title: "Exercises", practice: { format: "problem-set", items: 6, perItemMinutes: null, answers: true } }),
+      ],
+    });
+    expect(result.materials).toHaveLength(1);
+    expect(result.materials[0].minutes).toBe(90);
+    expect(result.materials[0].practice).toEqual({ format: "problem-set", items: 6, perItemMinutes: 10, minutes: 60, answers: true });
+  });
+
+  it("does not overwrite a practice the kept material already has", async () => {
+    const f = page();
+    const result = await gate(f, {
+      candidates: [
+        candidate({ url, title: "Exercises", minutes: 30, practice: { format: "recall", items: 10, perItemMinutes: null, answers: true } }),
+        candidate({ url, title: "Exercises", practice: { format: "problem-set", items: 6, perItemMinutes: null, answers: true } }),
+      ],
+    });
+    expect(result.materials[0].practice?.format).toBe("recall");
+  });
+
+  it("adds a candidate's practice to the learner's own source it matches", async () => {
+    const f = page();
+    const result = await gate(f, {
+      learner: [{ url, type: "link" }],
+      learnerNotes: [{ url, kind: "docs", why: "Theirs" }],
+      candidates: [candidate({ url, title: "Exercises", practice: { format: "problem-set", items: 4, perItemMinutes: null, answers: true } })],
+    });
+    expect(result.materials).toHaveLength(1);
+    expect(result.materials[0].origin).toBe("learner");
+    expect(result.materials[0].practice).toMatchObject({ format: "problem-set", minutes: 40 });
+  });
+
+  it("keeps a practice-only material with no reading minutes", async () => {
+    const f = page();
+    const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", practice: { format: "problem-set", items: 6, perItemMinutes: null, answers: true } })] });
+    expect(result.materials[0].minutes).toBeNull();
+    expect(result.materials[0].practice?.minutes).toBe(60);
+  });
+
+  it("drops a practice-only candidate whose format needs answers and has none", async () => {
+    const f = page();
+    const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", practice: { format: "problem-set", items: 6, perItemMinutes: null, answers: false } })] });
+    expect(result.materials).toEqual([]);
+    expect(result.dropped).toEqual([{ title: "Exercises", url, reason: "practice without answers" }]);
+  });
+
+  it("keeps a candidate with reading minutes as reading only when its practice is unusable", async () => {
+    const f = page();
+    const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", minutes: 45, practice: { format: "problem-set", items: 6, perItemMinutes: null, answers: false } })] });
+    expect(result.materials[0].minutes).toBe(45);
+    expect(result.materials[0].practice ?? null).toBeNull();
+    expect(result.dropped).toEqual([]);
+  });
+
+  it("keeps the practice tag on a learner's link", async () => {
+    const f = page();
+    const result = await gate(f, {
+      learner: [{ url, type: "link" }],
+      learnerNotes: [{ url, kind: "docs", why: "Their problem list", practice: { format: "problem-set", items: 30, perItemMinutes: 8, answers: true } }],
+    });
+    expect(result.materials[0].practice).toEqual({ format: "problem-set", items: 30, perItemMinutes: 8, minutes: 240, answers: true });
   });
 });

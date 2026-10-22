@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PRACTICE_FORMATS } from "@/lib/practice";
 import { SOURCE_TYPES } from "./source";
 
 export const MATERIAL_ORIGINS = ["learner", "research"] as const;
@@ -69,6 +70,21 @@ export const KIND_LABEL: Record<MaterialKind, string> = {
 };
 
 /**
+ * A material's role as practice: problems to solve, questions to answer, a lab to follow. `minutes` is doing time,
+ * not reading time; `Material.minutes` stays the reading time and is null for a source that is practice only.
+ */
+export const materialPracticeSchema = z.object({
+  format: z.enum(PRACTICE_FORMATS),
+  /** Problems, questions or steps the source holds; null when it is not counted. */
+  items: z.number().int().min(1).max(5000).nullable(),
+  perItemMinutes: z.number().int().min(1).max(600).nullable(),
+  minutes: z.number().int().min(1).max(60000).nullable(),
+  /** Whether the source carries answers, solutions or a rubric to check against. */
+  answers: z.boolean(),
+});
+export type MaterialPractice = z.infer<typeof materialPracticeSchema>;
+
+/**
  * One material as the browser holds it. `id` is a short id (`M1`…`Mn`) while drafting and the source row's uuid once
  * the plan is saved; node references use the same id space. A researched material carries `sig`, an HMAC over its
  * url, fetched title and verification time, so a forged "verified" badge cannot be saved.
@@ -95,6 +111,8 @@ export const materialSchema = z.object({
   uses: z.string().trim().max(120).nullable().optional(),
   /** The book's chapter list, when research found one. Absent on materials saved before chapters existed. */
   toc: chapterListSchema.nullable().optional(),
+  /** Set when the source also serves as practice. Absent on materials saved before practice formats existed. */
+  practice: materialPracticeSchema.nullable().optional(),
 });
 export type Material = z.infer<typeof materialSchema>;
 /** Up to 50 of the learner's own plus what research adds (at most 25 are asked for). */

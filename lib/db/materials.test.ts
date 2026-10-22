@@ -50,6 +50,7 @@ const MATERIALS: Material[] = [
   material("M1", "AI Engineering", { kind: "book", backbone: true, year: 2024, recommendedBy: ["https://a.example/", "https://b.example/"], minutes: 1320, minutesBasis: "measured", toc: TOC }),
   material("M2", "My notes", { origin: "learner", type: "note", kind: "note", url: "My notes", verifiedAt: null, fetchedTitle: null, sig: null }),
   material("M3", "Evals guide", { minutes: 300, uses: "units 1–4" }),
+  material("M4", "Problem list", { practice: { format: "problem-set", items: 20, perItemMinutes: 10, minutes: 200, answers: true } }),
 ];
 
 function plan(): PlanNode {
@@ -92,6 +93,7 @@ describe("persistence of materials", () => {
       ["AI Engineering", "research", "book", true],
       ["My notes", "learner", "note", false],
       ["Evals guide", "research", "docs", false],
+      ["Problem list", "research", "docs", false],
     ]);
     expect(detail.materials.every((m) => /^[0-9a-f-]{36}$/.test(m.id))).toBe(true);
     expect(detail.materials[0].recommendedBy).toEqual(["https://a.example/", "https://b.example/"]);
@@ -100,7 +102,12 @@ describe("persistence of materials", () => {
 
   it("keeps a book's chapter list through save and load, and null for the rest", async () => {
     const detail = (await getTrackDetail(trackId, "u1"))!;
-    expect(detail.materials.map((m) => m.toc ?? null)).toEqual([TOC, null, null]);
+    expect(detail.materials.map((m) => m.toc ?? null)).toEqual([TOC, null, null, null]);
+  });
+
+  it("keeps a material's practice role through save and load, and null for the rest", async () => {
+    const detail = (await getTrackDetail(trackId, "u1"))!;
+    expect(detail.materials.map((m) => m.practice ?? null)).toEqual([null, null, null, { format: "problem-set", items: 20, perItemMinutes: 10, minutes: 200, answers: true }]);
   });
 
   it("keeps the learner's hours, the plan's split and each material's size", async () => {
@@ -111,6 +118,7 @@ describe("persistence of materials", () => {
       [1320, "measured", null],
       [null, null, null],
       [300, "estimated", "units 1–4"],
+      [null, null, null],
     ]);
     await updateTrackStudyTime(trackId, "u1", { hoursPerWeek: 200, split: null });
     const after = (await getTrackDetail(trackId, "u1"))!;
