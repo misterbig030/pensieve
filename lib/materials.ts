@@ -362,8 +362,9 @@ function formatChapters(chapters: number[]): string {
 }
 
 /**
- * `practice-outside`: a sourced practice row whose source the parent did not reserve. `practice-generated`: a row the
- * model wrote where the registry forbids it (a format never written, or recall not from the unit's own reading).
+ * `practice-outside`: a sourced practice row of a format the parent reserved, from a source it did not reserve.
+ * `practice-generated`: a row the model wrote where the registry forbids it (a format never written, or recall not from
+ * the unit's own reading).
  */
 export type BreachKind =
   | "outside"
@@ -516,8 +517,10 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     return found;
   };
 
-  // The parent's practice reservation binds its children's sourced rows, by source and format.
+  // The parent's practice reservation binds its children's sourced rows, by source and format, for the formats it
+  // reserved; a format it reserved nothing of may take any source of that format, as the prompt offers.
   const practiceReserved = parentNode?.practiceCovers ?? [];
+  const reservedFormats = new Set(practiceReserved.map((c) => c.format));
   const inPracticeReservation = (r: PracticeRef) => practiceReserved.some((c) => c.id === r.id && c.format === r.format);
 
   const withRefs = input.nodes.filter((n) => refsOf(n).length > 0);
@@ -586,11 +589,9 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
 
     if (input.leaves) {
       const rows = node.practice ?? [];
-      if (practiceReserved.length > 0) {
-        for (const r of rows.filter((r) => !r.generated && r.id !== null && !inPracticeReservation(r))) {
-          const from = aliases.alias(r.id!) ?? r.id;
-          practiceBreach("practice-outside", index, unit, r, `${unit} assigns ${rowName(r.format, r.task)} from ${from}, which ${label(parentNode!)} did not reserve`);
-        }
+      for (const r of rows.filter((r) => !r.generated && r.id !== null && reservedFormats.has(r.format) && !inPracticeReservation(r))) {
+        const from = aliases.alias(r.id!) ?? r.id;
+        practiceBreach("practice-outside", index, unit, r, `${unit} assigns ${rowName(r.format, r.task)} from ${from}, which ${label(parentNode!)} did not reserve`);
       }
       // The drafter's resolver refuses these; a revision may still bring them.
       const ownReading = new Set((node.materials ?? []).filter(isRead).map((r) => r.id));

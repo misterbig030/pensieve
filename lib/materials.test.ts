@@ -667,6 +667,13 @@ describe("checks over the week", () => {
     expect(dropBreaches(days, out.breaches)).toEqual(['dropped Problems "Graphs 1–3" from Week 1 · Day 1: practice-outside']);
     expect(days[0].practice).toEqual([solve("Arrays 1–3", 30)]);
   });
+  it("binds only the formats the week reserved: a sourced row of a format it reserved nothing of may use any source", () => {
+    const design = { format: "design-exercise" as const, items: 20, perItemMinutes: 45, minutes: null, answers: true };
+    const withDesign = { ...split, formats: [split.formats[0], { format: "design-exercise" as const, share: 50, focus: "systems", reason: "" }] };
+    const { root, days } = week([{ practice: [{ format: "design-exercise", id: "D", task: "Design a URL shortener", done: "checked against the rubric", minutes: 45, generated: false }] }]);
+    const out = levelChecks({ root, nodes: days, leaves: true, top: false, materials: [...materials, { id: "D", practice: design }], unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split: withDesign });
+    expect(out.breaches.map((b) => b.kind)).not.toContain("practice-outside");
+  });
   it("does not check sourced rows against a week that reserves no practice", () => {
     const { root, days } = week([{ practice: [solve("Graphs 1–3", 30, "Q")] }]);
     delete root.children![0].practiceCovers;
