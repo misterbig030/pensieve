@@ -234,16 +234,48 @@ function authorsOverlap(claimed: string | null, authors: string[]): boolean {
   return authors.some((a) => titleTokens(a).some((t) => want.has(t)));
 }
 
+/**
+ * The title to ask the catalogue for: the main title without asides in brackets. A claim copied from a book's web
+ * page ("Designing Data-Intensive Applications (DDIA) — an O'Reilly book…") finds nothing until the extras go.
+ */
+export function searchTitle(title: string): string {
+  const main = mainTitle(title);
+  const bare = main.replace(/\s*(?:\([^)]*\)|\[[^\]]*\])/g, "").trim();
+  return bare || main;
+}
+
+/** How closely two titles agree, from 0 to 1: shared tokens over both titles' tokens, at their best forms. */
+function titleCloseness(claimed: string, found: string): number {
+  let best = 0;
+  for (const a of new Set([claimed, mainTitle(claimed), searchTitle(claimed)])) {
+    for (const b of new Set([found, mainTitle(found)])) {
+      const r = tokenRecall(a, b);
+      const size = r.size + new Set(titleTokens(b)).size;
+      if (size > 0) best = Math.max(best, (2 * r.hits) / size);
+    }
+  }
+  return best;
+}
+
+/**
+ * The catalogue entry for a claimed book: of the docs whose title and author agree with the claim, the closest
+ * title, so "System Design Interview" by Alex Xu is not "Machine Learning System Design Interview", which he
+ * co-wrote and the catalogue lists first. A tie keeps the catalogue's order.
+ */
 export function pickBookMatch(title: string, author: string | null, docs: OpenLibraryDoc[]): BookMatch | null {
+  let best: { doc: OpenLibraryDoc & { title: string }; closeness: number } | null = null;
   for (const doc of docs) {
     if (!doc.title) continue;
     const matched = titleMatches(title, [doc.title]).ok || titleMatches(doc.title, [title]).ok;
     if (!matched || !authorsOverlap(author, doc.author_name ?? [])) continue;
-    const key = typeof doc.key === "string" && /^\/works\/OL\d+W$/.test(doc.key) ? doc.key : null;
-    const pages = typeof doc.number_of_pages_median === "number" && doc.number_of_pages_median > 0 ? doc.number_of_pages_median : null;
-    return { key, title: doc.title, authors: doc.author_name ?? [], year: doc.first_publish_year ?? null, pages };
+    const closeness = titleCloseness(title, doc.title);
+    if (!best || closeness > best.closeness) best = { doc: { ...doc, title: doc.title }, closeness };
   }
-  return null;
+  if (!best) return null;
+  const { doc } = best;
+  const key = typeof doc.key === "string" && /^\/works\/OL\d+W$/.test(doc.key) ? doc.key : null;
+  const pages = typeof doc.number_of_pages_median === "number" && doc.number_of_pages_median > 0 ? doc.number_of_pages_median : null;
+  return { key, title: doc.title, authors: doc.author_name ?? [], year: doc.first_publish_year ?? null, pages };
 }
 
 export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLookup {
@@ -269,11 +301,11 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLo
   };
   return {
     async find(title, author, signal) {
-      const main = mainTitle(title);
-      const withAuthor = author ? await query({ title: main, author }, signal) : [];
+      const search = searchTitle(title);
+      const withAuthor = author ? await query({ title: search, author }, signal) : [];
       const hit = pickBookMatch(title, author, withAuthor);
       if (hit) return hit;
-      return pickBookMatch(title, author, await query({ title: main }, signal));
+      return pickBookMatch(title, author, await query({ title: search }, signal));
     },
     async chapters(match, signal) {
       if (!match.key) return null;
