@@ -1,3 +1,4 @@
+import { budgetCeiling } from "@/lib/materials";
 import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { formatDuration } from "@/lib/researchProgress";
 import { chapterAt, type Chapter, type Material, type MaterialRef, type MaterialTier, type PracticeCover, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
@@ -149,13 +150,20 @@ export function budgetLine({ readingMinutes, practiceMinutes, budgetMinutes }: {
   return `${formatDuration(readingMinutes)} reading · ${formatDuration(practiceMinutes)} practice · ${formatDuration(budgetMinutes)}`;
 }
 
-/** Must and should minutes against the budget, as a two-part bar and one line of text. */
+/**
+ * How many minutes a unit runs past its budget, once past what the drafting checks accept (`budgetCeiling`); 0 within
+ * it, so a unit the checks pass is not called over.
+ */
+export function minutesOver(totalMinutes: number, budgetMinutes: number): number {
+  return totalMinutes > budgetCeiling(budgetMinutes) ? totalMinutes - budgetMinutes : 0;
+}
+
+/** Must and should minutes against the budget, as a two-part bar and one line of text, with how far it runs over. */
 export function BudgetBar({ rows, practiceMinutes = 0, budgetMinutes, variant = "compact" }: { rows: ReadRow[]; practiceMinutes?: number; budgetMinutes: number; variant?: "compact" | "full" }) {
   const { must, should } = sumMinutes(rows);
   const budget = Math.max(budgetMinutes, 1);
   const line = budgetLine({ readingMinutes: must + should, practiceMinutes, budgetMinutes });
-  const total = must + should + practiceMinutes;
-  const over = total > budgetMinutes;
+  const over = minutesOver(must + should + practiceMinutes, budgetMinutes);
   const share = (minutes: number, taken: number) => `${Math.min(100 - taken, (minutes / budget) * 100)}%`;
   const mustPct = Math.min(100, (must / budget) * 100);
   const shouldPct = Math.min(100 - mustPct, (should / budget) * 100);
@@ -179,8 +187,9 @@ export function BudgetBar({ rows, practiceMinutes = 0, budgetMinutes, variant = 
             </>
           )}
         </span>
-        <span className={cn("ml-auto text-muted-foreground", over && "text-accent-800")}>
-          {over ? `${formatDuration(total - budgetMinutes)} over the budget` : line}
+        <span className="ml-auto text-muted-foreground">
+          {line}
+          {over > 0 && <span className="text-accent-800"> · {formatDuration(over)} over</span>}
         </span>
       </div>
     );
@@ -189,7 +198,8 @@ export function BudgetBar({ rows, practiceMinutes = 0, budgetMinutes, variant = 
     <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
       {bar}
       <span>
-        {formatDuration(must)} must-read{should > 0 ? ` · ${formatDuration(should)} optional` : ""} · {over ? `${formatDuration(total - budgetMinutes)} over budget` : line}
+        {formatDuration(must)} must-read{should > 0 ? ` · ${formatDuration(should)} optional` : ""} · {line}
+        {over > 0 && <span className="text-accent-800"> · {formatDuration(over)} over</span>}
       </span>
     </div>
   );

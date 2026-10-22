@@ -433,6 +433,14 @@ export interface LevelCheckInput {
 /** How far must-reading may run past the plan's reading share before it is worth reporting. */
 export const SHARE_TOLERANCE = 1.25;
 
+/** Minutes a leaf's total or part may run past its tolerance too, so a short budget is not held to the minute. */
+export const BUDGET_SLACK = 10;
+
+/** The most a leaf's budget of `minutes`, or one part of it, holds before the checks call it over. */
+export function budgetCeiling(minutes: number): number {
+  return minutes * SHARE_TOLERANCE + BUDGET_SLACK;
+}
+
 type RefLike = { id: string; chapter?: number | null; activity?: RefActivity; note?: string | null };
 
 const isRead = (r: RefLike) => (r.activity ?? "read") === "read";
@@ -554,7 +562,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       should += tiers.should;
       for (const r of n.practice ?? []) assigned.set(r.format, (assigned.get(r.format) ?? 0) + r.minutes);
     }
-    if (must > budgets.reading * SHARE_TOLERANCE + 10) {
+    if (must > budgetCeiling(budgets.reading)) {
       breach("over-budget", index, unit, [], `${unit}'s must-reading is ${must} min against a budget of about ${budgets.reading} min`);
     }
     const left = Math.max(0, budgets.reading - must);
@@ -565,8 +573,8 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       const minutes = assigned.get(f) ?? 0;
       const budget = budgets.practice[f] ?? 0;
       const name = PRACTICE_REGISTRY[f].label;
-      if (minutes > budget * SHARE_TOLERANCE + 10) breach("over-budget", index, unit, [], `${unit}'s ${name} practice is ${minutes} min against a budget of about ${budget} min`);
-      else if (minutes < budget / SHARE_TOLERANCE - 10) short.push(`${name} ${minutes} of about ${budget} min`);
+      if (minutes > budgetCeiling(budget)) breach("over-budget", index, unit, [], `${unit}'s ${name} practice is ${minutes} min against a budget of about ${budget} min`);
+      else if (minutes < budget / SHARE_TOLERANCE - BUDGET_SLACK) short.push(`${name} ${minutes} of about ${budget} min`);
     }
     if (short.length > 0) facts.push(`${unit} practice short: ${short.join(", ")}`);
   };
@@ -621,7 +629,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       if (budget <= 0) return;
       const { must, should } = tierMinutes(node.materials);
       const total = must + should + rows.reduce((sum, r) => sum + r.minutes, 0);
-      if (node.level === "day" && total > budget * SHARE_TOLERANCE + 10) {
+      if (node.level === "day" && total > budgetCeiling(budget)) {
         breach("over-budget", index, unit, [], `${unit} is ${total} min of reading and practice against a budget of about ${budget} min`);
       } else if (total > budget) facts.push(`${unit} over budget: ${total} of ${budget} min`);
       if (node.level !== "day") weekRule([node], index, unit, budget);

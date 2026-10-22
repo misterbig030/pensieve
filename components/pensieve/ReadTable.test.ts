@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
-import { budgetLine, byTier, chapterLabel, coverPracticeRows, partLabel, practiceRowsFor, readRowsFor, rowBrief } from "./ReadTable";
+import { budgetLine, byTier, chapterLabel, coverPracticeRows, minutesOver, partLabel, practiceRowsFor, readRowsFor, rowBrief } from "./ReadTable";
 
 describe("readRowsFor", () => {
   it("fills chapter, activity and a key per row", () => {
@@ -80,6 +80,16 @@ describe("budgetLine", () => {
   });
   it("says reading against the budget when the unit has no practice rows", () => {
     expect(budgetLine({ readingMinutes: 191, practiceMinutes: 0, budgetMinutes: 360 })).toBe("3 h 11 of 6 h reading");
+  });
+});
+
+describe("minutesOver", () => {
+  it("is over only past the tolerance the drafting checks accept, and then by the minutes past the budget", () => {
+    // Six hours over five days is a 72-minute day; the checks accept up to 72 × 1.25 + 10 = 100 minutes.
+    expect(minutesOver(100, 72)).toBe(0);
+    expect(minutesOver(80, 72)).toBe(0);
+    expect(minutesOver(101, 72)).toBe(29);
+    expect(minutesOver(0, 0)).toBe(0);
   });
 });
 
