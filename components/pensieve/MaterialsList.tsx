@@ -57,7 +57,7 @@ export interface MaterialsListProps {
   onRemove?: (id: string) => void;
   /** Offered only before the plan is confirmed, with the "unavailable" notice. */
   onResearchAgain?: () => void;
-  /** Rows shown before "Show all". */
+  /** Rows shown before "Show all", of the reading groups and of the Practice group each. */
   initialShown?: number;
 }
 
@@ -70,7 +70,7 @@ export function MaterialsList(props: MaterialsListProps) {
   const backbone = materials.find((m) => m.backbone) ?? null;
   const rest = materials.filter((m) => m !== backbone);
   const ordered = [...KIND_ORDER.flatMap((kind) => rest.filter((m) => m.kind === kind && !isPracticeOnly(m))), ...rest.filter(isPracticeOnly)];
-  const shown = showAll ? ordered : ordered.slice(0, initialShown);
+  const shown = showAll ? ordered : shownRows(ordered, initialShown);
   const researched = materials.filter((m) => m.origin === "research").length;
   const yours = materials.length - researched;
   const { readingMinutes: sized, practiceMinutes } = materialTotals(materials);
@@ -121,7 +121,7 @@ export function MaterialsList(props: MaterialsListProps) {
             ))}
           </div>
 
-          {ordered.length > initialShown && (
+          {shownRows(ordered, initialShown).length < ordered.length && (
             <Button variant="secondary" size="sm" className="min-h-10 self-start border border-border bg-transparent px-4 text-[12.5px]" onClick={() => setShowAll((v) => !v)}>
               {showAll ? "Show fewer" : `Show all ${materials.length}`}
             </Button>
@@ -160,6 +160,14 @@ export function MaterialsList(props: MaterialsListProps) {
       )}
     </div>
   );
+}
+
+/**
+ * The rows shown before "Show all": the first `initialShown` of the reading groups and of the Practice group, which
+ * comes last, so the Practice group shows whatever the list's length.
+ */
+export function shownRows(ordered: Material[], initialShown: number): Material[] {
+  return [...ordered.filter((m) => !isPracticeOnly(m)).slice(0, initialShown), ...ordered.filter(isPracticeOnly).slice(0, initialShown)];
 }
 
 /** A practice-only source goes in the "Practice" group instead of a kind group. */
