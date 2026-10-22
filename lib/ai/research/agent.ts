@@ -1,6 +1,6 @@
 import { ToolLoopAgent, isStepCount, type LanguageModel } from "ai";
 import type { SourceInput } from "@/lib/schemas/source";
-import { DEFAULT_HOURS_PER_WEEK, totalHours, weeksLabel } from "@/lib/studyTime";
+import { DEFAULT_HOURS_PER_WEEK, totalHours, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, loggedGenerateObject, type GenerationLogContext } from "../logged";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, RESEARCH_LOOP_EFFORT, type AiModelId, type ReasoningEffort } from "../models";
 import { providerError } from "../providerError";
@@ -27,6 +27,8 @@ export interface ResearchBrief {
   /** Hours a week the learner can give. Research sizes its list against the total; six when not stated. */
   hoursPerWeek?: number;
   sources: SourceInput[];
+  /** How the plan's time divides between reading and practice, picked before research; not used by research yet. */
+  split?: PlanSplit;
 }
 
 /** Study hours over the whole plan: the ceiling research sizes its list against. */

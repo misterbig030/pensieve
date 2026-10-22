@@ -2,19 +2,33 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Material } from "@/lib/schemas/material";
 import type { UnitDraft } from "@/lib/schemas/plan";
 
-// Only streamObject is faked; the error classes stay real so provider refusals are recognised.
-vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof import("ai")>()), streamObject: vi.fn() }));
+// Only streamObject and generateObject are faked; the error classes stay real so provider refusals are recognised.
+vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof import("ai")>()), streamObject: vi.fn(), generateObject: vi.fn() }));
 
-import { streamObject } from "ai";
+import { generateObject, streamObject } from "ai";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelCall } from "./logged";
-import { streamExpandNode, streamPlanDraft } from "./planDraft";
+import { streamExpandNode, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
 import type { ResolvedModel } from "./resolve";
 import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
 import type { PlanNode } from "@/lib/planTree";
 import { AIE_MATERIALS, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 
 const mockedStreamObject = vi.mocked(streamObject);
+const PICK_LABEL = "Practice · pick";
+const mockedGenerateObject = vi.mocked(generateObject);
+
+/** What the practice-pick call returns by default: a reading-heavy split with one project pick. */
+const PICK = { readingShare: 85, practice: "building projects", reason: "A craft topic.", picks: [{ format: "project", share: 100, focus: "a small tool", reason: "Learning by building." }] };
+
+/** Makes the pick call return `object`; every plan drafted without a split makes one pick call first. */
+function respondPick(object: unknown = PICK) {
+  mockedGenerateObject.mockResolvedValue({
+    object,
+    usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 },
+    finishReason: "stop",
+  } as unknown as Awaited<ReturnType<typeof generateObject>>);
+}
 
 function fakeStream(units: UnitDraft[]) {
   return {
@@ -35,6 +49,8 @@ describe("streamPlanDraft with materials", () => {
   beforeEach(() => {
     // Braces matter: a returned mock would be called by the runner as a cleanup hook, with no arguments.
     mockedStreamObject.mockReset();
+    mockedGenerateObject.mockReset();
+    respondPick();
   });
 
   it("puts covers on headings and the Read table on leaves, drops unknown ids, and reports the checks", async () => {
@@ -63,7 +79,7 @@ describe("streamPlanDraft with materials", () => {
       weeks: 4, daysPerWeek: 7,
       granularity: "day",
       materials: [material("M1", { kind: "book", backbone: true }), material("M2")],
-      log: { onCall: (c) => void calls.push(c) },
+      log: { onCall: (c) => void (c.label !== PICK_LABEL && calls.push(c)) },
     })) {
       events.push(event);
     }
@@ -89,30 +105,87 @@ describe("streamPlanDraft with materials", () => {
   });
 });
 
-describe("streamPlanDraft and the time split", () => {
+describe("streamPlanDraft and the practice pick", () => {
   beforeEach(() => {
     // Braces matter: a returned mock would be called by the runner as a cleanup hook, with no arguments.
     mockedStreamObject.mockReset();
+    mockedGenerateObject.mockReset();
+    respondPick();
   });
 
-  function fakeTop(units: UnitDraft[], split: unknown) {
-    const stream = fakeStream(units) as unknown as { object: Promise<unknown> };
-    stream.object = Promise.resolve({ split, units });
-    return stream as unknown as ReturnType<typeof streamObject>;
-  }
   const weeks = (n: number): UnitDraft[] => Array.from({ length: n }, (_, i) => ({ title: `W${i + 1}`, summary: "s" }));
 
-  it("takes the split from the top level, announces it, and budgets weeks from the learner's hours", async () => {
-    mockedStreamObject.mockReturnValueOnce(fakeTop(weeks(4), { readingShare: 84.6, practice: "writing summaries.", reason: "A knowledge topic." }));
+  it("picks the practice first and announces the split before any unit", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const calls: ModelCall[] = [];
     const events: PlanDraftEvent[] = [];
-    for await (const event of streamPlanDraft({ topic: "The French Revolution", weeks: 4, daysPerWeek: 7, granularity: "week", hoursPerWeek: 10, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+    for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", hoursPerWeek: 10, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
 
-    expect(events.find((e) => e.type === "split")).toEqual({ type: "split", split: { readingShare: 85, practice: "writing summaries", reason: "A knowledge topic." } });
+    expect(mockedGenerateObject).toHaveBeenCalledTimes(1);
+    expect(events[0]).toEqual({
+      type: "split",
+      split: { readingShare: 85, practice: "building projects", reason: "A craft topic.", formats: [{ format: "project", share: 100, focus: "a small tool", reason: "Learning by building." }] },
+    });
+    expect(events.slice(1).some((e) => e.type === "split")).toBe(false);
+    expect(events.findIndex((e) => e.type === "node")).toBeGreaterThan(0);
     const finish = events.at(-1);
     expect(finish?.type === "finish" && finish.root.children!.map((n) => n.budgetHours)).toEqual([10, 10, 10, 10]);
-    expect(calls[0].prompt).toContain('as "split"');
-    expect(calls[0].facts).toContain("split 85% reading · writing summaries");
+    // The drafter is never asked to decide a split; it is told the one the pick made.
+    expect(calls.map((c) => c.label)).toEqual([PICK_LABEL, "Top level · 4 weeks"]);
+    expect(calls[1].prompt).not.toContain('as "split"');
+    expect(calls[1].prompt).toContain("How this plan spends that time: about 85% reading or watching the materials, the rest on building projects.");
+  });
+
+  it("adds the pick call's cost to the finish event", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const rows: number[] = [];
+    let finish: PlanDraftEvent | undefined;
+    for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], log: { onLog: (row) => void rows.push(row.costUsd) } })) {
+      if (event.type === "finish") finish = event;
+    }
+    expect(rows).toHaveLength(2);
+    expect(rows.every((cost) => cost > 0)).toBe(true);
+    expect(finish?.type === "finish" && finish.costUsd).toBeCloseTo(rows[0] + rows[1], 10);
+  });
+
+  it("lets a failed pick propagate without drafting anything", async () => {
+    const refusal = Object.assign(new Error("Your credit balance is too low"), { statusCode: 400 });
+    mockedGenerateObject.mockReset();
+    mockedGenerateObject.mockRejectedValue(refusal);
+    await expect(async () => {
+      for await (const _ of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [] })) void _;
+    }).rejects.toBe(refusal);
+    expect(mockedStreamObject).not.toHaveBeenCalled();
+  });
+
+  it("drafts an all-reading plan when the pick returns nothing usable", async () => {
+    respondPick({ readingShare: "lots", practice: "", reason: "" });
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [] })) events.push(event);
+    expect(events[0]).toEqual({ type: "split", split: { readingShare: 100, practice: "reading", reason: "", formats: [] } });
+    expect(events.at(-1)?.type).toBe("finish");
+  });
+
+  it("keeps a split it is given and makes no pick call", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const calls: ModelCall[] = [];
+    const split = { readingShare: 50, practice: "building", reason: "" };
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", split, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+    expect(mockedGenerateObject).not.toHaveBeenCalled();
+    expect(events.some((e) => e.type === "split")).toBe(false);
+    expect(calls[0].prompt).toContain("the rest on building");
+  });
+
+  it("shows the pick only the learner's own sources", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const learner = material("L1", { origin: "learner", title: "My notes" });
+    const found = material("R1", { title: "Found by research" });
+    for await (const _ of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [learner, found] })) void _;
+    const prompt = (mockedGenerateObject.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain("My notes");
+    expect(prompt).not.toContain("Found by research");
   });
 
   it("drafts on the outline model it is given and records who paid", async () => {
@@ -140,7 +213,10 @@ describe("streamPlanDraft and the time split", () => {
     expect(events.at(-1)?.type).toBe("finish");
     expect(mockedStreamObject.mock.calls.length).toBeGreaterThan(0);
     for (const call of mockedStreamObject.mock.calls) expect(call[0].model).toBe(direct);
-    expect(calls.length).toBe(mockedStreamObject.mock.calls.length);
+    // The pick runs on the same outline model as the units.
+    expect(mockedGenerateObject.mock.calls).toHaveLength(1);
+    expect(mockedGenerateObject.mock.calls[0][0].model).toBe(direct);
+    expect(calls.length).toBe(mockedStreamObject.mock.calls.length + 1);
     for (const c of calls) {
       expect(c.model).toBe("anthropic/claude-haiku-4.5");
       expect(c.keyOwner).toBe("user");
@@ -167,24 +243,70 @@ describe("streamPlanDraft and the time split", () => {
     }).rejects.toBe(refusal);
   });
 
-  it("drafts on without a split when the model returns none", async () => {
-    mockedStreamObject.mockReturnValueOnce(fakeTop(weeks(4), undefined));
-    const calls: ModelCall[] = [];
-    const events: PlanDraftEvent[] = [];
-    for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
-    expect(events.some((e) => e.type === "split")).toBe(false);
-    expect(events.at(-1)?.type).toBe("finish");
-    expect(calls[0].facts).toContain("no split returned");
+});
+
+describe("streamResearchedPlanDraft", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+    mockedGenerateObject.mockReset();
+    respondPick();
   });
 
-  it("keeps a split it is given and does not ask for another", async () => {
+  const weeks = (n: number): UnitDraft[] => Array.from({ length: n }, (_, i) => ({ title: `W${i + 1}`, summary: "s" }));
+  const offline = { fetcher: { fetch: vi.fn() } as never, books: vi.fn() as never };
+
+  it("picks first, announces the split before the research events, and drafts against it", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const calls: ModelCall[] = [];
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamResearchedPlanDraft({
+      topic: "Git",
+      weeks: 4,
+      daysPerWeek: 7,
+      materials: [],
+      granularity: "week",
+      arm: null,
+      research: offline,
+      log: { onCall: (c) => void calls.push(c) },
+    })) events.push(event);
+
+    expect(events[0].type).toBe("split");
+    expect(events.findIndex((e) => e.type === "research.start")).toBeGreaterThan(0);
+    expect(events.filter((e) => e.type === "split")).toHaveLength(1);
+    expect(mockedGenerateObject).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)?.type).toBe("finish");
+    expect(calls.at(-1)?.prompt).toContain("the rest on building projects");
+  });
+
+  it("adds the pick's cost to the finish event", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const rows: number[] = [];
+    let finish: PlanDraftEvent | undefined;
+    for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline, log: { onLog: (row) => void rows.push(row.costUsd) } })) {
+      if (event.type === "finish") finish = event;
+    }
+    expect(rows).toHaveLength(2);
+    expect(finish?.type === "finish" && finish.costUsd).toBeCloseTo(rows[0] + rows[1], 10);
+  });
+
+  it("keeps a split it is given and makes no pick call", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const split = { readingShare: 50, practice: "building", reason: "" };
     const events: PlanDraftEvent[] = [];
-    for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", split, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+    for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", split, arm: null, research: offline })) events.push(event);
+    expect(mockedGenerateObject).not.toHaveBeenCalled();
     expect(events.some((e) => e.type === "split")).toBe(false);
-    expect(calls[0].prompt).not.toContain('as "split"');
+  });
+
+  it("lets a failed pick propagate before research starts", async () => {
+    const refusal = new Error("refused");
+    mockedGenerateObject.mockReset();
+    mockedGenerateObject.mockRejectedValue(refusal);
+    const events: PlanDraftEvent[] = [];
+    await expect(async () => {
+      for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline })) events.push(event);
+    }).rejects.toBe(refusal);
+    expect(events).toEqual([]);
   });
 });
 

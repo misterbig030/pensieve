@@ -257,16 +257,6 @@ describe("time and the split in prompts", () => {
     );
   });
 
-  it("asks the top level of a new plan to decide the split, and states no share yet", () => {
-    const prompt = buildUnitsPrompt({ ...base, hoursPerWeek: 10, decideSplit: true });
-    expect(prompt).toContain("The learner's time: about 10 hours a week, over 7 study days a week.");
-    expect(prompt).toContain('First decide how this learner\'s time divides, as "split".');
-    expect(prompt).toContain("1. Week 1 (7 study days) — budget about 10 h\n");
-    expect(prompt).toContain("must minutes stay within your readingShare of the unit's budget");
-    expect(prompt).not.toContain("building and practice");
-    expect(prompt).toContain("Each resource's size is in the list.");
-  });
-
   it("budgets later levels from the decided split and names the practice", () => {
     const split = { readingShare: 85, practice: "writing summaries", reason: "A knowledge topic." };
     const prompt = buildUnitsPrompt({ ...base, hoursPerWeek: 6, split });
@@ -349,7 +339,7 @@ describe("chapters as resources in prompts", () => {
     expect(prompt).not.toMatch(/review/i);
   });
   it("the top level is told everything is free", () => {
-    const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", level: "month", spans: [30, 30, 30], weeks: 13, daysPerWeek: 7, unitsAreLeaves: false, decideSplit: true });
+    const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", level: "month", spans: [30, 30, 30], weeks: 13, daysPerWeek: 7, unitsAreLeaves: false });
     expect(prompt).toContain("Every resource is free. Reserve each in at most one month; the book's chapters in order.");
     expect(prompt).toContain("Each resource is read in at most one unit at this level. M1's chapters are resources of their own (M1.1, M1.2, …): reserve them in order across the units, each chapter in exactly one unit, and never refer to M1 itself.");
     expect(prompt).toContain('list in "covers" the resources its weeks will read, as { id, note }.');

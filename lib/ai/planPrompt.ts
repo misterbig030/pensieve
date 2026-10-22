@@ -218,8 +218,6 @@ export interface UnitsPromptInput extends PlanPromptContext {
   parentId?: string;
   /** True when the units are the finest level the learner will work at (they get content and check-ins). */
   unitsAreLeaves: boolean;
-  /** True for the top level of a new plan: the drafter decides the time split before writing the units. */
-  decideSplit?: boolean;
 }
 
 /** Asks for titles and summaries for exactly `spans.length` units whose spans the server already decided. */
@@ -232,8 +230,7 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   parts.push(`You are designing a self-study curriculum, one unit at a time.`);
   parts.push(...contextLines(input, { sections: true }));
   parts.push(`The whole plan is ${weeksLabel(input.weeks)} long. Each week's days are numbered from Day 1.`);
-  // While the split is being decided in this same call there is no share to state yet.
-  const share = input.decideSplit ? null : (readingShareOf(input.split) ?? MUST_SHARE);
+  const share = readingShareOf(input.split) ?? MUST_SHARE;
 
   if (input.tree && input.parentId) {
     parts.push(`Here is the plan so far. Lines marked done are behind the learner; use what they covered to plan what comes next.${hasMaterials ? " Braces show the materials each unit reserves or reads." : ""}`);
@@ -247,7 +244,7 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   const daysInWeek = input.level === "day" ? n : input.daysPerWeek;
   input.spans.forEach((len, i) => {
     const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, daysInWeek, input.hoursPerWeek) : null;
-    const must = share === null || minutes === null ? "" : `, so about ${formatMinutes(Math.round((minutes * share) / 5) * 5)} of must-reading`;
+    const must = minutes === null ? "" : `, so about ${formatMinutes(Math.round((minutes * share) / 5) * 5)} of must-reading`;
     const budget = hasMaterials && minutes !== null ? ` — budget about ${formatMinutes(minutes)}${must}` : "";
     parts.push(`${i + 1}. ${unitLine(input.level, i, len, input.daysPerWeek)}${budget}`);
   });
@@ -262,14 +259,6 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
     );
   } else {
     parts.push(`Each ${noun} is a heading that will be planned in detail later, when the learner reaches it. Make the headings distinct and progressive.`);
-  }
-  if (input.decideSplit) {
-    parts.push(
-      [
-        `First decide how this learner's time divides, as "split". readingShare is the percentage of study time spent reading or watching the materials (0 to 100). practice names what the rest is spent on, in two or three words that fit this topic ("building projects", "writing summaries", "practice problems", "running sessions", "speaking aloud"). reason is one sentence.`,
-        `Judge it from the kind of topic and the learner's instructions, not from a habit: a knowledge topic such as history is mostly reading with some writing or recall; a craft or engineering skill is half or more doing; physical training is nearly all sessions; exam preparation leans on timed practice near the end.`,
-      ].join("\n"),
-    );
   }
   parts.push(
     `Return exactly ${n} units in that order. Title: a short noun phrase (at most 8 words) with no "Week 1:" or "Day 3:" prefix. Summary: one sentence on what it covers and why it comes here.`,
@@ -335,7 +324,6 @@ export function availabilityLines(input: UnitsPromptInput, aliases: MaterialAlia
 
 /** What the rest of a unit's time is for, in the plan's words. */
 function practiceOf(input: UnitsPromptInput): string {
-  if (input.decideSplit) return "the practice you named";
   return input.split?.practice ?? "building and practice";
 }
 
@@ -372,11 +360,9 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const lines = [
     `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note }. tier is "must" or "should"; minutes is the reading or watching time for this unit; note names the part: for a chapter, the sections this unit covers ("Post-Training; Sampling"), for anything else the part ("§2 only", "whole essay").`,
     ...availabilityLines(input, aliases),
-    input.decideSplit
-      ? `Rules: at least one must per unit ${where}; must minutes stay within your readingShare of the unit's budget, because the rest of the time is for the practice you named; should items are optional extras.`
-      : input.split
-        ? `Rules: at least one must per unit ${where}; must minutes stay within about ${input.split.readingShare}% of the unit's budget, because the rest of the time is for ${input.split.practice}; should items are optional extras.`
-        : `Rules: at least one must per unit; must minutes stay within about ${Math.round(MUST_SHARE * 100)}% of the unit's budget, because the rest of the time is for building and practice; should items are optional extras.`,
+    input.split
+      ? `Rules: at least one must per unit ${where}; must minutes stay within about ${input.split.readingShare}% of the unit's budget, because the rest of the time is for ${input.split.practice}; should items are optional extras.`
+      : `Rules: at least one must per unit; must minutes stay within about ${Math.round(MUST_SHARE * 100)}% of the unit's budget, because the rest of the time is for building and practice; should items are optional extras.`,
   ];
   const size = input.materials.some((m) => m.minutes) ? "Each resource's size is in the list. " : "";
   lines.push(
