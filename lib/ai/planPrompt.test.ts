@@ -266,6 +266,23 @@ describe("time and the split in prompts", () => {
     expect(prompt).not.toContain('as "split"');
   });
 
+  it("states the split as drafted: picks by name, and a pick with no source counted as reading", () => {
+    // Problems has no source and is never written, so its half of the practice time is reading: 20 + 40 → 60%.
+    const split = {
+      readingShare: 20,
+      practice: "mock interviews",
+      reason: "",
+      formats: [
+        { format: "problem-set" as const, share: 50, focus: "arrays", reason: "" },
+        { format: "design-exercise" as const, share: 50, focus: "systems", reason: "" },
+      ],
+    };
+    const prompt = buildUnitsPrompt({ ...base, materials: MATERIALS, hoursPerWeek: 6, split });
+    expect(prompt).toContain("How this plan spends that time: about 60% reading or watching the materials, the rest on design.");
+    expect(prompt).toContain("because the rest of the time is for design;");
+    expect(prompt).not.toContain("mock interviews");
+  });
+
   it("gives a day its share of its week, however many days the week has", () => {
     const prompt = buildUnitsPrompt({ ...base, granularity: "day", level: "day", spans: Array(7).fill(1), weeks: 1, hoursPerWeek: 30, split: { readingShare: 50, practice: "building", reason: "" } });
     expect(prompt).toContain("1. Day 1 — budget about 4.3 h\n");

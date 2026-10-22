@@ -26,6 +26,7 @@ import {
   keptReadTable,
   keepPracticeCovers,
   splitHours,
+  draftedSplit,
 } from "./materials";
 
 describe("parseChapters", () => {
@@ -613,6 +614,15 @@ describe("practice budgets", () => {
       ],
     });
     expect(splitHours({ readingShare: 60, practice: "projects", reason: "" }, 72, materials)).toEqual({ reading: 43, picks: [] });
+  });
+  it("states the split as drafted: a pick that can't be assigned is reading, and the others keep their proportions", () => {
+    // Lab's 25% of the practice half is reading: 50 + 12.5 → 63%. Problems and recall split the rest 2:1.
+    const drafted = draftedSplit(split, materials);
+    expect(drafted.readingShare).toBe(63);
+    expect(drafted.formats?.map((p) => [p.format, p.share])).toEqual([["problem-set", 67], ["recall", 33]]);
+    expect(draftedSplit({ ...split, formats: [split.formats![2]] }, materials)).toMatchObject({ readingShare: 100, formats: [] });
+    // Nothing to fold: the split comes back as it is.
+    expect(draftedSplit({ readingShare: 60, practice: "projects", reason: "" }, materials)).toEqual({ readingShare: 60, practice: "projects", reason: "" });
   });
   it("gives recall's time to reading when the list has no reading to write it from", () => {
     const practiceOnly = [materials[1]];

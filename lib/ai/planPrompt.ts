@@ -1,4 +1,4 @@
-import { aliasMaterials, formatAliases, pickSources, practiceBudgets, type MaterialAliases, type PickSources, type ResolvedAlias } from "@/lib/materials";
+import { aliasMaterials, draftedSplit, formatAliases, pickSources, practiceBudgets, type MaterialAliases, type PickSources, type ResolvedAlias } from "@/lib/materials";
 import { PRACTICE_REGISTRY, type PracticeFormat, type PracticeGenerated } from "@/lib/practice";
 import {
   budgetFor,
@@ -16,7 +16,7 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialRef, type PracticeCover, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
-import { dayMinutes, weeksLabel, type PlanSplit } from "@/lib/studyTime";
+import { dayMinutes, isAllReading, practiceLabelOf, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 
 export interface PlanPromptContext {
   topic: string;
@@ -226,12 +226,20 @@ function contextLines(ctx: PlanPromptContext, options: RenderMaterialsOptions = 
 }
 
 /** What the prompt says about the learner's time: the weekly hours and days, and the plan's split once it is decided. */
-function timeLines(ctx: Pick<PlanPromptContext, "hoursPerWeek" | "daysPerWeek" | "split">): string[] {
+function timeLines(ctx: Pick<PlanPromptContext, "hoursPerWeek" | "daysPerWeek" | "split" | "materials">): string[] {
   const lines: string[] = [];
   const days = `${ctx.daysPerWeek} study day${ctx.daysPerWeek === 1 ? "" : "s"} a week`;
   if (ctx.hoursPerWeek !== undefined) lines.push(`The learner's time: about ${ctx.hoursPerWeek} hour${ctx.hoursPerWeek === 1 ? "" : "s"} a week, over ${days}. This setting is what the plan is budgeted from, whatever the instructions say about time.`);
   else lines.push(`The learner studies ${ctx.daysPerWeek} day${ctx.daysPerWeek === 1 ? "" : "s"} a week.`);
-  if (ctx.split) lines.push(`How this plan spends that time: about ${ctx.split.readingShare}% reading or watching the materials, the rest on ${ctx.split.practice}.`);
+  if (ctx.split) {
+    // As drafted: a pick with no source is reading, so the line names the picks the units actually get.
+    const split = draftedSplit(ctx.split, ctx.materials);
+    lines.push(
+      isAllReading(split)
+        ? "How this plan spends that time: all of it reading or watching the materials."
+        : `How this plan spends that time: about ${split.readingShare}% reading or watching the materials, the rest on ${practiceLabelOf(split)}.`,
+    );
+  }
   return lines;
 }
 
@@ -472,7 +480,7 @@ export function availabilityLines(input: UnitsPromptInput, aliases: MaterialAlia
 
 /** What the rest of a unit's time is for, in the plan's words. */
 function practiceOf(input: UnitsPromptInput): string {
-  return input.split?.practice ?? "building and practice";
+  return input.split ? practiceLabelOf(draftedSplit(input.split, input.materials)) : "building and practice";
 }
 
 function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): string {

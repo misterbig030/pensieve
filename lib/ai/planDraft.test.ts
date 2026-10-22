@@ -134,7 +134,7 @@ describe("streamPlanDraft and the practice pick", () => {
     // The drafter is never asked to decide a split; it is told the one the pick made.
     expect(calls.map((c) => c.label)).toEqual([PICK_LABEL, "Top level · 4 weeks"]);
     expect(calls[1].prompt).not.toContain('as "split"');
-    expect(calls[1].prompt).toContain("How this plan spends that time: about 85% reading or watching the materials, the rest on building projects.");
+    expect(calls[1].prompt).toContain("How this plan spends that time: about 85% reading or watching the materials, the rest on project.");
   });
 
   it("adds the pick call's cost to the finish event", async () => {
@@ -276,7 +276,7 @@ describe("streamResearchedPlanDraft", () => {
     expect(events.filter((e) => e.type === "split")).toHaveLength(1);
     expect(mockedGenerateObject).toHaveBeenCalledTimes(1);
     expect(events.at(-1)?.type).toBe("finish");
-    expect(calls.at(-1)?.prompt).toContain("the rest on building projects");
+    expect(calls.at(-1)?.prompt).toContain("the rest on project.");
   });
 
   it("adds the pick's cost to the finish event", async () => {

@@ -306,6 +306,23 @@ export function splitHours(split: PlanSplit, totalHours: number, materials: Pick
   return { reading, picks };
 }
 
+/**
+ * The split as drafting spends it: a pick that can't be assigned is reading (`practiceBudgets`), so its share of the
+ * practice time moves to the reading share and the other picks keep their proportions. All reading when none is left.
+ */
+export function draftedSplit(split: PlanSplit, materials: Pick<Material, "id" | "practice" | "minutes">[]): PlanSplit {
+  const picks = pickSources(split, materials);
+  const kept = picks.filter((p) => p.assignable).map((p) => p.pick);
+  if (kept.length === picks.length) return split;
+  const keptShare = kept.reduce((sum, p) => sum + p.share, 0);
+  if (kept.length === 0) return { ...split, readingShare: 100, formats: [] };
+  const readingShare = Math.round(split.readingShare + ((100 - split.readingShare) * (100 - keptShare)) / 100);
+  const shares = kept.map((p) => Math.round((p.share / keptShare) * 100));
+  const largest = shares.indexOf(Math.max(...shares));
+  shares[largest] += 100 - shares.reduce((sum, n) => sum + n, 0);
+  return { ...split, readingShare, formats: kept.map((p, i) => ({ ...p, share: shares[i] })) };
+}
+
 /** One fact per pick that can't be assigned, for the drafting call's facts. */
 export function noSourceFacts(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice" | "minutes">[]): string[] {
   return pickSources(split, materials)
