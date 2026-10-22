@@ -19,7 +19,6 @@ import {
 import { aliasMaterials, dropBreaches, keepCoverTiers, resolveCoverRefs, resolveMaterialRefs, treeChecks, type MaterialAliases } from "@/lib/materials";
 import type { CoverRefDraft, MaterialRefDraft } from "@/lib/schemas/material";
 import { revisedTreeSchema, type RevisedTree } from "@/lib/schemas/plan";
-import { readingShareOf } from "@/lib/studyTime";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
 import { appModel, type ResolvedModel } from "./resolve";
@@ -154,7 +153,7 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       return [];
     }
     if (!aliases) return [];
-    const checks = treeChecks(revised, input.materials, { granularity: input.granularity, hoursPerWeek: input.hoursPerWeek, daysPerWeek: input.daysPerWeek, readingShare: readingShareOf(input.split) });
+    const checks = treeChecks(revised, input.materials, { granularity: input.granularity, hoursPerWeek: input.hoursPerWeek, daysPerWeek: input.daysPerWeek, split: input.split });
     const dropped = dropBreaches(checks.nodes, checks.breaches);
     return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...dropped];
   };

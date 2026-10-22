@@ -268,11 +268,21 @@ describe("time and the split in prompts", () => {
 
   it("gives a day its share of its week, however many days the week has", () => {
     const prompt = buildUnitsPrompt({ ...base, granularity: "day", level: "day", spans: Array(7).fill(1), weeks: 1, hoursPerWeek: 30, split: { readingShare: 50, practice: "building", reason: "" } });
-    expect(prompt).toContain("1. Day 1 — budget about 4.3 h, so about 2.2 h of must-reading");
+    expect(prompt).toContain("1. Day 1 — budget about 4.3 h\n");
     expect(prompt).toContain("Each day is one focused session of about 4.3 h.");
     const three = buildUnitsPrompt({ ...base, granularity: "day", level: "day", spans: [1, 1, 1], weeks: 1, daysPerWeek: 5, hoursPerWeek: 6 });
     expect(three).toContain("1. Day 1 — budget about 2 h");
     expect(three).toContain("3. Day 3 — budget about 2 h");
+  });
+
+  it("budgets a week's days over the week: no per-day must share, and a day may be all reading or all practice", () => {
+    const prompt = buildUnitsPrompt({ ...base, granularity: "day", level: "day", spans: Array(5).fill(1), weeks: 1, daysPerWeek: 5, hoursPerWeek: 6, split: { readingShare: 50, practice: "building", reason: "" } });
+    expect(prompt).toContain(
+      "Rules: the week has about 3 h of reading; the rest of its time is for building. Across the week, the days' must minutes add up to no more than about 3 h. A day may be all reading or all practice, but each day's must, should and practice minutes fit within its own budget. A day that reads has at least one must; should items are optional extras.",
+    );
+    expect(prompt).not.toContain("of the unit's budget");
+    expect(prompt).not.toContain("of must-reading");
+    expect(prompt).not.toContain("long practice task");
   });
 
   it("keeps the old wording and the fixed share when no hours or split are given", () => {

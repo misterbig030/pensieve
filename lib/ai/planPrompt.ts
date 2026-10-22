@@ -282,7 +282,8 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
       : "";
   input.spans.forEach((len, i) => {
     const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, daysInWeek, input.hoursPerWeek) : null;
-    const must = minutes === null || !hasMaterials ? "" : `, so about ${formatMinutes(Math.round((minutes * share) / 5) * 5)} of must-reading`;
+    // A day's must-reading is budgeted over its week (the rules say how much), so its line gives only its total.
+    const must = minutes === null || !hasMaterials || input.level === "day" ? "" : `, so about ${formatMinutes(Math.round((minutes * share) / 5) * 5)} of must-reading`;
     const budget = (hasMaterials || picks.length > 0) && minutes !== null ? ` — budget about ${formatMinutes(minutes)}${must}${weekPractice}` : "";
     parts.push(`${i + 1}. ${unitLine(input.level, i, len, input.daysPerWeek)}${budget}`);
   });
@@ -307,7 +308,7 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   return parts.join("\n");
 }
 
-/** A week's reading and per-pick practice minutes, with a pick that can't be assigned given back to reading. */
+/** A week's reading and per-pick practice minutes, with a pick that can't be assigned given back to reading: what the checks hold the week to. */
 function weekBudgetsOf(input: UnitsPromptInput) {
   return practiceBudgets(input.split, budgetFor(1, input.hoursPerWeek) * 60, input.materials);
 }
@@ -501,15 +502,19 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const backbone = input.materials.findIndex((m) => m.backbone);
   const listed = backbone >= 0 && !!input.materials[backbone].toc;
   const B = `M${backbone + 1}`;
-  // With practice picked, a day may go to one long practice task and read nothing.
-  const longTask = input.level === "day" && pickSources(input.split, input.materials).some((p) => p.assignable) ? ", except a day given to one long practice task" : "";
-  const where = `${reserved.length > 0 ? "where the reservation has material for it" : "where the list has material for it"}${longTask}`;
+  const where = reserved.length > 0 ? "where the reservation has material for it" : "where the list has material for it";
+  // Days are budgeted over their week, as the checks hold them: the week's must-reading, and each day's own total.
+  const reading = formatMinutes(weekBudgetsOf(input).reading);
+  const rules =
+    input.level === "day"
+      ? `Rules: the week has about ${reading} of reading; the rest of its time is for ${practiceOf(input)}. Across the week, the days' must minutes add up to no more than about ${reading}. A day may be all reading or all practice, but each day's must, should and practice minutes fit within its own budget. A day that reads has at least one must; should items are optional extras.`
+      : input.split
+        ? `Rules: at least one must per unit ${where}; must minutes stay within about ${input.split.readingShare}% of the unit's budget, because the rest of the time is for ${input.split.practice}; should items are optional extras.`
+        : `Rules: at least one must per unit; must minutes stay within about ${Math.round(MUST_SHARE * 100)}% of the unit's budget, because the rest of the time is for building and practice; should items are optional extras.`;
   const lines = [
     `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note }. tier is "must" or "should"; minutes is the reading or watching time for this unit; note names the part: for a chapter, the sections this unit covers ("Post-Training; Sampling"), for anything else the part ("§2 only", "whole essay").`,
     ...availabilityLines(input, aliases),
-    input.split
-      ? `Rules: at least one must per unit ${where}; must minutes stay within about ${input.split.readingShare}% of the unit's budget, because the rest of the time is for ${input.split.practice}; should items are optional extras.`
-      : `Rules: at least one must per unit; must minutes stay within about ${Math.round(MUST_SHARE * 100)}% of the unit's budget, because the rest of the time is for building and practice; should items are optional extras.`,
+    rules,
   ];
   const size = input.materials.some((m) => m.minutes) ? "Each resource's size is in the list. " : "";
   lines.push(

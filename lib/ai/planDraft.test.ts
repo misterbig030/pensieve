@@ -351,8 +351,9 @@ describe("breaches while drafting", () => {
     const retryPrompt = (mockedStreamObject.mock.calls[1][0] as { prompt: string }).prompt;
     expect(retryPrompt).toContain("Your previous answer broke these rules; return all 7 units again, corrected:\n- ");
     expect(retryPrompt).toContain("- Week 1 · Day 5 reads M1.3, which Week 1 did not reserve");
-    // Sized before the check, two 20-minute rows on a 107-minute chapter are 54 and 53 minutes against a 20-minute share.
-    expect(retryPrompt).toContain("- Week 1 · Day 1's must-reading is 54 min against a budget of about 20 min");
+    // Sized before the check, the rows take their chapters' 466 minutes, against the week's 144 of reading.
+    expect(retryPrompt).toContain("- Week 1's must-reading is 466 min against a budget of about 144 min");
+    expect(retryPrompt).not.toContain("Day 1's must-reading");
     expect(calls.map((c) => c.label)).toEqual(["Week 1 · 7 days", "Week 1 · 7 days (retry)"]);
     expect(calls[0].facts).toContain("breach: Week 1 · Day 5 reads M1.3, which Week 2 holds");
     const finish = events.at(-1);
@@ -405,8 +406,9 @@ describe("breaches while drafting", () => {
     for await (const e of streamExpandNode({ ...ctx, tree: tree(), nodeId: "w1", reason: "split", splitDays: 3, log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") children = e.children;
     const prompt = mockedStreamObject.mock.calls[0][0].prompt as string;
     expect(prompt).toContain("Its 3 days cover, in order:");
-    // Six hours over three days is two hours a day, 40% of it must-reading.
-    expect(prompt).toContain("3. Day 3 — budget about 2 h, so about 50 min of must-reading");
+    // Six hours over three days is two hours a day; must-reading is budgeted over the week, 40% of its 6 h.
+    expect(prompt).toContain("3. Day 3 — budget about 2 h\n");
+    expect(prompt).toContain("Across the week, the days' must minutes add up to no more than about 2.4 h.");
     expect(prompt).not.toContain("4. Day 4");
     expect(children.map((c) => c.len)).toEqual([1, 1, 1]);
     expect(calls[0].facts).toContain("3 of 3 units");

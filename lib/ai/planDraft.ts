@@ -31,7 +31,7 @@ import {
 } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 import { unitListSchema, type UnitDraft } from "@/lib/schemas/plan";
-import { readingShareOf, type PlanSplit } from "@/lib/studyTime";
+import type { PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
 import { providerError } from "./providerError";
@@ -277,7 +277,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     // Chapter rows take their minutes from the list before the budget is judged, so the checks see real sizes.
     if (leaf) sizeChapterRows(final, ctx.materials);
     const { root, placed } = placeForChecks(input.tree, input.parentId, final);
-    const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, readingShare: readingShareOf(ctx.split) });
+    const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, split: ctx.split });
     breaches = checks.breaches;
     const facts = [...checks.facts, ...practiceFacts, ...breaches.map((b) => `breach: ${b.text}`)];
     if (attempt === 2) {

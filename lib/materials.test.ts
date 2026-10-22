@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
-import type { MaterialRef } from "@/lib/schemas/material";
+import type { MaterialRef, PracticeRef } from "@/lib/schemas/material";
 import { AIE_HOURS, AIE_MATERIALS, AIE_SHARE, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 import {
   aliasMaterials,
@@ -107,7 +107,7 @@ describe("chapter checks", () => {
 });
 
 describe("levelChecks", () => {
-  const share = { hoursPerWeek: AIE_HOURS, readingShare: AIE_SHARE, daysPerWeek: 7 };
+  const share = { hoursPerWeek: AIE_HOURS, split: { readingShare: AIE_SHARE * 100, practice: "projects", reason: "" }, daysPerWeek: 7 };
   const weeksOf = (root: PlanNode) => root.children![0].children!;
   const read = (chapter: number | null, minutes: number, id = "aie"): MaterialRef => ({ id, tier: "must", minutes, note: null, chapter });
   const check = (root: PlanNode, nodes: PlanNode[], leaves = true, top = false) => levelChecks({ root, nodes, leaves, top, materials: AIE_MATERIALS, unknownIds: [], ...share });
@@ -213,7 +213,7 @@ describe("levelChecks", () => {
     expect(out.facts).toEqual(["dropped unknown M9", "no must: Week 2", "Week 1 over budget: 400 of 360 min", "backbone ch. 2 after ch. 3 (Week 2)"]);
     expect(out.breaches.map((b) => b.text)).toEqual(["Week 1's must-reading is 400 min against a budget of about 216 min"]);
   });
-  it("checks days against the learner's hours and must-reading against the plan's share", () => {
+  it("checks days against the learner's hours, and must-reading against the plan's share over the week, not each day", () => {
     const d1 = makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, materials: [{ id: "X", tier: "must", minutes: 45, note: null }] });
     const d2 = makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1, materials: [{ id: "X", tier: "must", minutes: 20, note: null }, { id: "Y", tier: "should", minutes: 40, note: null }] });
     const d3 = makeNode({ id: "d3", level: "day", title: "C", summary: "c", len: 1, materials: [{ id: "X", tier: "must", minutes: 15, note: null }] });
@@ -221,12 +221,13 @@ describe("levelChecks", () => {
     const base = { root, nodes: [d1, d2, d3], leaves: true, top: true, materials: [{ id: "X" }, { id: "Y" }], unknownIds: [], daysPerWeek: 7 };
     // Without hours, a day has no budget to check.
     expect(levelChecks(base)).toEqual({ facts: [], breaches: [] });
-    // Six hours a week is 50 minutes a day; a 30% reading share is about 15 of them.
-    const out = levelChecks({ ...base, hoursPerWeek: 6, readingShare: 0.3 });
-    expect(out.facts).toEqual(["Day 2 over budget: 60 of 50 min"]);
-    expect(out.breaches.map((b) => b.text)).toEqual(["Day 1's must-reading is 45 min against a budget of about 15 min"]);
-    // No share yet: the default share stands in, and 45 min fits 50 × 0.6 × 1.25 + 10.
-    expect(levelChecks({ ...base, hoursPerWeek: 6, readingShare: null })).toEqual({ facts: ["Day 2 over budget: 60 of 50 min"], breaches: [] });
+    // Six hours a week is 50 minutes a day; a 30% reading share is 108 of the week's 360. Day 1's 45 min of must is
+    // more than 30% of its day, but the week's 80 min fit.
+    const out = levelChecks({ ...base, hoursPerWeek: 6, split: { readingShare: 30, practice: "projects", reason: "" } });
+    expect(out.facts).toEqual(["Day 2 over budget: 60 of 50 min", "Week 1 should-reading is 40 min, more than the 28 min must-reading leaves of the reading budget"]);
+    expect(out.breaches).toEqual([]);
+    // No split yet: the default share stands in, 216 min of the week.
+    expect(levelChecks({ ...base, hoursPerWeek: 6, split: null })).toEqual({ facts: ["Day 2 over budget: 60 of 50 min"], breaches: [] });
   });
   it("continues chapter order from leaves earlier in the plan", () => {
     const d1 = makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, materials: [{ id: "B", tier: "must", minutes: 30, note: "ch. 4" }] });
@@ -573,9 +574,124 @@ describe("practice budgets", () => {
     expect(noSourceFacts(split, materials)).toEqual(["no source for Lab: its time goes to reading"]);
     expect(noSourceFacts(null, materials)).toEqual([]);
   });
+  it("without picks, reads the split's share of the week, or the default share before a split", () => {
+    expect(practiceBudgets({ readingShare: 40, practice: "projects", reason: "" }, 360, materials)).toEqual({ reading: 144, practice: {} });
+    expect(practiceBudgets({ readingShare: 100, practice: "reading", reason: "", formats: [] }, 360, materials)).toEqual({ reading: 360, practice: {} });
+    expect(practiceBudgets(null, 360, materials)).toEqual({ reading: 216, practice: {} });
+  });
   it("gives recall's time to reading when the list has no reading to write it from", () => {
     const practiceOnly = [materials[1]];
     expect(practiceBudgets(split, 360, practiceOnly)).toEqual({ reading: 270, practice: { "problem-set": 90 } });
     expect(noSourceFacts(split, practiceOnly)).toEqual(["no source for Recall: its time goes to reading", "no source for Lab: its time goes to reading"]);
+  });
+});
+
+describe("checks over the week", () => {
+  const problems = { format: "problem-set" as const, items: 150, perItemMinutes: 10, minutes: null, answers: true };
+  // Reading R1–R4, problem lists P (reserved by the week) and Q (not reserved).
+  const materials = [{ id: "R1" }, { id: "R2" }, { id: "R3" }, { id: "R4" }, { id: "P", practice: problems }, { id: "Q", practice: problems }];
+  const split = {
+    readingShare: 50,
+    practice: "problems and mocks",
+    reason: "",
+    formats: [
+      { format: "problem-set" as const, share: 50, focus: "arrays", reason: "" },
+      { format: "mock" as const, share: 50, focus: "interviews", reason: "" },
+    ],
+  };
+  const must = (id: string, minutes: number): MaterialRef => ({ id, tier: "must", minutes, note: null });
+  const solve = (task: string, minutes: number, id = "P"): PracticeRef => ({ format: "problem-set", id, task, done: "solved", minutes, generated: id === null });
+  const mock: PracticeRef = { format: "mock", id: null, task: "A 60-minute mock interview", done: "scored against the rubric", minutes: 75, generated: true };
+  /** A one-week plan of these days, the week reserving P for problems. */
+  const week = (days: { materials?: MaterialRef[]; practice?: PracticeRef[] }[], len = days.length) => {
+    const children = days.map((d, i) => makeNode({ id: `d${i + 1}`, level: "day", title: `D${i + 1}`, summary: "s", len: 1, ...d }));
+    const w1 = makeNode({ id: "w1", level: "week", title: "W", summary: "s", len, children, practiceCovers: [{ format: "problem-set", id: "P", note: "Arrays" }] });
+    const root = layout(makeRoot([w1]));
+    return { root, days: w1.children! };
+  };
+  // Six hours over five days: 360 min a week, 70 a day; 180 of reading, 90 of problems and 90 of mocks.
+  const check = (root: PlanNode, nodes: PlanNode[], hoursPerWeek = 6) =>
+    levelChecks({ root, nodes, leaves: true, top: false, materials, unknownIds: [], hoursPerWeek, daysPerWeek: 5, split });
+
+  it("passes a week with an all-reading day and a 75-minute mock day", () => {
+    const { root, days } = week([
+      { materials: [must("R1", 70)] },
+      { materials: [must("R2", 40)], practice: [solve("Arrays 1–3", 30)] },
+      { practice: [mock] },
+      { materials: [must("R3", 40)], practice: [solve("Arrays 4–6", 30)] },
+      { materials: [must("R4", 30)], practice: [solve("Arrays 7–9", 30)] },
+    ]);
+    // The mock runs 5 min past its day, within the tolerance: a fact, not a breach.
+    expect(check(root, days)).toEqual({ facts: ["Week 1 · Day 3 over budget: 75 of 70 min"], breaches: [] });
+  });
+  it("breaches once, naming the week, when the days' must-reading runs past the week's reading budget", () => {
+    const { root, days } = week([
+      { materials: [must("R1", 70)] },
+      { materials: [must("R2", 60)], practice: [solve("Arrays 1–3", 30)] },
+      { practice: [mock] },
+      { materials: [must("R3", 60)], practice: [solve("Arrays 4–6", 30)] },
+      { materials: [must("R4", 60)], practice: [solve("Arrays 7–9", 30)] },
+    ]);
+    const { breaches } = check(root, days);
+    expect(breaches.map((b) => [b.kind, b.unit, b.text])).toEqual([["over-budget", "Week 1", "Week 1's must-reading is 250 min against a budget of about 180 min"]]);
+  });
+  it("breaches a pick's minutes over its share of the week, and states a pick left short as a fact", () => {
+    const { root, days } = week([
+      { practice: [solve("Arrays 1–6", 65)] },
+      { practice: [solve("Arrays 7–12", 65)] },
+      { materials: [must("R1", 60)] },
+      { materials: [must("R2", 60)] },
+      { materials: [must("R3", 60)] },
+    ]);
+    const out = check(root, days);
+    expect(out.breaches.map((b) => [b.kind, b.text])).toEqual([["over-budget", "Week 1's Problems practice is 130 min against a budget of about 90 min"]]);
+    expect(out.facts).toEqual(["Week 1 practice short: Mock 0 of about 90 min"]);
+  });
+  it("breaches a 60-minute mock on a 25-minute day against that day's own budget", () => {
+    // Three hours over seven days: 25 min a day.
+    const { root, days } = week([{}, {}, { practice: [{ ...mock, minutes: 60 }] }, {}, {}, {}, {}]);
+    const out = levelChecks({ root, nodes: days, leaves: true, top: false, materials, unknownIds: [], hoursPerWeek: 3, daysPerWeek: 7, split });
+    expect(out.breaches.filter((b) => b.kind === "over-budget").map((b) => [b.unit, b.text])).toEqual([["Week 1 · Day 3", "Week 1 · Day 3 is 60 min of reading and practice against a budget of about 25 min"]]);
+  });
+  it("states should-reading past what must leaves of the week's reading as a fact", () => {
+    const { root, days } = week([{ materials: [must("R1", 70)] }, { materials: [must("R2", 70)] }, { materials: [{ ...must("R3", 60), tier: "should" }] }]);
+    const out = levelChecks({ root, nodes: days, leaves: true, top: false, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split: { readingShare: 50, practice: "projects", reason: "" } });
+    // A split from before formats: reading is its share of the week, 180 min, and nothing is practice.
+    expect(out).toEqual({ facts: ["no must: Week 1 · Day 3", "Week 1 should-reading is 60 min, more than the 40 min must-reading leaves of the reading budget"], breaches: [] });
+  });
+  it("a sourced row outside the week's practice reservation is practice-outside, and dropBreaches removes it", () => {
+    const { root, days } = week([{ practice: [solve("Arrays 1–3", 30), solve("Graphs 1–3", 30, "Q")] }, { materials: [must("R1", 60)] }]);
+    const out = check(root, days);
+    expect(out.breaches.map((b) => [b.kind, b.index, b.text])).toEqual([["practice-outside", 0, 'Week 1 · Day 1 assigns Problems "Graphs 1–3" from M6, which Week 1 did not reserve']]);
+    expect(dropBreaches(days, out.breaches)).toEqual(['dropped Problems "Graphs 1–3" from Week 1 · Day 1: practice-outside']);
+    expect(days[0].practice).toEqual([solve("Arrays 1–3", 30)]);
+  });
+  it("does not check sourced rows against a week that reserves no practice", () => {
+    const { root, days } = week([{ practice: [solve("Graphs 1–3", 30, "Q")] }]);
+    delete root.children![0].practiceCovers;
+    expect(check(root, days).breaches.map((b) => b.kind)).not.toContain("practice-outside");
+  });
+  it("a generated row the registry forbids is practice-generated, and so is recall not written from the day's reading", () => {
+    const recall = (id: string | null): PracticeRef => ({ format: "recall", id, task: `Questions on ${id}`, done: "checked", minutes: 10, generated: true });
+    const both = { ...split, formats: [split.formats[0], { format: "recall" as const, share: 50, focus: "terms", reason: "" }] };
+    const { root, days } = week([{ materials: [must("R1", 30)], practice: [solve("Five array problems", 20, null as unknown as string), recall("R1"), recall("R2")] }]);
+    const out = levelChecks({ root, nodes: days, leaves: true, top: false, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split: both });
+    expect(out.breaches.filter((b) => b.kind === "practice-generated").map((b) => b.text)).toEqual([
+      'Week 1 · Day 1 writes Problems "Five array problems" itself, which is never written',
+      'Week 1 · Day 1 writes Recall "Questions on R2" itself, not from its own reading',
+    ]);
+    dropBreaches(days, out.breaches);
+    expect(days[0].practice).toEqual([recall("R1")]);
+  });
+  it("holds a week leaf to the week's budgets", () => {
+    const w1 = makeNode({ id: "w1", level: "week", title: "W", summary: "s", len: 5, budgetHours: 6, materials: [must("R1", 150)], practice: [solve("Arrays 1–12", 130), mock] });
+    const root = layout(makeRoot([w1]));
+    const out = levelChecks({ root, nodes: [w1], leaves: true, top: true, materials, unknownIds: [], daysPerWeek: 5, split });
+    expect(out.breaches.map((b) => b.text)).toEqual(["Week 1's Problems practice is 130 min against a budget of about 90 min"]);
+  });
+  it("treeChecks takes the split", () => {
+    const { root } = week([{ practice: [solve("Arrays 1–12", 130)] }, { materials: [must("R1", 60)] }]);
+    const out = treeChecks(root, materials, { granularity: "day", hoursPerWeek: 6, daysPerWeek: 5, split });
+    expect(out.breaches.map((b) => b.text)).toContain("Week 1's Problems practice is 130 min against a budget of about 90 min");
   });
 });
