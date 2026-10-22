@@ -7,10 +7,11 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { sources } from "@/lib/db/schema";
 import { collectCalls } from "@/lib/ai/collectCalls";
-import { generateDailyContent, type LessonMaterial } from "@/lib/ai/dailyContent";
+import { generateDailyContent, type LessonMaterial, type LessonPractice } from "@/lib/ai/dailyContent";
 import { chapterAt } from "@/lib/schemas/material";
 import type { ModelCall } from "@/lib/ai/logged";
-import { getNodeReadList, getOwnedNode, upsertLeafContent } from "@/lib/db/planQueries";
+import { PRACTICE_REGISTRY } from "@/lib/practice";
+import { getNodePracticeList, getNodeReadList, getOwnedNode, upsertLeafContent } from "@/lib/db/planQueries";
 import { resolveModels } from "@/lib/ai/resolve";
 import { UserKeyError, guardUserKeyCall } from "@/lib/ai/userKeyError";
 import type { KeyErrorKind } from "@/lib/ai/models";
@@ -56,6 +57,17 @@ export async function generateLeafContentAction(input: {
           kind: s.kind,
         }));
 
+  // The Do table: a generated recall row keeps its reading as source, any other generated row has none.
+  const practice: LessonPractice[] = (await getNodePracticeList(node.id)).map((p) => ({
+    format: p.format,
+    label: PRACTICE_REGISTRY[p.format].label,
+    task: p.task,
+    done: p.done ?? "",
+    minutes: p.minutes ?? 0,
+    source: p.source ? { title: p.source.title ?? p.source.url, url: p.source.url } : null,
+    generated: p.generated,
+  }));
+
   const models = await resolveModels(userId);
   let generated: Awaited<ReturnType<typeof generateDailyContent>>;
   try {
@@ -67,6 +79,7 @@ export async function generateLeafContentAction(input: {
           unit: node.level === "day" ? "day" : "week",
           spanDays: node.len,
           materials,
+          practice,
           model: models.content,
           log: collectCalls(admin, { trackId: input.trackId, userId, onLog: insertGenerationLog, keyOwner: models.content.keyOwner }, calls),
         }),

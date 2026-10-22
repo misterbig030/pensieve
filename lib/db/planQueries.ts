@@ -410,6 +410,23 @@ export async function logSession(nodeId: string, userId: string, hours: number):
   return { trackId: node.trackId };
 }
 
+/** A leaf's Do table: its assigned practice rows in row order, each with its saved source (none for a generated row). */
+export async function getNodePracticeList(nodeId: string) {
+  return db
+    .select({
+      source: sources,
+      format: nodePractice.format,
+      task: nodePractice.task,
+      done: nodePractice.done,
+      minutes: nodePractice.minutes,
+      generated: nodePractice.generated,
+    })
+    .from(nodePractice)
+    .leftJoin(sources, eq(nodePractice.sourceId, sources.id))
+    .where(and(eq(nodePractice.nodeId, nodeId), eq(nodePractice.role, "assigned")))
+    .orderBy(asc(nodePractice.position));
+}
+
 /** A leaf's Read table: its assigned materials in row order, each with the saved source. */
 export async function getNodeReadList(nodeId: string) {
   const rows = await db
