@@ -24,6 +24,7 @@ import {
   tierMinutes,
   treeChecks,
   keptReadTable,
+  keepPracticeCovers,
 } from "./materials";
 
 describe("parseChapters", () => {
@@ -693,5 +694,35 @@ describe("checks over the week", () => {
     const { root } = week([{ practice: [solve("Arrays 1–12", 130)] }, { materials: [must("R1", 60)] }]);
     const out = treeChecks(root, materials, { granularity: "day", hoursPerWeek: 6, daysPerWeek: 5, split });
     expect(out.breaches.map((b) => b.text)).toContain("Week 1's Problems practice is 130 min against a budget of about 90 min");
+  });
+});
+
+describe("keepPracticeCovers", () => {
+  const kept = [
+    { format: "problem-set" as const, id: "neet", note: null, task: "Arrays 1–6", minutes: 40 },
+    { format: "design-exercise" as const, id: null, note: null, task: "Design a cache", minutes: 30 },
+  ];
+
+  it("restores task and minutes on a reservation written back with an id only", () => {
+    expect(keepPracticeCovers([{ format: "problem-set", id: "neet", note: "harder" }], kept)).toEqual([
+      { format: "problem-set", id: "neet", note: "harder", task: "Arrays 1–6", minutes: 40 },
+      kept[1],
+    ]);
+  });
+
+  it("never overwrites a value the reservation already has, and matches on format as well as id", () => {
+    const next = [
+      { format: "problem-set" as const, id: "neet", note: null, task: "Mine" },
+      { format: "lab" as const, id: "neet", note: null },
+    ];
+    expect(keepPracticeCovers(next, kept).slice(0, 2)).toEqual([
+      { format: "problem-set", id: "neet", note: null, task: "Mine", minutes: 40 },
+      { format: "lab", id: "neet", note: null },
+    ]);
+  });
+
+  it("carries generated reservations forward unchanged, after the rewritten list, even when it is empty", () => {
+    expect(keepPracticeCovers([], kept)).toEqual([kept[1]]);
+    expect(keepPracticeCovers([], undefined)).toEqual([]);
   });
 });

@@ -805,18 +805,20 @@ export function keepCoverTiers(next: CoverRef[], before: CoverRef[] | undefined)
 }
 
 /**
- * A practice reservation the model wrote back, with the `task` and `minutes` of the matching reservation it had before
- * (same format and source). The model writes only ids and notes, so a week split by hand would otherwise lose its rows'
- * tasks on any revision. Values the reservation already has are kept.
+ * What a heading's practice reservations become when the model rewrites them. Reservations it wrote back with ids only
+ * regain the `task` and `minutes` of the matching one it had before (same format and source); values they already have
+ * are kept. The model cannot name a generated reservation (no source, `id: null`), so those carry forward unchanged,
+ * after the rewritten list. A week split by hand would otherwise lose its rows on any revision.
  */
 export function keepPracticeCovers(next: PracticeCover[], before: PracticeCover[] | undefined): PracticeCover[] {
   const old = new Map((before ?? []).filter((r) => r.id !== null && (r.task !== undefined || r.minutes !== undefined)).map((r) => [`${r.format}:${r.id}`, r]));
-  if (old.size === 0) return next;
-  return next.map((r) => {
+  const generated = (before ?? []).filter((r) => r.id === null);
+  const restored = next.map((r) => {
     const o = old.get(`${r.format}:${r.id}`);
     if (!o) return r;
     return { ...r, ...(r.task === undefined && o.task !== undefined ? { task: o.task } : {}), ...(r.minutes === undefined && o.minutes !== undefined ? { minutes: o.minutes } : {}) };
   });
+  return [...restored, ...generated];
 }
 
 /** A copy of the tree without any reference to `id`. */
