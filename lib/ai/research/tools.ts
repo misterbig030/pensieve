@@ -243,7 +243,7 @@ export class ResearchNotes {
     }
     for (const f of this.fetches) {
       if (f.ok) {
-        const size = f.durationMinutes ? ` (runtime ${f.durationMinutes} min)` : f.words ? ` (${f.words} words)` : "";
+        const size = f.durationMinutes ? ` (runtime ${f.durationMinutes} min)` : f.words ? ` (${f.words} words${nearlyEmpty(f) ? "; nearly empty, drawn by script: it shows nothing of its content" : ""})` : "";
         parts.push(`Read <${f.url}>${f.finalUrl && f.finalUrl !== f.url ? ` → <${f.finalUrl}>` : ""}: title "${f.title ?? "(none)"}"${size}\n  ${f.excerpt}`);
       }
       else parts.push(`Could not read <${f.url}>: ${f.reason}`);
@@ -267,6 +267,20 @@ export interface ResearchToolsOptions {
 }
 
 export const BUDGET_SPENT = "budget spent";
+
+/** Below this many words, a read page with no runtime showed next to nothing of itself. */
+const NEARLY_EMPTY_WORDS = 100;
+
+/**
+ * Whether a read page came back nearly empty, as a page drawn by script in the browser does: the reader runs no
+ * scripts, so NeetCode's or LeetCode's problem lists read as their title alone. Unmeasured pages and videos are not.
+ */
+export function nearlyEmpty(page: { words?: number | null; durationMinutes?: number | null }): boolean {
+  return typeof page.words === "number" && page.words < NEARLY_EMPTY_WORDS && !page.durationMinutes;
+}
+
+const DRAWN_BY_SCRIPT =
+  "This page came back nearly empty: it is drawn by script in the browser, which this reader does not run, so its content cannot be read here and says nothing about solutions or size. Look for a readable copy of the same content: the site's GitHub repository or a static page that lists it.";
 
 export function createResearchTools(opts: ResearchToolsOptions) {
   const { provider, fetcher, budget, notes, emit } = opts;
@@ -313,7 +327,7 @@ export function createResearchTools(opts: ResearchToolsOptions) {
         durationMinutes: page.durationMinutes ?? null,
       });
       emit({ type: "research.fetch", url, ok: true });
-      return page;
+      return nearlyEmpty(page) ? { ...page, note: DRAWN_BY_SCRIPT } : page;
     },
   });
 
