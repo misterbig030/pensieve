@@ -619,6 +619,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             hoursPerWeek={hoursPerWeek}
             daysPerWeek={daysPerWeek}
             split={split}
+            materials={materials}
             deciding={drafting && !split}
             onChangeHours={changeHours}
             // A one-week plan is its days: a different number is a change to ask for in the conversation.

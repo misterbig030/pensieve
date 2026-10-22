@@ -72,7 +72,7 @@ export default async function TrackDetailPage({ params }: { params: Promise<{ id
       <Progress value={total > 0 ? (done / total) * 100 : 0} className="mb-6 max-w-[320px]" />
       <PlanSummaryCard summary={summary} className="mb-6" />
       <div className="mb-6">
-        <TimeSplitCard weeks={weeksOf(root, root, track.daysPerWeek)} hoursPerWeek={track.hoursPerWeek} daysPerWeek={track.daysPerWeek} split={track.split} />
+        <TimeSplitCard weeks={weeksOf(root, root, track.daysPerWeek)} hoursPerWeek={track.hoursPerWeek} daysPerWeek={track.daysPerWeek} split={track.split} materials={materials} />
       </div>
       {materials.length > 0 && (
         <div className="mb-6">

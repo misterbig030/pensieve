@@ -25,6 +25,7 @@ import {
   treeChecks,
   keptReadTable,
   keepPracticeCovers,
+  splitHours,
 } from "./materials";
 
 describe("parseChapters", () => {
@@ -600,6 +601,18 @@ describe("practice budgets", () => {
     const dual = [{ id: "book", minutes: 600, practice: { format: "problem-set" as const, items: 10, perItemMinutes: 10, minutes: null, answers: true } }];
     expect(practiceBudgets(split, 360, dual)).toEqual({ reading: 225, practice: { "problem-set": 90, recall: 45 } });
     expect(noSourceFacts(split, dual)).toEqual(["no source for Lab: its time goes to reading"]);
+  });
+  it("shows the time card a pick that can't be assigned as reading, not as hours of its own", () => {
+    // 72 h at 50% reading: 36 h of reading, then problems 18 h, recall 9 h and lab 9 h; the lab has no source.
+    expect(splitHours(split, 72, materials)).toEqual({
+      reading: 45,
+      picks: [
+        { format: "problem-set", label: "Problems", hours: 18, focus: "arrays", toReading: false },
+        { format: "recall", label: "Recall", hours: 9, focus: "terms", toReading: false },
+        { format: "lab", label: "Lab", hours: 0, focus: "git", toReading: true },
+      ],
+    });
+    expect(splitHours({ readingShare: 60, practice: "projects", reason: "" }, 72, materials)).toEqual({ reading: 43, picks: [] });
   });
   it("gives recall's time to reading when the list has no reading to write it from", () => {
     const practiceOnly = [materials[1]];

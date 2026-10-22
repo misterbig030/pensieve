@@ -1,6 +1,6 @@
 import { learnerKind } from "@/lib/ai/research/verify";
 import { budgetFor, cloneTree, daysInWeekOf, fullLabelOf, parentOf, walk, weeksOf, type Granularity, type PlanNode } from "@/lib/planTree";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY, weekBudgets, type PracticeFormat, type PracticePick } from "@/lib/practice";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, weekBudgets, type PracticeFormat, type PracticePick } from "@/lib/practice";
 import { dayMinutes, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
@@ -286,6 +286,24 @@ export function practiceBudgets(
     delete budgets.practice[pick.format];
   }
   return budgets;
+}
+
+/** A pick on the time card: its hours, or none with `toReading` when it can't be assigned and its time is reading. */
+export type PickHours = ReturnType<typeof formatHours>[number] & { toReading: boolean };
+
+/**
+ * The time card's hours: reading, and each pick's (`formatHours`). A pick that can't be assigned is drafted as reading
+ * (`practiceBudgets`), so its hours count as reading and it has none of its own.
+ */
+export function splitHours(split: PlanSplit, totalHours: number, materials: Pick<Material, "id" | "practice" | "minutes">[]): { reading: number; picks: PickHours[] } {
+  const assignable = new Map(pickSources(split, materials).map((p) => [p.pick.format, p.assignable]));
+  let reading = Math.round((totalHours * split.readingShare) / 100);
+  const picks = formatHours(split, totalHours).map((p) => {
+    const toReading = assignable.get(p.format) === false;
+    if (toReading) reading += p.hours;
+    return { ...p, hours: toReading ? 0 : p.hours, toReading };
+  });
+  return { reading, picks };
 }
 
 /** One fact per pick that can't be assigned, for the drafting call's facts. */
