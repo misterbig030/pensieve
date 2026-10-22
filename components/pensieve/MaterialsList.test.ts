@@ -32,6 +32,7 @@ describe("splitCoverage", () => {
   it("separates open practice picks, as their labels, from uncovered topic areas", () => {
     expect(splitCoverage(["Retrieval", "practice: Problems", "Evals", "practice: Mock"])).toEqual({ areas: ["Retrieval", "Evals"], practice: ["Problems", "Mock"] });
     expect(splitCoverage([])).toEqual({ areas: [], practice: [] });
+    expect(splitCoverage(["Practice: Problems"])).toEqual({ areas: [], practice: ["Problems"] });
   });
 });
 

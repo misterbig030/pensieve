@@ -1,11 +1,12 @@
 import type { LanguageModel } from "ai";
+import { isPracticeOnly } from "@/lib/materials";
 import type { Material } from "@/lib/schemas/material";
 import type { GenerationLogContext } from "../logged";
 import type { AiModelId } from "../models";
 import { providerError } from "../providerError";
 import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type ResearchBrief } from "./agent";
 import { createChapterFinder, type ChapterFinder, type ChapterFinderResult } from "./chapterFinder";
-import { PRACTICE_OPEN_PREFIX, type Coverage, type DroppedMaterial, type ResearchEvent, type ResearchNotice } from "./events";
+import { isPracticeOpen, type Coverage, type DroppedMaterial, type ResearchEvent, type ResearchNotice } from "./events";
 import { SourceFetcher, capsFor, searchProviderFromEnv, type ResearchCaps } from "./tools";
 import { createOpenLibraryLookup, runGate, sizedMinutes, type BookLookup } from "./verify";
 import { createWorkersArm } from "./workers";
@@ -14,15 +15,20 @@ import { createWorkersArm } from "./workers";
 export const THIN_BELOW = 3;
 
 /**
- * Research is thin when it verified almost nothing, or when it left at least as many of the topic's main areas
- * open as it covered. A short list that covers the topic is not thin: a week-long plan needs only a handful. Open
- * practice picks are not areas of the topic, so they do not count.
+ * Research is thin when it verified almost nothing to read (`verifiedReading`), or when it left at least as many of
+ * the topic's main areas open as it covered. A short list that covers the topic is not thin: a week-long plan needs
+ * only a handful. Open practice picks are not areas of the topic, so they do not count.
  */
 export function isThin(verified: number, coverage: Coverage | null | undefined): boolean {
   if (verified < THIN_BELOW) return true;
   if (!coverage) return false;
-  const open = coverage.open.filter((a) => !a.startsWith(PRACTICE_OPEN_PREFIX)).length;
+  const open = coverage.open.filter((a) => !isPracticeOpen(a)).length;
   return open > 0 && open >= coverage.covered.length;
+}
+
+/** The researched materials there is something to read in: what the thin notice counts, since practice-only sources are not reading. */
+export function verifiedReading(materials: Pick<Material, "origin" | "minutes" | "practice">[]): number {
+  return materials.filter((m) => m.origin === "research" && !isPracticeOnly(m)).length;
 }
 
 export interface ResearchOutcome {
@@ -179,7 +185,7 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
 
   const unavailable = !arm || arm.stoppedBy === "cancelled" || arm.stoppedBy === "clock-idle" || (arm.stoppedBy === "search-error" && arm.searchesOk === 0);
   const coverage = arm?.coverage ?? null;
-  const notice: ResearchNotice | undefined = unavailable ? "unavailable" : isThin(gate.verified, coverage) ? "thin" : undefined;
+  const notice: ResearchNotice | undefined = unavailable ? "unavailable" : isThin(verifiedReading(materials), coverage) ? "thin" : undefined;
   const sized = sizedMinutes(materials);
   yield { type: "research.done", materials, dropped: gate.dropped, ...(notice ? { notice } : {}), counts, coverage, sizedMinutes: sized };
 

@@ -8,7 +8,7 @@ import type { ModelCall } from "../logged";
 import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
-import { isThin, researchMaterials, streamWhile } from "./pipeline";
+import { isThin, researchMaterials, streamWhile, verifiedReading } from "./pipeline";
 import { RESEARCH_CAPS, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
 import type { BookLookup, CandidateList } from "./verify";
 
@@ -310,6 +310,22 @@ describe("thin research", () => {
     // Open practice picks are not topic areas.
     expect(isThin(8, { covered: ["Foundations", "Agents", "Evals"], open: ["practice: Problems", "practice: Mock", "practice: Design"] })).toBe(false);
     expect(isThin(8, { covered: ["Foundations"], open: ["Evals", "practice: Problems"] })).toBe(true);
+    // The prefix matches in any case.
+    expect(isThin(8, { covered: ["Foundations"], open: ["Practice: Problems"] })).toBe(false);
+  });
+
+  it("counts only the researched materials there is something to read in", () => {
+    const problems = { format: "problem-set" as const, items: 150, perItemMinutes: 10, minutes: 1500, answers: true };
+    const list = [
+      { origin: "research" as const, minutes: 600 },
+      { origin: "research" as const, minutes: 300, practice: problems },
+      { origin: "research" as const, minutes: null, practice: problems },
+      { origin: "research" as const, minutes: null, practice: { ...problems, format: "lab" as const } },
+      { origin: "learner" as const, minutes: 120 },
+    ];
+    // Two readings and two practice-only lists is two verified to read: thin.
+    expect(verifiedReading(list)).toBe(2);
+    expect(isThin(verifiedReading(list), null)).toBe(true);
   });
 
   it("carries the arm's coverage and the list's size to the done event", async () => {

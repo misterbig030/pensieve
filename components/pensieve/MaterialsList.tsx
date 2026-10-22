@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PRACTICE_OPEN_PREFIX, type Coverage, type DroppedMaterial, type ResearchNotice } from "@/lib/ai/research/events";
+import { PRACTICE_OPEN_PREFIX, isPracticeOpen, type Coverage, type DroppedMaterial, type ResearchNotice } from "@/lib/ai/research/events";
 import { isPracticeOnly } from "@/lib/materials";
 import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { approxDuration } from "@/lib/researchProgress";
@@ -201,8 +201,8 @@ function totalsLine(readingMinutes: number, practiceMinutes: number): string {
 
 /** Separates the practice picks research found no source for (as their labels) from the topic areas it left open. */
 export function splitCoverage(open: string[]): { areas: string[]; practice: string[] } {
-  const practice = open.filter((a) => a.startsWith(PRACTICE_OPEN_PREFIX)).map((a) => a.slice(PRACTICE_OPEN_PREFIX.length));
-  return { areas: open.filter((a) => !a.startsWith(PRACTICE_OPEN_PREFIX)), practice };
+  const practice = open.filter(isPracticeOpen).map((a) => a.slice(PRACTICE_OPEN_PREFIX.length));
+  return { areas: open.filter((a) => !isPracticeOpen(a)), practice };
 }
 
 function byline(m: Material, withKind = false): string {
