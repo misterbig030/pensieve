@@ -561,6 +561,17 @@ describe("practice through the gate", () => {
     expect(result.materials[0].practice).toMatchObject({ format: "problem-set", minutes: 60 });
   });
 
+  it("keeps the part a practice-only candidate named when the reading candidate names none", async () => {
+    const f = page();
+    const result = await gate(f, {
+      candidates: [
+        candidate({ url, title: "Exercises", uses: "exercises 1-6", practice: { format: "problem-set", items: 6, perItemMinutes: null, answers: true } }),
+        candidate({ url, title: "Exercises", minutes: 90 }),
+      ],
+    });
+    expect(result.materials[0]).toMatchObject({ minutes: 90, uses: "exercises 1-6" });
+  });
+
   it("does not overwrite a reading size the kept material already has", async () => {
     const f = page();
     const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", minutes: 90 }), candidate({ url, title: "Exercises", minutes: 20 })] });
