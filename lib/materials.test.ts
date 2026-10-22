@@ -519,6 +519,26 @@ describe("practice rows and reservations", () => {
     expect(refs).toEqual([]);
     expect(refused).toEqual(['Problems "The essay\'s exercises": M4 is not a practice source']);
   });
+  it("refuses a sourced row whose source serves another format", () => {
+    const both = { ...split, formats: [...split.formats, { format: "lab" as const, share: 20, focus: "git", reason: "" }] };
+    const { refs, refused } = resolvePracticeRefs(
+      [
+        { format: "problem-set", id: "M3", task: "Branching problems", done: "solved", minutes: 20 },
+        { format: "recall", id: "M2", task: "Recall the array patterns", done: "checked", minutes: 10 },
+      ],
+      aliases,
+      both,
+      ["book"],
+    );
+    expect(refs).toEqual([]);
+    expect(refused).toEqual(['Problems "Branching problems": M3 serves Lab, not Problems', 'Recall "Recall the array patterns": M2 serves Problems, not Recall']);
+  });
+  it("drops a reservation whose source serves another format into unknown", () => {
+    const both = { ...split, formats: [...split.formats, { format: "lab" as const, share: 20, focus: "git", reason: "" }] };
+    const { refs, unknown } = resolvePracticeCovers([{ format: "problem-set", id: "M3", note: "Branching" }, { format: "lab", id: "M3" }], aliases, both);
+    expect(refs).toEqual([{ format: "lab", id: "git-lab", note: null }]);
+    expect(unknown).toEqual(["M3"]);
+  });
   it("reserves practice sources of picked formats, and drops a cover that is not a pick or not a source into unknown", () => {
     const { refs, unknown } = resolvePracticeCovers(
       [
@@ -552,5 +572,10 @@ describe("practice budgets", () => {
     expect(practiceBudgets(split, 360, materials)).toEqual({ reading: 225, practice: { "problem-set": 90, recall: 45 } });
     expect(noSourceFacts(split, materials)).toEqual(["no source for Lab: its time goes to reading"]);
     expect(noSourceFacts(null, materials)).toEqual([]);
+  });
+  it("gives recall's time to reading when the list has no reading to write it from", () => {
+    const practiceOnly = [materials[1]];
+    expect(practiceBudgets(split, 360, practiceOnly)).toEqual({ reading: 270, practice: { "problem-set": 90 } });
+    expect(noSourceFacts(split, practiceOnly)).toEqual(["no source for Recall: its time goes to reading", "no source for Lab: its time goes to reading"]);
   });
 });

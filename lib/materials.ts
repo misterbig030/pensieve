@@ -153,10 +153,11 @@ function rowName(format: string, task: string): string {
 
 /**
  * Resolves the model's practice rows. A row of a format the split did not pick is refused. A row naming a practice
- * source keeps it. A row with no id is one the model wrote (`generated`), refused when its format is never written;
- * recall written from reading must name a resource the unit itself reads (`reads`, its Read table's ids), so a recall
- * row with no id, or citing other reading, is refused. An id not in the list is unknown; a reading id on any other
- * format is refused, since it is no practice source.
+ * source of its own format keeps it; one whose source serves another format is refused. A row with no id is one the
+ * model wrote (`generated`), refused when its format is never written. Recall written from reading must name a
+ * resource the unit itself reads (`reads`, its Read table's ids), so a recall row with no id, or citing other reading,
+ * is refused. An id not in the list is unknown; a reading id on any other format is refused, since it is no practice
+ * source.
  */
 export function resolvePracticeRefs(
   drafts: PracticeRefDraft[] | undefined,
@@ -186,7 +187,12 @@ export function resolvePracticeRefs(
       continue;
     }
     const spec = PRACTICE_REGISTRY[format];
-    const generated = !resolved || aliases.practice(resolved.id) === null;
+    const serves = resolved ? aliases.practice(resolved.id) : null;
+    if (serves !== null && serves !== format) {
+      refused.push(`${name}: ${alias} serves ${PRACTICE_REGISTRY[serves].label}, not ${spec.label}`);
+      continue;
+    }
+    const generated = serves === null;
     if (generated) {
       const why =
         format === "recall"
@@ -209,7 +215,10 @@ export function resolvePracticeRefs(
   return { refs, unknown, refused };
 }
 
-/** Resolves a heading's practice reservations. One whose format is not a pick, or whose material is no practice source, is dropped into `unknown`. */
+/**
+ * Resolves a heading's practice reservations. One whose format is not a pick, or whose material is no practice source
+ * of that format, is dropped into `unknown`.
+ */
 export function resolvePracticeCovers(
   drafts: PracticeCoverDraft[] | undefined,
   aliases: MaterialAliases,
@@ -220,7 +229,7 @@ export function resolvePracticeCovers(
   for (const draft of drafts ?? []) {
     const resolved = aliases.resolve(draft.id);
     const format = pickedFormat(draft.format, split);
-    if (!resolved || !format || aliases.practice(resolved.id) === null) {
+    if (!resolved || !format || aliases.practice(resolved.id) !== format) {
       unknown.push(draft.id);
       continue;
     }
@@ -233,15 +242,21 @@ export function resolvePracticeCovers(
 export interface PickSources {
   pick: PracticePick;
   sources: string[];
-  /** False when nothing can be assigned: no source, and the format is never written. Its time goes to reading. */
+  /**
+   * False when nothing can be assigned: no source, and the format is never written, or is written only from reading and
+   * the list has none. Its time goes to reading.
+   */
   assignable: boolean;
 }
 
 /** The split's picks with their sources. Empty when the plan is all reading. */
 export function pickSources(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice">[]): PickSources[] {
+  const hasReading = materials.some((m) => !m.practice);
   return (split?.formats ?? []).map((pick) => {
     const sources = materials.filter((m) => m.practice?.format === pick.format).map((m) => m.id);
-    return { pick, sources, assignable: sources.length > 0 || PRACTICE_REGISTRY[pick.format].generated !== "never" };
+    const rule = PRACTICE_REGISTRY[pick.format].generated;
+    const writable = rule !== "never" && (rule !== "from-reading" || hasReading);
+    return { pick, sources, assignable: sources.length > 0 || writable };
   });
 }
 
