@@ -572,6 +572,24 @@ describe("practice through the gate", () => {
     expect(result.materials[0]).toMatchObject({ minutes: 90, uses: "exercises 1-6" });
   });
 
+  it("takes the part a later practice-only candidate names for a reading size already kept", async () => {
+    const f = page();
+    const result = await gate(f, {
+      candidates: [
+        candidate({ url, title: "Exercises", minutes: 90 }),
+        candidate({ url, title: "Exercises", uses: "exercises 1-6", practice: { format: "problem-set", items: 6, perItemMinutes: null, answers: true } }),
+      ],
+    });
+    expect(result.materials[0]).toMatchObject({ minutes: 90, uses: "exercises 1-6" });
+  });
+
+  it("does not attach a discarded candidate's part to the reading size already kept", async () => {
+    const f = page();
+    const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", minutes: 90 }), candidate({ url, title: "Exercises", minutes: 20, uses: "ch. 2" })] });
+    expect(result.materials[0].minutes).toBe(90);
+    expect(result.materials[0].uses).toBeNull();
+  });
+
   it("does not overwrite a reading size the kept material already has", async () => {
     const f = page();
     const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", minutes: 90 }), candidate({ url, title: "Exercises", minutes: 20 })] });
