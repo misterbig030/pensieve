@@ -384,6 +384,52 @@ describe("tree edits", () => {
     expect(root.children![0].children![0].materials?.[0].id).toBe("uuid-1");
   });
 
+  it("removes a material's practice rows and reservations but keeps generated rows", () => {
+    const root = makeRoot([
+      makeNode({ id: "m1", level: "month", title: "A", summary: "a", len: 7, practiceCovers: [{ format: "problem-set", id: "M4", note: null }, { format: "lab", id: "M5", note: null }], children: [
+        makeNode({
+          id: "d1",
+          level: "day",
+          title: "D",
+          summary: "d",
+          len: 7,
+          practice: [
+            { format: "problem-set", id: "M4", task: "t", done: "d", minutes: 20, generated: false },
+            { format: "recall", id: null, task: "t", done: "d", minutes: 10, generated: true },
+          ],
+        }),
+      ] }),
+      makeNode({ id: "m2", level: "month", title: "B", summary: "b", len: 7, practiceCovers: [{ format: "problem-set", id: "M4", note: null }] }),
+    ]);
+    const next = removeMaterialRefs(root, "M4");
+    expect(next.children![0].practiceCovers).toEqual([{ format: "lab", id: "M5", note: null }]);
+    expect(next.children![0].children![0].practice).toEqual([{ format: "recall", id: null, task: "t", done: "d", minutes: 10, generated: true }]);
+    expect(next.children![1].practiceCovers).toBeUndefined();
+  });
+
+  it("maps practice ids to uuids, keeps generated rows and drops unknown sources", () => {
+    const root = makeRoot([
+      makeNode({ id: "m1", level: "month", title: "A", summary: "a", len: 7, practiceCovers: [{ format: "problem-set", id: "M4", note: null }, { format: "lab", id: "M9", note: null }], children: [
+        makeNode({
+          id: "d1",
+          level: "day",
+          title: "D",
+          summary: "d",
+          len: 7,
+          practice: [
+            { format: "problem-set", id: "M4", task: "t", done: "d", minutes: 20, generated: false },
+            { format: "recall", id: null, task: "t", done: "d", minutes: 10, generated: true },
+            { format: "lab", id: "M9", task: "t", done: "d", minutes: 10, generated: false },
+          ],
+        }),
+      ] }),
+    ]);
+    const { root: next, dropped } = remapTreeRefs(root, new Map([["M4", "uuid-4"]]));
+    expect(dropped).toBe(2);
+    expect(next.children![0].practiceCovers).toEqual([{ format: "problem-set", id: "uuid-4", note: null }]);
+    expect(next.children![0].children![0].practice!.map((r) => r.id)).toEqual(["uuid-4", null]);
+  });
+
   it("sums minutes by tier", () => {
     expect(tierMinutes([{ id: "a", tier: "must", minutes: 30, note: null }, { id: "b", tier: "should", minutes: null, note: null }, { id: "c", tier: "should", minutes: 15, note: null }])).toEqual({ must: 30, should: 15 });
   });

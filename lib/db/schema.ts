@@ -15,6 +15,7 @@ import {
 import { relations, sql } from "drizzle-orm";
 import { KEY_ERRORS, KEY_OWNERS, MODEL_PROVIDERS } from "@/lib/ai/models";
 import { SOURCE_TYPES } from "@/lib/schemas/source";
+import { PRACTICE_FORMATS } from "@/lib/practice";
 import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS, MINUTES_BASES, type ChapterList, type MaterialPractice, REF_ACTIVITIES } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 
@@ -146,6 +147,34 @@ export const nodeMaterials = pgTable(
   (t) => [primaryKey({ columns: [t.nodeId, t.sourceId, t.chapter] }), index("node_materials_source_idx").on(t.sourceId)],
 );
 
+/**
+ * Which practice a node carries. Headings reserve a practice source for the units inside them (`covers`; a week split
+ * by hand keeps its rows' task and minutes); leaves assign tasks (`assigned`). A generated row has no source, and a
+ * source may appear on a node more than once, so rows have their own id. Removing a source removes its rows.
+ */
+export const nodePractice = pgTable(
+  "node_practice",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => planNodes.id, { onDelete: "cascade" }),
+    role: text("role", { enum: MATERIAL_ROLES }).notNull(),
+    /** Row order among the node's practice rows of that role. */
+    position: integer("position").notNull().default(0),
+    format: text("format", { enum: PRACTICE_FORMATS }).notNull(),
+    /** Null for a generated row. */
+    sourceId: uuid("source_id").references(() => sources.id, { onDelete: "cascade" }),
+    /** Empty for a plain reservation, which names no task. */
+    task: text("task").notNull().default(""),
+    done: text("done"),
+    note: text("note"),
+    minutes: integer("minutes"),
+    generated: boolean("generated").notNull().default(false),
+  },
+  (t) => [index("node_practice_node_idx").on(t.nodeId)],
+);
+
 export const dailyContent = pgTable("daily_content", {
   id: uuid("id").primaryKey().defaultRandom(),
   nodeId: uuid("node_id")
@@ -217,6 +246,8 @@ export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
 export type NodeMaterialRow = typeof nodeMaterials.$inferSelect;
 export type NewNodeMaterialRow = typeof nodeMaterials.$inferInsert;
+export type NodePracticeRow = typeof nodePractice.$inferSelect;
+export type NewNodePracticeRow = typeof nodePractice.$inferInsert;
 export type PlanNodeRow = typeof planNodes.$inferSelect;
 export type NewPlanNodeRow = typeof planNodes.$inferInsert;
 export type DailyContent = typeof dailyContent.$inferSelect;

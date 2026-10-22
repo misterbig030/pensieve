@@ -161,11 +161,11 @@ export type PracticeRef = z.infer<typeof practiceRefSchema>;
 
 /**
  * A heading's reservation of a practice source for the units inside it. A week split by hand keeps its row's `task` and
- * `minutes` here, as a split week keeps its Read table.
+ * `minutes` here, as a split week keeps its Read table; a generated row has no source, so its `id` is null.
  */
 export const practiceCoverSchema = z.object({
   format: z.enum(PRACTICE_FORMATS),
-  id: z.string().min(1).max(64),
+  id: z.string().min(1).max(64).nullable(),
   note: z.string().max(300).nullable(),
   task: z.string().max(300).optional(),
   minutes: z.number().int().min(1).max(600).optional(),

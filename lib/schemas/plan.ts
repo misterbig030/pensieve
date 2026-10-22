@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema } from "./material";
+import { coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema, practiceCoverSchema, practiceRefSchema } from "./material";
 
 export const PLAN_LEVELS = ["month", "week", "day"] as const;
 export const planLevelSchema = z.enum(PLAN_LEVELS);
@@ -57,6 +57,8 @@ const nodeInputBase = z.object({
   manualSplit: z.boolean().optional(),
   covers: z.array(coverRefSchema).max(40).optional(),
   materials: z.array(materialRefSchema).max(40).optional(),
+  practice: z.array(practiceRefSchema).max(40).optional(),
+  practiceCovers: z.array(practiceCoverSchema).max(40).optional(),
 });
 const leafInputSchema = nodeInputBase.extend({ children: z.null().optional() });
 const midInputSchema = nodeInputBase.extend({ children: z.array(leafInputSchema).max(60).nullable().optional() });

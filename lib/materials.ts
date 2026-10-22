@@ -555,8 +555,13 @@ export function removeMaterialRefs(root: PlanNode, id: string): PlanNode {
   walk(next, (n) => {
     if (n.covers) n.covers = n.covers.filter((r) => r.id !== id);
     if (n.materials) n.materials = n.materials.filter((r) => r.id !== id);
+    // Generated practice rows have no source (`id: null`) and stay.
+    if (n.practice) n.practice = n.practice.filter((r) => r.id !== id);
+    if (n.practiceCovers) n.practiceCovers = n.practiceCovers.filter((r) => r.id !== id);
     if (n.covers?.length === 0) delete n.covers;
     if (n.materials?.length === 0) delete n.materials;
+    if (n.practice?.length === 0) delete n.practice;
+    if (n.practiceCovers?.length === 0) delete n.practiceCovers;
   });
   return next;
 }
@@ -578,13 +583,33 @@ export function remapTreeRefs(root: PlanNode, ids: ReadonlyMap<string, string>):
     }
     return out.length > 0 ? out : undefined;
   };
+  // Practice with no source (`id: null`, a generated row) has nothing to map and stays.
+  const mapPractice = <T extends { id: string | null }>(refs: T[] | undefined): T[] | undefined => {
+    if (!refs) return refs;
+    const out: T[] = [];
+    for (const r of refs) {
+      if (r.id === null) out.push(r);
+      else {
+        const id = ids.get(r.id);
+        if (id) out.push({ ...r, id });
+        else dropped += 1;
+      }
+    }
+    return out.length > 0 ? out : undefined;
+  };
   walk(next, (n) => {
     const covers = map(n.covers);
     const materials = map(n.materials);
+    const practice = mapPractice(n.practice);
+    const practiceCovers = mapPractice(n.practiceCovers);
     if (covers) n.covers = covers;
     else delete n.covers;
     if (materials) n.materials = materials;
     else delete n.materials;
+    if (practice) n.practice = practice;
+    else delete n.practice;
+    if (practiceCovers) n.practiceCovers = practiceCovers;
+    else delete n.practiceCovers;
   });
   return { root: next, dropped };
 }

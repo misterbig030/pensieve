@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "./client";
 import { tracks, sources, planNodes, checkIns, type NewSource, type Source } from "./schema";
-import { getTrackNodeMaterials, insertPlanTree, rowsToTree } from "./planQueries";
+import { getTrackNodeMaterials, getTrackNodePractice, insertPlanTree, rowsToTree } from "./planQueries";
 import { remapTreeRefs } from "@/lib/materials";
 import { doneDays, type Granularity, type PlanNode } from "@/lib/planTree";
 import { clip, type Material } from "@/lib/schemas/material";
@@ -53,13 +53,14 @@ export async function getTrackDetail(trackId: string, userId: string) {
   });
   if (!track) return null;
 
-  const [nodeRows, trackSources, materialRows] = await Promise.all([
+  const [nodeRows, trackSources, materialRows, practiceRows] = await Promise.all([
     db.query.planNodes.findMany({ where: eq(planNodes.trackId, trackId) }),
     db.query.sources.findMany({ where: eq(sources.trackId, trackId), orderBy: [asc(sources.position)] }),
     getTrackNodeMaterials(trackId),
+    getTrackNodePractice(trackId),
   ]);
 
-  return { track, root: rowsToTree(nodeRows, materialRows), materials: trackSources.map(sourceToMaterial) };
+  return { track, root: rowsToTree(nodeRows, materialRows, practiceRows), materials: trackSources.map(sourceToMaterial) };
 }
 
 /**
