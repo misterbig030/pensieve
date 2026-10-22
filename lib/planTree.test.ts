@@ -250,3 +250,22 @@ describe("planning everything", () => {
     expect(planningStepsLeft(plan(), 7)).toBe(7);
   });
 });
+
+describe("makeNode practice", () => {
+  const row = { format: "problem-set" as const, id: "M1", task: "Solve 10", done: "checked", minutes: 100, generated: false };
+  const cover = { format: "recall" as const, id: "M2", note: null };
+  const base = { level: "week" as const, title: "W", summary: "", len: 5 };
+
+  it("keeps practice rows and reservations when there are some", () => {
+    const node = makeNode({ ...base, practice: [row], practiceCovers: [cover] });
+    expect(node.practice).toEqual([row]);
+    expect(node.practiceCovers).toEqual([cover]);
+  });
+
+  it("leaves them off when empty or absent", () => {
+    const empty = makeNode({ ...base, practice: [], practiceCovers: [] });
+    expect("practice" in empty).toBe(false);
+    expect("practiceCovers" in empty).toBe(false);
+    expect("practice" in makeNode(base)).toBe(false);
+  });
+});

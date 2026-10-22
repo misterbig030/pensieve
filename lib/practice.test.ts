@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, normalizePicks, type PracticePickDraft } from "@/lib/practice";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, normalizePicks, shareOut, weekBudgets, type PracticePickDraft } from "@/lib/practice";
 
 const draft = (format: string, share = 25, focus = "Arrays", reason = "Because."): PracticePickDraft => ({ format, share, focus, reason });
 
@@ -105,5 +105,45 @@ describe("formatHours", () => {
 
   it("is empty when the split has no picks", () => {
     expect(formatHours({ readingShare: 50, practice: "practice", reason: "" }, 40)).toEqual([]);
+  });
+});
+
+describe("weekBudgets", () => {
+  const split = (shares: number[], readingShare: number) => ({
+    readingShare,
+    practice: "practice",
+    reason: "",
+    formats: shares.map((share, i) => ({ format: (["problem-set", "design-exercise", "mock", "lab"] as const)[i], share, focus: `focus ${i}`, reason: "" })),
+  });
+
+  it("gives reading its share of the week and shares the rest across the picks", () => {
+    expect(weekBudgets(split([50, 30, 20], 30), 600)).toEqual({
+      reading: 180,
+      practice: { "problem-set": 210, "design-exercise": 126, mock: 84 },
+    });
+  });
+
+  it("shares the practice minutes by largest remainder so they sum exactly, ties to the earlier pick", () => {
+    // 101 min at 0% reading: 45/35/20 -> 45.45, 35.35, 20.2 -> floors 45, 35, 20, the spare minute to the biggest remainder.
+    const b = weekBudgets(split([45, 35, 20], 0), 101);
+    expect(b.reading).toBe(0);
+    expect(Object.values(b.practice).reduce((a, m) => a + (m ?? 0), 0)).toBe(101);
+    expect(b.practice).toEqual({ "problem-set": 46, "design-exercise": 35, mock: 20 });
+    // 10 min over 50/50: a tie goes to the earlier pick.
+    expect(weekBudgets(split([50, 50], 0), 11).practice).toEqual({ "problem-set": 6, "design-exercise": 5 });
+  });
+
+  it("is all reading without a split, without picks, or at 100% reading", () => {
+    expect(weekBudgets(null, 600)).toEqual({ reading: 600, practice: {} });
+    expect(weekBudgets(undefined, 600)).toEqual({ reading: 600, practice: {} });
+    expect(weekBudgets({ readingShare: 40, practice: "practice", reason: "" }, 600)).toEqual({ reading: 600, practice: {} });
+    expect(weekBudgets(split([50, 50], 100), 600)).toEqual({ reading: 600, practice: {} });
+  });
+});
+
+describe("shareOut", () => {
+  it("shares a total by percent so the parts sum to the total", () => {
+    expect(shareOut(10, [45, 35, 20])).toEqual([5, 3, 2]);
+    expect(shareOut(0, [50, 50])).toEqual([0, 0]);
   });
 });

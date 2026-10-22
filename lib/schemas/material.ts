@@ -146,6 +146,33 @@ export const coverRefSchema = z.object({
 export type CoverRef = z.infer<typeof coverRefSchema>;
 
 /**
+ * A leaf's practice row: a task of one format with how to know it is done. `id` is a material id (a practice source, or
+ * the unit's reading for generated recall) or null.
+ */
+export const practiceRefSchema = z.object({
+  format: z.enum(PRACTICE_FORMATS),
+  id: z.string().min(1).max(64).nullable(),
+  task: z.string().trim().min(1).max(300),
+  done: z.string().trim().min(1).max(300),
+  minutes: z.number().int().min(1).max(600),
+  generated: z.boolean(),
+});
+export type PracticeRef = z.infer<typeof practiceRefSchema>;
+
+/**
+ * A heading's reservation of a practice source for the units inside it. A week split by hand keeps its row's `task` and
+ * `minutes` here, as a split week keeps its Read table.
+ */
+export const practiceCoverSchema = z.object({
+  format: z.enum(PRACTICE_FORMATS),
+  id: z.string().min(1).max(64),
+  note: z.string().max(300).nullable(),
+  task: z.string().max(300).optional(),
+  minutes: z.number().int().min(1).max(600).optional(),
+});
+export type PracticeCover = z.infer<typeof practiceCoverSchema>;
+
+/**
  * What the model writes for references. Looser than the wire schemas on purpose: a note that runs long or minutes
  * given as 42.5 must not fail the whole level, so bounds are applied in code (`normalizeRefs`). The model writes no
  * `activity`: a plan's reviews are the learner's choice, not the planner's, so every row it writes is a reading.
