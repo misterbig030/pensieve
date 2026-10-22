@@ -3,8 +3,9 @@ import type { WorkerSummary } from "@/lib/ai/research/agent";
 import type { ResearchOutcome } from "@/lib/ai/research/pipeline";
 import { titleMatches, titleTokens } from "@/lib/ai/research/verify";
 import { recencyShare } from "@/lib/materials";
+import type { PracticeFormat, PracticePick } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
-import { totalHours } from "@/lib/studyTime";
+import { totalHours, type PlanSplit } from "@/lib/studyTime";
 import { draftRequestOf } from "../golden/plan.v1";
 import type { ResearchGoldenRecord } from "./golden.v3";
 
@@ -53,11 +54,31 @@ export interface RunMetrics {
   duplicateShare: number | null;
   /** Where the backbone's chapter list came from; null without a backbone or a list. */
   chaptersSource: "catalogue" | "page" | null;
+  /** The practice formats the split picked, in order; empty when the split has none or there was no split. */
+  picks: PracticeFormat[];
+  /** Labelled formats the picks missed and excluded ones they took; null when the record has no format labels. */
+  formatHit: { missing: PracticeFormat[]; unwanted: PracticeFormat[] } | null;
 }
 
 /** Where the backbone's chapter list came from; null without a backbone or a list. */
 export function chaptersSource(materials: Material[]): "catalogue" | "page" | null {
   return materials.find((m) => m.backbone)?.toc?.source ?? null;
+}
+
+/** The practice formats a brief should (include) and should not (exclude) get. */
+export interface FormatLabels {
+  include?: PracticeFormat[];
+  exclude?: PracticeFormat[];
+}
+
+/** Which labelled formats the picks missed, and which excluded formats they took; null without labels. */
+export function formatHit(picks: PracticePick[], labels: FormatLabels | undefined): { missing: PracticeFormat[]; unwanted: PracticeFormat[] } | null {
+  if (!labels || (!labels.include && !labels.exclude)) return null;
+  const picked = new Set(picks.map((p) => p.format));
+  return {
+    missing: (labels.include ?? []).filter((f) => !picked.has(f)),
+    unwanted: (labels.exclude ?? []).filter((f) => picked.has(f)),
+  };
 }
 
 function authorMatches(expected: string, author: string | null): boolean {
@@ -124,8 +145,11 @@ export function runMetrics(input: {
   researchMs: number;
   /** Fees billed outside tokens, such as arm C's server-side searches. */
   extraCostUsd?: number;
+  /** The split the practice pick chose and the draft kept, when there was one. */
+  split?: PlanSplit | null;
 }): RunMetrics {
   const { outcome, record } = input;
+  const picks = input.split?.formats ?? [];
   return {
     recordId: record.id,
     arm: input.arm,
@@ -149,6 +173,8 @@ export function runMetrics(input: {
     chaptersSource: chaptersSource(outcome.materials),
     workers: outcome.arm?.workers ?? null,
     duplicateShare: outcome.arm?.duplicateShare ?? null,
+    picks: picks.map((p) => p.format),
+    formatHit: formatHit(picks, record.labels?.formats),
   };
 }
 

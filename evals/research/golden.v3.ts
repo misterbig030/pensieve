@@ -1,4 +1,5 @@
 import type { Granularity } from "@/lib/planTree";
+import type { PracticeFormat } from "@/lib/practice";
 import type { SourceInput } from "@/lib/schemas/source";
 
 /**
@@ -25,6 +26,8 @@ export interface ResearchGoldenRecord {
   labels?: {
     expectedBackbone?: { title: string; author: string };
     mustInclude?: { title: string }[];
+    /** Practice formats the plan's split should pick (include) and should not (exclude). Checked after the pick, before research. */
+    formats?: { include?: PracticeFormat[]; exclude?: PracticeFormat[] };
   };
 }
 
@@ -120,26 +123,30 @@ export const GOLDEN_V3: ResearchGoldenRecord[] = [
     why: "Deliberately thin: fewer than five verified materials and the thin notice, never an invented book.",
     input: { topic: "Victorian whitework embroidery", days: 21, granularity: "day", sources: [] },
   },
-  // Study hours and the time split (added Oct 4 with the study-hours build). No labels: these are read, not scored by title.
+  // Study hours and the time split (added Oct 4 with the study-hours build). Labelled only with the practice formats the split should pick; the rest is read, not scored by title.
   {
     id: "tech-28d-nosrc-casual-01",
     why: "Three hours a week is 12 hours in all: research should stop at a handful of short materials, not a textbook.",
     input: { topic: "SQL for data analysis", days: 28, granularity: "week", hoursPerWeek: 3, sources: [] },
+    labels: { formats: { include: ["problem-set"] } },
   },
   {
     id: "tech-84d-nosrc-fulltime-01",
     why: "Thirty hours a week is 360 hours: the list should be long enough to fill them, and the split should lean on building.",
     input: { topic: "Deep learning from the ground up", days: 84, granularity: "week", hoursPerWeek: 30, instructions: "Career change, studying full time. I want to implement things myself.", sources: [] },
+    labels: { formats: { include: ["project"] } },
   },
   {
     id: "soft-30d-nosrc-frenchrev-01",
     why: "A knowledge topic with nothing to build: the split should be mostly reading, with writing or recall for the rest.",
     input: { topic: "The French Revolution, 1789 to 1799", days: 30, granularity: "day", sources: [] },
+    labels: { formats: { include: ["recall"], exclude: ["problem-set"] } },
   },
   {
     id: "soft-56d-nosrc-5k-01",
     why: "Physical training: almost no reading. The split should be nearly all sessions and research should come back short.",
     input: { topic: "Couch to 5K", days: 56, granularity: "week", hoursPerWeek: 3, sources: [] },
+    labels: { formats: { include: ["session"] } },
   },
   // Interview prep (added Oct 21, ahead of practice formats). Each loop has several kinds of round, and preparing for
   // them is mostly practice. No instructions: the topic alone should tell the planner which rounds to prepare for.
@@ -147,18 +154,18 @@ export const GOLDEN_V3: ResearchGoldenRecord[] = [
     id: "int-56d-nosrc-sde-01",
     why: "A full senior SDE loop: coding, system design and behavioral rounds. Research should find practice sources (problem lists, design questions with solutions), not only reading, and the plan should prepare all three rounds.",
     input: { topic: "Senior SDE interview", days: 56, granularity: "day", hoursPerWeek: 10, sources: [] },
-    labels: { mustInclude: [{ title: "System Design Interview" }] },
+    labels: { mustInclude: [{ title: "System Design Interview" }], formats: { include: ["problem-set", "design-exercise", "mock"] } },
   },
   {
     id: "int-42d-nosrc-aiproduct-01",
     why: "An AI product engineer loop, like the owner's own tracks: LLM, RAG, agents and evals questions, AI system design, a project deep dive and often a coding round. Question banks should come with answers.",
     input: { topic: "Interview for engineers building AI products", days: 42, granularity: "day", sources: [] },
-    labels: { expectedBackbone: { title: "AI Engineering", author: "Chip Huyen" } },
+    labels: { expectedBackbone: { title: "AI Engineering", author: "Chip Huyen" }, formats: { include: ["recall", "design-exercise", "mock"] } },
   },
   {
     id: "int-56d-nosrc-mle-01",
     why: "An MLE loop: ML fundamentals, ML system design, coding and a project deep dive. The balance differs from SDE: less algorithm drilling, more ML concepts and design.",
     input: { topic: "MLE interview", days: 56, granularity: "week", hoursPerWeek: 8, sources: [] },
-    labels: { mustInclude: [{ title: "Introduction to Machine Learning Interviews" }] },
+    labels: { mustInclude: [{ title: "Introduction to Machine Learning Interviews" }], formats: { include: ["recall", "design-exercise"] } },
   },
 ];

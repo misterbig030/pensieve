@@ -110,6 +110,7 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
     latencyMs: Math.round(performance.now() - started),
     researchMs,
     extraCostUsd: arm === "C" ? (outcome.arm?.counts.searches ?? 0) * WEB_SEARCH_USD : 0,
+    split,
   });
   return { metrics, materials: outcome.materials, dropped: outcome.dropped, plan, split, coverage: outcome.coverage, facts: calls.flatMap((c) => c.facts.map((f) => `${c.label}: ${f}`)) };
 }
@@ -132,8 +133,10 @@ async function main() {
           results.push(result);
           const m = result.metrics;
           const time = result.split ? `, split ${result.split.readingShare}% reading / ${result.split.practice}` : "";
+          const hit = m.formatHit ? ` · missing ${m.formatHit.missing.join(", ") || "—"} · unwanted ${m.formatHit.unwanted.join(", ") || "—"}` : "";
+          const picks = `\n    picks ${m.picks.join(", ") || "—"}${hit}`;
           const who = m.workers ? `, workers ${m.workers.map((w) => `${w.direction.slice(0, 3)}:${w.steps}/${w.stoppedBy}`).join(" ")}` : "";
-          console.log(`verified ${m.verified}/${m.proposed}, backbone ${m.backboneHit ?? "—"}, sized ${m.sizedHours} of ${m.totalHours} h (${pct(m.measuredShare)} measured)${time}${who}, $${m.costUsd.toFixed(3)}, ${(m.latencyMs / 1000).toFixed(0)} s (research ${(m.researchMs / 1000).toFixed(0)} s)`);
+          console.log(`verified ${m.verified}/${m.proposed}, backbone ${m.backboneHit ?? "—"}, sized ${m.sizedHours} of ${m.totalHours} h (${pct(m.measuredShare)} measured)${time}${who}, $${m.costUsd.toFixed(3)}, ${(m.latencyMs / 1000).toFixed(0)} s (research ${(m.researchMs / 1000).toFixed(0)} s)${picks}`);
         } catch (error) {
           console.log(`failed: ${error instanceof Error ? error.message : String(error)}`);
         }
