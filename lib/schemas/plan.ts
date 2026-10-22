@@ -44,6 +44,8 @@ const revisedLeafSchema = z.object({
   days: z.number().int().min(1),
   covers: z.array(coverRefDraftSchema).optional(),
   materials: z.array(materialRefDraftSchema).optional(),
+  practiceCovers: z.array(practiceCoverDraftSchema).optional(),
+  practice: z.array(practiceRefDraftSchema).optional(),
 });
 const revisedMidSchema = revisedLeafSchema.extend({
   children: z.array(revisedLeafSchema).min(1).max(40).optional(),

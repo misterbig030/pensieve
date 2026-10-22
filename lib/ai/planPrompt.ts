@@ -559,6 +559,7 @@ export function buildRevisionPrompt(input: RevisionPromptInput): string {
       ...(hasMaterials
         ? [
             `- Materials: return "covers" (headings: { id, note }) and "materials" (units without children: { id, tier, minutes, note }) for every unit that has them, changed only as the request asks. Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit. A request like "make the talk optional" changes that row's tier to "should"; it does not add or drop other rows. Leave both fields out only for units with no materials. Use only ids from the list.`,
+            `- Practice: return "practiceCovers" (headings: { format, id, note }) and "practice" (units without children: { format, id, task, done, minutes }) for every unit that has them, changed only as the request asks. Keep each row's format and source id; leave id out only for a row you wrote.`,
           ]
         : []),
     ].join("\n"),

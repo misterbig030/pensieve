@@ -16,8 +16,9 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import { aliasMaterials, dropBreaches, keepCoverTiers, resolveCoverRefs, resolveMaterialRefs, treeChecks, type MaterialAliases } from "@/lib/materials";
-import type { CoverRefDraft, MaterialRefDraft } from "@/lib/schemas/material";
+import { aliasMaterials, dropBreaches, keepCoverTiers, keepPracticeCovers, resolveCoverRefs, resolveMaterialRefs, resolvePracticeCovers, resolvePracticeRefs, treeChecks, type MaterialAliases } from "@/lib/materials";
+import type { CoverRefDraft, MaterialRefDraft, PracticeCoverDraft, PracticeRefDraft } from "@/lib/schemas/material";
+import type { PlanSplit } from "@/lib/studyTime";
 import { revisedTreeSchema, type RevisedTree } from "@/lib/schemas/plan";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
@@ -38,6 +39,8 @@ interface RevisedUnit {
   days: number;
   covers?: CoverRefDraft[];
   materials?: MaterialRefDraft[];
+  practiceCovers?: PracticeCoverDraft[];
+  practice?: PracticeRefDraft[];
   children?: RevisedUnit[];
 }
 
@@ -45,7 +48,9 @@ interface RevisedUnit {
  * Turns the model's revised tree back into `PlanNode`s. Kept nodes (by ref) keep their id and status; locked nodes
  * are restored verbatim from the original tree; new nodes get temporary ids. Throws when a locked node went missing.
  * With `aliases`, material references come back too: a field the model left out keeps the node's old references,
- * headings keep `covers`, leaves keep `materials`, and ids not in the list are dropped.
+ * headings keep `covers`, leaves keep `materials`, and ids not in the list are dropped. Practice follows the same
+ * rules: leaves keep `practice` (a rewritten list goes through `resolvePracticeRefs`, which drops refused and unknown
+ * rows), headings keep `practiceCovers`, and a split week's reservations keep their `task` and `minutes`.
  */
 export function applyRevision(
   original: PlanNode,
@@ -56,6 +61,7 @@ export function applyRevision(
   aliases?: MaterialAliases,
   hoursPerWeek?: number,
   daysPerWeek: number = MAX_DAYS_PER_WEEK,
+  split?: PlanSplit | null,
 ): PlanNode {
   const byRef = new Map<string, PlanNode>();
   for (const [id, ref] of refs) {
@@ -76,6 +82,12 @@ export function applyRevision(
     const leaf = children === null && (level === "day" || leafWeek);
     const covers = aliases && unit.covers !== undefined ? keepCoverTiers(resolveCoverRefs(unit.covers, aliases).refs, kept?.covers) : kept?.covers;
     const materials = aliases && unit.materials !== undefined ? resolveMaterialRefs(unit.materials, aliases).refs : kept?.materials;
+    const practiceCovers =
+      aliases && unit.practiceCovers !== undefined ? keepPracticeCovers(resolvePracticeCovers(unit.practiceCovers, aliases, split).refs, kept?.practiceCovers) : kept?.practiceCovers;
+    const practice =
+      aliases && unit.practice !== undefined
+        ? resolvePracticeRefs(unit.practice, aliases, split, (materials ?? []).map((r) => r.id)).refs
+        : kept?.practice;
     return makeNode({
       id: kept?.id,
       level,
@@ -88,6 +100,8 @@ export function applyRevision(
       children,
       covers: leaf ? undefined : covers,
       materials: leaf ? materials : undefined,
+      practiceCovers: leaf ? undefined : practiceCovers,
+      practice: leaf ? practice : undefined,
     });
   };
 
@@ -147,7 +161,7 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
   let failure: unknown;
   const check = (object: RevisedTree): string[] => {
     try {
-      revised = applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek, input.daysPerWeek);
+      revised = applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek, input.daysPerWeek, input.split);
     } catch (error) {
       failure = error;
       return [];

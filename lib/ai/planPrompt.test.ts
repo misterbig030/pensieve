@@ -373,6 +373,11 @@ describe("chapters as resources in prompts", () => {
       "Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit.",
     );
   });
+  it("the revision rule asks for practice rows and reservations to come back", () => {
+    const root = aiePlan();
+    const prompt = buildRevisionPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", daysPerWeek: 7, tree: root, refs: assignRefs(root), lockBefore: 0, changeRequest: "x" });
+    expect(prompt).toContain('return "practiceCovers" (headings: { format, id, note }) and "practice" (units without children');
+  });
 });
 
 describe("practice in prompts", () => {
