@@ -144,7 +144,7 @@ export function buildResearchInstructions(
     `You gather the materials for a self-study plan: one well-recommended backbone textbook the plan follows in order, where the topic has one, and the canonical and current materials around it. You find them and say how long each takes. ${
       picks.length > 0
         ? `How the learner's time divides between reading and practice is already decided; you also look for the practice sources.`
-        : `How the learner's time divides between reading and practice is decided later, not by you.`
+        : `How the learner's time divides between reading and practice is already decided, not by you.`
     }`,
     todayLine(today),
     `You have two tools. ${names.search} returns titles, URLs and snippets. ${names.fetch} reads one https page and returns its own title, headings and text. ${budget}`,

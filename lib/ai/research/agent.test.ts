@@ -387,11 +387,13 @@ describe("the practice picks in the research prompts", () => {
     const text = buildResearchInstructions(caps, undefined, undefined, undefined, PICKS);
     expect(text).toContain("\n6. Practice");
     for (const pick of PICKS) expect(text).toContain(`${PRACTICE_REGISTRY[pick.format].research} for: ${pick.focus}`);
-    expect(text).not.toContain("is decided later, not by you");
+    expect(text).not.toContain("not by you");
     expect(text.indexOf("5. Size")).toBeLessThan(text.indexOf("6. Practice"));
     const plain = buildResearchInstructions(caps);
     expect(plain).not.toContain("Practice");
-    expect(plain).toContain("is decided later, not by you");
+    // The split is picked before research, so it is decided already, all reading when there are no picks.
+    expect(plain).toContain("How the learner's time divides between reading and practice is already decided, not by you.");
+    expect(plain).not.toContain("decided later");
     expect(buildResearchInstructions(caps, undefined, undefined, undefined, [])).toBe(plain);
   });
 
