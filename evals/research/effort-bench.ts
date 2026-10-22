@@ -37,7 +37,7 @@ const { values } = parseArgs({
   },
 });
 
-const SECTIONS = ["The learner's sources:", "Backbone research:", "Canonical materials:", "Canonical and recent material:", "Recent material:", "Now list the materials."];
+const SECTIONS = ["The learner's sources:", "Backbone research:", "Canonical materials:", "Canonical and recent material:", "Recent material:", "Practice sources:", "Now list the materials."];
 
 /** Which sections of the candidate prompt carry a worker's written notes. */
 function notesWritten(prompt: string): Record<string, boolean> {
@@ -114,7 +114,7 @@ async function runAt(effort: Effort, b: ResearchBrief, model: AiModelId): Promis
 
 function report(r: EffortRun) {
   console.log(`\n=== effort ${r.effort}: research ${(r.researchMs / 1000).toFixed(1)} s, $${r.costUsd.toFixed(3)}, stopped by ${r.stoppedBy}`);
-  for (const w of r.workers ?? []) console.log(`  ${w.direction.padEnd(9)} ${w.steps} steps, ${w.searches} searches, ${w.fetches} reads, ${w.stoppedBy}; notes written: ${r.notes[w.direction === "backbone" ? "Backbone research" : w.direction === "canonical" ? ("Canonical materials" in r.notes ? "Canonical materials" : "Canonical and recent material") : "Recent material"] ? "yes" : "no"}`);
+  for (const w of r.workers ?? []) console.log(`  ${w.direction.padEnd(9)} ${w.steps} steps, ${w.searches} searches, ${w.fetches} reads, ${w.stoppedBy}; notes written: ${r.notes[w.direction === "backbone" ? "Backbone research" : w.direction === "canonical" ? ("Canonical materials" in r.notes ? "Canonical materials" : "Canonical and recent material") : w.direction === "practice" ? "Practice sources" : "Recent material"] ? "yes" : "no"}`);
   if (r.candidateStep) console.log(`  candidates: ${(r.candidateStep.latencyMs / 1000).toFixed(1)} s, ${r.candidateStep.outputTokens} out, ${r.candidateStep.reasoningTokens ?? 0} reasoning`);
   console.log(`  gate: ${r.verified}/${r.proposed} verified${r.dropped.length ? `; dropped: ${r.dropped.map((d) => `"${d.title}" (${d.reason})`).join(", ")}` : ""}`);
   for (const m of r.materials) console.log(`    [${m.kind}${m.backbone ? " · backbone" : ""}] "${m.title}" <${m.url}>${m.minutes ? ` · ${m.minutes} min` : ""}`);

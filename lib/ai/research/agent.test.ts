@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
+import { PRACTICE_REGISTRY, type PracticePick } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
 import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm } from "./agent";
@@ -351,6 +352,56 @@ describe("research prompts", () => {
     expect(plain).not.toContain("grouped by the research direction");
     expect(grouped).toContain("Notes are grouped by the research direction that found them; a material found by more than one appears once in your list.");
     expect(grouped.indexOf("Research notes")).toBeLessThan(grouped.indexOf("grouped by the research direction"));
+  });
+});
+
+const PICKS: PracticePick[] = [
+  { format: "problem-set", share: 70, focus: "graph problems", reason: "r" },
+  { format: "lab", share: 30, focus: "git branching", reason: "r" },
+];
+const splitOf = (formats: PracticePick[]) => ({ readingShare: 60, practice: "problems", formats, reason: "r" });
+
+describe("the practice picks in the research prompts", () => {
+  const caps: ResearchCaps = { steps: 8, searches: 3, fetches: 6, wallMs: 60_000 };
+
+  it("adds a practice step to arm A's work order only when the plan has picks", () => {
+    const text = buildResearchInstructions(caps, undefined, undefined, undefined, PICKS);
+    expect(text).toContain("\n6. Practice");
+    for (const pick of PICKS) expect(text).toContain(`${PRACTICE_REGISTRY[pick.format].research} for: ${pick.focus}`);
+    expect(text).not.toContain("is decided later, not by you");
+    expect(text.indexOf("5. Size")).toBeLessThan(text.indexOf("6. Practice"));
+    const plain = buildResearchInstructions(caps);
+    expect(plain).not.toContain("Practice");
+    expect(plain).toContain("is decided later, not by you");
+    expect(buildResearchInstructions(caps, undefined, undefined, undefined, [])).toBe(plain);
+  });
+
+  it("asks for a practice draft on candidates and the learner's sources, and lists unmet picks as open", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 4, sources: [], split: splitOf(PICKS) }, "notes");
+    expect(prompt).toContain("- practice:");
+    expect(prompt).toContain("problem-set (Problems): graph problems");
+    expect(prompt).toContain("lab (Lab): git branching");
+    expect(prompt).toContain("items: the problems, questions, labs or steps");
+    expect(prompt).toContain("perItemMinutes: only when the page states a time per item");
+    expect(prompt).toContain("answers: true only when the source gives solutions, an answer key, worked solutions or a rubric");
+    expect(prompt).toContain("minutes are null unless the plan would also read it");
+    expect(prompt).toContain("A wrong answers: false removes the tag");
+    expect(prompt).toContain('"practice: <label>"');
+    expect(prompt).toContain("practice: Problems");
+  });
+
+  it("leaves the final prompt as it was without picks", () => {
+    const base = buildFinalPrompt({ topic: "T", weeks: 4, sources: [] }, "notes");
+    expect(base).not.toContain("practice");
+    expect(buildFinalPrompt({ topic: "T", weeks: 4, sources: [], split: splitOf([]) }, "notes")).toBe(base);
+  });
+
+  it("gives arm A the picks of the brief's split", async () => {
+    const { model, calls } = scriptedModel([{ text: "Done." }], [LIST]);
+    const { fetcher } = fetcherFor();
+    await collect(researchMaterials({ brief: { ...brief, split: splitOf(PICKS) }, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
+    const system = calls.map((c) => c.prompt.find((m) => m.role === "system")?.content).find((c) => typeof c === "string" && c.includes("You gather"));
+    expect(system).toContain("6. Practice");
   });
 });
 

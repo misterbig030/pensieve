@@ -1,5 +1,6 @@
 import { ToolLoopAgent, isStepCount, type LanguageModel } from "ai";
 import type { SourceInput } from "@/lib/schemas/source";
+import { PRACTICE_REGISTRY, type PracticePick } from "@/lib/practice";
 import { DEFAULT_HOURS_PER_WEEK, totalHours, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, loggedGenerateObject, type GenerationLogContext } from "../logged";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, RESEARCH_LOOP_EFFORT, type AiModelId, type ReasoningEffort } from "../models";
@@ -27,7 +28,7 @@ export interface ResearchBrief {
   /** Hours a week the learner can give. Research sizes its list against the total; six when not stated. */
   hoursPerWeek?: number;
   sources: SourceInput[];
-  /** How the plan's time divides between reading and practice, picked before research; not used by research yet. */
+  /** How the plan's time divides between reading and practice, picked before research; its practice picks tell research what else to look for. */
   split?: PlanSplit;
 }
 
@@ -118,18 +119,33 @@ export function todayLine(today: Date = new Date()): string {
   return `Today is ${date}. Count "recent" from today, not from your own sense of the present; a query for recent material carries this year, ${today.getUTCFullYear()}.`;
 }
 
+/** What research looks for to serve each practice pick, one line per pick. */
+export function practiceLines(picks: PracticePick[]): string[] {
+  return picks.map((pick) => `- ${PRACTICE_REGISTRY[pick.format].research} for: ${pick.focus}`);
+}
+
+/** The practice picks of a brief's split; none when the plan is all reading or has no split. */
+export function picksOf(brief: Pick<ResearchBrief, "split">): PracticePick[] {
+  return brief.split?.formats ?? [];
+}
+
 export function buildResearchInstructions(
   caps: ResearchCaps,
   names: ResearchToolNames = { search: "webSearch", fetch: "fetchSource" },
   enforcement: BudgetEnforcement = "code",
   today: Date = new Date(),
+  picks: PracticePick[] = [],
 ): string {
   const budget =
     enforcement === "code"
       ? `Budget: ${caps.searches} searches, ${caps.fetches} page reads and ${caps.steps} steps in all; calls past a cap are refused.`
       : `Budget: ${caps.searches} searches and ${caps.fetches} page reads; each tool stops on its own once its budget is used. There is no step limit: do the research in one pass, then write your notes.`;
   return [
-    `You gather the materials for a self-study plan: one well-recommended backbone textbook the plan follows in order, where the topic has one, and the canonical and current materials around it. You find them and say how long each takes. How the learner's time divides between reading and practice is decided later, not by you.`,
+    `You gather the materials for a self-study plan: one well-recommended backbone textbook the plan follows in order, where the topic has one, and the canonical and current materials around it. You find them and say how long each takes. ${
+      picks.length > 0
+        ? `How the learner's time divides between reading and practice is already decided; you also look for the practice sources.`
+        : `How the learner's time divides between reading and practice is decided later, not by you.`
+    }`,
     todayLine(today),
     `You have two tools. ${names.search} returns titles, URLs and snippets. ${names.fetch} reads one https page and returns its own title, headings and text. ${budget}`,
     `Work in this order:`,
@@ -138,12 +154,31 @@ export function buildResearchInstructions(
     `3. Canonical materials: official documentation, the well-known courses and talks, the standard papers.`,
     `4. Currency: if the field moves fast, material from the last two years that covers what the backbone predates.`,
     `5. Size: note how long each material is whenever a page says so (pages, runtime, course hours, words). The learner's total study time is in the brief; a list that takes longer than that to get through is too long.`,
+    ...(picks.length > 0
+      ? [
+          `6. Practice: the plan assigns practice, so also look for sources the learner can do, one kind at a time, preferring ones that come with answers, solutions or a rubric. Note how many problems, questions or steps each holds, any time it states per item, and whether it gives answers:`,
+          ...practiceLines(picks),
+        ]
+      : []),
     RESEARCH_RULES,
     `When the topic's main areas each have material, or the budget is spent, stop calling tools and write a few lines of notes on what you found, which pages agree, and which areas are still uncovered.`,
   ].join("\n");
 }
 
+/** The `practice` field's guidance for candidates and the learner's notes: which formats, and how to fill it. Empty without picks. */
+function practiceFieldLines(picks: PracticePick[]): { learner: string; candidate: string; coverage: string } | null {
+  if (picks.length === 0) return null;
+  const formats = picks.map((p) => `${p.format} (${PRACTICE_REGISTRY[p.format].label}): ${p.focus}`).join("; ");
+  const fill = `format: the id of the pick it serves (${formats}). items: the problems, questions, labs or steps the page says it holds, null when it does not say. perItemMinutes: only when the page states a time per item, else null. answers: true only when the source gives solutions, an answer key, worked solutions or a rubric.`;
+  return {
+    candidate: `- practice: set when the source is practice to do, alone or besides reading; leave it out for reading only. ${fill} A practice source's minutes are null unless the plan would also read it. A source that is only practice, for a format that needs answers, is thrown away unless answers is true.`,
+    learner: ` A learner source that is practice to do (a problem list, a question bank, a lab) also gets "practice", filled the same way (${fill}); its minutes are null unless the plan would also read it. A wrong answers: false removes the tag, so set it false only when the page plainly has no answers.`,
+    coverage: ` A practice pick that no candidate or learner source serves goes in "open" as "practice: <label>" (for example "practice: ${PRACTICE_REGISTRY[picks[0].format].label}").`,
+  };
+}
+
 export function buildFinalPrompt(brief: ResearchBrief, notes: string, options: { grouped?: boolean } = {}): string {
+  const practice = practiceFieldLines(picksOf(brief));
   return [
     `You researched materials for a self-study plan.`,
     ...briefLines(brief),
@@ -152,7 +187,7 @@ export function buildFinalPrompt(brief: ResearchBrief, notes: string, options: {
     notes || "(nothing was found)",
     [
       `Now list the materials.`,
-      `"learner": one entry per source the learner provided, in their order, with its url exactly as given, its kind and one line on what it is.`,
+      `"learner": one entry per source the learner provided, in their order, with its url exactly as given, its kind and one line on what it is.${practice?.learner ?? ""}`,
       `"candidates": the researched materials, the backbone textbook first. Choose a list that covers the topic's main areas and that this learner could get through: together the candidates' minutes must not exceed ${briefHours(brief)} hours, and a short plan needs only a handful. Never invent one.`,
       `- url: the material's own page, preferably one from the notes. title: exactly as that page gives it; a candidate whose page is titled something else is thrown away.`,
       `- a book is checked against a library catalogue instead, by title and author: give its title as published and always its author. Its url is the publisher's or the author's page for that one book, read or not, and never a shop listing (Amazon or another retailer).`,
@@ -163,7 +198,8 @@ export function buildFinalPrompt(brief: ResearchBrief, notes: string, options: {
       `- year and author when the notes give them.`,
       `- minutes: how long the part this plan would use takes to read or watch, from what the notes say about its length (pages, runtime, course hours, words). A rough number is better than none; null only when there is nothing to go on.`,
       `- uses: the part this plan would use when that is not the whole work ("ch. 1, 7–9", "units 1–4"); null for the whole.`,
-      `"coverage": "covered" names the three to eight main areas of the topic that the list covers; "open" names main areas nothing on the list covers. One to three words each.`,
+      ...(practice ? [practice.candidate] : []),
+      `"coverage": "covered" names the three to eight main areas of the topic that the list covers; "open" names main areas nothing on the list covers. One to three words each.${practice?.coverage ?? ""}`,
     ].join("\n"),
   ].join("\n");
 }
@@ -419,7 +455,7 @@ export function createAgentArm(options: AgentArmOptions): ResearchArm {
     try {
       loop = await runResearchLoop({
         model,
-        instructions: buildResearchInstructions(caps),
+        instructions: buildResearchInstructions(caps, undefined, undefined, undefined, picksOf(brief)),
         prompt: briefLines(brief).join("\n"),
         caps,
         deadline: deadline.signal,

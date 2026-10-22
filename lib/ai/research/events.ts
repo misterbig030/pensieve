@@ -10,7 +10,7 @@ export interface Coverage {
 }
 
 /** The research direction an arm W worker runs. Absent on arm A's and arm C's events. */
-export type WorkerDirection = "backbone" | "canonical" | "current";
+export type WorkerDirection = "backbone" | "canonical" | "current" | "practice";
 
 export interface ResearchCounts {
   searches: number;
