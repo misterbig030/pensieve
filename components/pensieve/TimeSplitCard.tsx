@@ -5,8 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DaysPerWeekPicker } from "@/components/pensieve/DaysPerWeekPicker";
 import { capitalize } from "@/lib/planTree";
+import { formatHours } from "@/lib/practice";
 import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, SPLIT_SET_BY_LEARNER, clampHours, presetFor, totalHours, type PlanSplit } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
+
+/** Shades of the practice colour, one per picked format, darkest first. */
+const PICK_SHADES = ["bg-accent-2-700", "bg-accent-2-500", "bg-accent-2-300", "bg-accent-2-200"];
 
 export interface TimeSplitCardProps {
   /** The plan's length in weeks. */
@@ -35,6 +39,7 @@ export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, decidin
   const preset = presetFor(hoursPerWeek);
   const editable = !!onChangeHours || !!onChangeDays || !!onChangeSplit;
   const reading = split ? Math.round((total * split.readingShare) / 100) : 0;
+  const picks = split ? formatHours(split, total) : [];
 
   return (
     <section aria-labelledby="time-h" className="flex flex-col gap-2.5 rounded-[28px] bg-secondary px-[22px] py-[18px]">
@@ -68,17 +73,34 @@ export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, decidin
         <>
           <div aria-hidden="true" className="flex h-3 overflow-hidden rounded-full bg-neutral-300">
             <span className="block bg-accent-700 transition-[width]" style={{ width: `${split.readingShare}%` }} />
-            <span className="block grow bg-accent-2-700" />
+            {picks.length > 0 ? (
+              (split.formats ?? []).map((p, i) => (
+                <span key={p.format} className={cn("block", PICK_SHADES[i % PICK_SHADES.length])} style={{ width: `${((100 - split.readingShare) * p.share) / 100}%` }} />
+              ))
+            ) : (
+              <span className="block grow bg-accent-2-700" />
+            )}
           </div>
           <div className="flex flex-wrap gap-x-[18px] gap-y-1 text-[12.5px]">
             <span className="inline-flex items-center gap-1.5">
               <span className="block size-2.5 rounded-[3px] bg-accent-700" />
               Reading and watching · about {reading} h
             </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="block size-2.5 rounded-[3px] bg-accent-2-700" />
-              {capitalize(split.practice)} · about {total - reading} h
-            </span>
+            {picks.length > 0 ? (
+              picks.map((p, i) => (
+                <span key={p.format} className="inline-flex items-center gap-1.5">
+                  <span className={cn("block size-2.5 shrink-0 rounded-[3px]", PICK_SHADES[i % PICK_SHADES.length])} />
+                  <span>
+                    {p.label} · about {p.hours} h <span className="text-muted-foreground">— {p.focus}</span>
+                  </span>
+                </span>
+              ))
+            ) : (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="block size-2.5 rounded-[3px] bg-accent-2-700" />
+                {capitalize(split.practice)} · about {total - reading} h
+              </span>
+            )}
           </div>
           {split.reason && split.reason !== SPLIT_SET_BY_LEARNER && <p className="m-0 text-[12.5px] leading-normal text-neutral-800">Why: {split.reason}</p>}
         </>

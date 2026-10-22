@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
-import { byTier, chapterLabel, partLabel, readRowsFor, rowBrief } from "./ReadTable";
+import { budgetLine, byTier, chapterLabel, partLabel, readRowsFor, rowBrief } from "./ReadTable";
 
 describe("readRowsFor", () => {
   it("fills chapter, activity and a key per row", () => {
@@ -71,5 +71,14 @@ describe("rowBrief", () => {
     expect(rowBrief(review)).toEqual({ head: "Review of ch. 2", detail: "Modeling; Post-Training" });
     expect(rowBrief(whole)).toEqual({ head: "AI Evals: Everything You Need to Know", detail: "whole essay" });
     expect(rowBrief({ ...chapter, chapter: { ...chapter.chapter!, n: null } })).toEqual({ head: "Introduction to Building AI Applications with Foundation Models", detail: "The Rise of AI Engineering; Foundation Model Use Cases" });
+  });
+});
+
+describe("budgetLine", () => {
+  it("gives reading, practice and the budget as one line", () => {
+    expect(budgetLine({ readingMinutes: 191, practiceMinutes: 169, budgetMinutes: 360 })).toBe("3 h 11 reading · 2 h 49 practice · 6 h");
+  });
+  it("says reading against the budget when the unit has no practice rows", () => {
+    expect(budgetLine({ readingMinutes: 191, practiceMinutes: 0, budgetMinutes: 360 })).toBe("3 h 11 of 6 h reading");
   });
 });

@@ -73,7 +73,6 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
           youtubeSources={youtubeSources}
           readRows={readRows}
           budgetMinutes={budgetMinutes({ level: node.level, budgetHours: isWeek ? (node.budgetHours ?? budgetFor(1, hours)) : null }, hours, days)}
-          practice={detail.track.split?.practice}
           isCompleted={node.status === "completed"}
         />
       </div>

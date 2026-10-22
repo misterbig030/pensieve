@@ -54,7 +54,7 @@ import {
 } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
-import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, rebudget, totalHours, weeksLabel, type PlanSplit } from "@/lib/studyTime";
+import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, practiceLabelOf, rebudget, totalHours, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 export interface PlanWorkspaceProps {
@@ -521,7 +521,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
 
   function changeSplit(next: PlanSplit) {
     setSplit(next);
-    setTimeNote(`The plan now spends about ${next.readingShare}% of your time reading and the rest on ${next.practice}. Units planned from here on follow it.`);
+    setTimeNote(`The plan now spends about ${next.readingShare}% of your time reading and the rest on ${practiceLabelOf(next)}. Units planned from here on follow it.`);
   }
 
   /** One sys line for time changes, replaced as the learner keeps adjusting, so the rail is not flooded. */
@@ -642,7 +642,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             materials={materials}
             hoursPerWeek={hoursPerWeek}
             daysPerWeek={daysPerWeek}
-            practice={split?.practice}
             root={tree}
             mode={mode}
             highlight={new Set(highlight)}
@@ -781,7 +780,7 @@ function materialsText(materials: Material[]): string {
 function draftedText(root: PlanNode, weeks: number, materials: Material[] = [], split: PlanSplit | null = null): string {
   const tops = root.children ?? [];
   if (tops.length === 0) return "Nothing was drafted. Try again.";
-  const time = split ? `I planned about ${split.readingShare}% of your time for reading and the rest for ${split.practice}; change that above if it is off. ` : "";
+  const time = split ? `I planned about ${split.readingShare}% of your time for reading and the rest for ${practiceLabelOf(split)}; change that above if it is off. ` : "";
   const lead = `${materialsText(materials)}${time}`;
   const level = tops[0].level;
   if (level === "day") return `${lead}Drafted ${tops.length} days, one topic each. Ask me why something sits where it does, or tell me what to change.`;

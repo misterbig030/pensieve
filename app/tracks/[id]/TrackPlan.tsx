@@ -17,7 +17,6 @@ interface TrackPlanProps {
   materials: Material[];
   hoursPerWeek: number;
   daysPerWeek: number;
-  practice?: string;
 }
 
 /** What one planning step is likely to cost, for the estimate shown before planning everything. */
@@ -30,7 +29,7 @@ interface PlanAll {
 }
 
 /** The saved plan as a tree. Expanding or splitting runs on the server and the page refreshes with the new rows. */
-export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek, daysPerWeek, practice }: TrackPlanProps) {
+export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek, daysPerWeek }: TrackPlanProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     // Finished groups start folded so the current work is what you see first.
     const done = new Set<string>();
@@ -149,7 +148,6 @@ export function TrackPlan({ trackId, root, granularity, materials, hoursPerWeek,
         materials={materials}
         hoursPerWeek={hoursPerWeek}
         daysPerWeek={daysPerWeek}
-        practice={practice}
         mode="track"
         highlight={new Set()}
         lockBefore={0}

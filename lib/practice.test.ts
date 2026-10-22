@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY, normalizePicks, type PracticePickDraft } from "@/lib/practice";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, normalizePicks, type PracticePickDraft } from "@/lib/practice";
 
 const draft = (format: string, share = 25, focus = "Arrays", reason = "Because."): PracticePickDraft => ({ format, share, focus, reason });
 
@@ -64,5 +64,35 @@ describe("PRACTICE_REGISTRY", () => {
       mock: [null, 75],
       session: [null, null],
     });
+  });
+});
+
+describe("formatHours", () => {
+  const split = (shares: number[], readingShare = 40) => ({
+    readingShare,
+    practice: "practice",
+    reason: "",
+    formats: shares.map((share, i) => ({ format: (["problem-set", "design-exercise", "mock"] as const)[i], share, focus: `focus ${i}`, reason: "" })),
+  });
+
+  it("splits the practice hours by share, rounded to sum to the practice hours", () => {
+    // 40 h total, 40% reading: 16 reading, 24 practice hours.
+    const rows = formatHours(split([50, 30, 20]), 40);
+    expect(rows.map((r) => [r.format, r.label, r.hours, r.focus])).toEqual([
+      ["problem-set", "Problems", 12, "focus 0"],
+      ["design-exercise", "Design", 7, "focus 1"],
+      ["mock", "Mock", 5, "focus 2"],
+    ]);
+  });
+
+  it("puts the rounding difference on the largest pick", () => {
+    // 25 h total, 60% reading: 15 reading, 10 practice; 45/35/20 -> 4.5, 3.5, 2 -> 5, 4, 2 is 11, so the largest gives one back.
+    const rows = formatHours(split([45, 35, 20], 60), 25);
+    expect(rows.map((r) => r.hours)).toEqual([4, 4, 2]);
+    expect(rows.reduce((a, r) => a + r.hours, 0)).toBe(10);
+  });
+
+  it("is empty when the split has no picks", () => {
+    expect(formatHours({ readingShare: 50, practice: "practice", reason: "" }, 40)).toEqual([]);
   });
 });

@@ -57,8 +57,6 @@ export interface PlanTreeProps {
   hoursPerWeek?: number;
   /** The learner's usual study days a week: what a week splits into unless they pick another number. */
   daysPerWeek: number;
-  /** What the plan spends non-reading time on, for the budget lines. */
-  practice?: string;
 }
 
 type Ctx = Omit<PlanTreeProps, "root"> & { root: PlanNode; byId: ReadonlyMap<string, Material> };
@@ -190,7 +188,7 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
         (isWeek ? (
           <span className="mt-1 flex flex-col gap-2">
             <ReadRows rows={rows} link={!href} />
-            <BudgetBar rows={rows} budgetMinutes={budgetMinutes(node, ctx.hoursPerWeek)} practice={ctx.practice} />
+            <BudgetBar rows={rows} budgetMinutes={budgetMinutes(node, ctx.hoursPerWeek)} />
           </span>
         ) : (
           <span className="flex min-w-0 flex-col gap-0.5 text-[11.5px] leading-snug text-muted-foreground">
@@ -311,7 +309,7 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
       {kept.length > 0 ? (
         <div className="flex flex-col gap-2">
           <ReadRows rows={kept} />
-          <BudgetBar rows={kept} budgetMinutes={budgetFor(1, ctx.hoursPerWeek) * 60} practice={ctx.practice} />
+          <BudgetBar rows={kept} budgetMinutes={budgetFor(1, ctx.hoursPerWeek) * 60} />
         </div>
       ) : (
         <CoversRow node={node} byId={ctx.byId} />

@@ -79,7 +79,7 @@ export default async function TrackDetailPage({ params }: { params: Promise<{ id
           <MaterialsList topic={track.title} materials={materials} initialShown={4} />
         </div>
       )}
-      <TrackPlan trackId={track.id} root={root} granularity={track.granularity} materials={materials} hoursPerWeek={track.hoursPerWeek} daysPerWeek={track.daysPerWeek} practice={track.split?.practice} />
+      <TrackPlan trackId={track.id} root={root} granularity={track.granularity} materials={materials} hoursPerWeek={track.hoursPerWeek} daysPerWeek={track.daysPerWeek} />
     </PageShell>
   );
 }

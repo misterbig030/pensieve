@@ -82,22 +82,21 @@ function ItemLink({ material: m, className, link = true }: { material: Material;
   );
 }
 
+/**
+ * A unit's budget as one line: reading and practice minutes against the budget. Without practice rows it reads
+ * "3 h 11 of 6 h reading".
+ */
+export function budgetLine({ readingMinutes, practiceMinutes, budgetMinutes }: { readingMinutes: number; practiceMinutes: number; budgetMinutes: number }): string {
+  if (practiceMinutes <= 0) return `${formatDuration(readingMinutes)} of ${formatDuration(budgetMinutes)} reading`;
+  return `${formatDuration(readingMinutes)} reading · ${formatDuration(practiceMinutes)} practice · ${formatDuration(budgetMinutes)}`;
+}
+
 /** Must and should minutes against the budget, as a two-part bar and one line of text. */
-export function BudgetBar({
-  rows,
-  budgetMinutes,
-  variant = "compact",
-  practice = "practice",
-}: {
-  rows: ReadRow[];
-  budgetMinutes: number;
-  variant?: "compact" | "full";
-  /** What the rest of the time goes to, in the plan's words ("building projects"). */
-  practice?: string;
-}) {
+export function BudgetBar({ rows, budgetMinutes, variant = "compact" }: { rows: ReadRow[]; budgetMinutes: number; variant?: "compact" | "full" }) {
   const { must, should } = sumMinutes(rows);
   const budget = Math.max(budgetMinutes, 1);
-  const left = Math.max(0, budgetMinutes - must - should);
+  // Practice rows are not part of a unit's table yet, so the practice minutes are zero.
+  const line = budgetLine({ readingMinutes: must + should, practiceMinutes: 0, budgetMinutes });
   const over = must + should > budgetMinutes;
   const bar = (
     <span className={cn("flex h-1.5 shrink-0 overflow-hidden rounded-full bg-neutral-300", variant === "full" ? "h-2 w-[220px] max-[640px]:w-full" : "w-40 max-[640px]:w-24")}>
@@ -110,10 +109,10 @@ export function BudgetBar({
       <div className="flex flex-wrap items-center gap-3.5 rounded-2xl bg-background px-3.5 py-3 text-[12.5px]">
         {bar}
         <span>
-          <strong className="font-semibold">{formatDuration(must)}</strong> must · <strong className="font-semibold">{formatDuration(should)}</strong> should · of {formatDuration(budgetMinutes)}
+          <strong className="font-semibold">{formatDuration(must)}</strong> must · <strong className="font-semibold">{formatDuration(should)}</strong> should
         </span>
         <span className={cn("ml-auto text-muted-foreground", over && "text-accent-800")}>
-          {over ? `${formatDuration(must + should - budgetMinutes)} over the budget` : `Leaves ${formatDuration(left)} for ${practice}`}
+          {over ? `${formatDuration(must + should - budgetMinutes)} over the budget` : line}
         </span>
       </div>
     );
@@ -122,7 +121,7 @@ export function BudgetBar({
     <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
       {bar}
       <span>
-        {formatDuration(must)} must-read{should > 0 ? ` · ${formatDuration(should)} optional` : ""} · {over ? `${formatDuration(must + should - budgetMinutes)} over budget` : `${formatDuration(left)} left for ${practice}`}
+        {formatDuration(must)} must-read{should > 0 ? ` · ${formatDuration(should)} optional` : ""} · {over ? `${formatDuration(must + should - budgetMinutes)} over budget` : line}
       </span>
     </div>
   );
@@ -153,7 +152,7 @@ export function ReadRows({ rows, link = true }: { rows: ReadRow[]; link?: boolea
 }
 
 /** The leaf page's Read table: Tier | Item | Min | Note, with a budget footer. */
-export function ReadTable({ rows, budgetMinutes, practice }: { rows: ReadRow[]; budgetMinutes: number; practice?: string }) {
+export function ReadTable({ rows, budgetMinutes }: { rows: ReadRow[]; budgetMinutes: number }) {
   return (
     <section aria-labelledby="read-h" className="flex flex-col gap-3 rounded-[28px] bg-secondary px-[22px] py-5">
       <div className="flex items-center gap-2.5">
@@ -206,7 +205,7 @@ export function ReadTable({ rows, budgetMinutes, practice }: { rows: ReadRow[]; 
           </tbody>
         </table>
       </div>
-      <BudgetBar rows={rows} budgetMinutes={budgetMinutes} variant="full" practice={practice} />
+      <BudgetBar rows={rows} budgetMinutes={budgetMinutes} variant="full" />
     </section>
   );
 }
