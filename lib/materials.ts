@@ -807,12 +807,14 @@ export function keepCoverTiers(next: CoverRef[], before: CoverRef[] | undefined)
 /**
  * What a heading's practice reservations become when the model rewrites them. Reservations it wrote back with ids only
  * regain the `task` and `minutes` of the matching one it had before (same format and source); values they already have
- * are kept. The model cannot name a generated reservation (no source, `id: null`), so those carry forward unchanged,
- * after the rewritten list. A week split by hand would otherwise lose its rows on any revision.
+ * are kept. The model cannot name a generated reservation: one with no source (`id: null`), or a recall row that cites
+ * its reading, which `resolvePracticeCovers` drops since the reading serves no practice of that format (`practiceOf`).
+ * Those carry forward unchanged, after the rewritten list. A week split by hand would otherwise lose its rows on any
+ * revision.
  */
-export function keepPracticeCovers(next: PracticeCover[], before: PracticeCover[] | undefined): PracticeCover[] {
+export function keepPracticeCovers(next: PracticeCover[], before: PracticeCover[] | undefined, practiceOf: (id: string) => PracticeFormat | null): PracticeCover[] {
   const old = new Map((before ?? []).filter((r) => r.id !== null && (r.task !== undefined || r.minutes !== undefined)).map((r) => [`${r.format}:${r.id}`, r]));
-  const generated = (before ?? []).filter((r) => r.id === null);
+  const generated = (before ?? []).filter((r) => r.id === null || practiceOf(r.id) !== r.format);
   const restored = next.map((r) => {
     const o = old.get(`${r.format}:${r.id}`);
     if (!o) return r;

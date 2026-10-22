@@ -401,6 +401,36 @@ describe("applyRevision with practice", () => {
     ]);
     expect(result.children![0].practiceCovers).toEqual([{ format: "problem-set", id: "neet", note: null, task: "Arrays 1-6", minutes: 40 }, generated]);
   });
+
+  it("keeps a split week's generated recall reservation, which cites its reading, when the model writes it back by id", () => {
+    const recall = { format: "recall" as const, id: "book", note: null, task: "Six questions on hashing", minutes: 15 };
+    const original = layout(
+      makeRoot([
+        makeNode({
+          id: "w1",
+          level: "week",
+          title: "Split",
+          summary: "s",
+          len: 2,
+          manualSplit: true,
+          practiceCovers: [{ format: "problem-set", id: "neet", note: null, task: "Arrays 1-6", minutes: 40 }, recall],
+          children: [makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1 }), makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1 })],
+        }),
+      ]),
+    );
+    // The prompt asks the model to keep each row's format and source id, so it writes the recall row back as M1.
+    const result = revise(original, [
+      {
+        ref: "n1",
+        title: "Split",
+        summary: "s",
+        days: 2,
+        practiceCovers: [{ format: "problem-set", id: "M2" }, { format: "recall", id: "M1" }],
+        children: [{ ref: "n2", title: "A", summary: "a", days: 1 }, { ref: "n3", title: "B", summary: "b", days: 1 }],
+      },
+    ]);
+    expect(result.children![0].practiceCovers).toEqual([{ format: "problem-set", id: "neet", note: null, task: "Arrays 1-6", minutes: 40 }, recall]);
+  });
 });
 
 describe("revisePlanTree checks the whole tree", () => {

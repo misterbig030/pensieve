@@ -50,7 +50,8 @@ interface RevisedUnit {
  * With `aliases`, material references come back too: a field the model left out keeps the node's old references,
  * headings keep `covers`, leaves keep `materials`, and ids not in the list are dropped. Practice follows the same
  * rules: leaves keep `practice` (a rewritten list goes through `resolvePracticeRefs`, which drops refused and unknown
- * rows), headings keep `practiceCovers`, and a split week's reservations keep their `task` and `minutes`.
+ * rows), headings keep `practiceCovers`, and a split week's reservations keep their `task` and `minutes`, its generated
+ * ones whatever the model wrote.
  */
 export function applyRevision(
   original: PlanNode,
@@ -83,7 +84,7 @@ export function applyRevision(
     const covers = aliases && unit.covers !== undefined ? keepCoverTiers(resolveCoverRefs(unit.covers, aliases).refs, kept?.covers) : kept?.covers;
     const materials = aliases && unit.materials !== undefined ? resolveMaterialRefs(unit.materials, aliases).refs : kept?.materials;
     const practiceCovers =
-      aliases && unit.practiceCovers !== undefined ? keepPracticeCovers(resolvePracticeCovers(unit.practiceCovers, aliases, split).refs, kept?.practiceCovers) : kept?.practiceCovers;
+      aliases && unit.practiceCovers !== undefined ? keepPracticeCovers(resolvePracticeCovers(unit.practiceCovers, aliases, split).refs, kept?.practiceCovers, aliases.practice) : kept?.practiceCovers;
     const practice =
       aliases && unit.practice !== undefined
         ? resolvePracticeRefs(unit.practice, aliases, split, (materials ?? []).map((r) => r.id)).refs

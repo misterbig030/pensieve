@@ -702,9 +702,11 @@ describe("keepPracticeCovers", () => {
     { format: "problem-set" as const, id: "neet", note: null, task: "Arrays 1–6", minutes: 40 },
     { format: "design-exercise" as const, id: null, note: null, task: "Design a cache", minutes: 30 },
   ];
+  // "neet" is a problem list; "book" is reading.
+  const practiceOf = aliasMaterials([{ id: "book" }, { id: "neet", practice: { format: "problem-set", items: 150, perItemMinutes: 10, minutes: null, answers: true } }]).practice;
 
   it("restores task and minutes on a reservation written back with an id only", () => {
-    expect(keepPracticeCovers([{ format: "problem-set", id: "neet", note: "harder" }], kept)).toEqual([
+    expect(keepPracticeCovers([{ format: "problem-set", id: "neet", note: "harder" }], kept, practiceOf)).toEqual([
       { format: "problem-set", id: "neet", note: "harder", task: "Arrays 1–6", minutes: 40 },
       kept[1],
     ]);
@@ -715,14 +717,20 @@ describe("keepPracticeCovers", () => {
       { format: "problem-set" as const, id: "neet", note: null, task: "Mine" },
       { format: "lab" as const, id: "neet", note: null },
     ];
-    expect(keepPracticeCovers(next, kept).slice(0, 2)).toEqual([
+    expect(keepPracticeCovers(next, kept, practiceOf).slice(0, 2)).toEqual([
       { format: "problem-set", id: "neet", note: null, task: "Mine", minutes: 40 },
       { format: "lab", id: "neet", note: null },
     ]);
   });
 
   it("carries generated reservations forward unchanged, after the rewritten list, even when it is empty", () => {
-    expect(keepPracticeCovers([], kept)).toEqual([kept[1]]);
-    expect(keepPracticeCovers([], undefined)).toEqual([]);
+    expect(keepPracticeCovers([], kept, practiceOf)).toEqual([kept[1]]);
+    expect(keepPracticeCovers([], undefined, practiceOf)).toEqual([]);
+  });
+
+  it("carries a generated recall reservation that cites its reading forward, since the model cannot write it back", () => {
+    const recall = { format: "recall" as const, id: "book", note: null, task: "Six questions on hashing", minutes: 15 };
+    expect(keepPracticeCovers([{ format: "problem-set", id: "neet", note: null }], [kept[0], recall], practiceOf)).toEqual([kept[0], recall]);
   });
 });
+
