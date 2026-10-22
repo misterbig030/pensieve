@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { PlanSplit } from "@/lib/studyTime";
 
 /**
- * The practice formats a plan can assign in place of "left for practice" time: one registry that the picking step,
+ * The practice formats a plan can assign to the time that is not reading: one registry that the picking step,
  * research, drafting and the lesson all read from. Pure and client-safe. `lib/studyTime.ts` imports the pick schemas
  * from here, so this file must not import it at runtime.
  */
@@ -166,15 +166,18 @@ export function normalizePicks(drafts: PracticePickDraft[] | null | undefined): 
 }
 
 /**
- * The split's picks with their hours: each pick's share of the practice hours (the total less the rounded reading
- * hours), rounded, with the rounding difference on the largest pick so the hours sum exactly. Empty without picks.
+ * The split's picks with their hours: the practice hours (the total less the rounded reading hours) shared by largest
+ * remainder, so the hours sum exactly to the practice hours and none is negative. Ties go to the earlier pick. A pick
+ * can get 0 h when there are fewer practice hours than picks. Empty without picks.
  */
 export function formatHours(split: PlanSplit, totalHours: number): { format: PracticeFormat; label: string; hours: number; focus: string }[] {
   const picks = split.formats ?? [];
   if (picks.length === 0) return [];
   const practiceHours = totalHours - Math.round((totalHours * split.readingShare) / 100);
-  const rows = picks.map((p) => ({ format: p.format, label: PRACTICE_REGISTRY[p.format].label, hours: Math.round((practiceHours * p.share) / 100), focus: p.focus }));
-  const largest = picks.reduce((best, p, i) => (p.share > picks[best].share ? i : best), 0);
-  rows[largest].hours += practiceHours - rows.reduce((sum, r) => sum + r.hours, 0);
-  return rows;
+  // Whole-number arithmetic: a pick's exact hours are practiceHours * share / 100.
+  const hours = picks.map((p) => Math.floor((practiceHours * p.share) / 100));
+  const order = picks.map((p, i) => ({ i, remainder: (practiceHours * p.share) % 100 })).sort((x, y) => y.remainder - x.remainder || x.i - y.i);
+  const leftover = practiceHours - hours.reduce((sum, h) => sum + h, 0);
+  for (const { i } of order.slice(0, leftover)) hours[i] += 1;
+  return picks.map((p, i) => ({ format: p.format, label: PRACTICE_REGISTRY[p.format].label, hours: hours[i], focus: p.focus }));
 }

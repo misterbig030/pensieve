@@ -85,11 +85,22 @@ describe("formatHours", () => {
     ]);
   });
 
-  it("puts the rounding difference on the largest pick", () => {
-    // 25 h total, 60% reading: 15 reading, 10 practice; 45/35/20 -> 4.5, 3.5, 2 -> 5, 4, 2 is 11, so the largest gives one back.
+  it("shares the hours by largest remainder, ties to the earlier pick", () => {
+    // 25 h total, 60% reading: 15 reading, 10 practice; 45/35/20 -> 4.5, 3.5, 2 -> floors 4, 3, 2, the spare hour goes to the first 0.5.
     const rows = formatHours(split([45, 35, 20], 60), 25);
-    expect(rows.map((r) => r.hours)).toEqual([4, 4, 2]);
+    expect(rows.map((r) => r.hours)).toEqual([5, 3, 2]);
     expect(rows.reduce((a, r) => a + r.hours, 0)).toBe(10);
+  });
+
+  it("never gives a pick negative hours when there are fewer hours than picks", () => {
+    const four = {
+      readingShare: 0,
+      practice: "practice",
+      reason: "",
+      formats: (["problem-set", "recall", "mock", "lab"] as const).map((format) => ({ format, share: 25, focus: "x", reason: "" })),
+    };
+    const rows = formatHours(four, 2);
+    expect(rows.map((r) => r.hours)).toEqual([1, 1, 0, 0]);
   });
 
   it("is empty when the split has no picks", () => {
