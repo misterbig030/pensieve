@@ -5,6 +5,7 @@ import { generateObject } from "ai";
 import { aliasMaterials } from "@/lib/materials";
 import { layout, makeNode, makeRoot } from "@/lib/planTree";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
+import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
 import type { ModelCall } from "./logged";
 import { assignRefs } from "./planPrompt";
 import { applyRevision, LockedNodeError, revisePlanTree, spanFor } from "./planRevision";
@@ -485,5 +486,42 @@ describe("revisePlanTree checks the whole tree", () => {
       expect.arrayContaining(["breach: Day 2 reads M2, which Day 1 holds", "breach: Day 2 refers to M1 as a whole; use its chapters", "dropped M2 from Day 2: overlap", "dropped M1 from Day 2: whole-book"]),
     );
     expect(tree.children![1].materials).toEqual([{ id: "evals", tier: "should", minutes: 79, note: null, chapter: null, activity: "read" }]);
+  });
+});
+
+describe("applyRevision with an item list", () => {
+  const aliases = aliasMaterials([{ id: "book" }, { id: "neet", practice: LISTED_PROBLEMS }]);
+  const split = { readingShare: 50, practice: "problems", reason: "", formats: [{ format: "problem-set" as const, share: 100, focus: "arrays", reason: "" }] };
+  // Saved before item lists: a row naming the source without an item. And one item row.
+  const old = { format: "problem-set" as const, id: "neet", task: "Arrays 1-3", done: "Solved", minutes: 45, generated: false };
+  const anagram = { format: "problem-set" as const, id: "neet", task: "Group Anagrams", done: "Solved", minutes: 25, generated: false, itemFrom: 4, itemTo: 4 };
+
+  it("keeps a saved row without an item when the model writes it back, and an item row by its alias", () => {
+    const original = layout(makeRoot([makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, practice: [old, anagram] })]));
+    const result = applyRevision(
+      original,
+      assignRefs(original),
+      {
+        units: [
+          {
+            ref: "n1",
+            title: "A, renamed",
+            summary: "a",
+            days: 1,
+            practice: [
+              { format: "problem-set", id: "M2", task: "Arrays 1-3", done: "Solved", minutes: 45 },
+              { format: "problem-set", id: "M2.4", task: "Group Anagrams", done: "Solved", minutes: 25 },
+            ],
+          },
+        ],
+      },
+      0,
+      "day",
+      aliases,
+      undefined,
+      7,
+      split,
+    );
+    expect(result.children![0].practice).toEqual([old, anagram]);
   });
 });

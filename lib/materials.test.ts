@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
-import type { MaterialRef, PracticeRef } from "@/lib/schemas/material";
+import type { MaterialRef, PracticeCover, PracticeRef } from "@/lib/schemas/material";
+import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
 import { AIE_HOURS, AIE_MATERIALS, AIE_SHARE, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 import {
   aliasMaterials,
@@ -969,5 +970,166 @@ describe("item aliases on a listed practice source", () => {
     expect(refs.map((r) => r.id)).toEqual(["book"]);
     expect(unknown).toEqual(["M4.12"]);
     expect(resolveCoverRefs([{ id: "M4.12" }], aliases).unknown).toEqual(["M4.12"]);
+  });
+});
+
+describe("practice item lists: weeks reserve runs, days assign items", () => {
+  const unlisted = { format: "problem-set" as const, items: 150, perItemMinutes: 10, minutes: null, answers: true };
+  // M1 is reading, M2 the 21-problem list (P), M3 a problem list without one (Q).
+  const materials = [{ id: "R1" }, { id: "P", practice: LISTED_PROBLEMS }, { id: "Q", practice: unlisted }];
+  const aliases = aliasMaterials(materials);
+  const split = { readingShare: 50, practice: "problems", reason: "", formats: [{ format: "problem-set" as const, share: 100, focus: "arrays", reason: "" }] };
+  const reserve = (from: number, to: number, id = "P"): PracticeCover => ({ format: "problem-set", id, note: null, itemFrom: from, itemTo: to });
+  const item = (n: number): PracticeRef => ({ format: "problem-set", id: "P", task: PROBLEM_ITEMS[n - 1].title, done: "solved", minutes: 25, generated: false, itemFrom: n, itemTo: n });
+  const day = (id: string, practice: PracticeRef[] = []) => makeNode({ id, level: "day", title: id, summary: "s", len: 1, practice });
+  const week = (id: string, covers: PracticeCover[], days: PlanNode[] | null = null) => makeNode({ id, level: "week", title: id, summary: "s", len: days?.length ?? 5, practiceCovers: covers, children: days });
+  const check = (root: PlanNode, nodes: PlanNode[], leaves: boolean, top = false) => levelChecks({ root, nodes, leaves, top, materials, unknownIds: [], daysPerWeek: 5, split });
+
+  it("reserves item ranges in list order across weeks", () => {
+    const { refs, unknown } = resolvePracticeCovers(
+      [
+        { format: "problem-set", id: "M2", note: " Arrays & Hashing ", from: 1, to: 9 },
+        { format: "problem-set", id: "M2", from: 14, to: 10 },
+        { format: "problem-set", id: "M3", note: "Graphs", from: 1, to: 5 },
+      ],
+      aliases,
+      split,
+    );
+    // A listed source's run is kept as positions (a reversed one is turned round); a source without a list keeps its note only.
+    expect(refs).toEqual([{ ...reserve(1, 9), note: "Arrays & Hashing" }, reserve(10, 14), { format: "problem-set", id: "Q", note: "Graphs" }]);
+    expect(unknown).toEqual([]);
+    // Three weeks reserving the list in order, every item once: nothing to report.
+    const weeks = [week("w1", [reserve(1, 9)]), week("w2", [reserve(10, 14)]), week("w3", [reserve(15, 21)])];
+    expect(check(layout(makeRoot(weeks)), weeks, false, true)).toEqual({ facts: [], breaches: [] });
+    // Out of order is a fact; an item two weeks reserve is practice-overlap, which drops the later reservation.
+    const swapped = [week("w1", [reserve(10, 14)]), week("w2", [reserve(1, 9)]), week("w3", [reserve(14, 19)])];
+    const out = check(layout(makeRoot(swapped)), swapped, false, true);
+    expect(out.facts).toEqual(["M2 items 1–9 after item 14 (Week 2)", "M2 items 20–21 not reserved"]);
+    expect(out.breaches.map((b) => [b.kind, b.index, b.text])).toEqual([["practice-overlap", 2, "Week 3 reserves Problems M2 items 14–19, but Week 1 holds M2.14"]]);
+    expect(dropBreaches(swapped, out.breaches)).toEqual(["dropped Problems M2 items 14–19 from Week 3: practice-overlap"]);
+    expect(swapped[2].practiceCovers).toBeUndefined();
+  });
+
+  it("refuses an item alias outside the list", () => {
+    const rows = [
+      { format: "problem-set", id: "M2.4", task: "Group Anagrams", done: "solved", minutes: 40 },
+      { format: "problem-set", id: "M2.22", task: "A problem past the list", done: "solved", minutes: 25 },
+      { format: "problem-set", id: "M2", task: "Arrays & Hashing, problems 1–3", done: "solved", minutes: 45 },
+      { format: "problem-set", id: "M3", task: "Graphs 1–3", done: "solved", minutes: 30 },
+    ];
+    const { refs, unknown, refused } = resolvePracticeRefs(rows, aliases, split);
+    // An item row takes the item's position and its minutes (a medium problem is 25 min); a source without a list is as before.
+    expect(refs).toEqual([
+      { format: "problem-set", id: "P", task: "Group Anagrams", done: "solved", minutes: 25, generated: false, itemFrom: 4, itemTo: 4 },
+      { format: "problem-set", id: "Q", task: "Graphs 1–3", done: "solved", minutes: 30, generated: false },
+    ]);
+    // Past the list, or the listed source without an item: unknown, like an unknown chapter.
+    expect(unknown).toEqual(["M2.22", "M2"]);
+    expect(refused).toEqual([]);
+    // A reservation past the list, or of a listed source without a run, is dropped as unknown too.
+    const covers = resolvePracticeCovers([{ format: "problem-set", id: "M2", from: 15, to: 30 }, { format: "problem-set", id: "M2", note: "Stack" }, { format: "problem-set", id: "M2", from: 0, to: 3 }], aliases, split);
+    expect(covers.refs).toEqual([]);
+    expect(covers.unknown).toEqual(["M2.15–M2.30", "M2", "M2.0–M2.3"]);
+    // A saved plan's rows and reservations without items are kept when asked to keep them (a revision).
+    expect(resolvePracticeRefs([rows[2]], aliases, split, [], { keepUnitemized: true }).refs).toHaveLength(1);
+    expect(resolvePracticeCovers([{ format: "problem-set", id: "M2", note: "Stack" }], aliases, split, { keepUnitemized: true }).refs).toEqual([{ format: "problem-set", id: "P", note: "Stack" }]);
+    // An item alias names a one-item reservation, as a week split by hand writes it back.
+    expect(resolvePracticeCovers([{ format: "problem-set", id: "M2.7" }], aliases, split).refs).toEqual([reserve(7, 7)]);
+  });
+
+  it("breaches a day item outside its week's range", () => {
+    const days = [day("d1", [item(1), item(2)]), day("d2", [item(3), item(5)])];
+    const w1 = week("w1", [reserve(1, 4)], days);
+    const out = check(layout(makeRoot([w1])), days, true);
+    expect(out.breaches.map((b) => [b.kind, b.index, b.text])).toEqual([["practice-outside", 1, 'Week 1 · Day 2 assigns Problems M2.5 "Top K Frequent Elements", which Week 1 did not reserve']]);
+    expect(out.facts).toEqual(["item 4 of M2 reserved by Week 1 but not assigned"]);
+    expect(dropBreaches(days, out.breaches)).toEqual(['dropped Problems M2.5 "Top K Frequent Elements" from Week 1 · Day 2: practice-outside']);
+    expect(days[1].practice).toEqual([item(3)]);
+  });
+
+  it("breaches an item an earlier week already used", () => {
+    const first = [day("a1", [item(1), item(2)]), day("a2", [item(3)])];
+    // Week 2 was saved reserving 3–6, item 3 among them; its days now assign item 3 again, and item 4 twice.
+    const second = [day("b1", [item(3)]), day("b2", [item(4)]), day("b3", [item(4), item(5)])];
+    const root = layout(makeRoot([week("w1", [reserve(1, 3)], first), week("w2", [reserve(3, 6)], second)]));
+    const out = check(root, second, true);
+    expect(out.breaches.map((b) => [b.kind, b.index, b.text])).toEqual([
+      ["practice-overlap", 0, 'Week 2 · Day 1 assigns Problems M2.3 "Two Sum", which Week 1 · Day 2 already assigns'],
+      ["practice-overlap", 2, 'Week 2 · Day 3 assigns Problems M2.4 "Group Anagrams", which Week 2 · Day 2 already assigns'],
+    ]);
+    // A drop takes the repeated row only, never the first use.
+    dropBreaches(second, out.breaches);
+    expect(second.map((d) => d.practice?.map((r) => r.itemFrom))).toEqual([undefined, [4], [5]]);
+  });
+
+  it("keeps a source reserved elsewhere out of an unreserved week", () => {
+    // Weeks 1–2 reserve nothing; week 3 reserves the list and the unlisted source. Week 1's days may use neither.
+    const days = [day("d1", [item(1)]), day("d2", [{ format: "problem-set", id: "Q", task: "Graphs 1–3", done: "solved", minutes: 30, generated: false }])];
+    const root = layout(makeRoot([week("w1", [], days), week("w2", []), week("w3", [reserve(1, 21), { format: "problem-set", id: "Q", note: "Graphs" }])]));
+    const out = check(root, days, true);
+    expect(out.breaches.map((b) => [b.kind, b.text])).toEqual([
+      ["practice-outside", 'Week 1 · Day 1 assigns Problems M2.1 "Contains Duplicate", which Week 1 did not reserve'],
+      ["practice-outside", 'Week 1 · Day 2 assigns Problems "Graphs 1–3" from M3, which Week 1 did not reserve'],
+    ]);
+    // With no heading reserving them anywhere, any source may still be used.
+    const free = layout(makeRoot([week("w1", [], [day("d1", [item(1)])])]));
+    expect(check(free, free.children![0].children!, true).breaches).toEqual([]);
+    // A week split by hand reserves only what it did itself: that binds its own days, not the plan's other weeks.
+    const split = makeNode({ id: "w2", level: "week", title: "w2", summary: "s", len: 1, manualSplit: true, practiceCovers: [reserve(5, 5)], children: [day("e1", [item(5)])] });
+    const mixed = layout(makeRoot([week("w1", [], [day("d1", [item(1)])]), split]));
+    expect(check(mixed, mixed.children![0].children!, true).breaches).toEqual([]);
+  });
+
+  it("records reserved items no day assigned", () => {
+    const days = [day("d1", [item(1), item(2)]), day("d2", [item(4)])];
+    const w1 = week("w1", [reserve(1, 6)], days);
+    const out = check(layout(makeRoot([w1])), days, true);
+    expect(out.breaches).toEqual([]);
+    expect(out.facts).toEqual(["items 3, 5–6 of M2 reserved by Week 1 but not assigned"]);
+  });
+
+  it("holds a month's week ranges inside the month's, as chapters", () => {
+    const weeks = [week("w1", [reserve(1, 9)]), week("w2", [reserve(10, 16)])];
+    const m1 = makeNode({ id: "m1", level: "month", title: "M", summary: "s", len: 10, practiceCovers: [reserve(1, 14)], children: weeks });
+    const root = layout(makeRoot([m1, makeNode({ id: "m2", level: "month", title: "M", summary: "s", len: 10, practiceCovers: [reserve(15, 21)] })]));
+    const out = check(root, weeks, false);
+    expect(out.facts).toEqual([]);
+    expect(out.breaches.map((b) => [b.kind, b.index, b.text])).toEqual([["practice-outside", 1, "Week 2 reserves Problems M2 items 10–16, which Month 1 did not reserve"]]);
+    // Two weeks of the month reserving one item: practice-overlap, naming the week that holds it.
+    weeks[1].practiceCovers = [reserve(9, 14)];
+    expect(check(root, weeks, false).breaches.map((b) => b.text)).toEqual(["Week 2 reserves Problems M2 items 9–14, but Week 1 holds M2.9"]);
+    // Inside the month and short of its end: the rest is a fact.
+    weeks[1].practiceCovers = [reserve(10, 12)];
+    expect(check(root, weeks, false)).toEqual({ facts: ["items 13–14 of M2 reserved by Month 1 but not assigned"], breaches: [] });
+  });
+
+  it("never drops saved rows for the new rules", () => {
+    // A plan saved before the rules: week 1 reserved nothing and its days used the list (one row with no item); week 2
+    // reserved the list; week 2's days repeat week 1's item 1.
+    const old: PracticeRef = { format: "problem-set", id: "P", task: "Arrays & Hashing, problems 1–3", done: "solved", minutes: 45, generated: false };
+    const first = [day("a1", [item(1)]), day("a2", [old])];
+    const second = [day("b1", [item(1)]), day("b2", [item(2)])];
+    const root = layout(makeRoot([week("w1", [], first), week("w2", [reserve(1, 21)], second)]));
+    const out = treeChecks(root, materials, { granularity: "day", daysPerWeek: 5, split });
+    expect(out.breaches).toEqual([]);
+    expect(out.facts).toEqual(
+      expect.arrayContaining([
+        'Week 1 · Day 1 assigns Problems M2.1 "Contains Duplicate", which Week 1 did not reserve',
+        'Week 1 · Day 2 assigns Problems "Arrays & Hashing, problems 1–3" from M2 without an item',
+        'Week 2 · Day 1 assigns Problems M2.1 "Contains Duplicate", which Week 1 · Day 1 already assigns',
+      ]),
+    );
+    expect(dropBreaches(out.nodes, out.breaches)).toEqual([]);
+    expect(first[1].practice).toEqual([old]);
+    // The same rows drafted now breach.
+    expect(check(root, second, true).breaches.map((b) => b.kind)).toEqual(["practice-overlap"]);
+  });
+
+  it("keeps a split week's item reservations when they are written back by id or by item", () => {
+    const before = [{ ...reserve(1, 1), task: "Contains Duplicate", minutes: 15 }, { ...reserve(2, 2), task: "Valid Anagram", minutes: 15 }];
+    // Written back as item aliases: each finds its own task and minutes.
+    expect(keepPracticeCovers([reserve(2, 2), reserve(1, 1)], before, aliases.practice)).toEqual([before[1], before[0]]);
+    // A lone reservation written back without its run gets the run back.
+    expect(keepPracticeCovers([{ format: "problem-set", id: "P", note: null }], [before[0]], aliases.practice)).toEqual([before[0]]);
   });
 });

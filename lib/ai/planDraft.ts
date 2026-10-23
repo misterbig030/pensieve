@@ -425,14 +425,15 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
   const level = childLevel(node.level);
   if (!level) throw new Error("A day cannot be planned in more detail");
   // A week split by hand: its Read table and practice rows are the reservation its days are planned from, whatever the
-  // client sent. Reading keeps its tier and minutes; practice keeps its task and minutes.
+  // client sent. Reading keeps its tier and minutes; practice keeps its task and minutes, and an item row becomes a
+  // reservation of that one item.
   if (input.reason === "split" && node.materials) {
     node.covers = node.materials.map(({ id, note, chapter, activity, tier, minutes }) => ({ id, note, chapter, activity, tier, minutes }));
     delete node.materials;
     node.manualSplit = true;
   }
   if (input.reason === "split" && node.practice) {
-    node.practiceCovers = node.practice.map(({ format, id, task, minutes }) => ({ format, id, note: null, task, minutes }));
+    node.practiceCovers = node.practice.map(({ format, id, task, minutes, itemFrom, itemTo }) => ({ format, id, note: null, task, minutes, ...(itemFrom && itemTo ? { itemFrom, itemTo } : {}) }));
     delete node.practice;
     node.manualSplit = true;
   }

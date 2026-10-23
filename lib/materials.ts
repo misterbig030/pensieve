@@ -1,6 +1,19 @@
 import { learnerKind } from "@/lib/ai/research/verify";
 import { budgetFor, cloneTree, daysInWeekOf, fullLabelOf, parentOf, walk, weeksOf, type Granularity, type PlanNode } from "@/lib/planTree";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, isBlockFormat, shareOut, weekBudgets, type PracticeFormat, type PracticePick } from "@/lib/practice";
+import {
+  PRACTICE_FORMATS,
+  PRACTICE_REGISTRY,
+  formatHours,
+  formatRuns,
+  isBlockFormat,
+  itemMinutes,
+  itemPositions,
+  numberRuns,
+  shareOut,
+  weekBudgets,
+  type PracticeFormat,
+  type PracticePick,
+} from "@/lib/practice";
 import { activePicks, dayMinutes, isAllReading, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
@@ -14,6 +27,7 @@ import {
   type PracticeCoverDraft,
   type PracticeRef,
   type PracticeRefDraft,
+  type PracticeItem,
   clip,
   hostOf,
   shortId,
@@ -45,6 +59,8 @@ export interface MaterialAliases {
   items(id: string): number;
   /** The format a practice source serves; null for a material that is reading only. */
   practice(id: string): PracticeFormat | null;
+  /** The item at a 1-based position of a practice source's list. */
+  item(id: string, position: number): PracticeItem | undefined;
 }
 
 const ALIAS_RE = /^\[?\s*(m\d+)(?:\.(\d+))?\s*\]?$/i;
@@ -54,6 +70,7 @@ export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practic
   const fromAlias = new Map<string, string>();
   const counts = new Map<string, number>();
   const itemCounts = new Map<string, number>();
+  const lists = new Map<string, PracticeItem[]>();
   const formats = new Map<string, PracticeFormat>();
   materials.forEach((m, i) => {
     const alias = `M${i + 1}`;
@@ -61,6 +78,7 @@ export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practic
     fromAlias.set(alias.toLowerCase(), m.id);
     counts.set(m.id, m.toc?.chapters.length ?? 0);
     itemCounts.set(m.id, m.practice?.list?.items.length ?? 0);
+    if (m.practice?.list) lists.set(m.id, m.practice.list.items);
     if (m.practice) formats.set(m.id, m.practice.format);
   });
   return {
@@ -85,6 +103,7 @@ export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practic
     chapters: (id) => counts.get(id) ?? 0,
     items: (id) => itemCounts.get(id) ?? 0,
     practice: (id) => formats.get(id) ?? null,
+    item: (id, position) => lists.get(id)?.[position - 1],
   };
 }
 
@@ -158,12 +177,32 @@ function pickedFormat(format: string, split: PlanSplit | null | undefined): Prac
   return activePicks(split).some((p) => p.format === f) ? (f as PracticeFormat) : null;
 }
 
-/** "Problems "Arrays 1–6"": a refused row as the facts name it. */
-function rowName(format: string, task: string): string {
+/** "Problems "Arrays 1–6"": a refused row as the facts name it; an item row adds its alias, 'Problems M2.4 "Group Anagrams"'. */
+function rowName(format: string, task: string, item?: string): string {
   const f = format.trim().toLowerCase();
   const label = (PRACTICE_FORMATS as readonly string[]).includes(f) ? PRACTICE_REGISTRY[f as PracticeFormat].label : format.trim();
   const t = task.trim();
-  return `${label} "${t.length > 60 ? `${t.slice(0, 59)}…` : t}"`;
+  return `${label}${item ? ` ${item}` : ""} "${t.length > 60 ? `${t.slice(0, 59)}…` : t}"`;
+}
+
+/** "M2.4", "M2.15–M2.16, M2.20": positions of one list under its alias. */
+export function itemAliases(base: string, positions: Iterable<number>): string {
+  return numberRuns(positions)
+    .map(([a, b]) => (a === b ? `${base}.${a}` : `${base}.${a}–${base}.${b}`))
+    .join(", ");
+}
+
+/** "M2 items 1–9", "M2.7" for a run of one: a reservation's run as prompts and facts name it. */
+export function itemRun(base: string, from: number, to: number): string {
+  return from === to ? `${base}.${from}` : `${base} items ${from}–${to}`;
+}
+
+export interface ResolvePracticeOptions {
+  /**
+   * Keep a row or reservation of a listed source that names no item (a plan saved before item lists, written back by a
+   * revision) rather than refusing it as unknown. The whole-tree checks report it as a fact.
+   */
+  keepUnitemized?: boolean;
 }
 
 /**
@@ -172,13 +211,16 @@ function rowName(format: string, task: string): string {
  * model wrote (`generated`), refused when its format is never written. Recall written from reading must name a
  * resource the unit itself reads (`reads`, its Read table's ids), whatever that resource's practice role, so a recall
  * row with no id, or citing other reading, is refused. An id not in the list is unknown; a reading id on any other
- * format is refused, since it is no practice source.
+ * format is refused, since it is no practice source. A row of a source with an item list names one item (`M4.12`): it
+ * keeps that position and takes the item's minutes; one naming the source without an item is unknown, as an item past
+ * the list is.
  */
 export function resolvePracticeRefs(
   drafts: PracticeRefDraft[] | undefined,
   aliases: MaterialAliases,
   split: PlanSplit | null | undefined,
   reads: readonly string[] = [],
+  options: ResolvePracticeOptions = {},
 ): { refs: PracticeRef[]; unknown: string[]; refused: string[] } {
   const refs: PracticeRef[] = [];
   const unknown: string[] = [];
@@ -190,19 +232,21 @@ export function resolvePracticeRefs(
       refused.push(`${name}: not one of the plan's picks`);
       continue;
     }
-    const task = clip(draft.task, 300);
+    const alias = draft.id?.trim();
+    const resolved = alias ? aliases.resolve(alias) : undefined;
+    const spec = PRACTICE_REGISTRY[format];
+    const serves = resolved ? aliases.practice(resolved.id) : null;
+    // A listed source's item, when the row is that source's own practice.
+    const item = resolved && serves === format && resolved.item !== undefined ? aliases.item(resolved.id, resolved.item) : undefined;
+    const task = clip(draft.task, 300) ?? (item ? clip(item.title, 300) : null);
     if (!task) {
       refused.push(`${name}: no task`);
       continue;
     }
-    const alias = draft.id?.trim();
-    const resolved = alias ? aliases.resolve(alias) : undefined;
     if (alias && !resolved) {
       unknown.push(alias);
       continue;
     }
-    const spec = PRACTICE_REGISTRY[format];
-    const serves = resolved ? aliases.practice(resolved.id) : null;
     // Being on the unit's Read list is what makes a resource reading, so recall may be written from it whatever else it serves.
     const fromReading = format === "recall" && serves !== format && resolved !== undefined && reads.includes(resolved.id);
     if (serves !== null && serves !== format && !fromReading) {
@@ -226,20 +270,29 @@ export function resolvePracticeRefs(
         continue;
       }
     }
-    const minutes = Number.isFinite(draft.minutes) ? Math.max(1, Math.min(600, Math.round(draft.minutes))) : 1;
-    refs.push({ format, id: resolved?.id ?? null, task, done: clip(draft.done, 300) ?? spec.doneWhen, minutes, generated });
+    // A listed source is done item by item: the source alone names no part of it.
+    if (!generated && resolved && aliases.items(resolved.id) > 0 && !item && !options.keepUnitemized) {
+      unknown.push(alias!);
+      continue;
+    }
+    const minutes = item ? itemMinutes(format, item) : Number.isFinite(draft.minutes) ? Math.max(1, Math.min(600, Math.round(draft.minutes))) : 1;
+    const position = item ? { itemFrom: resolved!.item!, itemTo: resolved!.item! } : {};
+    refs.push({ format, id: resolved?.id ?? null, task, done: clip(draft.done, 300) ?? spec.doneWhen, minutes, generated, ...position });
   }
   return { refs, unknown, refused };
 }
 
 /**
  * Resolves a heading's practice reservations. One whose format is not a pick, or whose material is no practice source
- * of that format, is dropped into `unknown`.
+ * of that format, is dropped into `unknown`. A source with an item list is reserved by a run of positions (`from`–`to`,
+ * turned round when reversed, or an item alias for a run of one); a run past the list, or none, is unknown too. A source
+ * without a list keeps its note and no positions.
  */
 export function resolvePracticeCovers(
   drafts: PracticeCoverDraft[] | undefined,
   aliases: MaterialAliases,
   split: PlanSplit | null | undefined,
+  options: ResolvePracticeOptions = {},
 ): { refs: PracticeCover[]; unknown: string[] } {
   const refs: PracticeCover[] = [];
   const unknown: string[] = [];
@@ -250,7 +303,26 @@ export function resolvePracticeCovers(
       unknown.push(draft.id);
       continue;
     }
-    refs.push({ format, id: resolved.id, note: clip(draft.note, 300) });
+    const cover: PracticeCover = { format, id: resolved.id, note: clip(draft.note, 300) };
+    const size = aliases.items(resolved.id);
+    if (size > 0) {
+      const given = [draft.from, draft.to].filter((n): n is number => Number.isFinite(n)).map(Math.round);
+      if (given.length === 0 && resolved.item !== undefined) given.push(resolved.item);
+      if (given.length === 0) {
+        if (options.keepUnitemized) refs.push(cover);
+        else unknown.push(draft.id);
+        continue;
+      }
+      const [from, to] = [Math.min(...given), Math.max(...given)];
+      if (from < 1 || to > size) {
+        const base = aliases.alias(resolved.id)!;
+        unknown.push(`${base}.${from}–${base}.${to}`);
+        continue;
+      }
+      cover.itemFrom = from;
+      cover.itemTo = to;
+    }
+    refs.push(cover);
   }
   return { refs, unknown };
 }
@@ -455,7 +527,10 @@ function formatChapters(chapters: number[]): string {
 }
 
 /**
- * `practice-outside`: a sourced practice row of a format the parent reserved, from a source it did not reserve.
+ * `practice-outside`: a sourced practice row of a format the parent reserved, from a source it did not reserve; one from
+ * a source some heading reserves when its parent reserved none of it; an item outside the parent's run of that source;
+ * and a heading's run outside its parent's.
+ * `practice-overlap`: an item another unit already did, or one two units of a level take; a run two headings reserve.
  * `practice-generated`: a row the model wrote where the registry forbids it (a format never written, or recall not from
  * the unit's own reading).
  */
@@ -467,10 +542,11 @@ export type BreachKind =
   | "over-budget"
   | "unread-reservation"
   | "practice-outside"
+  | "practice-overlap"
   | "practice-generated";
 
 /** The breaches a drop can cure: the row goes, the unit keeps the rest. Over-budget and unread reservations stay facts. */
-export const DROPPABLE: ReadonlySet<BreachKind> = new Set<BreachKind>(["outside", "overlap", "whole-book", "review-before-read", "practice-outside", "practice-generated"]);
+export const DROPPABLE: ReadonlySet<BreachKind> = new Set<BreachKind>(["outside", "overlap", "whole-book", "review-before-read", "practice-outside", "practice-overlap", "practice-generated"]);
 
 export interface Breach {
   kind: BreachKind;
@@ -483,8 +559,10 @@ export interface Breach {
   names: string;
   /** The sentence the retry quotes and the admin dock shows. */
   text: string;
-  /** The practice rows a practice breach names, which a drop removes. */
-  practice?: Pick<PracticeRef, "format" | "id" | "task">[];
+  /** The practice rows a practice breach names, which a drop removes: one row each. */
+  practice?: (Pick<PracticeRef, "format" | "id" | "task"> & { itemFrom?: number | null })[];
+  /** The practice reservations a practice breach names, which a drop removes: one each. */
+  practiceCovers?: Pick<PracticeCover, "format" | "id" | "itemFrom" | "itemTo">[];
 }
 
 export interface LevelChecks {
@@ -513,6 +591,11 @@ export interface LevelCheckInput {
    * one, `MUST_SHARE` stands in for the reading share.
    */
   split?: PlanSplit | null;
+  /**
+   * Whether the rows were saved before this call (revision's whole-tree checks). The rules on item lists and on reserved
+   * sources then state facts and never breaches, so a saved row is never dropped for them.
+   */
+  saved?: boolean;
 }
 
 /** How far must-reading may run past the plan's reading share before it is worth reporting. */
@@ -571,8 +654,34 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const verb = input.leaves ? "reads" : "reserves";
   const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
   const breach = (kind: BreachKind, index: number, unit: string, refs: RefLike[], text: string) => breaches.push({ kind, index, unit, refs: refs.map(toResolved), names: names(refs), text });
-  const practiceBreach = (kind: BreachKind, index: number, unit: string, row: PracticeRef, text: string) =>
-    breaches.push({ kind, index, unit, refs: [], names: rowName(row.format, row.task), text, practice: [{ format: row.format, id: row.id, task: row.task }] });
+  /** 'Problems M2.4 "Group Anagrams"' for an item row, 'Problems "Arrays 1–6"' otherwise. */
+  const rowLabel = (row: PracticeRef) => rowName(row.format, row.task, row.id !== null && row.itemFrom ? aliases.alias(row.id, { item: row.itemFrom }) : undefined);
+  /** "Problems M2 items 1–9" for a run, "Problems M3" for a source without one. Sourced reservations only. */
+  const coverLabel = (c: PracticeCover) => {
+    const base = aliases.alias(c.id!) ?? c.id!;
+    return `${PRACTICE_REGISTRY[c.format].label} ${c.itemFrom && c.itemTo ? itemRun(base, c.itemFrom, c.itemTo) : base}`;
+  };
+  const rowBreach = (kind: BreachKind, index: number, unit: string, row: PracticeRef, text: string): Breach => ({
+    kind,
+    index,
+    unit,
+    refs: [],
+    names: rowLabel(row),
+    text,
+    practice: [{ format: row.format, id: row.id, task: row.task, itemFrom: row.itemFrom ?? null }],
+  });
+  const coverBreach = (kind: BreachKind, index: number, unit: string, c: PracticeCover, text: string): Breach => ({
+    kind,
+    index,
+    unit,
+    refs: [],
+    names: coverLabel(c),
+    text,
+    practiceCovers: [{ format: c.format, id: c.id, itemFrom: c.itemFrom ?? null, itemTo: c.itemTo ?? null }],
+  });
+  const practiceBreach = (kind: BreachKind, index: number, unit: string, row: PracticeRef, text: string) => breaches.push(rowBreach(kind, index, unit, row, text));
+  // The rules on item lists and on reserved sources hold what this call drafts; over saved rows they are facts.
+  const newRule = (b: Breach) => (input.saved ? facts.push(b.text) : breaches.push(b));
 
   // Where these units sit: their parent (none at the top level), its line of ancestors, and their own descendants.
   const placed = new Set(input.nodes.map((n) => n.id));
@@ -622,10 +731,36 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   };
 
   // The parent's practice reservation binds its children's sourced rows, by source and format, for the formats it
-  // reserved; a format it reserved nothing of may take any source of that format, as the prompt offers.
+  // reserved. A source a heading reserves anywhere is used only where it is reserved: a unit whose parent reserved none
+  // of it takes none of it (the reserved-source rule). A source no heading reserves may be taken by any unit. A week
+  // split by hand counts only for its own days: its reservation is what it did itself.
   const practiceReserved = parentNode?.practiceCovers ?? [];
   const reservedFormats = new Set(practiceReserved.map((c) => c.format));
-  const inPracticeReservation = (r: PracticeRef) => practiceReserved.some((c) => c.id === r.id && c.format === r.format);
+  const sourceKey = (r: { format: PracticeFormat; id: string | null }) => `${r.format}:${r.id}`;
+  const parentCovers = (r: { format: PracticeFormat; id: string | null }) => practiceReserved.filter((c) => c.id === r.id && c.format === r.format);
+  const below = new Set<string>();
+  for (const n of input.nodes) walk(n, (d) => void below.add(d.id));
+  const reservedSomewhere = new Set<string>();
+  walk(input.root, (n) => {
+    if (!below.has(n.id) && !n.manualSplit) for (const c of n.practiceCovers ?? []) if (c.id !== null) reservedSomewhere.add(sourceKey(c));
+  });
+  // Item lists: an item is one position of a source's list (`id#position`). Rows of units outside this level already
+  // did theirs, and this level's do theirs as it goes: an item is done once in the plan. A heading's run is held against
+  // other headings' runs, less what the parent reserved (its own level settled that), and its siblings' as it goes.
+  const listedSource = (id: string | null) => id !== null && aliases.items(id) > 0;
+  const itemKey = (id: string, position: number) => `${id}#${position}`;
+  const inRuns = (runs: PracticeCover[], position: number) => runs.some((c) => itemPositions(c).includes(position));
+  const parentItems = new Set(practiceReserved.flatMap((c) => (c.id !== null ? itemPositions(c).map((n) => itemKey(c.id!, n)) : [])));
+  const doneBy = new Map<string, string>();
+  const heldBy = new Map<string, string>();
+  walk(input.root, (n) => {
+    if (n.id === input.root.id || skip.has(n.id)) return;
+    for (const r of n.practice ?? []) if (r.id !== null && r.itemFrom && !doneBy.has(itemKey(r.id, r.itemFrom))) doneBy.set(itemKey(r.id, r.itemFrom), label(n));
+    for (const c of n.practiceCovers ?? []) {
+      if (c.id === null) continue;
+      for (const k of itemPositions(c).map((p) => itemKey(c.id!, p))) if (!parentItems.has(k) && !heldBy.has(k)) heldBy.set(k, label(n));
+    }
+  });
 
   const withRefs = input.nodes.filter((n) => refsOf(n).length > 0);
   // Budgets are checked once the level holds anything to budget, and only where there is a budget: without the
@@ -718,9 +853,31 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
 
     if (input.leaves) {
       const rows = node.practice ?? [];
-      for (const r of rows.filter((r) => !r.generated && r.id !== null && reservedFormats.has(r.format) && !inPracticeReservation(r))) {
-        const from = aliases.alias(r.id!) ?? r.id;
-        practiceBreach("practice-outside", index, unit, r, `${unit} assigns ${rowName(r.format, r.task)} from ${from}, which ${label(parentNode!)} did not reserve`);
+      for (const r of rows.filter((r) => !r.generated && r.id !== null)) {
+        const covers = parentCovers(r);
+        const from = aliases.alias(r.id!) ?? r.id!;
+        const what = r.itemFrom ? rowLabel(r) : `${rowLabel(r)} from ${from}`;
+        const notReserved = () => `${unit} assigns ${what}, which ${label(parentNode!)} did not reserve`;
+        if (listedSource(r.id) && !r.itemFrom) facts.push(`${unit} assigns ${what} without an item`);
+        // Another source of a format the parent reserved: the rule from before item lists, a breach over saved rows too.
+        if (reservedFormats.has(r.format) && covers.length === 0) {
+          practiceBreach("practice-outside", index, unit, r, notReserved());
+          continue;
+        }
+        if (parentNode && covers.length === 0 && reservedSomewhere.has(sourceKey(r))) {
+          newRule(rowBreach("practice-outside", index, unit, r, notReserved()));
+          continue;
+        }
+        if (!listedSource(r.id) || !r.itemFrom) continue;
+        const runs = covers.filter((c) => itemPositions(c).length > 0);
+        if (runs.length > 0 && !inRuns(runs, r.itemFrom)) {
+          newRule(rowBreach("practice-outside", index, unit, r, notReserved()));
+          continue;
+        }
+        const key = itemKey(r.id!, r.itemFrom);
+        const holder = doneBy.get(key);
+        if (holder) newRule(rowBreach("practice-overlap", index, unit, r, `${unit} assigns ${what}, which ${holder} already assigns`));
+        else doneBy.set(key, unit);
       }
       // The drafter's resolver refuses these; a revision may still bring them.
       const ownReading = new Set((node.materials ?? []).filter(isRead).map((r) => r.id));
@@ -752,8 +909,41 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       if (known > budget * SHARE_TOLERANCE) {
         breach("over-budget", index, unit, [], `${unit} reserves about ${known} min of reading against a budget of about ${Math.round(budget)} min`);
       }
+      // Practice reservations: the parent's sources only, a listed source by a run inside the parent's, each item once.
+      for (const c of (node.practiceCovers ?? []).filter((c) => c.id !== null)) {
+        const covers = parentCovers(c);
+        const name = coverLabel(c);
+        const notReserved = () => `${unit} reserves ${name}, which ${label(parentNode!)} did not reserve`;
+        if (parentNode && covers.length === 0 && (reservedFormats.has(c.format) || reservedSomewhere.has(sourceKey(c)))) {
+          newRule(coverBreach("practice-outside", index, unit, c, notReserved()));
+          continue;
+        }
+        if (!listedSource(c.id)) continue;
+        const own = itemPositions(c);
+        if (own.length === 0) {
+          facts.push(`${unit} reserves ${name} without a run of items`);
+          continue;
+        }
+        const runs = covers.filter((p) => itemPositions(p).length > 0);
+        if (runs.length > 0 && own.some((n) => !inRuns(runs, n))) {
+          newRule(coverBreach("practice-outside", index, unit, c, notReserved()));
+          continue;
+        }
+        const held = new Map<string, number[]>();
+        for (const n of own) {
+          const holder = heldBy.get(itemKey(c.id!, n));
+          if (holder) held.set(holder, [...(held.get(holder) ?? []), n]);
+        }
+        const base = aliases.alias(c.id!) ?? c.id!;
+        if (held.size > 0) {
+          const whose = [...held].map(([holder, ns]) => `${holder} holds ${itemAliases(base, ns)}`).join(" and ");
+          newRule(coverBreach("practice-overlap", index, unit, c, `${unit} reserves ${name}, but ${whose}`));
+        }
+        for (const n of own) if (!heldBy.has(itemKey(c.id!, n))) heldBy.set(itemKey(c.id!, n), unit);
+      }
     }
   });
+  facts.push(...itemListFacts(input, aliases, parentNode, skip, label));
 
   // A week's days together: the week rule, named for the week.
   if (input.leaves && input.nodes[0].level === "day" && hasRows && input.hoursPerWeek !== undefined) {
@@ -805,6 +995,68 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   return { facts, breaches };
 }
 
+/** "item 4", "items 3, 5–6". */
+function itemsText(positions: number[]): string {
+  return positions.length === 1 ? `item ${positions[0]}` : `items ${formatRuns(positions)}`;
+}
+
+/**
+ * Facts on item lists once a level is checked. Headings: a run that goes back in its list, from where earlier units'
+ * runs ended (as chapter regressions are); at the top, a listed source's items no heading reserves. Under a parent: the
+ * items it reserved that none of its units assigns, or, for headings, reserves. They are not handed to later units.
+ */
+function itemListFacts(input: LevelCheckInput, aliases: MaterialAliases, parentNode: PlanNode | null, skip: ReadonlySet<string>, label: (n: PlanNode) => string): string[] {
+  const facts: string[] = [];
+  const base = (id: string) => aliases.alias(id) ?? id;
+  const runsOf = (n: PlanNode) => (n.practiceCovers ?? []).filter((c) => c.id !== null && aliases.items(c.id) > 0 && itemPositions(c).length > 0);
+  const sourceKey = (r: { format: PracticeFormat; id: string | null }) => `${r.format}:${r.id}`;
+  /** Each listed source's positions in these runs, by format and source. */
+  const bySource = (covers: PracticeCover[]) => {
+    const out = new Map<string, { id: string; positions: number[] }>();
+    for (const c of covers) {
+      const entry = out.get(sourceKey(c)) ?? { id: c.id!, positions: [] };
+      entry.positions.push(...itemPositions(c));
+      out.set(sourceKey(c), entry);
+    }
+    return out;
+  };
+  if (!input.leaves) {
+    const furthest = new Map<string, number>();
+    const first = input.nodes[0];
+    walk(input.root, (n) => {
+      if (n.id === input.root.id || skip.has(n.id) || n.end >= first.start) return;
+      for (const c of runsOf(n)) furthest.set(sourceKey(c), Math.max(furthest.get(sourceKey(c)) ?? 0, c.itemTo!));
+    });
+    for (const node of input.nodes) {
+      for (const [k, { id, positions }] of bySource(runsOf(node))) {
+        const [lo, hi] = [Math.min(...positions), Math.max(...positions)];
+        const far = furthest.get(k) ?? 0;
+        if (lo < far) facts.push(`${itemRun(base(id), lo, hi)} after item ${far} (${label(node)})`);
+        furthest.set(k, Math.max(far, hi));
+      }
+    }
+    if (input.top) {
+      for (const { id, positions } of bySource(input.nodes.flatMap(runsOf)).values()) {
+        const have = new Set(positions);
+        const missing = Array.from({ length: aliases.items(id) }, (_, i) => i + 1).filter((n) => !have.has(n));
+        if (missing.length > 0) facts.push(`${base(id)} ${itemsText(missing)} not reserved`);
+      }
+    }
+  }
+  if (parentNode) {
+    for (const [k, { id, positions }] of bySource(runsOf(parentNode))) {
+      const taken = new Set(
+        input.leaves
+          ? input.nodes.flatMap((n) => (n.practice ?? []).filter((r) => sourceKey(r) === k && r.itemFrom).map((r) => r.itemFrom!))
+          : input.nodes.flatMap((n) => runsOf(n).filter((c) => sourceKey(c) === k).flatMap(itemPositions)),
+      );
+      const missing = [...new Set(positions)].filter((n) => !taken.has(n)).sort((a, b) => a - b);
+      if (missing.length > 0) facts.push(`${itemsText(missing)} of ${base(id)} reserved by ${label(parentNode)} but not assigned`);
+    }
+  }
+  return facts;
+}
+
 /** The backbone chapter numbers a node reads: from chapter references, or from the note of a row without one. */
 function chapterNumbers(node: PlanNode, backbone: CheckMaterial): number[] {
   const out: number[] = [];
@@ -834,7 +1086,8 @@ function chaptersBefore(root: PlanNode, node: PlanNode | undefined, backbone: Ch
 
 /**
  * Every sibling group of a tree through `levelChecks`, in walk order. `nodes` is that walk order without the root, and
- * each breach's `index` points into it, so `dropBreaches(nodes, breaches)` works on the whole tree.
+ * each breach's `index` points into it, so `dropBreaches(nodes, breaches)` works on the whole tree. The rows are saved
+ * ones, so the rules on item lists and reserved sources state facts only (`saved`).
  */
 export function treeChecks(
   root: PlanNode,
@@ -857,7 +1110,7 @@ export function treeChecks(
     // Leaf-ness is the level's, not the node's: a hand-split week is still a week-sized leaf of a week plan.
     const level = group[0].level;
     const leaves = level === "day" || (level === "week" && granularity === "week");
-    const out = levelChecks({ root, nodes: group, leaves, top: n.id === root.id, materials, unknownIds: [], ...shares });
+    const out = levelChecks({ root, nodes: group, leaves, top: n.id === root.id, materials, unknownIds: [], saved: true, ...shares });
     facts.push(...out.facts);
     breaches.push(...out.breaches.map((b) => ({ ...b, index: b.index < 0 ? -1 : position.get(group[b.index].id)! })));
   });
@@ -871,10 +1124,20 @@ export function dropBreaches(nodes: PlanNode[], breaches: Breach[]): string[] {
     if (!DROPPABLE.has(b.kind) || b.index < 0) continue;
     const node = nodes[b.index];
     if (!node) continue;
-    if (b.practice) {
-      const named = b.practice;
-      node.practice = (node.practice ?? []).filter((r) => !named.some((p) => p.format === r.format && p.id === r.id && p.task === r.task));
-      if (node.practice.length === 0) delete node.practice;
+    if (b.practice || b.practiceCovers) {
+      // One row or reservation per entry, the last that matches: a repeated item keeps its first use.
+      for (const p of b.practice ?? []) {
+        const rows = node.practice ?? [];
+        const at = rows.findLastIndex((r) => p.format === r.format && p.id === r.id && p.task === r.task && (p.itemFrom ?? null) === (r.itemFrom ?? null));
+        if (at >= 0) rows.splice(at, 1);
+      }
+      for (const p of b.practiceCovers ?? []) {
+        const covers = node.practiceCovers ?? [];
+        const at = covers.findLastIndex((c) => p.format === c.format && p.id === c.id && (p.itemFrom ?? null) === (c.itemFrom ?? null) && (p.itemTo ?? null) === (c.itemTo ?? null));
+        if (at >= 0) covers.splice(at, 1);
+      }
+      if (node.practice?.length === 0) delete node.practice;
+      if (node.practiceCovers?.length === 0) delete node.practiceCovers;
       out.push(`dropped ${b.names} from ${b.unit}: ${b.kind}`);
       continue;
     }
@@ -956,19 +1219,26 @@ export function keepCoverTiers(next: CoverRef[], before: CoverRef[] | undefined)
 
 /**
  * What a heading's practice reservations become when the model rewrites them. Reservations it wrote back with ids only
- * regain the `task` and `minutes` of the matching one it had before (same format and source); values they already have
- * are kept. The model cannot name a generated reservation: one with no source (`id: null`), or a recall row that cites
- * its reading, which `resolvePracticeCovers` drops since the reading serves no practice of that format (`practiceOf`).
- * Those carry forward unchanged, after the rewritten list. A week split by hand would otherwise lose its rows on any
- * revision.
+ * regain the `task` and `minutes` of the matching one it had before (same format and source, and the same first item for
+ * a run of a listed source); values they already have are kept. One written back without its run takes the run of the
+ * only reservation of that source it had. The model cannot name a generated reservation: one with no source (`id:
+ * null`), or a recall row that cites its reading, which `resolvePracticeCovers` drops since the reading serves no
+ * practice of that format (`practiceOf`). Those carry forward unchanged, after the rewritten list. A week split by hand
+ * would otherwise lose its rows on any revision.
  */
 export function keepPracticeCovers(next: PracticeCover[], before: PracticeCover[] | undefined, practiceOf: (id: string) => PracticeFormat | null): PracticeCover[] {
-  const old = new Map((before ?? []).filter((r) => r.id !== null && (r.task !== undefined || r.minutes !== undefined)).map((r) => [`${r.format}:${r.id}`, r]));
+  const sourced = (before ?? []).filter((r) => r.id !== null && practiceOf(r.id) === r.format);
   const generated = (before ?? []).filter((r) => r.id === null || practiceOf(r.id) !== r.format);
   const restored = next.map((r) => {
-    const o = old.get(`${r.format}:${r.id}`);
+    const same = sourced.filter((o) => o.format === r.format && o.id === r.id);
+    const o = r.itemFrom ? same.find((x) => x.itemFrom === r.itemFrom) : same.length === 1 ? same[0] : same.find((x) => !x.itemFrom);
     if (!o) return r;
-    return { ...r, ...(r.task === undefined && o.task !== undefined ? { task: o.task } : {}), ...(r.minutes === undefined && o.minutes !== undefined ? { minutes: o.minutes } : {}) };
+    return {
+      ...r,
+      ...(r.task === undefined && o.task !== undefined ? { task: o.task } : {}),
+      ...(r.minutes === undefined && o.minutes !== undefined ? { minutes: o.minutes } : {}),
+      ...(!r.itemFrom && o.itemFrom && o.itemTo ? { itemFrom: o.itemFrom, itemTo: o.itemTo } : {}),
+    };
   });
   return [...restored, ...generated];
 }

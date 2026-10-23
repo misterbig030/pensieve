@@ -25,6 +25,12 @@ import { DEFAULT_OUTLINE_MODEL } from "./models";
 import { appModel, type ResolvedModel } from "./resolve";
 import { assignRefs, buildRevisionPrompt, type PlanPromptContext } from "./planPrompt";
 
+/**
+ * A revision writes back saved rows: one of a listed source without an item (saved before item lists) stays, and the
+ * whole-tree checks state it as a fact.
+ */
+const SAVED = { keepUnitemized: true } as const;
+
 export class LockedNodeError extends Error {
   constructor(label: string) {
     super(`The change would touch ${label}, which is already completed. Pick something later in the plan.`);
@@ -84,10 +90,12 @@ export function applyRevision(
     const covers = aliases && unit.covers !== undefined ? keepCoverTiers(resolveCoverRefs(unit.covers, aliases).refs, kept?.covers) : kept?.covers;
     const materials = aliases && unit.materials !== undefined ? resolveMaterialRefs(unit.materials, aliases).refs : kept?.materials;
     const practiceCovers =
-      aliases && unit.practiceCovers !== undefined ? keepPracticeCovers(resolvePracticeCovers(unit.practiceCovers, aliases, split).refs, kept?.practiceCovers, aliases.practice) : kept?.practiceCovers;
+      aliases && unit.practiceCovers !== undefined
+        ? keepPracticeCovers(resolvePracticeCovers(unit.practiceCovers, aliases, split, SAVED).refs, kept?.practiceCovers, aliases.practice)
+        : kept?.practiceCovers;
     const practice =
       aliases && unit.practice !== undefined
-        ? resolvePracticeRefs(unit.practice, aliases, split, (materials ?? []).map((r) => r.id)).refs
+        ? resolvePracticeRefs(unit.practice, aliases, split, (materials ?? []).map((r) => r.id), SAVED).refs
         : kept?.practice;
     return makeNode({
       id: kept?.id,

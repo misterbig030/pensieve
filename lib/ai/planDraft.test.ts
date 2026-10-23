@@ -14,6 +14,7 @@ import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
 import { aliasMaterials } from "@/lib/materials";
 import { makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import { AIE_MATERIALS, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
+import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
 import { DEFAULT_HOURS_PER_WEEK } from "@/lib/studyTime";
 
 const mockedStreamObject = vi.mocked(streamObject);
@@ -696,5 +697,49 @@ describe("practice while drafting", () => {
     );
     expect(node.practiceCovers).toEqual([{ format: "problem-set", id: "M2", note: "Arrays & Hashing" }]);
     expect(node.practice).toBeUndefined();
+  });
+});
+
+describe("item lists while drafting", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+  });
+  const materials = [material("M1"), material("M2", { kind: "course", practice: LISTED_PROBLEMS })];
+  const split = { readingShare: 50, practice: "problems", reason: "r", formats: [{ format: "problem-set" as const, share: 100, focus: "arrays", reason: "" }] };
+  const ctx = { topic: "Interviews", weeks: 1, daysPerWeek: 5, granularity: "week" as const, materials, hoursPerWeek: 6, split };
+  const row = (n: number) => ({ format: "problem-set" as const, id: "M2", task: PROBLEM_ITEMS[n - 1].title, done: "solved", minutes: 15, generated: false, itemFrom: n, itemTo: n });
+
+  it("a week split by hand keeps each item as a one-item reservation", async () => {
+    // A week leaf that did items 1–3 (easy, 15 min each) is split into three days.
+    const tree = makeRoot([makeNode({ id: "w1", level: "week", title: "Arrays", summary: "s", len: 5, budgetHours: 6, practice: [row(1), row(2), row(3)] })]);
+    const units: UnitDraft[] = [1, 2, 3].map((n) => ({ title: `D${n}`, summary: "s", practice: [{ format: "problem-set", id: `M2.${n}`, task: PROBLEM_ITEMS[n - 1].title, done: "solved", minutes: 30 }] }));
+    mockedStreamObject.mockReturnValueOnce(fakeStream(units));
+    const calls: ModelCall[] = [];
+    let children: PlanNode[] = [];
+    for await (const e of streamExpandNode({ ...ctx, tree, nodeId: "w1", reason: "split", splitDays: 3, log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") children = e.children;
+    const prompt = (mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain("Reserved for this unit: M2 items 1–3; the items not yet done are below, one row each.");
+    expect(prompt).toContain("  M2.2 242. Valid Anagram · Arrays & Hashing · easy · 15 min");
+    // Each day keeps its item, timed by the item; nothing breaches, so there is no retry.
+    expect(children.map((c) => c.practice)).toEqual([[row(1)], [row(2)], [row(3)]]);
+    expect(mockedStreamObject).toHaveBeenCalledTimes(1);
+    expect(calls[0].facts.filter((f) => f.startsWith("breach") || f.includes("not assigned"))).toEqual([]);
+  });
+
+  it("refuses a day's item outside its week's reservation and drops it after the retry", async () => {
+    const tree = makeRoot([makeNode({ id: "w1", level: "week", title: "Arrays", summary: "s", len: 5, budgetHours: 6, practice: [row(1), row(2)] })]);
+    const units: UnitDraft[] = [
+      { title: "D1", summary: "s", practice: [{ format: "problem-set", id: "M2.1", task: "Contains Duplicate", done: "solved", minutes: 15 }] },
+      { title: "D2", summary: "s", practice: [{ format: "problem-set", id: "M2.9", task: "Longest Consecutive Sequence", done: "solved", minutes: 25 }, { format: "problem-set", id: "M2", task: "Arrays, problems 2–3", done: "solved", minutes: 30 }] },
+    ];
+    mockedStreamObject.mockReturnValueOnce(fakeStream(units)).mockReturnValueOnce(fakeStream(units));
+    const calls: ModelCall[] = [];
+    let children: PlanNode[] = [];
+    for await (const e of streamExpandNode({ ...ctx, tree, nodeId: "w1", reason: "split", splitDays: 2, log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") children = e.children;
+    expect(calls[0].facts).toContain('breach: Week 1 · Day 2 assigns Problems M2.9 "Longest Consecutive Sequence", which Week 1 did not reserve');
+    expect(calls[0].facts).toContain("dropped unknown M2");
+    expect(calls[1].facts).toContain('dropped Problems M2.9 "Longest Consecutive Sequence" from Week 1 · Day 2: practice-outside');
+    expect(calls[1].facts).toContain("item 2 of M2 reserved by Week 1 but not assigned");
+    expect(children.map((c) => c.practice)).toEqual([[row(1)], undefined]);
   });
 });

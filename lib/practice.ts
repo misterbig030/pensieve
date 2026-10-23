@@ -133,6 +133,45 @@ export function itemMinutes(format: PracticeFormat, item: PracticeItem): number 
   return spec.perItemMinutes ?? spec.fixedMinutes ?? 10;
 }
 
+/** The positions `from` to `to`, inclusive; none when either is missing. */
+export function itemPositions(run: { itemFrom?: number | null; itemTo?: number | null }): number[] {
+  if (!run.itemFrom || !run.itemTo || run.itemTo < run.itemFrom) return [];
+  return Array.from({ length: run.itemTo - run.itemFrom + 1 }, (_, i) => run.itemFrom! + i);
+}
+
+/** Runs of consecutive numbers, sorted and deduplicated: [3, 5, 6] → [[3, 3], [5, 6]]. */
+export function numberRuns(numbers: Iterable<number>): [number, number][] {
+  const out: [number, number][] = [];
+  for (const n of [...new Set(numbers)].sort((a, b) => a - b)) {
+    const last = out.at(-1);
+    if (last && n === last[1] + 1) last[1] = n;
+    else out.push([n, n]);
+  }
+  return out;
+}
+
+/** "3, 5–6": runs of consecutive numbers joined. */
+export function formatRuns(numbers: Iterable<number>): string {
+  return numberRuns(numbers)
+    .map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`))
+    .join(", ");
+}
+
+/**
+ * A list's groups in order of first appearance, each with every position holding an item of that name (a name that
+ * comes back later in the list is one group, `[1–9, 40–42]`); items without a group share one, named null.
+ */
+export function listGroups(items: PracticeItem[]): { name: string | null; positions: number[]; items: PracticeItem[] }[] {
+  const groups = new Map<string | null, { name: string | null; positions: number[]; items: PracticeItem[] }>();
+  items.forEach((item, i) => {
+    const group = groups.get(item.group) ?? { name: item.group, positions: [], items: [] };
+    group.positions.push(i + 1);
+    group.items.push(item);
+    groups.set(item.group, group);
+  });
+  return [...groups.values()];
+}
+
 /** Whether a format comes in whole blocks of a fixed size (mock, design-exercise), budgeted over the plan, not per week. */
 export function isBlockFormat(format: PracticeFormat): boolean {
   return PRACTICE_REGISTRY[format].fixedMinutes !== null;

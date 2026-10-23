@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot, type NewNodeInput } from "@/lib/planTree";
 import { aliasMaterials } from "@/lib/materials";
 import { AIE_MATERIALS, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
-import type { ChapterList, Material } from "@/lib/schemas/material";
+import type { ChapterList, Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
+import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
 import { assignRefs, buildPlanChatSystemPrompt, buildRevisionPrompt, buildUnitsPrompt, practiceTag, renderChapters, renderMaterials, renderRefs, renderTree } from "./planPrompt";
 
 function tree() {
@@ -540,5 +541,88 @@ describe("practice in prompts", () => {
         A,
       ),
     ).toBe("practises Problems M2 40 min: Arrays 1–6; Recall M1 generated 15 min: Six questions");
+  });
+});
+
+describe("listed practice sources in prompts", () => {
+  // M1 the backbone, M2 a 21-problem list (Arrays & Hashing 1–9, Two Pointers 10–14, Stack 15–21), M3 a list without items.
+  const LISTED: Material = { ...MATERIALS[1], id: "P", kind: "course", title: "NeetCode 150", practice: LISTED_PROBLEMS };
+  const UNLISTED: Material = { ...MATERIALS[1], id: "Q", kind: "course", title: "Graph drills", practice: { format: "problem-set", items: 40, perItemMinutes: 10, minutes: null, answers: true } };
+  const materials = [MATERIALS[0], LISTED, UNLISTED];
+  const split = { readingShare: 50, practice: "problems", reason: "", formats: [{ format: "problem-set" as const, share: 100, focus: "arrays and hashing", reason: "" }] };
+  const reserve = (from: number, to: number, id = "P"): PracticeCover => ({ format: "problem-set", id, note: null, itemFrom: from, itemTo: to });
+  const item = (n: number): PracticeRef => ({ format: "problem-set", id: "P", task: `Problem ${n}`, done: "solved", minutes: 25, generated: false, itemFrom: n, itemTo: n });
+  const week = (id: string, extra: Partial<NewNodeInput> = {}) => makeNode({ id, level: "week", title: id, summary: "s", len: 5, ...extra });
+  const days = (tree: ReturnType<typeof makeRoot>, parentId: string) =>
+    buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "day", spans: [1, 1, 1, 1, 1], weeks: 3, daysPerWeek: 5, hoursPerWeek: 6, split, tree: layout(tree), parentId, unitsAreLeaves: true });
+
+  it("reserves item ranges in list order across weeks", () => {
+    const top = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "week", spans: [5, 5, 5], weeks: 3, daysPerWeek: 5, hoursPerWeek: 6, split, unitsAreLeaves: false });
+    // The list is shown by group with positions and minutes under its source, never by title; its time is per item.
+    expect(top).toContain('M2 [course · practice: Problems · 21 problems · answers · the learner\'s own] "NeetCode 150"');
+    expect(top).toContain("\n  M2 items 1–9 Arrays & Hashing (3.3 h); 10–14 Two Pointers (2.1 h); 15–21 Stack (2.9 h)\n");
+    expect(top).not.toContain("Group Anagrams");
+    expect(top).toContain("A source with an item list is reserved by positions instead, as { format, id, from, to }: a run of its items, from and to inclusive.");
+    // Six hours, half of it practice, all problems: 3 h a week.
+    expect(top).toContain(
+      '- Problems (format "problem-set"), aimed at arrays and hashing: M2 by item positions, from item 1: each unit reserves the next run, starting after the item where the unit before it ends, every item in exactly one unit; size a unit\'s run to its weeks\' Problems time, about 3 h a week, at the items\' minutes. Also M3.',
+    );
+    expect(top).not.toMatch(/\d+\s*%[^\n]*Problems/);
+    // A month's weeks continue inside the month's run, from where its earlier reservations end.
+    const m1 = makeNode({ id: "m1", level: "month", title: "M", summary: "s", len: 10, practiceCovers: [reserve(10, 21)] });
+    const inside = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "week", spans: [5, 5], weeks: 2, daysPerWeek: 5, hoursPerWeek: 6, split, tree: layout(makeRoot([m1])), parentId: "m1", unitsAreLeaves: false });
+    expect(inside).toContain('- Problems (format "problem-set"), aimed at arrays and hashing: from this unit\'s reservation, M2 items 10–21, from item 10: each unit reserves the next run,');
+    expect(inside).not.toContain("Also M3");
+  });
+
+  it("lists a week's reserved items to its days", () => {
+    // Week 2 reserved items 3–6; item 3 was saved on a day of week 1, so its days get 4–6.
+    const tree = makeRoot([week("w1", { children: [makeNode({ id: "d1", level: "day", title: "D", summary: "s", len: 1, practice: [item(3)] })] }), week("w2", { practiceCovers: [reserve(3, 6)] })]);
+    const prompt = days(tree, "w2");
+    expect(prompt).toContain("Reserved for this unit: M2 items 3–6; the items not yet done are below, one row each.");
+    const lines = prompt.split("\n");
+    const at = lines.findIndex((l) => l.startsWith('- Problems (format "problem-set")'));
+    expect(lines.slice(at + 1, at + 4)).toEqual([
+      "  M2.4 49. Group Anagrams · Arrays & Hashing · medium · 25 min",
+      "  M2.5 347. Top K Frequent Elements · Arrays & Hashing · medium · 25 min",
+      "  M2.6 271. Encode and Decode Strings · Arrays & Hashing · medium · 25 min",
+    ]);
+    expect(prompt).not.toContain("M2.3 1. Two Sum");
+    // Listed items are timed by their own lines, not by the format's single per-item figure.
+    expect(lines[at]).toContain("Each listed item takes the minutes on its line.");
+    expect(lines[at]).not.toContain("about 10 min each");
+    expect(prompt).toContain('A listed item is one row: id is the item\'s own ("M2.4"), task may restate its title, minutes are its minutes; never an item not listed for the unit, and never one item twice.');
+    // A plan with no reservations offers each unit the items no unit has done yet, in list order.
+    const free = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "day", spans: [1, 1, 1, 1, 1], weeks: 1, daysPerWeek: 5, hoursPerWeek: 6, split, unitsAreLeaves: true });
+    expect(free).toContain("Sources: M2, M3. M2's items not yet done are below, in list order: take them in order, one row each.");
+    expect(free).toContain("  M2.1 217. Contains Duplicate · Arrays & Hashing · easy · 15 min");
+    expect(free).toContain("  M2.21 84. Largest Rectangle in Histogram · Stack · hard · 35 min");
+  });
+
+  it("keeps a source reserved elsewhere out of an unreserved week", () => {
+    const tree = makeRoot([week("w1"), week("w2", { practiceCovers: [reserve(1, 21), { format: "problem-set", id: "Q", note: "Graphs" }] })]);
+    const prompt = days(tree, "w1");
+    expect(prompt).toContain("This unit reserves no Problems source, and every one is reserved by other units: write no Problems rows.");
+    expect(prompt).not.toContain("Sources: M2");
+    expect(prompt).not.toContain("M2.1 217.");
+    // Only the sources no heading reserves are offered.
+    const some = days(makeRoot([week("w1"), week("w2", { practiceCovers: [reserve(1, 21)] })]), "w1");
+    expect(some).toContain("Sources: M3.");
+    expect(some).not.toContain("M2.1 217.");
+    // A week split by hand reserves only what it did itself, so the others still offer its source.
+    const done = makeNode({ id: "e1", level: "day", title: "D", summary: "s", len: 1, practice: [item(5)] });
+    const handSplit = days(makeRoot([week("w1"), week("w2", { manualSplit: true, practiceCovers: [reserve(5, 5)], children: [done] })]), "w1");
+    expect(handSplit).toContain("Sources: M2, M3.");
+    expect(handSplit).toContain("  M2.4 49. Group Anagrams");
+    expect(handSplit).not.toContain("M2.5 347.");
+  });
+
+  it("names item rows and runs in the plan so far", () => {
+    const A = aliasMaterials(materials);
+    expect(renderRefs({ practiceCovers: [reserve(1, 9)] }, A)).toBe("practice covers Problems M2 items 1–9");
+    expect(renderRefs({ practice: [{ ...item(4), task: "Group Anagrams" }] }, A)).toBe("practises Problems M2.4 25 min: Group Anagrams");
+    const root = makeRoot([week("w1", { practiceCovers: [reserve(1, 9)] })]);
+    const revision = buildRevisionPrompt({ topic: "t", materials, granularity: "day", daysPerWeek: 5, split, tree: root, refs: assignRefs(root), lockBefore: 0, changeRequest: "x" });
+    expect(revision).toContain("A source with an item list is reserved by a run, { format, id, from, to }, and done one item per row, id the item's own (M2.1).");
   });
 });
