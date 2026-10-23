@@ -481,7 +481,7 @@ export async function* streamResearchedPlanDraft(input: StreamResearchedDraftInp
     yield { type: "split", split };
   }
   const outcome = yield* researchMaterials({
-    brief: { topic: input.topic, instructions: input.instructions, weeks: input.weeks, daysPerWeek: input.daysPerWeek, hoursPerWeek: input.hoursPerWeek, sources: input.materials, split },
+    brief: { topic: input.topic, instructions: input.instructions, weeks: input.weeks, daysPerWeek: input.daysPerWeek, hoursPerWeek: input.hoursPerWeek, sources: input.materials },
     arm: input.arm,
     signal: input.signal,
     log: input.log,

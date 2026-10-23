@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
-import { PRACTICE_REGISTRY, type PracticePick } from "@/lib/practice";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
-import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, readingHours } from "./agent";
+import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, practiceLines } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
 import { isThin, researchMaterials, streamWhile, verifiedReading } from "./pipeline";
@@ -374,71 +374,56 @@ describe("research prompts", () => {
   });
 });
 
-const PICKS: PracticePick[] = [
-  { format: "problem-set", share: 70, focus: "graph problems", reason: "r" },
-  { format: "lab", share: 30, focus: "git branching", reason: "r" },
-];
-const splitOf = (formats: PracticePick[]) => ({ readingShare: 60, practice: "problems", formats, reason: "r" });
-
-describe("the practice picks in the research prompts", () => {
+describe("practice in the research prompts", () => {
   const caps: ResearchCaps = { steps: 8, searches: 3, fetches: 6, wallMs: 60_000 };
 
-  it("adds a practice step to arm A's work order only when the plan has picks", () => {
-    const text = buildResearchInstructions(caps, undefined, undefined, undefined, PICKS);
-    expect(text).toContain("\n6. Practice");
-    for (const pick of PICKS) expect(text).toContain(`${PRACTICE_REGISTRY[pick.format].research} for: ${pick.focus}`);
-    expect(text).not.toContain("not by you");
-    expect(text.indexOf("5. Size")).toBeLessThan(text.indexOf("6. Practice"));
-    // The candidates step holds what is read to the plan's reading time, so the work order says the same.
-    expect(text).toContain("only the reading part of the study time goes to what the list asks the learner to read");
-    expect(text).not.toContain("a list that takes longer than that to get through is too long");
-    const plain = buildResearchInstructions(caps);
-    expect(plain).toContain("The learner's total study time is in the brief; a list that takes longer than that to get through is too long.");
-    expect(plain).not.toContain("Practice");
-    // The split is picked before research, so it is decided already, all reading when there are no picks.
-    expect(plain).toContain("How the learner's time divides between reading and practice is already decided, not by you.");
-    expect(plain).not.toContain("decided later");
-    expect(buildResearchInstructions(caps, undefined, undefined, undefined, [])).toBe(plain);
+  it("lists one line per registry format, with its label, format id and research line", () => {
+    const lines = practiceLines();
+    expect(lines).toHaveLength(PRACTICE_FORMATS.length);
+    for (const f of PRACTICE_FORMATS) expect(lines).toContain(`- ${PRACTICE_REGISTRY[f].label} (${f}): ${PRACTICE_REGISTRY[f].research}`);
   });
 
-  it("asks for a practice draft on candidates and the learner's sources, and lists unmet picks as open", () => {
-    const prompt = buildFinalPrompt({ topic: "T", weeks: 4, sources: [], split: splitOf(PICKS) }, "notes");
+  it("always asks arm A for practice, of the kinds the topic calls for", () => {
+    const text = buildResearchInstructions(caps);
+    expect(text).toContain("\n6. Practice");
+    expect(text.indexOf("5. Size")).toBeLessThan(text.indexOf("6. Practice"));
+    expect(text).toContain("the kinds of practice this topic calls for");
+    expect(text).toContain("skipping kinds it doesn't need");
+    for (const line of practiceLines()) expect(text).toContain(line);
+    expect(text).toContain("How the learner's time divides between reading and practice is decided after research, from what you find; you also look for the practice sources.");
+    expect(text).not.toContain("already decided");
+    expect(text).not.toContain("not by you");
+    expect(text).toContain("The learner's total study time is in the brief; a list that takes longer than that to get through is too long.");
+    expect(text).not.toContain("only the reading part of the study time");
+  });
+
+  it("asks for a practice draft on candidates and the learner's sources, naming every registry format", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 4, sources: [] }, "notes");
     expect(prompt).toContain("- practice:");
-    expect(prompt).toContain("problem-set (Problems): graph problems");
-    expect(prompt).toContain("lab (Lab): git branching");
+    for (const f of PRACTICE_FORMATS) expect(prompt).toContain(`${f} (${PRACTICE_REGISTRY[f].label})`);
     expect(prompt).toContain("items: the problems, questions, labs or steps");
     expect(prompt).toContain("perItemMinutes: only when the page states a time per item");
     expect(prompt).toContain("answers: true only when the source gives solutions, an answer key, worked solutions or a rubric");
     expect(prompt).toContain("minutes are null unless the plan would also read it");
     expect(prompt).toContain("A wrong answers: false removes the tag");
-    expect(prompt).toContain('"practice: <label>"');
-    expect(prompt).toContain("practice: Problems");
+    expect(prompt).toContain('a kind of practice the topic needs that nothing serves goes in "open" as "practice: <label>"');
   });
 
-  it("leaves the final prompt as it was without picks, but for the reading cap", () => {
-    const base = buildFinalPrompt({ topic: "T", weeks: 4, sources: [] }, "notes");
-    expect(base).not.toContain("practice");
-    expect(base).toContain("must not exceed 24 hours");
-    // 60% of 24 hours.
-    expect(buildFinalPrompt({ topic: "T", weeks: 4, sources: [], split: splitOf([]) }, "notes")).toBe(base.replace("must not exceed 24 hours", "must not exceed 14 hours"));
-  });
-
-  it("caps the candidates' reading at the plan's reading hours, not all its study hours", () => {
-    // An SDE interview loop: 8 weeks at 6 hours, a quarter of it reading, drafted about 31 hours of reading.
-    const brief = { topic: "T", weeks: 8, hoursPerWeek: 6, sources: [], split: { ...splitOf(PICKS), readingShare: 25 } };
-    expect(readingHours(brief)).toBe(12);
-    const prompt = buildFinalPrompt(brief, "notes");
+  it("caps the candidates' minutes at all study hours again and lists materials whole", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 8, hoursPerWeek: 6, sources: [] }, "notes");
     expect(prompt).toContain("48 hours of study in all");
-    expect(prompt).toContain("together the minutes of what the plan reads or watches must not exceed 12 hours, the plan's reading time; practice-only sources have no minutes and do not count");
-    expect(readingHours({ weeks: 8, hoursPerWeek: 6 })).toBe(48);
-    expect(readingHours({ ...brief, split: { ...brief.split, readingShare: 100 } })).toBe(48);
-    expect(readingHours({ ...brief, split: { ...brief.split, readingShare: 0 } })).toBe(1);
+    expect(prompt).toContain("must not exceed 48 hours");
+    expect(prompt).not.toContain("the plan's reading time");
+    expect(prompt).toContain("list each material at its whole size");
+    expect(prompt).toContain("which part the plan uses is decided after research");
+    expect(prompt).toContain("When the notes name a leading book, list it first even when the whole book runs past the time");
+    expect(prompt).not.toContain("the part this plan would use takes");
   });
 
-  it("gives arm A the picks of the brief's split", async () => {
+  it("gives arm A the practice step whatever the brief", async () => {
     const { model, calls } = scriptedModel([{ text: "Done." }], [LIST]);
     const { fetcher } = fetcherFor();
-    await collect(researchMaterials({ brief: { ...brief, split: splitOf(PICKS) }, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
+    await collect(researchMaterials({ brief, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
     const system = calls.map((c) => c.prompt.find((m) => m.role === "system")?.content).find((c) => typeof c === "string" && c.includes("You gather"));
     expect(system).toContain("6. Practice");
   });

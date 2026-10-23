@@ -86,9 +86,9 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
   const started = performance.now();
 
   const input = draftRequestOf(record.input);
-  // The practice is picked before research, as in the app, and the draft below keeps that split.
+  // The practice is picked before research, as in the app (until the allocation replaces it); research gets no split, and the draft below keeps this one.
   const picked = await pickPractice({ ...input, model: appModel(DEFAULT_OUTLINE_MODEL), log });
-  const research = researchMaterials({ brief: { ...input, split: picked.split }, arm: armFor(arm), log });
+  const research = researchMaterials({ brief: { ...input }, arm: armFor(arm), log });
   let next = await research.next();
   while (!next.done) next = await research.next();
   const outcome = next.value;

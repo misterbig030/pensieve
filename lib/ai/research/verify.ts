@@ -647,7 +647,11 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     const uses = clip(c.uses, 120);
     // The page's own length counts only when the candidate's own page was read, not its catalogue entry.
     const ownPage = outcome.ok && checkPage(c, outcome, threshold).ok ? outcome.page : null;
-    const size = { ...sizeFields({ kind: c.kind, uses, claimedMinutes: c.minutes, words: ownPage?.words, durationMinutes: ownPage?.durationMinutes, bookPages }), uses };
+    // A practice-only source is sized by its practice, never by its page: a course video's runtime is not reading.
+    const size =
+      c.practice && c.minutes == null
+        ? { minutes: null, minutesBasis: null, uses }
+        : { ...sizeFields({ kind: c.kind, uses, claimedMinutes: c.minutes, words: ownPage?.words, durationMinutes: ownPage?.durationMinutes, bookPages }), uses };
 
     const practice = c.practice ? normalizePractice(c.practice) : null;
 

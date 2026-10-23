@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
-import { PRACTICE_REGISTRY, type PracticePick } from "@/lib/practice";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
 import { initialResearch, reduceResearch } from "@/lib/researchProgress";
@@ -12,7 +12,7 @@ import type { PageInfo } from "./extract";
 import { defaultArm, researchMaterials } from "./pipeline";
 import { ResearchNotes, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
 import type { BookLookup, CandidateList } from "./verify";
-import { DEADLINE_SHARE, buildWorkerInstructions, createWorkersArm, duplicateShare, foldStopReason, mergeNotes, splitCaps } from "./workers";
+import { DEADLINE_SHARE, PRACTICE_RESEARCH_KINDS, buildWorkerInstructions, createWorkersArm, duplicateShare, foldStopReason, mergeNotes, splitCaps } from "./workers";
 
 const usage = {
   inputTokens: { total: 100, noCache: 100, cacheRead: undefined, cacheWrite: undefined },
@@ -179,7 +179,6 @@ describe("splitCaps with practice", () => {
       expect(plans.reduce((n, p) => n + p.caps.fetches, 0)).toBe(caps.fetches);
       expect(plans.every((p) => p.caps.searches >= 1 && p.caps.fetches >= 1)).toBe(true);
       expect(plans.every((p) => p.caps.wallMs === Math.round(caps.wallMs * DEADLINE_SHARE))).toBe(true);
-      expect(plans.at(-1)?.picks).toBeUndefined();
     }
   });
 
@@ -239,19 +238,17 @@ describe("buildWorkerInstructions", () => {
     expect(r).toContain("Budget: 1 search, 3 page reads and 2 steps in all");
     for (const text of [b, c, r]) expect(text).toContain(RESEARCH_RULES);
   });
-  it("tells the practice worker what to look for, pick by pick, and to keep to practice sources", () => {
-    const picks: PracticePick[] = [
-      { format: "problem-set", share: 60, focus: "dynamic programming", reason: "r" },
-      { format: "mock", share: 40, focus: "system design rounds", reason: "r" },
-    ];
-    const practice = splitCaps(capsFor(72), picks.length).find((p) => p.direction === "practice")!;
-    const text = buildWorkerInstructions({ ...practice, picks });
+  it("tells the practice worker every kind of practice, to choose the ones the topic needs, and to keep to practice sources", () => {
+    const practice = splitCaps(capsFor(48), PRACTICE_RESEARCH_KINDS).find((p) => p.direction === "practice")!;
+    const text = buildWorkerInstructions(practice);
     expect(text.startsWith("Direction: practice.\n")).toBe(true);
-    for (const pick of picks) expect(text).toContain(`${PRACTICE_REGISTRY[pick.format].research} for: ${pick.focus}`);
+    for (const f of PRACTICE_FORMATS) expect(text).toContain(`- ${PRACTICE_REGISTRY[f].label} (${f}): ${PRACTICE_REGISTRY[f].research}`);
+    expect(text).toContain("the kinds of practice this topic calls for, skipping kinds it doesn't need");
+    expect(text).not.toContain("for: ");
     expect(text).toContain("Boundaries: practice sources only");
     expect(text).toContain("Prefer ones that come with answers");
-    expect(text).toContain("Budget: 2 searches, 3 page reads and 3 steps in all");
-    expect(text).toContain("one search for each kind of practice");
+    expect(text).toContain("Budget: 4 searches, 5 page reads and 3 steps in all");
+    expect(text).toContain("one search for each kind you choose");
     expect(text).toContain("In the third, read the readable copy of any page that came back nearly empty");
     expect(text).toContain("Do not write notes");
     expect(text).toContain(RESEARCH_RULES);
@@ -270,7 +267,7 @@ describe("buildWorkerInstructions", () => {
 });
 
 describe("arm W through the pipeline", () => {
-  it("reads the learner's links first, runs the three directions at once and merges their notes", async () => {
+  it("reads the learner's links first, runs the four directions at once and merges their notes", async () => {
     const { model, calls } = directedModel(SCRIPTS, [LIST]);
     const { fetcher, fetchPage } = fetcherFor();
     const log: ModelCall[] = [];
@@ -286,19 +283,22 @@ describe("arm W through the pipeline", () => {
     ]);
     const searches = events.filter((e) => e.type === "research.search");
     expect(new Set(searches.map((e) => e.worker))).toEqual(new Set(["backbone", "canonical", "current"]));
-    expect(events.filter((e) => e.type === "research.fetch" && e.worker === "canonical")).toHaveLength(2);
+    expect(new Set(events.filter((e) => e.type === "research.search" || e.type === "research.fetch").map((e) => e.worker))).not.toContain("practice");
+    // The practice worker takes canonical's second read: a worker past its share is refused.
+    expect(events.filter((e) => e.type === "research.fetch" && e.worker === "canonical")).toHaveLength(1);
     // Every worker was told what the learner's source is.
     const firstSteps = calls.filter((c) => directionOf(c) && !c.prompt.some((m) => m.role === "assistant"));
-    expect(firstSteps.map(directionOf).sort()).toEqual(["backbone", "canonical", "current"]);
+    expect(firstSteps.map(directionOf).sort()).toEqual(["backbone", "canonical", "current", "practice"]);
     for (const c of firstSteps) expect(userText(c)).toContain('title "My notes page"');
     // The cache: learner page once, the three pages the workers read once each, the gate reads nothing again.
     expect(fetchPage).toHaveBeenCalledTimes(4);
-    expect(outcome.arm?.counts).toEqual({ steps: 7, searches: 3, fetches: 4 });
+    expect(outcome.arm?.counts).toEqual({ steps: 8, searches: 3, fetches: 3 });
     expect(outcome.arm?.stoppedBy).toBe("model");
     expect(outcome.arm?.workers?.map((w) => [w.direction, w.steps, w.searches, w.fetches, w.stoppedBy])).toEqual([
       ["backbone", 3, 1, 1, "model"],
-      ["canonical", 2, 1, 2, "steps"],
+      ["canonical", 2, 1, 1, "steps"],
       ["current", 2, 1, 0, "steps"],
+      ["practice", 1, 0, 0, "model"],
     ]);
     expect(outcome.arm?.duplicateShare).toBe(1); // the fake provider returns the same two URLs to every query
     // The candidate step sees every direction under its heading, and the learner's source.
@@ -322,38 +322,29 @@ describe("arm W through the pipeline", () => {
     expect(state.reads).toBe(4);
   });
 
-  it("runs a practice worker when the brief's split has picks, and hands the picks to it alone", async () => {
-    const picks: PracticePick[] = [{ format: "problem-set", share: 100, focus: "graph problems", reason: "r" }];
-    const split = { readingShare: 60, practice: "problems", formats: picks, reason: "r" };
+  it("always runs a practice worker with the fixed allowance, whatever the brief", async () => {
     const { model, calls } = directedModel({ ...SCRIPTS, practice: [{ calls: [{ tool: "webSearch", input: { query: "graph problems with solutions" } }] }, { text: "Done." }] }, [LIST]);
     const { fetcher } = fetcherFor();
-    const { events, outcome } = await collect(researchMaterials({ brief: { ...brief, split }, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }));
+    const { events, outcome } = await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }));
     expect(outcome.arm?.workers?.map((w) => w.direction)).toEqual(["backbone", "canonical", "current", "practice"]);
     expect(events.filter((e) => e.type === "research.search" && e.worker === "practice")).toHaveLength(1);
     const system = (direction: string) => String(calls.find((c) => directionOf(c) === direction)!.prompt.find((m) => m.role === "system")?.content);
-    expect(system("practice")).toContain("for: graph problems");
-    expect(system("canonical")).not.toContain("graph problems");
+    for (const f of PRACTICE_FORMATS) expect(system("practice")).toContain(`(${f}):`);
+    expect(system("canonical")).not.toContain("kinds of practice");
+    // The allowance does not depend on a decision not yet made: the 72-hour band gives the practice worker as if four kinds.
+    expect(system("practice")).toContain("Budget: 4 searches, 5 page reads and 3 steps in all");
     const prompt = candidatePrompt(calls);
     expect(prompt).toContain("Practice sources:");
-    expect(prompt).toContain("problem-set");
   });
 
-  it("runs the three directions as before when the split has no picks", async () => {
-    const split = { readingShare: 100, practice: "none", formats: [], reason: "r" };
-    const { model } = directedModel(SCRIPTS, [LIST]);
-    const { fetcher } = fetcherFor();
-    const { outcome } = await collect(researchMaterials({ brief: { ...brief, split }, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }));
-    expect(outcome.arm?.workers?.map((w) => w.direction)).toEqual(["backbone", "canonical", "current"]);
-  });
-
-  it("runs two workers at the smallest band, canonical covering recent material", async () => {
+  it("runs backbone and canonical, with canonical covering recent material, and the practice worker at the smallest band", async () => {
     const { model, calls } = directedModel(SCRIPTS, [LIST]);
     const { fetcher } = fetcherFor();
     const { events, outcome } = await collect(
       researchMaterials({ brief: { ...brief, weeks: 1, hoursPerWeek: 3 }, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }),
     );
     expect(events[0]).toEqual({ type: "research.start", caps: { searches: 3, fetches: 6, steps: 8 } });
-    expect(outcome.arm?.workers?.map((w) => w.direction)).toEqual(["backbone", "canonical"]);
+    expect(outcome.arm?.workers?.map((w) => w.direction)).toEqual(["backbone", "canonical", "practice"]);
     const canonical = calls.find((c) => directionOf(c) === "canonical")!;
     expect(canonical.prompt.find((m) => m.role === "system")?.content).toContain("last two years");
     expect(candidatePrompt(calls)).toContain("Canonical and recent material:");
@@ -371,12 +362,12 @@ describe("arm W through the pipeline", () => {
     );
     const provider = fakeProvider();
     const { fetcher, fetchPage } = fetcherFor();
-    // No learner links, so the counts are the workers' alone; 4 weeks is the 40-hour band: shares 3, 1 and 1.
+    // No learner links, so the counts are the workers' alone; 4 weeks is the 40-hour band: shares 3, 1 and 1, then the practice worker takes one search from backbone.
     const { outcome } = await collect(researchMaterials({ brief: { ...brief, weeks: 4, sources: [] }, arm: createWorkersArm({ provider, model }), fetcher, books }));
-    // backbone 3 of 5 asked, canonical 1 of 2 asked, current 1: the band's five.
-    expect(provider.search).toHaveBeenCalledTimes(5);
-    expect(provider.search.mock.calls.map((c) => c[0] as string).filter((q) => q.startsWith("b"))).toHaveLength(3);
-    expect(outcome.arm?.counts.searches).toBe(5);
+    // backbone 2 of 5 asked, canonical 1 of 2 asked, current 1, practice (which this script leaves idle) 0.
+    expect(provider.search).toHaveBeenCalledTimes(4);
+    expect(provider.search.mock.calls.map((c) => c[0] as string).filter((q) => q.startsWith("b"))).toHaveLength(2);
+    expect(outcome.arm?.counts.searches).toBe(4);
     // Two workers read the same page: two budget units, one fetch.
     expect(outcome.arm?.counts.fetches).toBe(2);
     expect(fetchPage.mock.calls.filter((c) => c[0] === "https://docs.example.com/a")).toHaveLength(1);
@@ -436,7 +427,7 @@ describe("arm W through the pipeline", () => {
     errors.mockRestore();
     expect(outcome.arm?.stoppedBy).toBe("model");
     expect(outcome.arm?.workers?.find((w) => w.direction === "current")).toMatchObject({ stoppedBy: "search-error", steps: 1, searches: 1 });
-    expect(outcome.arm?.counts).toEqual({ steps: 6, searches: 3, fetches: 4 });
+    expect(outcome.arm?.counts).toEqual({ steps: 7, searches: 3, fetches: 3 });
     expect(outcome.arm?.searchesOk).toBe(3);
     expect(candidatePrompt(calls)).toContain("Core Textbook");
     expect(candidatePrompt(calls)).toContain('Search: "llm engineering 2026"');
@@ -639,7 +630,7 @@ describe("the date in a worker's instructions", () => {
     await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books, log: { onCall: (c) => void log.push(c) } }));
     const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
     const firstSteps = log.filter((c) => c.label?.endsWith("step 1"));
-    expect(firstSteps.length).toBe(3);
+    expect(firstSteps.length).toBe(4);
     for (const c of firstSteps) expect(c.system).toContain(`Today is ${today}.`);
   });
 });

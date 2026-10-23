@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { isPracticeOnly } from "@/lib/materials";
 import type { PageInfo } from "./extract";
 import type { ResearchEvent } from "./events";
 import { signMaterial, verifyMaterialSig } from "./signature";
@@ -673,6 +674,22 @@ describe("practice through the gate", () => {
     const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", practice: { format: "problem-set", items: 6, perItemMinutes: null, answers: true } })] });
     expect(result.materials[0].minutes).toBeNull();
     expect(result.materials[0].practice?.minutes).toBe(60);
+  });
+
+  it("leaves a practice-only source unsized instead of taking its runtime", async () => {
+    // A course video that is the practice source: its 39 hours of runtime are not a reading size.
+    const f = gateFixture({ [url]: info(url, "Exercises", { durationMinutes: 2340 }) });
+    const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", kind: "video", minutes: null, practice: { format: "problem-set", items: 150, perItemMinutes: null, answers: true } })] });
+    expect(result.materials[0].minutes).toBeNull();
+    expect(result.materials[0].minutesBasis).toBeNull();
+    expect(result.materials[0].practice?.minutes).toBe(1500);
+    expect(isPracticeOnly(result.materials[0])).toBe(true);
+  });
+
+  it("still sizes a reading candidate from its page", async () => {
+    const f = gateFixture({ [url]: info(url, "Exercises", { durationMinutes: 59 }) });
+    const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", kind: "video", minutes: 45 })] });
+    expect(result.materials[0]).toMatchObject({ minutes: 59, minutesBasis: "measured" });
   });
 
   it("drops a practice-only candidate whose format needs answers and has none", async () => {

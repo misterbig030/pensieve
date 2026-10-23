@@ -1,5 +1,4 @@
 import type { LanguageModel } from "ai";
-import type { PracticePick } from "@/lib/practice";
 import { hostOf } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
 import { DEFAULT_RESEARCH_MODEL, type AiModelId, type ReasoningEffort } from "../models";
@@ -9,7 +8,6 @@ import {
   todayLine,
   ResearchLoopError,
   briefLines,
-  picksOf,
   practiceLines,
   runCandidateStep,
   runResearchLoop,
@@ -33,6 +31,11 @@ import { mapLimit, normalizeCoverage } from "./verify";
 /** Share of the band's clock the workers get; the rest is for the candidate step. */
 export const DEADLINE_SHARE = 0.75;
 const LEARNER_READ_CONCURRENCY = 6;
+/**
+ * The practice worker's fixed allowance, as if four kinds of practice: it chooses the kinds itself, so its budget
+ * cannot depend on a count decided before it looks.
+ */
+export const PRACTICE_RESEARCH_KINDS = 4;
 
 export interface WorkerPlan {
   direction: WorkerDirection;
@@ -40,8 +43,6 @@ export interface WorkerPlan {
   caps: ResearchCaps;
   /** At the smallest band the canonical worker covers currency too. */
   withCurrent: boolean;
-  /** The practice picks the practice worker looks for; set only on the practice plan. */
-  picks?: PracticePick[];
 }
 
 /**
@@ -135,10 +136,10 @@ const CURRENT_BRIEF = [
   `Boundaries: published within the last two years. No books; another researcher collects them.`,
 ];
 
-const PRACTICE_BRIEF = (picks: PracticePick[]) => [
-  `Objective: sources the learner can practise with, for each kind of practice the plan assigns:`,
-  ...practiceLines(picks),
-  `Strategy: you have three steps. In the first, make all your searches at once, one search for each kind of practice. In the second, read the pages worth reading, all at once, preferring each source's own page, to see whether it gives solutions or an answer key, how many problems, questions or steps it holds, and any time it states per item. In the third, read the readable copy of any page that came back nearly empty (its GitHub repository or a static page that lists the same problems); otherwise stop. ${TWO_STEPS}`,
+const PRACTICE_BRIEF = [
+  `Objective: sources the learner can practise with, for the kinds of practice this topic calls for, skipping kinds it doesn't need:`,
+  ...practiceLines(),
+  `Strategy: you have three steps. In the first, make all your searches at once, one search for each kind you choose. In the second, read the pages worth reading, all at once, preferring each source's own page, to see whether it gives solutions or an answer key, how many problems, questions or steps it holds, and any time it states per item. In the third, read the readable copy of any page that came back nearly empty (its GitHub repository or a static page that lists the same problems); otherwise stop. ${TWO_STEPS}`,
   `Boundaries: practice sources only (problem lists, question banks, labs, exercises, mock tests); other researchers collect the reading. Prefer ones that come with answers, solutions or a rubric. A source's URL is its own page.`,
 ];
 
@@ -151,7 +152,7 @@ export function buildWorkerInstructions(plan: WorkerPlan, today: Date = new Date
       : direction === "canonical"
         ? CANONICAL_BRIEF(plan.withCurrent)
         : direction === "practice"
-          ? PRACTICE_BRIEF(plan.picks ?? [])
+          ? PRACTICE_BRIEF
           : CURRENT_BRIEF;
   return [
     `Direction: ${direction}.`,
@@ -272,8 +273,7 @@ export function createWorkersArm(options: WorkersArmOptions): ResearchArm {
   return async function researchWorkers({ brief, signal, fetcher, emit, log, caps: runCaps }: ArmInput): Promise<ArmResult> {
     const caps = options.caps ?? runCaps ?? RESEARCH_CAPS;
     const learner = await readLearnerLinks(brief.sources, fetcher, emit, signal);
-    const picks = picksOf(brief);
-    const plans = splitCaps(caps, picks.length).map((plan) => (plan.direction === "practice" ? { ...plan, picks } : plan));
+    const plans = splitCaps(caps, PRACTICE_RESEARCH_KINDS);
     const prompt = [...briefLines(brief), ...(learner.fetches.length > 0 ? [LEARNER_HEADING, learner.render()] : [])].join("\n");
 
     // One deadline for every worker, armed once the learner's links are in.

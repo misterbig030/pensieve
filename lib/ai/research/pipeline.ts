@@ -17,7 +17,7 @@ export const THIN_BELOW = 3;
 /**
  * Research is thin when it verified almost nothing to read (`verifiedReading`), or when it left at least as many of
  * the topic's main areas open as it covered. A short list that covers the topic is not thin: a week-long plan needs
- * only a handful. Open practice picks are not areas of the topic, so they do not count.
+ * only a handful. Open practice kinds are not areas of the topic, so they do not count.
  */
 export function isThin(verified: number, coverage: Coverage | null | undefined): boolean {
   if (verified < THIN_BELOW) return true;
