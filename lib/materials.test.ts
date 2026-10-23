@@ -108,6 +108,56 @@ describe("chapter checks", () => {
     expect(chapterGaps([1, 2, 5, 6])).toEqual([3, 4]);
     expect(chapterGaps([])).toEqual([]);
   });
+  it("judges gaps against a cut list's own chapters", () => {
+    expect(chapterGaps([5, 6, 7, 8, 9], [5, 6, 7, 8, 9])).toEqual([]);
+    expect(chapterGaps([5, 6, 7, 9], [5, 6, 7, 8, 9])).toEqual([8]);
+    expect(chapterGaps([5, 7, 9], [5, 6, 7, 9])).toEqual([6]);
+  });
+});
+
+describe("levelChecks on a backbone cut to ch. 5–9", () => {
+  // The allocation kept AIE's chapters 5–9: the list's positions 1–5 are now ch. 5–9.
+  const cut = { ...AIE_TOC, chapters: AIE_TOC.chapters.slice(4, 9) };
+  const materials = AIE_MATERIALS.map((m) => (m.id === "aie" ? { ...m, toc: cut, minutes: 543, uses: "ch. 5–9" } : m));
+  const cover = (chapter: number) => ({ id: "aie", note: null, chapter });
+  const weeks = () => [1, 2, 3, 4, 5].map((p) => makeNode({ id: `w${p}`, level: "week", title: `W${p}`, summary: "s", len: 7, covers: [cover(p)] }));
+  const run = (root: PlanNode, nodes: PlanNode[], leaves: boolean, top: boolean) =>
+    levelChecks({ root, nodes, leaves, top, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 7, split: { readingShare: 40, practice: "projects", reason: "" } });
+
+  it("a top level reserving every kept chapter reports no chapter fact", () => {
+    const nodes = weeks();
+    const root = layout(makeRoot(nodes));
+    expect(run(root, nodes, false, true).facts.filter((f) => f.startsWith("backbone"))).toEqual([]);
+  });
+  it("a top level leaving a kept chapter out names it by its own number", () => {
+    const nodes = weeks();
+    nodes[3].covers = [];
+    const root = layout(makeRoot(nodes));
+    expect(run(root, nodes, false, true).facts).toContain("backbone ch. 8 not reserved");
+  });
+  it("a reservation naming a chapter the plan cut is a fact, not a breach", () => {
+    const nodes = weeks();
+    nodes[4].covers = [cover(5), { id: "aie", note: "ch. 3" }];
+    const root = layout(makeRoot(nodes));
+    const out = run(root, nodes, false, true);
+    expect(out.facts).toContain("backbone ch. 3 reserved outside the kept chapters");
+    expect(out.breaches).toEqual([]);
+  });
+  it("days under a week read the cut list's positions, checked against the week's reservation", () => {
+    const nodes = weeks();
+    const root = layout(makeRoot(nodes));
+    const w2 = root.children![1];
+    w2.children = [1, 2].map((i) => makeNode({ id: `d${i}`, level: "day", title: `D${i}`, summary: "s", len: 1, materials: [{ id: "aie", tier: "must", minutes: 30, note: null, chapter: 2 }] }));
+    layout(root);
+    const ok = run(root, w2.children, true, false);
+    expect(ok.breaches).toEqual([]);
+    expect(ok.facts.filter((f) => f.startsWith("backbone"))).toEqual([]);
+    // Position 1 is ch. 5, which week 1 holds: outside week 2's reservation and an overlap, named by the cut list.
+    w2.children[1].materials = [{ id: "aie", tier: "must", minutes: 30, note: null, chapter: 1 }];
+    const out = run(root, w2.children, true, false);
+    expect(out.breaches.map((b) => b.kind)).toEqual(["outside", "overlap"]);
+    expect(out.facts).toContain("backbone ch. 5 after ch. 6 (Week 2 · Day 2)");
+  });
 });
 
 describe("levelChecks", () => {

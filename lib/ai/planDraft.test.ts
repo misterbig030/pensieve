@@ -167,6 +167,40 @@ describe("streamPlanDraft and the allocation", () => {
     expect(outline).not.toContain("ch. 4");
   });
 
+  it("drafts the top level and a week's days against the cut chapter list, by its positions", async () => {
+    const book = material("M1", {
+      kind: "book",
+      backbone: true,
+      minutes: 600,
+      minutesBasis: "estimated",
+      toc: { source: "catalogue", url: "https://openlibrary.org/books/OL1M", printPages: false, end: null, chapters: Array.from({ length: 10 }, (_, i) => ({ n: i + 1, title: `Chapter ${i + 1}`, page: null, minutes: 60, sections: [] })) },
+    });
+    respondAllocate({ ...ALLOCATION, parts: [{ id: "M1", uses: null, minutes: null, chapters: [5, 6, 7, 8, 9], items: null, drop: false, dropReason: null }] });
+    // The cut list's positions 1–5 are ch. 5–9: each week reserves one, and week 1's days read its chapter.
+    mockedStreamObject
+      .mockReturnValueOnce(fakeStream([1, 2, 3, 4, 5].map((p) => ({ title: `W${p}`, summary: "s", covers: [{ id: `M1.${p}` }] }))))
+      .mockReturnValueOnce(
+        fakeStream(Array.from({ length: 5 }, (_, i) => ({ title: `Day ${i + 1}`, summary: "d", materials: i < 2 ? [{ id: "M1.1", tier: "must" as const, minutes: 30 }] : [] }))),
+      );
+    const calls: ModelCall[] = [];
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "Git", weeks: 5, daysPerWeek: 5, granularity: "day", hoursPerWeek: 5, materials: [book], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+
+    const finish = events.at(-1);
+    if (finish?.type !== "finish") throw new Error("no finish");
+    expect(calls.map((c) => c.label)).toEqual([ALLOCATE_LABEL, "Top level · 5 weeks", expect.stringContaining("Week 1")]);
+    const [top, days] = [calls[1], calls[2]];
+    expect(top.facts!.filter((f) => f.startsWith("backbone"))).toEqual([]);
+    expect(days.facts!.filter((f) => f.startsWith("backbone"))).toEqual([]);
+    expect(finish.root.children!.map((w) => w.covers![0].chapter)).toEqual([1, 2, 3, 4, 5]);
+    expect(finish.root.children![0].children!.slice(0, 2).map((d) => d.materials![0].chapter)).toEqual([1, 1]);
+    // The days' prompt names week 1's reservation by the cut list: ch. 5, not the book's first chapter.
+    const daysPrompt = (mockedStreamObject.mock.calls[1][0] as { prompt: string }).prompt;
+    expect(daysPrompt).toContain("M1.1");
+    expect(daysPrompt).toContain('ch. 5 "Chapter 5"');
+    expect(daysPrompt).not.toContain('"Chapter 1"');
+  });
+
   it("sends the materials the allocation dropped, and drafts without them", async () => {
     respondAllocate({ ...ALLOCATION, parts: [{ id: "M2", uses: null, minutes: null, chapters: null, items: null, drop: true, dropReason: "the book covers it" }] });
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));

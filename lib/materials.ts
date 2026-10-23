@@ -418,13 +418,21 @@ export function chapterRegressions(steps: ChapterStep[]): string[] {
   return out;
 }
 
-/** Chapters between 1 and the last reserved one that no heading reserves. */
-export function chapterGaps(reserved: number[]): number[] {
+/**
+ * Chapters up to the last reserved one that no heading reserves: of the backbone's own chapters when its list is known
+ * (`listed`, which after an allocation holds only the kept ones), else every number from 1.
+ */
+export function chapterGaps(reserved: number[], listed?: number[]): number[] {
   if (reserved.length === 0) return [];
   const have = new Set(reserved);
-  const gaps: number[] = [];
-  for (let c = 1; c <= Math.max(...reserved); c++) if (!have.has(c)) gaps.push(c);
-  return gaps;
+  const last = Math.max(...reserved);
+  const candidates = listed ?? Array.from({ length: last }, (_, i) => i + 1);
+  return [...new Set(candidates)].filter((c) => c <= last && !have.has(c)).sort((a, b) => a - b);
+}
+
+/** The backbone's chapter numbers as the checks name them: each chapter's own number, else its position. */
+function listedChapters(toc: CheckMaterial["toc"]): number[] | undefined {
+  return toc?.chapters.map((c, i) => c.n ?? i + 1);
 }
 
 function formatChapters(chapters: number[]): string {
@@ -768,9 +776,15 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     // Start from where the plan before these units left the backbone, so an expansion continues in order.
     const before = chaptersBefore(input.root, input.nodes[0], backbone);
     facts.push(...chapterRegressions([{ label: "earlier units", chapters: before }, ...steps]));
+    const listed = listedChapters(backbone.toc);
     if (input.top && !input.leaves) {
-      const gaps = chapterGaps(steps.flatMap((s) => s.chapters));
+      const gaps = chapterGaps(steps.flatMap((s) => s.chapters), listed);
       if (gaps.length > 0) facts.push(`backbone ch. ${formatChapters(gaps)} not reserved`);
+    }
+    // A note naming a chapter the list does not hold (one the allocation cut): a fact, not a breach.
+    if (listed) {
+      const outside = [...new Set(steps.flatMap((s) => s.chapters))].filter((c) => !listed.includes(c)).sort((a, b) => a - b);
+      if (outside.length > 0) facts.push(`backbone ch. ${formatChapters(outside)} ${input.leaves ? "read" : "reserved"} outside the kept chapters`);
     }
   }
   return { facts, breaches };
