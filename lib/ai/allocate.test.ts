@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof import("ai")>()), generateObject: vi.fn() }));
 import { APICallError, generateObject } from "ai";
 import { materialSchema, type Material } from "@/lib/schemas/material";
-import { ALL_READING, allocatePlan, applyAllocation, buildAllocationPrompt, type AllocationDraft, type AllocationInput } from "./allocate";
+import { ALL_READING, allocatePlan, applyAllocation, buildAllocationPrompt, fallbackAllocation, type AllocationDraft, type AllocationInput } from "./allocate";
+import { ALLOCATE_EFFORT } from "./models";
 import type { ModelCall } from "./logged";
 import { renderChapters } from "./planPrompt";
 import { appModel } from "./resolve";
@@ -62,6 +63,11 @@ const input: AllocationInput = { topic: "Software engineering interviews", weeks
 
 type Part = AllocationDraft["parts"][number];
 
+/** Every material of `input` kept whole except those named in `parts`: a material the model leaves out is not used. */
+function withRest(parts: (Partial<Part> & { id: string })[], ids = ["M1", "M2", "M3", "M4"]): (Partial<Part> & { id: string })[] {
+  return [...parts, ...ids.filter((id) => !parts.some((p) => p.id === id)).map((id) => ({ id }))];
+}
+
 function pick(format: string, share: number) {
   return { format, share, focus: "f", reason: "" };
 }
@@ -73,6 +79,8 @@ function draft(over: Partial<Omit<AllocationDraft, "parts">> & { parts?: (Partia
     practice: "interview practice",
     reason: "r",
     picks: [pick("problem-set", 60), pick("mock", 40)],
+    backbone: null,
+    coverage: null,
     ...rest,
     parts: (parts ?? []).map((p) => ({ uses: null, minutes: null, chapters: null, items: null, drop: false, dropReason: null, ...p })),
   };
@@ -88,7 +96,7 @@ function respond(object: unknown) {
 
 describe("applyAllocation", () => {
   it("derives the reading share from the kept parts, not the model's number", () => {
-    const out = applyAllocation(draft({ readingShare: 70, parts: [{ id: "M1", chapters: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }, { id: "M2", drop: true, dropReason: "covered by the book" }] }), input);
+    const out = applyAllocation(draft({ readingShare: 70, parts: withRest([{ id: "M1", chapters: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }, { id: "M2", drop: true, dropReason: "covered by the book" }]) }), input);
     expect(out.split.readingShare).toBe(22); // (600 + 30) / 2880
     expect(out.facts).toContain("model reading 70% → 22% from the parts");
     expect(out.facts).toContain("reading parts 10.5 h of 48 h");
@@ -97,7 +105,7 @@ describe("applyAllocation", () => {
   });
 
   it("says a dropped material had no reason when the model gave none", () => {
-    const out = applyAllocation(draft({ parts: [{ id: "M2", drop: true }] }), input);
+    const out = applyAllocation(draft({ parts: withRest([{ id: "M2", drop: true }]) }), input);
     expect(out.dropped).toEqual([{ title: "Essay", url: "https://e.example/a", reason: "not used by the plan: no reason given" }]);
   });
 
@@ -161,7 +169,7 @@ describe("applyAllocation", () => {
   });
 
   it("ignores unknown and repeated ids and never drops the learner's own", () => {
-    const out = applyAllocation(draft({ parts: [{ id: "M9", drop: true }, { id: "M4", drop: true }, { id: "M2", minutes: 5 }, { id: "M2", minutes: 1 }] }), input);
+    const out = applyAllocation(draft({ parts: [{ id: "M9", drop: true }, { id: "M4", drop: true }, { id: "M2", minutes: 5 }, { id: "M2", minutes: 1 }, { id: "M1" }, { id: "M3" }] }), input);
     expect(out.materials.map((m) => m.id)).toContain("M4");
     expect(out.materials.find((m) => m.id === "M2")!.minutes).toBe(5);
     expect(out.dropped).toEqual([]);
@@ -169,13 +177,13 @@ describe("applyAllocation", () => {
 
   it("caps the reading share at 100 when the reading parts fill the plan", () => {
     const big = { ...input, weeks: 1, hoursPerWeek: 3 }; // 180 min against 600 + 45 of reading
-    const out = applyAllocation(draft({ picks: [pick("problem-set", 100)] }), big);
+    const out = applyAllocation(draft({ picks: [pick("problem-set", 100)], parts: withRest([]) }), big);
     expect(out.split.readingShare).toBe(100);
     expect(out.split.formats).toEqual([]);
   });
 
   it("drops a pick nothing serves and that can't be written, and reshares the rest", () => {
-    const out = applyAllocation(draft({ picks: [pick("lab", 50), pick("problem-set", 30), pick("mock", 20)] }), input);
+    const out = applyAllocation(draft({ picks: [pick("lab", 50), pick("problem-set", 30), pick("mock", 20)], parts: withRest([]) }), input);
     expect(out.split.formats!.map((p) => [p.format, p.share])).toEqual([["problem-set", 60], ["mock", 40]]);
   });
 
@@ -187,14 +195,14 @@ describe("applyAllocation", () => {
 
   it("states when a per-item pick's kept items don't fill its time", () => {
     // 22% reading leaves 2246 min of practice; problem-set's 60% of it is about 1348 min against 75 × 10 = 750.
-    const out = applyAllocation(draft({ parts: [{ id: "M3", items: 75 }] }), input);
+    const out = applyAllocation(draft({ parts: withRest([{ id: "M3", items: 75 }]) }), input);
     expect(out.facts.some((f) => f.startsWith("problem-set: kept items take 750 min"))).toBe(true);
-    const close = applyAllocation(draft({ parts: [{ id: "M3", items: 135 }] }), input);
+    const close = applyAllocation(draft({ parts: withRest([{ id: "M3", items: 135 }]) }), input);
     expect(close.facts.some((f) => f.startsWith("problem-set:"))).toBe(false);
   });
 
   it("keeps the parts when the practice label is blank, naming the practice from the picks", () => {
-    const out = applyAllocation(draft({ practice: " ", parts: [{ id: "M2", drop: true }, { id: "M1", chapters: [1, 2, 3] }] }), input);
+    const out = applyAllocation(draft({ practice: " ", parts: withRest([{ id: "M2", drop: true }, { id: "M1", chapters: [1, 2, 3] }]) }), input);
     expect(out.materials.map((m) => m.id)).toEqual(["M1", "M3", "M4"]);
     expect(out.materials[0].toc!.chapters).toHaveLength(3);
     expect(out.dropped).toHaveLength(1);
@@ -221,7 +229,7 @@ describe("applyAllocation", () => {
   it("counts an unsized researched essay at the model's minutes, and says when kept reading stays unsized", () => {
     const loose = material({ id: "M5", title: "Loose essay" });
     const other = material({ id: "M6", title: "Other essay" });
-    const out = applyAllocation(draft({ parts: [{ id: "M5", minutes: 90 }] }), { ...input, materials: [essay, loose, other] });
+    const out = applyAllocation(draft({ parts: withRest([{ id: "M5", minutes: 90 }], ["M2", "M6"]) }), { ...input, materials: [essay, loose, other] });
     expect(out.materials.find((m) => m.id === "M5")).toMatchObject({ minutes: 90, minutesBasis: "estimated" });
     expect(out.split.readingShare).toBe(4); // (15 + 90) / 2880
     expect(out.facts).toContain("reading of unknown size, counted as no time: M6");
@@ -237,10 +245,10 @@ describe("applyAllocation", () => {
   });
 
   it("says when reading is all of the plan because no practice pick survived, against the kept reading", () => {
-    const out = applyAllocation(draft({ picks: [pick("lab", 100)] }), { ...input, materials: [essay] });
+    const out = applyAllocation(draft({ picks: [pick("lab", 100)], parts: withRest([], ["M2"]) }), { ...input, materials: [essay] });
     expect(out.split.readingShare).toBe(100);
     expect(out.facts).toContain("no practice kept: reading is 100% of the 48 h, with 0.3 h of kept reading");
-    const full = applyAllocation(draft({ picks: [pick("problem-set", 100)] }), { ...input, weeks: 1, hoursPerWeek: 3 });
+    const full = applyAllocation(draft({ picks: [pick("problem-set", 100)], parts: withRest([]) }), { ...input, weeks: 1, hoursPerWeek: 3 });
     expect(full.facts.some((f) => f.startsWith("no practice kept"))).toBe(false);
   });
 });
@@ -274,18 +282,6 @@ describe("allocatePlan", () => {
     mockedGenerateObject.mockReset();
   });
 
-  it("falls back to all reading with the materials unchanged when the call fails on the app's key", async () => {
-    mockedGenerateObject.mockRejectedValueOnce(new Error("No object generated: response did not match schema."));
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    const out = await allocatePlan({ ...input, model: appModel("anthropic/claude-opus-5.5") });
-    expect(out.split).toEqual(ALL_READING);
-    expect(out.materials).toBe(input.materials);
-    expect(out.dropped).toEqual([]);
-    expect(out.costUsd).toBe(0);
-    expect(error).toHaveBeenCalled();
-    error.mockRestore();
-  });
-
   it("lets a refusal on the learner's own key through, and stops when the request is gone", async () => {
     const refusal = new APICallError({ message: "invalid x-api-key", url: "https://api.anthropic.com", requestBodyValues: {}, statusCode: 401 });
     mockedGenerateObject.mockRejectedValueOnce(refusal);
@@ -299,7 +295,7 @@ describe("allocatePlan", () => {
   });
 
   it("logs the call as Allocate with its facts", async () => {
-    respond(draft({ readingShare: 70, parts: [{ id: "M2", drop: true, dropReason: "covered by the book" }, { id: "M3", items: 75 }] }));
+    respond(draft({ readingShare: 70, parts: withRest([{ id: "M2", drop: true, dropReason: "covered by the book" }, { id: "M3", items: 75 }]) }));
     const calls: ModelCall[] = [];
     const out = await allocatePlan({ ...input, model: appModel("anthropic/claude-opus-5.5"), log: { onCall: (c) => void calls.push(c) } });
     expect(calls[0].label).toBe("Allocate");
@@ -310,5 +306,180 @@ describe("allocatePlan", () => {
     expect(out.materials.find((m) => m.id === "M3")!.practice!.items).toBe(75);
     expect(out.dropped).toHaveLength(1);
     expect(out.costUsd).toBeGreaterThanOrEqual(0);
+  });
+});
+
+/**
+ * The brief's fixture, a 48-hour plan: M1 a catalogued book three other sites recommend (ten chapters of an hour), M2 a
+ * book Open Library didn't match (10 h), M3 an essay (15 min), M4 a practice-only problem list (150 items), M5 the
+ * learner's note (30 min), M6 a long course (40 h).
+ */
+const sixBook = material({
+  ...book,
+  id: "M1",
+  title: "The Catalogued Book",
+  url: "https://books.example/catalogued",
+  backbone: false,
+  catalogued: true,
+  why: "The standard text.",
+  foundBy: ["backbone", "canonical"],
+  recommendedBy: ["https://a.example/list", "https://b.example/post", "https://c.example/review", "https://books.example/other"],
+});
+const sixUncatalogued = material({
+  id: "M2",
+  title: "The Unmatched Book",
+  kind: "book",
+  url: "https://other.example/book",
+  catalogued: false,
+  minutes: 600,
+  minutesBasis: "estimated",
+  recommendedBy: ["https://a.example/list"],
+  foundBy: ["current"],
+});
+const sixEssay = material({ id: "M3", title: "Essay", url: "https://e.example/a", minutes: 15, minutesBasis: "measured", foundBy: ["current"] });
+const sixProblems = material({ ...problems, id: "M4", foundBy: ["practice"] });
+const sixNote = material({ ...note, id: "M5" });
+const sixCourse = material({ id: "M6", title: "Long Course", kind: "course", url: "https://course.example/c", minutes: 2400, minutesBasis: "measured", foundBy: ["canonical"] });
+const six: AllocationInput = {
+  topic: "Software engineering interviews",
+  weeks: 8,
+  daysPerWeek: 5,
+  hoursPerWeek: 6,
+  materials: [sixBook, sixUncatalogued, sixEssay, sixProblems, sixNote, sixCourse],
+};
+/** Every material of the fixture kept whole, so a test names only what it changes. */
+const sixWhole = ["M1", "M2", "M3", "M4", "M5", "M6"].map((id) => ({ id }));
+
+describe("the allocation's backbone, coverage and fallback", () => {
+  beforeEach(() => {
+    mockedGenerateObject.mockReset();
+  });
+
+  it("runs at high effort", async () => {
+    expect(ALLOCATE_EFFORT).toBe("high");
+    respond(draft({ parts: sixWhole }));
+    await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    const call = mockedGenerateObject.mock.calls[0][0] as { providerOptions?: { anthropic?: { effort?: string } } };
+    expect(call.providerOptions?.anthropic?.effort).toBe("high");
+  });
+
+  it("shows the model each book's evidence and asks for a backbone and coverage", () => {
+    const prompt = buildAllocationPrompt(six);
+    const line = (id: string) => prompt.split("\n").find((l) => l.startsWith(`${id} `))!;
+    expect(line("M1")).toContain("matched in the catalogue");
+    expect(line("M1")).toContain("recommended by 3 other sites: a.example, b.example, c.example");
+    expect(line("M1")).toContain("reading about 10 h");
+    expect(line("M1")).toContain("Why: The standard text.");
+    expect(line("M1")).toContain("found by: backbone, canonical");
+    expect(prompt).toContain('[10] ch. 10 "Chapter 10" · about 60 min');
+    expect(line("M2")).toContain("not matched in the catalogue");
+    expect(line("M2")).toContain("recommended by 1 other site: a.example");
+    expect(line("M5")).toContain("the learner's own");
+    expect(line("M3")).toContain("found by: current");
+    expect(line("M6")).toContain("found by: canonical");
+    // Research's own flag is not shown as a choice already made.
+    expect(buildAllocationPrompt(input).split("\n").find((l) => l.startsWith("M1 "))).not.toContain("backbone");
+
+    // The backbone guidance, in words.
+    for (const s of [
+      "the one book the plan follows in order",
+      "independent sites recommend",
+      "fits the learner's goal",
+      "a book the learner supplied and wants followed comes first",
+      "Length alone is not a reason against a book",
+      "none when no book suits",
+    ]) expect(prompt).toContain(s);
+    // It asks for the backbone and the coverage, and a part or a drop for every material.
+    const answer = prompt.slice(prompt.indexOf("How to answer"));
+    const field = (name: string) => answer.split("\n").find((l) => l.startsWith(`- ${name}:`))!;
+    expect(field("backbone")).toContain("null");
+    expect(field("coverage")).toContain("covered");
+    expect(field("coverage")).toContain("open");
+    expect(field("coverage")).toContain("one to three words");
+    expect(field("parts")).toContain("every material");
+    for (const name of ["backbone", "coverage"]) expect(field(name)).not.toMatch(/\d/);
+    expect(prompt).not.toMatch(/\d+\s*%/);
+    expect(prompt).not.toMatch(/small share|mostly practice|mostly reading/i);
+  });
+
+  it("refuses a backbone the gate couldn't match", () => {
+    const refused = (backbone: string, materials = six.materials, parts: { id: string; drop?: boolean }[] = sixWhole) => {
+      const out = applyAllocation(draft({ backbone, parts }), { ...six, materials });
+      expect(out.materials.filter((m) => m.backbone)).toEqual([]);
+      return out.facts.filter((f) => f.startsWith("backbone"));
+    };
+    expect(refused("M2")).toEqual(["backbone M2 refused: not matched in the catalogue"]);
+    expect(refused("M3")).toEqual(["backbone M3 refused: not a book"]);
+    expect(refused("M9")).toEqual(["backbone M9 refused: not in the list"]);
+    expect(refused("M1", six.materials, [...sixWhole.slice(1), { id: "M1", drop: true }])).toEqual(["backbone M1 refused: dropped by the plan"]);
+
+    // The learner's own book needs no match; a catalogued one is taken.
+    const ownBook = material({ id: "M7", title: "My Book", origin: "learner", type: "link", kind: "book", minutes: 300 });
+    const own = applyAllocation(draft({ backbone: "M7", parts: sixWhole }), { ...six, materials: [...six.materials, ownBook] });
+    expect(own.materials.filter((m) => m.backbone).map((m) => m.id)).toEqual(["M7"]);
+    const taken = applyAllocation(draft({ backbone: "M1", parts: sixWhole }), six);
+    expect(taken.materials.filter((m) => m.backbone).map((m) => m.id)).toEqual(["M1"]);
+    expect(taken.facts).toContain("backbone M1");
+  });
+
+  it("keeps one backbone at most", () => {
+    // Research's stale flags never survive: only the allocation's choice, or none.
+    const flagged = { ...six, materials: six.materials.map((m) => ({ ...m, backbone: m.id === "M2" || m.id === "M6" })) };
+    const chosen = applyAllocation(draft({ backbone: "M1", parts: sixWhole }), flagged);
+    expect(chosen.materials.map((m) => m.backbone)).toEqual([true, false, false, false, false, false]);
+    const none = applyAllocation(draft({ backbone: null, parts: sixWhole }), flagged);
+    expect(none.materials.filter((m) => m.backbone)).toEqual([]);
+    expect(none.facts).toContain("no backbone");
+  });
+
+  it("drops the researched materials it did not mention", () => {
+    const out = applyAllocation(draft({ backbone: "M1", parts: [{ id: "M1", chapters: [1, 2, 3, 4, 5] }] }), six);
+    expect(out.materials.map((m) => m.id)).toEqual(["M1", "M5"]);
+    expect(out.materials[1]).toEqual(sixNote);
+    expect(out.dropped).toEqual(
+      [sixUncatalogued, sixEssay, sixProblems, sixCourse].map((m) => ({ title: m.title, url: m.url, reason: "not used by the plan: not chosen" })),
+    );
+    for (const m of [sixUncatalogued, sixEssay, sixProblems, sixCourse]) expect(out.facts).toContain(`dropped ${m.id} "${m.title}": not chosen`);
+  });
+
+  it("normalises the plan's coverage", async () => {
+    const coverage = { covered: [" Arrays ", "Arrays", "Graphs", ""], open: ["Graphs", "System design"] };
+    expect(applyAllocation(draft({ parts: sixWhole, coverage }), six).coverage).toEqual({ covered: ["Arrays", "Graphs"], open: ["System design"] });
+    expect(applyAllocation(draft({ parts: sixWhole, coverage: null }), six).coverage).toBeNull();
+    respond(draft({ parts: sixWhole, coverage }));
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.coverage).toEqual({ covered: ["Arrays", "Graphs"], open: ["System design"] });
+  });
+
+  it("falls back to a list that fits the hours", async () => {
+    const out = fallbackAllocation(six);
+    // Backbone 10 h, the note, then M2 and M3 fit the 48 h; the 40 h course doesn't.
+    expect(out.materials.map((m) => m.id)).toEqual(["M1", "M2", "M3", "M4", "M5"]);
+    expect(out.materials.filter((m) => m.backbone).map((m) => m.id)).toEqual(["M1"]);
+    expect(out.dropped.map((d) => d.title)).toEqual(["Long Course"]);
+    expect(out.split).toEqual(ALL_READING);
+    expect(out.coverage).toBeNull();
+    expect(out.facts).toContain("fallback chose the materials");
+
+    // The most recommended catalogued book is the backbone, the first on a tie; it is kept even when it fills the
+    // hours, and the reading after it is skipped. Practice sources and the learner's own stay.
+    const rival = material({ ...sixBook, id: "M7", title: "Rival", url: "https://books.example/rival" });
+    const short = fallbackAllocation({ ...six, weeks: 1, hoursPerWeek: 5, materials: [rival, ...six.materials] });
+    expect(short.materials.filter((m) => m.backbone).map((m) => m.id)).toEqual(["M7"]);
+    expect(short.materials.map((m) => m.id)).toEqual(["M7", "M4", "M5"]);
+    const plain = fallbackAllocation({ ...six, materials: [sixEssay, sixNote] });
+    expect(plain.materials.filter((m) => m.backbone)).toEqual([]);
+
+    // A call that fails on the app's key takes the fallback, with no coverage.
+    mockedGenerateObject.mockRejectedValueOnce(new Error("No object generated: response did not match schema."));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const failed = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    expect(failed.materials).toEqual(out.materials);
+    expect(failed.dropped).toEqual(out.dropped);
+    expect(failed.split).toEqual(ALL_READING);
+    expect(failed.coverage).toBeNull();
+    expect(failed.costUsd).toBe(0);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 });

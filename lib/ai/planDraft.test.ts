@@ -202,7 +202,13 @@ describe("streamPlanDraft and the allocation", () => {
   });
 
   it("sends the materials the allocation dropped, and drafts without them", async () => {
-    respondAllocate({ ...ALLOCATION, parts: [{ id: "M2", uses: null, minutes: null, chapters: null, items: null, drop: true, dropReason: "the book covers it" }] });
+    respondAllocate({
+      ...ALLOCATION,
+      parts: [
+        { id: "M1", uses: null, minutes: null, chapters: null, items: null, drop: false, dropReason: null },
+        { id: "M2", uses: null, minutes: null, chapters: null, items: null, drop: true, dropReason: "the book covers it" },
+      ],
+    });
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const events: PlanDraftEvent[] = [];
     for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [material("M1"), material("M2", { title: "Found essay" })] })) events.push(event);

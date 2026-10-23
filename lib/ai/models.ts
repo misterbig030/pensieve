@@ -59,6 +59,11 @@ export const RESEARCH_LOOP_EFFORT: ReasoningEffort = "high";
  * its default effort took 94 s on the same prompt.
  */
 export const CANDIDATE_STEP_EFFORT: ReasoningEffort = "low";
+/**
+ * The allocation runs at this effort: it makes the plan's real choices (the backbone, each material's part, what is
+ * dropped, the practice shares and the plan's coverage) over research's whole, unselected list.
+ */
+export const ALLOCATE_EFFORT: ReasoningEffort = "high";
 
 interface TokenUsage {
   inputTokens?: number;
