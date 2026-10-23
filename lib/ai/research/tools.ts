@@ -243,7 +243,7 @@ export class ResearchNotes {
     }
     for (const f of this.fetches) {
       if (f.ok) {
-        const size = f.durationMinutes ? ` (runtime ${f.durationMinutes} min)` : f.words ? ` (${f.words} words)` : "";
+        const size = f.durationMinutes ? ` (runtime ${f.durationMinutes} min)` : f.words ? ` (${f.words} words${nearlyEmpty(f) ? "; nearly empty, perhaps drawn by script: it may show nothing of its content" : ""})` : "";
         parts.push(`Read <${f.url}>${f.finalUrl && f.finalUrl !== f.url ? ` → <${f.finalUrl}>` : ""}: title "${f.title ?? "(none)"}"${size}\n  ${f.excerpt}`);
       }
       else parts.push(`Could not read <${f.url}>: ${f.reason}`);
@@ -267,6 +267,21 @@ export interface ResearchToolsOptions {
 }
 
 export const BUDGET_SPENT = "budget spent";
+
+/** Below this many words, a read page with no runtime showed next to nothing of itself. */
+const NEARLY_EMPTY_WORDS = 100;
+
+/**
+ * Whether a read page came back nearly empty, as a page drawn by script in the browser does: the reader runs no
+ * scripts, so NeetCode's or LeetCode's problem lists read as their title alone. Unmeasured pages and videos are not.
+ */
+export function nearlyEmpty(page: { words?: number | null; durationMinutes?: number | null }): boolean {
+  return typeof page.words === "number" && page.words < NEARLY_EMPTY_WORDS && !page.durationMinutes;
+}
+
+/** The note on a nearly empty read: a guess, since a short page or a failed extraction looks the same. */
+const drawnByScript = (words: number) =>
+  `This page came back nearly empty (${words} words). It may be drawn by script in the browser, which this reader does not run, or it may just be short or have failed to read; either way it says nothing about solutions or size. If it should hold more, look for a readable copy of the same content: the site's GitHub repository or a static page that lists it.`;
 
 export function createResearchTools(opts: ResearchToolsOptions) {
   const { provider, fetcher, budget, notes, emit } = opts;
@@ -313,7 +328,7 @@ export function createResearchTools(opts: ResearchToolsOptions) {
         durationMinutes: page.durationMinutes ?? null,
       });
       emit({ type: "research.fetch", url, ok: true });
-      return page;
+      return nearlyEmpty(page) ? { ...page, note: drawnByScript(page.words ?? 0) } : page;
     },
   });
 

@@ -4,9 +4,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DaysPerWeekPicker } from "@/components/pensieve/DaysPerWeekPicker";
+import { splitHours } from "@/lib/materials";
 import { capitalize } from "@/lib/planTree";
-import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, SPLIT_SET_BY_LEARNER, clampHours, presetFor, totalHours, type PlanSplit } from "@/lib/studyTime";
+import type { Material } from "@/lib/schemas/material";
+import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, SPLIT_SET_BY_LEARNER, clampHours, presetFor, shareAdjustable, totalHours, type PlanSplit } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
+
+/** Shades of the practice colour, one per picked format, darkest first. */
+const PICK_SHADES = ["bg-accent-2-700", "bg-accent-2-500", "bg-accent-2-300", "bg-accent-2-200"];
 
 export interface TimeSplitCardProps {
   /** The plan's length in weeks. */
@@ -16,6 +21,8 @@ export interface TimeSplitCardProps {
   daysPerWeek: number;
   /** Null while the first units are still drafting, and on plans saved before splits existed. */
   split: PlanSplit | null;
+  /** The plan's materials: a pick with no source to assign is drafted as reading, and shown so. */
+  materials: Pick<Material, "id" | "practice" | "minutes">[];
   /** True while the top level is drafting: the split is on its way. */
   deciding?: boolean;
   /** Omit all three for a read-only card. */
@@ -29,12 +36,16 @@ export interface TimeSplitCardProps {
  * The learner's weekly hours and how the plan divides them. The split is the drafter's decision, shown with its
  * reason; the learner can overrule it and change the hours.
  */
-export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, deciding = false, onChangeHours, onChangeDays, onChangeSplit, disabled = false }: TimeSplitCardProps) {
+export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, materials, deciding = false, onChangeHours, onChangeDays, onChangeSplit, disabled = false }: TimeSplitCardProps) {
   const [editing, setEditing] = useState(false);
   const total = totalHours(weeks, hoursPerWeek);
   const preset = presetFor(hoursPerWeek);
   const editable = !!onChangeHours || !!onChangeDays || !!onChangeSplit;
-  const reading = split ? Math.round((total * split.readingShare) / 100) : 0;
+  const { reading, picks } = split ? splitHours(split, total, materials) : { reading: 0, picks: [] };
+  // A pick drafted as reading widens the reading bar by its share of the practice time.
+  const practiceShare = (share: number) => ((100 - (split?.readingShare ?? 0)) * share) / 100;
+  const toReading = new Set(picks.filter((p) => p.toReading).map((p) => p.format));
+  const readingWidth = (split?.readingShare ?? 0) + (split?.formats ?? []).filter((p) => toReading.has(p.format)).reduce((sum, p) => sum + practiceShare(p.share), 0);
 
   return (
     <section aria-labelledby="time-h" className="flex flex-col gap-2.5 rounded-[28px] bg-secondary px-[22px] py-[18px]">
@@ -67,18 +78,41 @@ export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, decidin
       {split ? (
         <>
           <div aria-hidden="true" className="flex h-3 overflow-hidden rounded-full bg-neutral-300">
-            <span className="block bg-accent-700 transition-[width]" style={{ width: `${split.readingShare}%` }} />
-            <span className="block grow bg-accent-2-700" />
+            <span className="block bg-accent-700 transition-[width]" style={{ width: `${readingWidth}%` }} />
+            {picks.length > 0 ? (
+              (split.formats ?? []).map((p, i) =>
+                toReading.has(p.format) ? null : <span key={p.format} className={cn("block", PICK_SHADES[i % PICK_SHADES.length])} style={{ width: `${practiceShare(p.share)}%` }} />,
+              )
+            ) : (
+              <span className="block grow bg-accent-2-700" />
+            )}
           </div>
           <div className="flex flex-wrap gap-x-[18px] gap-y-1 text-[12.5px]">
             <span className="inline-flex items-center gap-1.5">
               <span className="block size-2.5 rounded-[3px] bg-accent-700" />
               Reading and watching · about {reading} h
             </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="block size-2.5 rounded-[3px] bg-accent-2-700" />
-              {capitalize(split.practice)} · about {total - reading} h
-            </span>
+            {picks.length > 0
+              ? picks.map((p, i) =>
+                  p.toReading ? (
+                    <span key={p.format} className="text-muted-foreground">
+                      {p.label} · no source found, so its time is reading
+                    </span>
+                  ) : p.hours > 0 ? (
+                    <span key={p.format} className="inline-flex items-center gap-1.5">
+                      <span className={cn("block size-2.5 shrink-0 rounded-[3px]", PICK_SHADES[i % PICK_SHADES.length])} />
+                      <span>
+                        {p.label} · about {p.hours} h <span className="text-muted-foreground">— {p.focus}</span>
+                      </span>
+                    </span>
+                  ) : null,
+                )
+              : total - reading > 0 && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="block size-2.5 rounded-[3px] bg-accent-2-700" />
+                    {capitalize(split.practice)} · about {total - reading} h
+                  </span>
+                )}
           </div>
           {split.reason && split.reason !== SPLIT_SET_BY_LEARNER && <p className="m-0 text-[12.5px] leading-normal text-neutral-800">Why: {split.reason}</p>}
         </>
@@ -138,7 +172,10 @@ export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, decidin
               <p className="m-0 text-xs leading-normal text-muted-foreground">Applies to weeks you split from now on. Weeks already split keep their days.</p>
             </div>
           )}
-          {onChangeSplit && split && (
+          {onChangeSplit && split && !shareAdjustable(split) && (
+            <p className="m-0 text-xs leading-normal text-muted-foreground">All reading: no practice was picked for this topic, so there is no share to move.</p>
+          )}
+          {onChangeSplit && split && shareAdjustable(split) && (
             <div className="flex flex-col gap-2">
               <label htmlFor="share" className="text-[11px] tracking-wide text-muted-foreground uppercase">
                 Reading and watching: {split.readingShare}% of your time

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("ai", () => ({ generateObject: vi.fn() }));
 import { generateObject } from "ai";
 import type { ModelCall } from "./logged";
-import { buildDailyContentPrompt, enforceCitations, generateDailyContent } from "./dailyContent";
+import { buildDailyContentPrompt, enforceCitations, generateDailyContent, type LessonPractice } from "./dailyContent";
 
 const mockedGenerateObject = vi.mocked(generateObject);
 
@@ -76,6 +76,75 @@ describe("buildDailyContentPrompt", () => {
     expect(buildDailyContentPrompt({ title: "D", summary: "s", materials: [{ ...base, note: "Ch. 4 §2" }] })).not.toContain("Rows marked review");
   });
 
+  describe("practice", () => {
+    const input = {
+      title: "Load balancing",
+      summary: "L4 vs L7, algorithms",
+      materials: [{ url: "https://example.com/ai-eng", type: "link" as const, title: "AI Engineering", tier: "must" as const, minutes: 90, note: "Ch. 4 §2" }],
+    };
+    // The prompt of the input above as it was before practice existed.
+    const BEFORE_PRACTICE = [
+      "Write today's lesson for a self-study curriculum.",
+      "Day title: Load balancing",
+      "Day summary: L4 vs L7, algorithms",
+      "This unit's reading list. Guide the learner through it in order of tier (must before should), and point to the part named in each note:",
+      "- AI Engineering (https://example.com/ai-eng) — must, 90 min, Ch. 4 §2",
+      `Write the lesson body as markdown in the "contentMarkdown" field. In "citations", list only materials from this unit's list above that the lesson draws on, with their exact URL. Cite nothing else.`,
+    ].join("\n");
+    const problems: LessonPractice = {
+      format: "problem-set",
+      label: "Problems",
+      task: "Do problems 1-10",
+      done: "all ten solved without the answers",
+      minutes: 60,
+      source: { title: "Problem list", url: "https://example.com/problems" },
+      generated: false,
+    };
+    const recall: LessonPractice = {
+      format: "recall",
+      label: "Recall",
+      task: "Answer questions on the reading",
+      done: "every answer matches the reading",
+      minutes: 20,
+      source: { title: "AI Engineering", url: "https://example.com/ai-eng" },
+      generated: true,
+    };
+    const lab: LessonPractice = { format: "lab", label: "Lab", task: "Set up a proxy", done: "requests balance across two servers", minutes: 45, source: null, generated: true };
+
+    it("gives the same prompt as before for a unit without practice", () => {
+      expect(buildDailyContentPrompt(input)).toBe(BEFORE_PRACTICE);
+      expect(buildDailyContentPrompt({ ...input, practice: undefined })).toBe(BEFORE_PRACTICE);
+      expect(buildDailyContentPrompt({ ...input, practice: [] })).toBe(BEFORE_PRACTICE);
+    });
+
+    it("lists each task with its minutes and done line, and a source's link", () => {
+      const prompt = buildDailyContentPrompt({ ...input, practice: [problems] });
+      expect(prompt).toContain("- Problems: Do problems 1-10 (60 min) — done when: all ten solved without the answers — source: Problem list (https://example.com/problems)");
+      expect(prompt).toMatch(/end the lesson with a section on how to do and check each task/i);
+      expect(prompt).toContain(`Cite nothing else.`);
+    });
+
+    it("marks a task without a source as generated", () => {
+      const prompt = buildDailyContentPrompt({ ...input, practice: [lab] });
+      expect(prompt).toContain("- Lab: Set up a proxy (45 min) — done when: requests balance across two servers — generated");
+    });
+
+    it("asks for a generated recall task's answers in an answers fence, as markdown, drawn from the reading", () => {
+      const prompt = buildDailyContentPrompt({ ...input, practice: [recall] });
+      expect(prompt).toContain("- Recall: Answer questions on the reading (20 min) — done when: every answer matches the reading — generated from the reading: AI Engineering (https://example.com/ai-eng)");
+      expect(prompt).toContain('then their answers in a fenced code block with the info string "answers" (```answers), written as markdown inside the fence');
+      expect(prompt).not.toContain("<details>");
+      expect(prompt).toMatch(/only from this unit's reading/);
+    });
+
+    it("asks for the answers fence only for generated recall, and for other generated tasks gives how-to guidance only", () => {
+      expect(buildDailyContentPrompt({ ...input, practice: [problems, lab] })).not.toContain("```answers");
+      expect(buildDailyContentPrompt({ ...input, practice: [problems, lab] })).toMatch(/generated tasks of any other format[^\n]*guidance only/i);
+      expect(buildDailyContentPrompt({ ...input, practice: [problems] })).not.toMatch(/generated tasks/i);
+      expect(buildDailyContentPrompt({ ...input, practice: [{ ...recall, generated: false }] })).not.toContain("```answers");
+    });
+  });
+
   it("asks for no citations when nothing on the list is citable", () => {
     const prompt = buildDailyContentPrompt({ title: "A", summary: "B", materials: [] });
     expect(prompt).toMatch(/leave "citations" empty/);
@@ -103,6 +172,13 @@ describe("enforceCitations", () => {
       { title: "The talk", url: "https://youtu.be/abc" },
     ]);
     expect(result.dropped).toBe(1);
+  });
+
+  it("drops a practice source's URL, unless the unit's materials list it too", () => {
+    const cited = [{ title: "Problem list", url: "https://example.com/problems" }];
+    expect(enforceCitations(cited, materials)).toEqual({ citations: [], dropped: 1 });
+    const withReading = [...materials, { url: "https://example.com/problems", type: "link" as const, title: "Problem list" }];
+    expect(enforceCitations(cited, withReading).citations).toEqual(cited);
   });
 });
 

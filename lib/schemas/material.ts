@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PRACTICE_FORMATS } from "@/lib/practice";
 import { SOURCE_TYPES } from "./source";
 
 export const MATERIAL_ORIGINS = ["learner", "research"] as const;
@@ -69,6 +70,21 @@ export const KIND_LABEL: Record<MaterialKind, string> = {
 };
 
 /**
+ * A material's role as practice: problems to solve, questions to answer, a lab to follow. `minutes` is doing time,
+ * not reading time; `Material.minutes` stays the reading time and is null for a source that is practice only.
+ */
+export const materialPracticeSchema = z.object({
+  format: z.enum(PRACTICE_FORMATS),
+  /** Problems, questions or steps the source holds; null when it is not counted. */
+  items: z.number().int().min(1).max(5000).nullable(),
+  perItemMinutes: z.number().int().min(1).max(600).nullable(),
+  minutes: z.number().int().min(1).max(60000).nullable(),
+  /** Whether the source carries answers, solutions or a rubric to check against. */
+  answers: z.boolean(),
+});
+export type MaterialPractice = z.infer<typeof materialPracticeSchema>;
+
+/**
  * One material as the browser holds it. `id` is a short id (`M1`…`Mn`) while drafting and the source row's uuid once
  * the plan is saved; node references use the same id space. A researched material carries `sig`, an HMAC over its
  * url, fetched title and verification time, so a forged "verified" badge cannot be saved.
@@ -95,6 +111,8 @@ export const materialSchema = z.object({
   uses: z.string().trim().max(120).nullable().optional(),
   /** The book's chapter list, when research found one. Absent on materials saved before chapters existed. */
   toc: chapterListSchema.nullable().optional(),
+  /** Set when the source also serves as practice. Absent on materials saved before practice formats existed. */
+  practice: materialPracticeSchema.nullable().optional(),
 });
 export type Material = z.infer<typeof materialSchema>;
 /** Up to 50 of the learner's own plus what research adds (at most 25 are asked for). */
@@ -128,6 +146,33 @@ export const coverRefSchema = z.object({
 export type CoverRef = z.infer<typeof coverRefSchema>;
 
 /**
+ * A leaf's practice row: a task of one format with how to know it is done. `id` is a material id (a practice source, or
+ * the unit's reading for generated recall) or null.
+ */
+export const practiceRefSchema = z.object({
+  format: z.enum(PRACTICE_FORMATS),
+  id: z.string().min(1).max(64).nullable(),
+  task: z.string().trim().min(1).max(300),
+  done: z.string().trim().min(1).max(300),
+  minutes: z.number().int().min(1).max(600),
+  generated: z.boolean(),
+});
+export type PracticeRef = z.infer<typeof practiceRefSchema>;
+
+/**
+ * A heading's reservation of a practice source for the units inside it. A week split by hand keeps its row's `task` and
+ * `minutes` here, as a split week keeps its Read table; a generated row has no source, so its `id` is null.
+ */
+export const practiceCoverSchema = z.object({
+  format: z.enum(PRACTICE_FORMATS),
+  id: z.string().min(1).max(64).nullable(),
+  note: z.string().max(300).nullable(),
+  task: z.string().max(300).optional(),
+  minutes: z.number().int().min(1).max(600).optional(),
+});
+export type PracticeCover = z.infer<typeof practiceCoverSchema>;
+
+/**
  * What the model writes for references. Looser than the wire schemas on purpose: a note that runs long or minutes
  * given as 42.5 must not fail the whole level, so bounds are applied in code (`normalizeRefs`). The model writes no
  * `activity`: a plan's reviews are the learner's choice, not the planner's, so every row it writes is a reading.
@@ -144,6 +189,23 @@ export const coverRefDraftSchema = z.object({
 });
 export type MaterialRefDraft = z.infer<typeof materialRefDraftSchema>;
 export type CoverRefDraft = z.infer<typeof coverRefDraftSchema>;
+
+/** What the model writes for a leaf's practice row. Code decides `generated`: a row with no source is one the model wrote. */
+export const practiceRefDraftSchema = z.object({
+  format: z.string().describe(`One of the plan's picked formats: ${PRACTICE_FORMATS.join(", ")}`),
+  id: z.string().nullable().optional().describe("The practice source's id, or the unit's reading for recall written from it; left out for a row you write"),
+  task: z.string().describe('Exactly what to do and which part ("NeetCode 150 · Arrays & Hashing, problems 1–6")'),
+  done: z.string().describe("How the learner knows it is finished"),
+  minutes: z.number().describe("Minutes of doing"),
+});
+/** What the model writes for a heading's reservation of a practice source. */
+export const practiceCoverDraftSchema = z.object({
+  format: z.string().describe("The picked format this source serves"),
+  id: z.string().describe("A practice source's id from the list"),
+  note: z.string().optional().describe('The part this unit takes ("Arrays & Hashing; Two Pointers")'),
+});
+export type PracticeRefDraft = z.infer<typeof practiceRefDraftSchema>;
+export type PracticeCoverDraft = z.infer<typeof practiceCoverDraftSchema>;
 
 export function clip(text: string | null | undefined, max: number): string | null {
   const t = text?.trim();

@@ -4,16 +4,19 @@ import {
   checkIns,
   dailyContent,
   nodeMaterials,
+  nodePractice,
   planNodes,
   sources,
   tracks,
   type NewNodeMaterialRow,
+  type NewNodePracticeRow,
   type NewPlanNodeRow,
   type NodeMaterialRow,
+  type NodePracticeRow,
   type PlanNodeRow,
 } from "./schema";
 import { makeRoot, walk, type PlanNode } from "@/lib/planTree";
-import type { CoverRef, MaterialRef } from "@/lib/schemas/material";
+import type { CoverRef, MaterialRef, PracticeCover, PracticeRef } from "@/lib/schemas/material";
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -30,9 +33,26 @@ export function refsByNode(rows: Pick<NodeMaterialRow, "nodeId" | "sourceId" | "
   return out;
 }
 
+/** Groups a track's `node_practice` rows into each node's reservations and practice rows, in row order. */
+export function practiceByNode(rows: Pick<NodePracticeRow, "nodeId" | "sourceId" | "role" | "position" | "format" | "task" | "done" | "note" | "minutes" | "generated">[]) {
+  const out = new Map<string, { covers: PracticeCover[]; practice: PracticeRef[] }>();
+  for (const row of [...rows].sort((a, b) => a.position - b.position)) {
+    const entry = out.get(row.nodeId) ?? { covers: [], practice: [] };
+    if (row.role === "covers") {
+      entry.covers.push({ format: row.format, id: row.sourceId, note: row.note, ...(row.task ? { task: row.task } : {}), ...(row.minutes ? { minutes: row.minutes } : {}) });
+    } else {
+      // An assigned row is always written with its done condition and minutes.
+      entry.practice.push({ format: row.format, id: row.sourceId, task: row.task, done: row.done ?? "", minutes: row.minutes ?? 1, generated: row.generated });
+    }
+    out.set(row.nodeId, entry);
+  }
+  return out;
+}
+
 /** Builds the in-memory tree from a track's rows. Every stored node is present; a childless node is a leaf. */
-export function rowsToTree(rows: PlanNodeRow[], materialRows: NodeMaterialRow[] = []): PlanNode {
+export function rowsToTree(rows: PlanNodeRow[], materialRows: NodeMaterialRow[] = [], practiceRows: NodePracticeRow[] = []): PlanNode {
   const refs = refsByNode(materialRows);
+  const practice = practiceByNode(practiceRows);
   const byParent = new Map<string | null, PlanNodeRow[]>();
   for (const row of rows) {
     const list = byParent.get(row.parentId) ?? [];
@@ -53,6 +73,8 @@ export function rowsToTree(rows: PlanNodeRow[], materialRows: NodeMaterialRow[] 
       children: kids.length > 0 ? kids.map(build) : null,
       ...(refs.get(row.id)?.covers.length ? { covers: refs.get(row.id)!.covers } : {}),
       ...(refs.get(row.id)?.materials.length ? { materials: refs.get(row.id)!.materials } : {}),
+      ...(practice.get(row.id)?.covers.length ? { practiceCovers: practice.get(row.id)!.covers } : {}),
+      ...(practice.get(row.id)?.practice.length ? { practice: practice.get(row.id)!.practice } : {}),
       start: 1,
       end: row.len,
     };
@@ -80,12 +102,34 @@ export async function getTrackNodeMaterials(trackId: string, database: Pick<type
     .where(eq(planNodes.trackId, trackId));
 }
 
+/** Every `node_practice` row of a track. */
+export async function getTrackNodePractice(trackId: string, database: Pick<typeof db, "select"> = db): Promise<NodePracticeRow[]> {
+  return database
+    .select({
+      id: nodePractice.id,
+      nodeId: nodePractice.nodeId,
+      role: nodePractice.role,
+      position: nodePractice.position,
+      format: nodePractice.format,
+      sourceId: nodePractice.sourceId,
+      task: nodePractice.task,
+      done: nodePractice.done,
+      note: nodePractice.note,
+      minutes: nodePractice.minutes,
+      generated: nodePractice.generated,
+    })
+    .from(nodePractice)
+    .innerJoin(planNodes, eq(nodePractice.nodeId, planNodes.id))
+    .where(eq(planNodes.trackId, trackId));
+}
+
 export async function getPlanTree(trackId: string): Promise<PlanNode> {
-  const [rows, materialRows] = await Promise.all([
+  const [rows, materialRows, practiceRows] = await Promise.all([
     db.query.planNodes.findMany({ where: eq(planNodes.trackId, trackId), orderBy: [asc(planNodes.position)] }),
     getTrackNodeMaterials(trackId),
+    getTrackNodePractice(trackId),
   ]);
-  return rowsToTree(rows, materialRows);
+  return rowsToTree(rows, materialRows, practiceRows);
 }
 
 /**
@@ -113,12 +157,37 @@ export function refRows(nodeId: string, node: Pick<PlanNode, "covers" | "materia
 }
 
 /**
- * Flattens a tree into insertable rows, minting uuids for temporary ids and remapping parents accordingly. With
- * `sourceIds`, each node's references come out as `node_materials` rows under the same ids.
+ * A node's practice as rows. Leaves keep their practice rows (`assigned`), everything else its reservations
+ * (`covers`); a hand-split week's rows become reservations keeping their task and minutes. A row with a source is
+ * written only if the id is in `sourceIds`; a generated row has none.
  */
-export function flattenTree(trackId: string, root: PlanNode, sourceIds: ReadonlySet<string> = new Set()): { nodes: NewPlanNodeRow[]; materials: NewNodeMaterialRow[] } {
+export function practiceRows(nodeId: string, node: Pick<PlanNode, "practice" | "practiceCovers" | "children">, sourceIds: ReadonlySet<string>): NewNodePracticeRow[] {
+  const rows: NewNodePracticeRow[] = [];
+  const known = (ref: { id: string | null }) => ref.id === null || sourceIds.has(ref.id);
+  const assigned = node.children === null ? (node.practice ?? []) : [];
+  for (const [i, ref] of assigned.filter(known).entries()) {
+    rows.push({ nodeId, role: "assigned", position: i, format: ref.format, sourceId: ref.id, task: ref.task, done: ref.done, note: null, minutes: ref.minutes, generated: ref.generated });
+  }
+  const kept: PracticeCover[] = (node.children !== null ? (node.practice ?? []) : []).map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes }));
+  const covers = [...(node.practiceCovers ?? []), ...kept];
+  for (const [i, ref] of covers.filter(known).entries()) {
+    rows.push({ nodeId, role: "covers", position: i, format: ref.format, sourceId: ref.id, task: ref.task ?? "", done: null, note: ref.note, minutes: ref.minutes ?? null, generated: ref.id === null });
+  }
+  return rows;
+}
+
+/**
+ * Flattens a tree into insertable rows, minting uuids for temporary ids and remapping parents accordingly. With
+ * `sourceIds`, each node's references come out as `node_materials` and `node_practice` rows under the same ids.
+ */
+export function flattenTree(
+  trackId: string,
+  root: PlanNode,
+  sourceIds: ReadonlySet<string> = new Set(),
+): { nodes: NewPlanNodeRow[]; materials: NewNodeMaterialRow[]; practice: NewNodePracticeRow[] } {
   const rows: NewPlanNodeRow[] = [];
   const materials: NewNodeMaterialRow[] = [];
+  const practice: NewNodePracticeRow[] = [];
   const ids = new Map<string, string>();
   const idFor = (node: PlanNode) => {
     let id = ids.get(node.id);
@@ -144,8 +213,9 @@ export function flattenTree(trackId: string, root: PlanNode, sourceIds: Readonly
       manualSplit: node.manualSplit,
     });
     materials.push(...refRows(idFor(node), node, sourceIds));
+    practice.push(...practiceRows(idFor(node), node, sourceIds));
   });
-  return { nodes: rows, materials };
+  return { nodes: rows, materials, practice };
 }
 
 export function treeToRows(trackId: string, root: PlanNode): NewPlanNodeRow[] {
@@ -158,13 +228,16 @@ function isUuid(value: string): boolean {
 
 /** Inserts a whole tree and its references. `sourceIds` are the track's source uuids; other references are dropped. */
 export async function insertPlanTree(tx: Tx, trackId: string, root: PlanNode, sourceIds: ReadonlySet<string> = new Set()): Promise<void> {
-  const { nodes: rows, materials } = flattenTree(trackId, root, sourceIds);
+  const { nodes: rows, materials, practice } = flattenTree(trackId, root, sourceIds);
   // Parents are always emitted before their children by `walk`, so one ordered insert satisfies the self-reference.
   for (let i = 0; i < rows.length; i += 200) {
     await tx.insert(planNodes).values(rows.slice(i, i + 200));
   }
   for (let i = 0; i < materials.length; i += 200) {
     await tx.insert(nodeMaterials).values(materials.slice(i, i + 200));
+  }
+  for (let i = 0; i < practice.length; i += 200) {
+    await tx.insert(nodePractice).values(practice.slice(i, i + 200));
   }
 }
 
@@ -194,7 +267,7 @@ export async function replacePlanTree(trackId: string, userId: string, root: Pla
       if (removed.length > 0) await tx.delete(sources).where(and(eq(sources.trackId, trackId), inArray(sources.id, removed)));
     }
     const sourceIds = await trackSourceIds(tx, trackId);
-    const { nodes: rows, materials } = flattenTree(trackId, root, sourceIds);
+    const { nodes: rows, materials, practice } = flattenTree(trackId, root, sourceIds);
     const keep = new Set(rows.map((r) => r.id!));
     const existing = await tx.query.planNodes.findMany({
       where: eq(planNodes.trackId, trackId),
@@ -227,8 +300,10 @@ export async function replacePlanTree(trackId: string, userId: string, root: Pla
     const nodeIds = rows.map((r) => r.id!);
     for (let i = 0; i < nodeIds.length; i += 500) {
       await tx.delete(nodeMaterials).where(inArray(nodeMaterials.nodeId, nodeIds.slice(i, i + 500)));
+      await tx.delete(nodePractice).where(inArray(nodePractice.nodeId, nodeIds.slice(i, i + 500)));
     }
     for (let i = 0; i < materials.length; i += 200) await tx.insert(nodeMaterials).values(materials.slice(i, i + 200));
+    for (let i = 0; i < practice.length; i += 200) await tx.insert(nodePractice).values(practice.slice(i, i + 200));
   });
 }
 
@@ -249,6 +324,11 @@ export async function insertChildren(trackId: string, userId: string, parentId: 
         .update(nodeMaterials)
         .set({ role: "covers" })
         .where(and(eq(nodeMaterials.nodeId, parentId), eq(nodeMaterials.role, "assigned")));
+      // Likewise its practice rows: reservations that keep their task and minutes.
+      await tx
+        .update(nodePractice)
+        .set({ role: "covers" })
+        .where(and(eq(nodePractice.nodeId, parentId), eq(nodePractice.role, "assigned")));
     }
     const rows: NewPlanNodeRow[] = children.map((child, i) => ({
       id: crypto.randomUUID(),
@@ -267,6 +347,8 @@ export async function insertChildren(trackId: string, userId: string, parentId: 
     const sourceIds = await trackSourceIds(tx, trackId);
     const refs = rows.flatMap((row, i) => refRows(row.id!, children[i], sourceIds));
     if (refs.length > 0) await tx.insert(nodeMaterials).values(refs);
+    const practice = rows.flatMap((row, i) => practiceRows(row.id!, children[i], sourceIds));
+    if (practice.length > 0) await tx.insert(nodePractice).values(practice);
   });
 }
 
@@ -326,6 +408,23 @@ export async function logSession(nodeId: string, userId: string, hours: number):
   if (!node) throw new Error("Plan node not found for this user");
   await db.insert(checkIns).values({ nodeId, hours });
   return { trackId: node.trackId };
+}
+
+/** A leaf's Do table: its assigned practice rows in row order, each with its saved source (none for a generated row). */
+export async function getNodePracticeList(nodeId: string) {
+  return db
+    .select({
+      source: sources,
+      format: nodePractice.format,
+      task: nodePractice.task,
+      done: nodePractice.done,
+      minutes: nodePractice.minutes,
+      generated: nodePractice.generated,
+    })
+    .from(nodePractice)
+    .leftJoin(sources, eq(nodePractice.sourceId, sources.id))
+    .where(and(eq(nodePractice.nodeId, nodeId), eq(nodePractice.role, "assigned")))
+    .orderBy(asc(nodePractice.position));
 }
 
 /** A leaf's Read table: its assigned materials in row order, each with the saved source. */

@@ -12,7 +12,7 @@ vi.mock("./client", async () => {
 import { db } from "./client";
 import { createTrackWithPlan, getTrackDetail, updateTrackStudyTime } from "./queries";
 import { insertChildren, replacePlanTree } from "./planQueries";
-import { nodeMaterials, sources } from "./schema";
+import { nodeMaterials, nodePractice, sources } from "./schema";
 
 function material(id: string, title: string, extra: Partial<Material> = {}): Material {
   return {
@@ -50,6 +50,7 @@ const MATERIALS: Material[] = [
   material("M1", "AI Engineering", { kind: "book", backbone: true, year: 2024, recommendedBy: ["https://a.example/", "https://b.example/"], minutes: 1320, minutesBasis: "measured", toc: TOC }),
   material("M2", "My notes", { origin: "learner", type: "note", kind: "note", url: "My notes", verifiedAt: null, fetchedTitle: null, sig: null }),
   material("M3", "Evals guide", { minutes: 300, uses: "units 1–4" }),
+  material("M4", "Problem list", { practice: { format: "problem-set", items: 20, perItemMinutes: 10, minutes: 200, answers: true } }),
 ];
 
 function plan(): PlanNode {
@@ -92,6 +93,7 @@ describe("persistence of materials", () => {
       ["AI Engineering", "research", "book", true],
       ["My notes", "learner", "note", false],
       ["Evals guide", "research", "docs", false],
+      ["Problem list", "research", "docs", false],
     ]);
     expect(detail.materials.every((m) => /^[0-9a-f-]{36}$/.test(m.id))).toBe(true);
     expect(detail.materials[0].recommendedBy).toEqual(["https://a.example/", "https://b.example/"]);
@@ -100,7 +102,12 @@ describe("persistence of materials", () => {
 
   it("keeps a book's chapter list through save and load, and null for the rest", async () => {
     const detail = (await getTrackDetail(trackId, "u1"))!;
-    expect(detail.materials.map((m) => m.toc ?? null)).toEqual([TOC, null, null]);
+    expect(detail.materials.map((m) => m.toc ?? null)).toEqual([TOC, null, null, null]);
+  });
+
+  it("keeps a material's practice role through save and load, and null for the rest", async () => {
+    const detail = (await getTrackDetail(trackId, "u1"))!;
+    expect(detail.materials.map((m) => m.practice ?? null)).toEqual([null, null, null, { format: "problem-set", items: 20, perItemMinutes: 10, minutes: 200, answers: true }]);
   });
 
   it("keeps the learner's hours, the plan's split and each material's size", async () => {
@@ -111,6 +118,7 @@ describe("persistence of materials", () => {
       [1320, "measured", null],
       [null, null, null],
       [300, "estimated", "units 1–4"],
+      [null, null, null],
     ]);
     await updateTrackStudyTime(trackId, "u1", { hoursPerWeek: 200, split: null });
     const after = (await getTrackDetail(trackId, "u1"))!;
@@ -238,5 +246,67 @@ describe("persistence of materials", () => {
     await replacePlanTree(trackId, "u1", tampered);
     const after = (await getTrackDetail(trackId, "u1"))!;
     expect(after.root.children![0].children![0].materials).toBeUndefined();
+  });
+  describe("practice rows", () => {
+    const sourced = { format: "problem-set", id: "M4", task: "Problems 1-10", done: "All ten solved", minutes: 60, generated: false } as const;
+    const generated = { format: "recall", id: null, task: "Answer from memory: what does a harness do?", done: "Checked against the notes", minutes: 15, generated: true } as const;
+    const practiceRoot = () =>
+      makeRoot([
+        makeNode({ level: "week", title: "W1", summary: "s", len: 7, budgetHours: 6, materials: [{ id: "M1", tier: "must", minutes: 90, note: null }], practice: [sourced, generated] }),
+        makeNode({ level: "month", title: "M2", summary: "s", len: 28, practiceCovers: [{ format: "problem-set", id: "M4", note: "set 2" }] }),
+      ]);
+
+    it("saves and loads a week's practice rows and a heading's reservation, a generated row keeping a null source", async () => {
+      const created = await createTrackWithPlan({ userId: "u-pr", title: "T", granularity: "week", root: practiceRoot(), materials: MATERIALS, hoursPerWeek: 6, split: null });
+      const detail = (await getTrackDetail(created.trackId, "u-pr"))!;
+      const m4 = detail.materials.find((m) => m.title === "Problem list")!;
+      const [week, month] = detail.root.children!;
+      expect(week.practice).toEqual([{ ...sourced, id: m4.id }, generated]);
+      expect(week.practiceCovers).toBeUndefined();
+      expect(month.practiceCovers).toEqual([{ format: "problem-set", id: m4.id, note: "set 2" }]);
+      expect(month.practice).toBeUndefined();
+    });
+
+    it("turns a hand-split week's practice rows into reservations, task and minutes kept, and keeps them on re-save", async () => {
+      const created = await createTrackWithPlan({ userId: "u-pr2", title: "T", granularity: "week", root: practiceRoot(), materials: MATERIALS, hoursPerWeek: 6, split: null });
+      const detail = (await getTrackDetail(created.trackId, "u-pr2"))!;
+      const m4 = detail.materials.find((m) => m.title === "Problem list")!;
+      const week = detail.root.children![0];
+      const days = Array.from({ length: 3 }, (_, i) => makeNode({ level: "day", title: `Day ${i}`, summary: "d", len: 1, practice: i === 0 ? [{ ...sourced, id: m4.id, minutes: 30 }] : undefined }));
+      await insertChildren(created.trackId, "u-pr2", week.id, days, true);
+      const after = (await getTrackDetail(created.trackId, "u-pr2"))!.root.children![0];
+      expect(after.practice).toBeUndefined();
+      expect(after.practiceCovers).toEqual([
+        { format: "problem-set", id: m4.id, note: null, task: "Problems 1-10", minutes: 60 },
+        { format: "recall", id: null, note: null, task: generated.task, minutes: 15 },
+      ]);
+      expect(after.children![0].practice).toEqual([{ ...sourced, id: m4.id, minutes: 30 }]);
+      const saved = (await getTrackDetail(created.trackId, "u-pr2"))!;
+      await replacePlanTree(created.trackId, "u-pr2", saved.root, saved.materials.map((m) => m.id));
+      const resaved = (await getTrackDetail(created.trackId, "u-pr2"))!.root.children![0];
+      expect(resaved.practiceCovers).toEqual(after.practiceCovers);
+      expect(resaved.children![0].practice).toEqual(after.children![0].practice);
+    });
+
+    it("keeps practice rows through an adjust save, and drops a row whose source is outside the track", async () => {
+      const created = await createTrackWithPlan({ userId: "u-pr3", title: "T", granularity: "week", root: practiceRoot(), materials: MATERIALS, hoursPerWeek: 6, split: null });
+      const detail = (await getTrackDetail(created.trackId, "u-pr3"))!;
+      const tampered = structuredClone(detail.root);
+      tampered.children![0].practice = [...tampered.children![0].practice!, { ...sourced, id: crypto.randomUUID() }];
+      await replacePlanTree(created.trackId, "u-pr3", tampered);
+      const after = (await getTrackDetail(created.trackId, "u-pr3"))!;
+      expect(after.root.children![0].practice).toEqual(detail.root.children![0].practice);
+    });
+
+    it("removes a source's practice rows with it but keeps the generated ones", async () => {
+      const created = await createTrackWithPlan({ userId: "u-pr4", title: "T", granularity: "week", root: practiceRoot(), materials: MATERIALS, hoursPerWeek: 6, split: null });
+      const detail = (await getTrackDetail(created.trackId, "u-pr4"))!;
+      const m4 = detail.materials.find((m) => m.title === "Problem list")!;
+      await replacePlanTree(created.trackId, "u-pr4", detail.root, detail.materials.filter((m) => m.id !== m4.id).map((m) => m.id));
+      const after = (await getTrackDetail(created.trackId, "u-pr4"))!;
+      expect(after.root.children![0].practice).toEqual([generated]);
+      expect(after.root.children![1].practiceCovers).toBeUndefined();
+      expect(await db.select().from(nodePractice).where(eq(nodePractice.sourceId, m4.id))).toEqual([]);
+    });
   });
 });

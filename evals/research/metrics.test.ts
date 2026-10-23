@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ModelCall } from "@/lib/ai/logged";
+import type { PracticePick } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
-import { backboneHit, chaptersSource, checkCounts, decide, decideWorkers, median, mustIncludeRecall, sizeMetrics, summarize, type ArmName, type RunMetrics } from "./metrics";
+import { makeNode, makeRoot } from "@/lib/planTree";
+import type { PracticeRef } from "@/lib/schemas/material";
+import { backboneHit, chaptersSource, checkCounts, decide, decideWorkers, formatHit, median, mustIncludeRecall, openPicks, practiceSourcedShare, sizeMetrics, summarize, type ArmName, type RunMetrics } from "./metrics";
 
 function material(title: string, extra: Partial<Material> = {}): Material {
   return { id: title, origin: "research", type: "link", kind: "docs", url: "https://x", title, author: null, year: null, why: null, backbone: false, verifiedAt: null, fetchedTitle: null, recommendedBy: [], sig: null, ...extra };
@@ -21,6 +24,24 @@ describe("label metrics", () => {
   });
 });
 
+describe("formatHit", () => {
+  const pick = (format: PracticePick["format"]): PracticePick => ({ format, share: 50, focus: "x", reason: "" });
+  it("names the labelled formats the picks missed and the excluded ones they took", () => {
+    expect(formatHit([pick("problem-set"), pick("session")], { include: ["problem-set", "mock"], exclude: ["session"] })).toEqual({ missing: ["mock"], unwanted: ["session"] });
+  });
+  it("is empty on both sides when the picks match the labels", () => {
+    expect(formatHit([pick("recall"), pick("design-exercise")], { include: ["recall"], exclude: ["problem-set"] })).toEqual({ missing: [], unwanted: [] });
+  });
+  it("reads a label with only one side", () => {
+    expect(formatHit([], { include: ["project"] })).toEqual({ missing: ["project"], unwanted: [] });
+    expect(formatHit([pick("lab")], { exclude: ["lab"] })).toEqual({ missing: [], unwanted: ["lab"] });
+  });
+  it("is null without labels", () => {
+    expect(formatHit([pick("recall")], undefined)).toBeNull();
+    expect(formatHit([pick("recall")], {})).toBeNull();
+  });
+});
+
 describe("checkCounts", () => {
   it("counts the code checks' facts", () => {
     const call = (facts: string[]) => ({ facts }) as unknown as ModelCall;
@@ -30,7 +51,26 @@ describe("checkCounts", () => {
         call(["Week 2 over budget: 400 of 360 min", "backbone ch. 2 after ch. 3 (Week 2)", "backbone ch. 3, 4 not reserved"]),
       ]),
     ).toEqual({ unknownRefs: 2, overBudgetLeaves: 1, chapterRegressions: 1, unreservedChapters: 1, overShareLeaves: 0 });
-    expect(checkCounts([call(["Day 1 must-reading over the plan's share: 45 of about 15 min"])]).overShareLeaves).toBe(1);
+    // Must-reading over the week's reading budget, a leaf week's or a week's days together.
+    expect(checkCounts([call(["breach: Week 1's must-reading is 250 min against a budget of about 180 min", "breach: Week 2's Problems practice is 130 min against a budget of about 90 min"])]).overShareLeaves).toBe(1);
+  });
+});
+
+describe("practice metrics", () => {
+  const row = (generated: boolean): PracticeRef => ({ format: "problem-set", id: generated ? null : "M2", task: "t", done: "d", minutes: 30, generated });
+  it("gives the sourced share of the plan's practice rows, null without any", () => {
+    const plan = makeRoot([
+      makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 5, children: [makeNode({ id: "d1", level: "day", title: "D1", summary: "s", len: 1, practice: [row(false), row(true)] })] }),
+      makeNode({ id: "w2", level: "week", title: "W2", summary: "s", len: 5, practice: [row(false), row(false)] }),
+    ]);
+    expect(practiceSourcedShare(plan)).toBe(0.75);
+    expect(practiceSourcedShare(makeRoot([makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 5 })]))).toBeNull();
+    expect(practiceSourcedShare(null)).toBeNull();
+  });
+  it("counts the practice picks research left open, in any case, null without coverage", () => {
+    expect(openPicks({ covered: ["Arrays"], open: ["Graphs", "practice: Problems", "Practice: Mock"] })).toBe(2);
+    expect(openPicks({ covered: [], open: [] })).toBe(0);
+    expect(openPicks(null)).toBeNull();
   });
 });
 
@@ -39,7 +79,7 @@ describe("decide", () => {
     recordId: "r", arm, run: 1, verifiedRate, proposed: 10, verified: 5, backboneHit: backbone, mustIncludeRecall: null, recency: 0,
     notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0, overShareLeaves: 0,
     sizedHours: 36, totalHours: 72, measuredShare: 0.5, unsizedShare: 0, coverage: null, costUsd: 0, latencyMs: 0,
-    researchMs: 0, toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: null,
+    researchMs: 0, toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: null, picks: [], formatHit: null, practiceSourcedShare: null, openPicks: null,
   });
   it("keeps arm A when it is no worse on backbone and within 10 points on verified rate", () => {
     const runs = [run("A", 0.7, true), run("C", 0.78, true)];
@@ -67,7 +107,7 @@ describe("decideWorkers", () => {
     recordId: "r", arm, run: 1, verifiedRate: 0.7, proposed: 10, verified: 7, backboneHit: backbone, mustIncludeRecall: recall, recency: 0,
     notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0, overShareLeaves: 0,
     sizedHours: 36, totalHours: 72, measuredShare: 0.5, unsizedShare: 0, coverage: null, costUsd, latencyMs: researchMs + 40_000, researchMs,
-    toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: null,
+    toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: null, picks: [], formatHit: null, practiceSourcedShare: null, openPicks: null,
   });
   it("adopts W when its research is fast enough, no more than five points behind, and not too dear", () => {
     const runs = [run("A", 100_000, 0.2, true, 1), run("A", 120_000, 0.2, true, 0.5), run("W", 60_000, 0.3, true, 0.75), run("W", 70_000, 0.3, false, 0.75)];
@@ -124,7 +164,7 @@ describe("chaptersSource", () => {
     recordId: "r", arm: "A", run: 1, verifiedRate: 0.7, proposed: 10, verified: 7, backboneHit: backbone, mustIncludeRecall: null, recency: 0,
     notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0, overShareLeaves: 0,
     sizedHours: 36, totalHours: 72, measuredShare: 0.5, unsizedShare: 0, coverage: null, costUsd: 0, latencyMs: 0, researchMs: 0,
-    toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: source,
+    toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: source, picks: [], formatHit: null, practiceSourcedShare: null, openPicks: null,
   });
   it("reads the backbone's list source, null without a backbone or a list", () => {
     expect(chaptersSource([material("Core", { kind: "book", backbone: true, toc }), material("Other", { toc: { ...toc, source: "catalogue" } })])).toBe("page");

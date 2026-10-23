@@ -8,7 +8,7 @@
  * count (see `weeksOf`).
  */
 
-import type { CoverRef, MaterialRef } from "@/lib/schemas/material";
+import type { CoverRef, MaterialRef, PracticeCover, PracticeRef } from "@/lib/schemas/material";
 
 export type PlanLevel = "month" | "week" | "day";
 export type NodeStatus = "pending" | "generated" | "completed";
@@ -33,6 +33,10 @@ export interface PlanNode {
   covers?: CoverRef[];
   /** Leaves: the Read table. */
   materials?: MaterialRef[];
+  /** Headings: practice sources the units inside will use, reserved in order. */
+  practiceCovers?: PracticeCover[];
+  /** Leaves: the practice rows. */
+  practice?: PracticeRef[];
   /** Track pages attach the sessions logged against a week leaf. */
   sessions?: { count: number; hours: number };
   /** 1-based index of the first study day across the plan, set by `layout`. Internal: the learner sees days by week. */
@@ -313,6 +317,8 @@ export interface NewNodeInput {
   status?: NodeStatus;
   covers?: CoverRef[];
   materials?: MaterialRef[];
+  practiceCovers?: PracticeCover[];
+  practice?: PracticeRef[];
 }
 
 export function makeNode(input: NewNodeInput): PlanNode {
@@ -328,6 +334,8 @@ export function makeNode(input: NewNodeInput): PlanNode {
     children: input.children ?? null,
     ...(input.covers && input.covers.length > 0 ? { covers: input.covers } : {}),
     ...(input.materials && input.materials.length > 0 ? { materials: input.materials } : {}),
+    ...(input.practiceCovers && input.practiceCovers.length > 0 ? { practiceCovers: input.practiceCovers } : {}),
+    ...(input.practice && input.practice.length > 0 ? { practice: input.practice } : {}),
     start: 1,
     end: input.len,
   };

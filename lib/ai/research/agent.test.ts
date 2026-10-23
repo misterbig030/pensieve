@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
+import { PRACTICE_REGISTRY, type PracticePick } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
-import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm } from "./agent";
+import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, readingHours } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
-import { isThin, researchMaterials, streamWhile } from "./pipeline";
+import { isThin, researchMaterials, streamWhile, verifiedReading } from "./pipeline";
 import { RESEARCH_CAPS, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
 import type { BookLookup, CandidateList } from "./verify";
 
@@ -306,6 +307,25 @@ describe("thin research", () => {
     expect(isThin(8, { covered: ["History", "Basic stitches"], open: ["Advanced stitches", "Finishing"] })).toBe(true);
     expect(isThin(8, { covered: ["Foundations", "Agents", "Evals"], open: ["Retrieval"] })).toBe(false);
     expect(isThin(8, { covered: ["Foundations"], open: [] })).toBe(false);
+    // Open practice picks are not topic areas.
+    expect(isThin(8, { covered: ["Foundations", "Agents", "Evals"], open: ["practice: Problems", "practice: Mock", "practice: Design"] })).toBe(false);
+    expect(isThin(8, { covered: ["Foundations"], open: ["Evals", "practice: Problems"] })).toBe(true);
+    // The prefix matches in any case.
+    expect(isThin(8, { covered: ["Foundations"], open: ["Practice: Problems"] })).toBe(false);
+  });
+
+  it("counts only the researched materials there is something to read in", () => {
+    const problems = { format: "problem-set" as const, items: 150, perItemMinutes: 10, minutes: 1500, answers: true };
+    const list = [
+      { origin: "research" as const, minutes: 600 },
+      { origin: "research" as const, minutes: 300, practice: problems },
+      { origin: "research" as const, minutes: null, practice: problems },
+      { origin: "research" as const, minutes: null, practice: { ...problems, format: "lab" as const } },
+      { origin: "learner" as const, minutes: 120 },
+    ];
+    // Two readings and two practice-only lists is two verified to read: thin.
+    expect(verifiedReading(list)).toBe(2);
+    expect(isThin(verifiedReading(list), null)).toBe(true);
   });
 
   it("carries the arm's coverage and the list's size to the done event", async () => {
@@ -351,6 +371,76 @@ describe("research prompts", () => {
     expect(plain).not.toContain("grouped by the research direction");
     expect(grouped).toContain("Notes are grouped by the research direction that found them; a material found by more than one appears once in your list.");
     expect(grouped.indexOf("Research notes")).toBeLessThan(grouped.indexOf("grouped by the research direction"));
+  });
+});
+
+const PICKS: PracticePick[] = [
+  { format: "problem-set", share: 70, focus: "graph problems", reason: "r" },
+  { format: "lab", share: 30, focus: "git branching", reason: "r" },
+];
+const splitOf = (formats: PracticePick[]) => ({ readingShare: 60, practice: "problems", formats, reason: "r" });
+
+describe("the practice picks in the research prompts", () => {
+  const caps: ResearchCaps = { steps: 8, searches: 3, fetches: 6, wallMs: 60_000 };
+
+  it("adds a practice step to arm A's work order only when the plan has picks", () => {
+    const text = buildResearchInstructions(caps, undefined, undefined, undefined, PICKS);
+    expect(text).toContain("\n6. Practice");
+    for (const pick of PICKS) expect(text).toContain(`${PRACTICE_REGISTRY[pick.format].research} for: ${pick.focus}`);
+    expect(text).not.toContain("not by you");
+    expect(text.indexOf("5. Size")).toBeLessThan(text.indexOf("6. Practice"));
+    // The candidates step holds what is read to the plan's reading time, so the work order says the same.
+    expect(text).toContain("only the reading part of the study time goes to what the list asks the learner to read");
+    expect(text).not.toContain("a list that takes longer than that to get through is too long");
+    const plain = buildResearchInstructions(caps);
+    expect(plain).toContain("The learner's total study time is in the brief; a list that takes longer than that to get through is too long.");
+    expect(plain).not.toContain("Practice");
+    // The split is picked before research, so it is decided already, all reading when there are no picks.
+    expect(plain).toContain("How the learner's time divides between reading and practice is already decided, not by you.");
+    expect(plain).not.toContain("decided later");
+    expect(buildResearchInstructions(caps, undefined, undefined, undefined, [])).toBe(plain);
+  });
+
+  it("asks for a practice draft on candidates and the learner's sources, and lists unmet picks as open", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 4, sources: [], split: splitOf(PICKS) }, "notes");
+    expect(prompt).toContain("- practice:");
+    expect(prompt).toContain("problem-set (Problems): graph problems");
+    expect(prompt).toContain("lab (Lab): git branching");
+    expect(prompt).toContain("items: the problems, questions, labs or steps");
+    expect(prompt).toContain("perItemMinutes: only when the page states a time per item");
+    expect(prompt).toContain("answers: true only when the source gives solutions, an answer key, worked solutions or a rubric");
+    expect(prompt).toContain("minutes are null unless the plan would also read it");
+    expect(prompt).toContain("A wrong answers: false removes the tag");
+    expect(prompt).toContain('"practice: <label>"');
+    expect(prompt).toContain("practice: Problems");
+  });
+
+  it("leaves the final prompt as it was without picks, but for the reading cap", () => {
+    const base = buildFinalPrompt({ topic: "T", weeks: 4, sources: [] }, "notes");
+    expect(base).not.toContain("practice");
+    expect(base).toContain("must not exceed 24 hours");
+    // 60% of 24 hours.
+    expect(buildFinalPrompt({ topic: "T", weeks: 4, sources: [], split: splitOf([]) }, "notes")).toBe(base.replace("must not exceed 24 hours", "must not exceed 14 hours"));
+  });
+
+  it("caps the candidates' reading at the plan's reading hours, not all its study hours", () => {
+    // An SDE interview loop: 8 weeks at 6 hours, a quarter of it reading, drafted about 31 hours of reading.
+    const brief = { topic: "T", weeks: 8, hoursPerWeek: 6, sources: [], split: { ...splitOf(PICKS), readingShare: 25 } };
+    expect(readingHours(brief)).toBe(12);
+    const prompt = buildFinalPrompt(brief, "notes");
+    expect(prompt).toContain("48 hours of study in all");
+    expect(prompt).toContain("together the minutes of what the plan reads or watches must not exceed 12 hours, the plan's reading time; practice-only sources have no minutes and do not count");
+    expect(readingHours({ weeks: 8, hoursPerWeek: 6 })).toBe(48);
+    expect(readingHours({ ...brief, split: { ...brief.split, readingShare: 100 } })).toBe(48);
+    expect(readingHours({ ...brief, split: { ...brief.split, readingShare: 0 } })).toBe(1);
+  });
+
+  it("gives arm A the picks of the brief's split", async () => {
+    const { model, calls } = scriptedModel([{ text: "Done." }], [LIST]);
+    const { fetcher } = fetcherFor();
+    await collect(researchMaterials({ brief: { ...brief, split: splitOf(PICKS) }, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
+    const system = calls.map((c) => c.prompt.find((m) => m.role === "system")?.content).find((c) => typeof c === "string" && c.includes("You gather"));
+    expect(system).toContain("6. Practice");
   });
 });
 

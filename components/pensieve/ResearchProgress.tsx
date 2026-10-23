@@ -12,6 +12,8 @@ const SHOWN_LOG = 8;
 export function ResearchProgress({ state, totalHours }: { state: ResearchProgressState; totalHours?: number }) {
   const elapsed = useElapsed(state.startedAt, state.running);
   const log = state.log.slice(-SHOWN_LOG);
+  // The practice worker may go past the band's caps (a search for each kind of practice), so a counter never shows more than its cap.
+  const searchCap = Math.max(state.caps.searches, state.searches);
   const readCap = Math.max(state.caps.fetches, state.reads);
 
   return (
@@ -34,7 +36,7 @@ export function ResearchProgress({ state, totalHours }: { state: ResearchProgres
         </p>
 
         <div className="grid grid-cols-3 gap-3 max-[640px]:grid-cols-1">
-          <Counter label="Searches" value={state.searches} of={state.caps.searches} />
+          <Counter label="Searches" value={state.searches} of={searchCap} />
           <Counter label="Pages read" value={state.reads} of={readCap} />
           <Counter label="Verified" value={state.verified} extra={state.dropped > 0 ? `· ${state.dropped} dropped` : undefined} of={Math.max(1, state.verified + state.dropped)} good />
         </div>

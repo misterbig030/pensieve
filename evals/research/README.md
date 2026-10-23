@@ -46,7 +46,8 @@ and practice. Each run now records:
 - `coverage`: how many of the topic's main areas research named as covered and as left open;
 - `split`: the drafter's reading share, what the rest is spent on, and its reason, for the judges to score under
   rubric dimension 5 (fit to the kind of topic);
-- `overShareLeaves`: units whose must-reading ran well past the plan's own share.
+- `overShareLeaves`: weeks whose must-reading ran well past the week's reading budget (the drafting checks'
+  must-reading breach, counted on every call that raised it).
 
 Four records at the end of `golden.v3.ts` exist for this: three hours a week, thirty hours a week, a history topic
 with nothing to build, and physical training.
@@ -112,3 +113,12 @@ once more with the breaches quoted; rows that still breach are dropped. Each bre
 the facts line. For the rubric, a plan whose months share a chapter, or whose days read outside their week's
 reservation, is a regression; a review row (activity `review`) over chapters read earlier is correct. Spec:
 `docs/superpowers/specs/2026-10-18-chapter-resources-design.md`. The eval has not been rerun for this change.
+
+## Practice formats (Oct 21)
+
+The practice is picked before research: up to four formats, each with a share of the practice time. Each run records
+`picks` (the formats picked), `formatHit` (labelled formats the picks missed and excluded ones they took),
+`practiceSourcedShare` (sourced practice rows over all practice rows in the drafted plan, the owner's quality bar of
+practice from established sources) and `openPicks` (picks research found no source for, from `coverage.open`).
+`summarize` reports the mean of the last two. Spec: `docs/superpowers/specs/2026-10-21-practice-formats-design.md`.
+The eval has not been rerun for this change.

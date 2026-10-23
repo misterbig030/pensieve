@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot } from "@/lib/planTree";
-import { clampHours, dayMinutes, formatDayTime, hoursInText, normalizeSplit, presetFor, readingShareOf, rebudget, totalHours, weeksLabel } from "./studyTime";
+import { clampHours, dayMinutes, formatDayTime, hoursInText, isAllReading, normalizeSplit, planSplitSchema, practiceLabelOf, presetFor, readingShareOf, rebudget, shareAdjustable, totalHours, weeksLabel } from "./studyTime";
 
 describe("hours", () => {
   it("totals the plan's hours over its weeks", () => {
@@ -61,6 +61,68 @@ describe("split", () => {
       reason: "A skill learned by shipping.",
     });
     expect(normalizeSplit({ readingShare: 140, practice: "x", reason: "" })?.readingShare).toBe(100);
+  });
+
+  it("carries normalised picks", () => {
+    const split = normalizeSplit({
+      readingShare: 60,
+      practice: "problems and design",
+      reason: "r",
+      picks: [
+        { format: "problem-set", share: 3, focus: "arrays", reason: "" },
+        { format: "design-exercise", share: 1, focus: "systems", reason: "" },
+        { format: "problem-set", share: 5, focus: "again", reason: "" },
+        { format: "karaoke", share: 5, focus: "x", reason: "" },
+      ],
+    });
+    expect(split?.formats?.map((p) => [p.format, p.share])).toEqual([
+      ["problem-set", 75],
+      ["design-exercise", 25],
+    ]);
+    expect(split?.readingShare).toBe(60);
+    expect(planSplitSchema.safeParse(split).success).toBe(true);
+  });
+
+  it("drops picks at 100% reading and reads 100% when no pick survives", () => {
+    const pick = { format: "recall", share: 100, focus: "terms", reason: "" };
+    expect(normalizeSplit({ readingShare: 100, practice: "none", reason: "", picks: [pick] })?.formats).toEqual([]);
+    const none = normalizeSplit({ readingShare: 70, practice: "practice", reason: "", picks: [{ format: "karaoke", share: 1, focus: "x", reason: "" }] });
+    expect(none?.readingShare).toBe(100);
+    expect(none?.formats).toEqual([]);
+    expect(normalizeSplit({ readingShare: 70, practice: "practice", reason: "", picks: [] })?.readingShare).toBe(100);
+  });
+
+  it("parses a split saved before picks existed", () => {
+    const split = planSplitSchema.parse({ readingShare: 60, practice: "practice problems", reason: "r" });
+    expect(split.formats).toBeUndefined();
+    expect(practiceLabelOf(split)).toBe("practice problems");
+  });
+
+  it("names the practice by its picks, in lower case", () => {
+    const pick = (format: "problem-set" | "design-exercise" | "mock") => ({ format, share: 30, focus: "f", reason: "" });
+    const base = { readingShare: 50, practice: "practice", reason: "" };
+    expect(practiceLabelOf({ ...base, formats: [pick("problem-set")] })).toBe("problems");
+    expect(practiceLabelOf({ ...base, formats: [pick("problem-set"), pick("mock")] })).toBe("problems and mock");
+    expect(practiceLabelOf({ ...base, formats: [pick("problem-set"), pick("design-exercise"), pick("mock")] })).toBe("problems, design and mock");
+    expect(practiceLabelOf({ ...base, formats: [] })).toBe("practice");
+  });
+
+  it("knows an all-reading split, so nothing is said of the rest", () => {
+    const pick = { format: "problem-set" as const, share: 100, focus: "f", reason: "" };
+    expect(isAllReading({ readingShare: 100, practice: "reading", reason: "", formats: [] })).toBe(true);
+    expect(isAllReading({ readingShare: 80, practice: "reading", reason: "", formats: [] })).toBe(true);
+    expect(isAllReading({ readingShare: 100, practice: "projects", reason: "" })).toBe(true);
+    expect(isAllReading({ readingShare: 60, practice: "projects", reason: "" })).toBe(false);
+    expect(isAllReading({ readingShare: 60, practice: "problems", reason: "", formats: [pick] })).toBe(false);
+  });
+
+  it("lets the learner move the reading share only when there is practice to give the time to", () => {
+    const pick = { format: "problem-set" as const, share: 100, focus: "f", reason: "" };
+    expect(shareAdjustable({ readingShare: 100, practice: "reading", reason: "", formats: [] })).toBe(false);
+    expect(shareAdjustable({ readingShare: 25, practice: "problems", reason: "", formats: [pick] })).toBe(true);
+    expect(shareAdjustable({ readingShare: 100, practice: "problems", reason: "", formats: [pick] })).toBe(true);
+    // A split from before picks keeps its slider: its rest is open practice.
+    expect(shareAdjustable({ readingShare: 60, practice: "projects", reason: "" })).toBe(true);
   });
 
   it("is null without a share or a practice", () => {

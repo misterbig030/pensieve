@@ -1,5 +1,6 @@
-import { dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
+import { ANSWERS_FENCE, dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
 import type { Chapter, MaterialKind, MaterialTier, RefActivity } from "@/lib/schemas/material";
+import type { PracticeFormat } from "@/lib/practice";
 import type { SourceType } from "@/lib/schemas/source";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_CONTENT_MODEL } from "./models";
@@ -22,11 +23,27 @@ export interface LessonMaterial {
   activity?: RefActivity;
 }
 
+/** One row of the unit's Do table, as the lesson prompt sees it. */
+export interface LessonPractice {
+  format: PracticeFormat;
+  /** The format's name: "Problems", "Recall". */
+  label: string;
+  task: string;
+  /** How the learner knows it is finished. */
+  done: string;
+  minutes: number;
+  /** The material the row is from; for a generated recall row, the reading it is made from; null for any other generated row. */
+  source: { title: string; url: string } | null;
+  generated: boolean;
+}
+
 interface BuildDailyContentPromptInput {
   title: string;
   summary: string;
   /** The unit's assigned materials. The lesson may cite only these. */
   materials: LessonMaterial[];
+  /** The unit's Do table. The lesson explains how to do and check each task; its sources are linked, never cited. */
+  practice?: LessonPractice[];
   /** A day is one lesson; a week is the material for several self-paced sessions. Defaults to a day. */
   unit?: "day" | "week";
   /** Span of the unit in days (weeks only). */
@@ -46,6 +63,29 @@ function row(m: LessonMaterial): string {
   } else if (review) part = "review";
   const meta = [m.tier, m.minutes ? `${m.minutes} min` : null, m.chapter ? null : m.note].filter(Boolean).join(", ");
   return `- ${m.title} (${m.url})${part ? ` — ${part}` : ""}${meta ? ` — ${meta}` : ""}`;
+}
+
+/** `- Problems: Do problems 1-10 (60 min) — done when: … — source: Problem list (url)`, or `— generated` when no source stands behind it. */
+function practiceRow(p: LessonPractice): string {
+  const origin = p.source ? (p.generated ? `generated from the reading: ${p.source.title} (${p.source.url})` : `source: ${p.source.title} (${p.source.url})`) : "generated";
+  return `- ${p.label}: ${p.task} (${p.minutes} min) — done when: ${p.done} — ${origin}`;
+}
+
+/** The practice section of the prompt: the tasks, and what the lesson writes for them. */
+function practiceSection(practice: LessonPractice[]): string[] {
+  const parts = [
+    `This unit's practice. End the lesson with a section on how to do and check each task: how to set it up, how to work through it, and how the learner knows it is done, by its "done when" line. Explain the tasks; do not just repeat the list. Link a task's source where it helps, but cite none of these sources in "citations":`,
+    ...practice.map(practiceRow),
+  ];
+  if (practice.some((p) => p.generated && p.format === "recall")) {
+    parts.push(
+      `For each generated Recall task, write its questions, then their answers in a fenced code block with the info string "${ANSWERS_FENCE}" (\`\`\`${ANSWERS_FENCE}), written as markdown inside the fence; the lesson shows that block collapsed, so the learner answers first. Draw the questions and answers only from this unit's reading above.`,
+    );
+  }
+  if (practice.some((p) => p.generated && p.format !== "recall")) {
+    parts.push(`Generated tasks of any other format get how-to guidance only: do not write exercises, problems or other content for them.`);
+  }
+  return parts;
 }
 
 export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): string {
@@ -86,6 +126,8 @@ export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): st
     );
     for (const s of other) parts.push(`- ${s.title ?? s.url}`);
   }
+
+  if (input.practice && input.practice.length > 0) parts.push(...practiceSection(input.practice));
 
   parts.push(
     readable.length + videos.length > 0

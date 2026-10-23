@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
+import { PRACTICE_REGISTRY, type PracticePick } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
 import { initialResearch, reduceResearch } from "@/lib/researchProgress";
@@ -35,7 +36,7 @@ function stepResult(step: Exclude<Step, "throw">): LanguageModelV4GenerateResult
 
 function directionOf(options: LanguageModelV4CallOptions): WorkerDirection | null {
   const system = options.prompt.find((m) => m.role === "system");
-  const match = typeof system?.content === "string" ? /^Direction: (backbone|canonical|current)\./m.exec(system.content) : null;
+  const match = typeof system?.content === "string" ? /^Direction: (backbone|canonical|current|practice)\./m.exec(system.content) : null;
   return (match?.[1] as WorkerDirection | undefined) ?? null;
 }
 
@@ -121,7 +122,7 @@ const LIST: CandidateList = {
 /** 12 weeks at six hours a week: the 100-hour band (6 searches, 12 reads), where the backbone worker has four steps. */
 const brief = { topic: "LLM engineering", weeks: 12, sources: [{ url: "https://learner.example.com/mine", type: "link" as const }] };
 
-const SCRIPTS: Record<WorkerDirection, Step[]> = {
+const SCRIPTS: Record<"backbone" | "canonical" | "current", Step[]> = {
   backbone: [
     { calls: [{ tool: "webSearch", input: { query: "best llm engineering book" } }] },
     { calls: [{ tool: "fetchSource", input: { url: "https://books.example.com/core" } }] },
@@ -150,23 +151,71 @@ describe("splitCaps", () => {
   it("divides each band between the workers so the shares sum to the band", () => {
     for (const hours of [6, 30, 72, 360]) {
       const caps = capsFor(hours);
-      const plans = splitCaps(caps);
+      const plans = splitCaps(caps, 0);
       expect(plans.reduce((n, p) => n + p.caps.searches, 0)).toBe(caps.searches);
       expect(plans.reduce((n, p) => n + p.caps.fetches, 0)).toBe(caps.fetches);
       expect(plans.every((p) => p.caps.wallMs === Math.round(caps.wallMs * DEADLINE_SHARE))).toBe(true);
       expect(plans.filter((p) => p.direction !== "backbone").every((p) => p.caps.steps === 2)).toBe(true);
     }
-    expect(splitCaps(capsFor(6)).map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps, p.withCurrent])).toEqual([["backbone", 2, 3, 3, false], ["canonical", 1, 3, 2, true]]);
-    expect(splitCaps(capsFor(30)).map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps])).toEqual([["backbone", 3, 4, 3], ["canonical", 1, 3, 2], ["current", 1, 3, 2]]);
-    expect(splitCaps(capsFor(72)).map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps])).toEqual([["backbone", 3, 5, 4], ["canonical", 2, 4, 2], ["current", 1, 3, 2]]);
-    expect(splitCaps(capsFor(360)).map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps])).toEqual([["backbone", 4, 6, 4], ["canonical", 2, 5, 2], ["current", 2, 5, 2]]);
+    expect(splitCaps(capsFor(6), 0).map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps, p.withCurrent])).toEqual([["backbone", 2, 3, 3, false], ["canonical", 1, 3, 2, true]]);
+    expect(splitCaps(capsFor(30), 0).map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps])).toEqual([["backbone", 3, 4, 3], ["canonical", 1, 3, 2], ["current", 1, 3, 2]]);
+    expect(splitCaps(capsFor(72), 0).map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps])).toEqual([["backbone", 3, 5, 4], ["canonical", 2, 4, 2], ["current", 1, 3, 2]]);
+    expect(splitCaps(capsFor(360), 0).map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps])).toEqual([["backbone", 4, 6, 4], ["canonical", 2, 5, 2], ["current", 2, 5, 2]]);
     // Caps that are not a band never produce an empty share; they may then exceed the caps given.
-    expect(splitCaps({ steps: 3, searches: 4, fetches: 3, wallMs: 60_000 }).every((p) => p.caps.searches >= 1 && p.caps.fetches >= 1)).toBe(true);
+    expect(splitCaps({ steps: 3, searches: 4, fetches: 3, wallMs: 60_000 }, 0).every((p) => p.caps.searches >= 1 && p.caps.fetches >= 1)).toBe(true);
+  });
+});
+
+describe("splitCaps with practice", () => {
+  const shape = (hours: number) => splitCaps(capsFor(hours), 1).map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps]);
+
+  it("adds a three-step practice worker and, for one kind of practice, keeps the band's searches and reads", () => {
+    for (const hours of [6, 30, 72, 360]) {
+      const caps = capsFor(hours);
+      const plans = splitCaps(caps, 1);
+      expect(plans.at(-1)?.direction).toBe("practice");
+      expect(plans.at(-1)?.caps.steps).toBe(3);
+      expect(plans.reduce((n, p) => n + p.caps.searches, 0)).toBe(caps.searches);
+      expect(plans.reduce((n, p) => n + p.caps.fetches, 0)).toBe(caps.fetches);
+      expect(plans.every((p) => p.caps.searches >= 1 && p.caps.fetches >= 1)).toBe(true);
+      expect(plans.every((p) => p.caps.wallMs === Math.round(caps.wallMs * DEADLINE_SHARE))).toBe(true);
+      expect(plans.at(-1)?.picks).toBeUndefined();
+    }
+  });
+
+  it("gives the practice worker a quarter of the band, taken from canonical first and then current", () => {
+    expect(shape(72)).toEqual([["backbone", 3, 5, 4], ["canonical", 1, 1, 2], ["current", 1, 3, 2], ["practice", 1, 3, 3]]);
+    expect(shape(360)).toEqual([["backbone", 4, 6, 4], ["canonical", 1, 1, 2], ["current", 1, 5, 2], ["practice", 2, 4, 3]]);
+  });
+
+  it("gives the practice worker a search for each kind of practice and a read more, past the band where it must", () => {
+    // An SDE interview loop at 48 hours: problems, design, mock and recall used to share one search.
+    const plans = splitCaps(capsFor(48), 4);
+    expect(plans.map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps])).toEqual([
+      ["backbone", 3, 5, 4],
+      ["canonical", 1, 1, 2],
+      ["current", 1, 3, 2],
+      ["practice", 4, 5, 3],
+    ]);
+    // Where the quarter is already enough, the kinds change nothing.
+    expect(splitCaps(capsFor(360), 2).map((p) => [p.direction, p.caps.searches, p.caps.fetches])).toEqual(splitCaps(capsFor(360), 1).map((p) => [p.direction, p.caps.searches, p.caps.fetches]));
+  });
+
+  it("takes the practice worker's share from canonical at the smallest band, where only two workers run", () => {
+    const plans = splitCaps(capsFor(6), 1);
+    expect(plans.map((p) => p.direction)).toEqual(["backbone", "canonical", "practice"]);
+    expect(plans.find((p) => p.direction === "canonical")).toMatchObject({ withCurrent: true, caps: { fetches: 1 } });
+    expect(plans.find((p) => p.direction === "practice")?.caps).toMatchObject({ searches: 1, fetches: 2 });
+  });
+
+  it("leaves today's split alone without practice", () => {
+    for (const hours of [6, 30, 72, 360]) expect(splitCaps(capsFor(hours), 0).map((p) => p.direction)).not.toContain("practice");
+    expect(splitCaps(capsFor(72), 0).map((p) => [p.direction, p.caps.searches, p.caps.fetches])).toEqual([["backbone", 3, 5], ["canonical", 2, 4], ["current", 1, 3]]);
   });
 });
 
 describe("buildWorkerInstructions", () => {
-  const [backbone, canonical, current] = splitCaps(capsFor(72));
+  const [backbone, canonical, current] = splitCaps(capsFor(72), 0);
   it("names the direction, its boundary and its own budget, and keeps the rules", () => {
     const b = buildWorkerInstructions(backbone);
     expect(b.startsWith("Direction: backbone.\n")).toBe(true);
@@ -190,12 +239,29 @@ describe("buildWorkerInstructions", () => {
     expect(r).toContain("Budget: 1 search, 3 page reads and 2 steps in all");
     for (const text of [b, c, r]) expect(text).toContain(RESEARCH_RULES);
   });
+  it("tells the practice worker what to look for, pick by pick, and to keep to practice sources", () => {
+    const picks: PracticePick[] = [
+      { format: "problem-set", share: 60, focus: "dynamic programming", reason: "r" },
+      { format: "mock", share: 40, focus: "system design rounds", reason: "r" },
+    ];
+    const practice = splitCaps(capsFor(72), picks.length).find((p) => p.direction === "practice")!;
+    const text = buildWorkerInstructions({ ...practice, picks });
+    expect(text.startsWith("Direction: practice.\n")).toBe(true);
+    for (const pick of picks) expect(text).toContain(`${PRACTICE_REGISTRY[pick.format].research} for: ${pick.focus}`);
+    expect(text).toContain("Boundaries: practice sources only");
+    expect(text).toContain("Prefer ones that come with answers");
+    expect(text).toContain("Budget: 2 searches, 3 page reads and 3 steps in all");
+    expect(text).toContain("one search for each kind of practice");
+    expect(text).toContain("In the third, read the readable copy of any page that came back nearly empty");
+    expect(text).toContain("Do not write notes");
+    expect(text).toContain(RESEARCH_RULES);
+  });
   it("asks the canonical worker for recent material too at the smallest band", () => {
-    const [, combined] = splitCaps(capsFor(6));
+    const [, combined] = splitCaps(capsFor(6), 0);
     expect(buildWorkerInstructions(combined)).toContain("last two years");
   });
   it("fits the backbone strategy into three steps where the band gives three", () => {
-    const [backbone] = splitCaps(capsFor(30));
+    const [backbone] = splitCaps(capsFor(30), 0);
     const b = buildWorkerInstructions(backbone);
     expect(b).toContain("you have 3 steps, and the last must be your notes");
     expect(b).toContain("the leading book's publisher's or author's page, all at once. Third, write your notes.");
@@ -254,6 +320,30 @@ describe("arm W through the pipeline", () => {
     const state = events.reduce((s, e) => reduceResearch(s, e, new Set(["https://learner.example.com/mine"])), initialResearch());
     expect(state.searches).toBe(3);
     expect(state.reads).toBe(4);
+  });
+
+  it("runs a practice worker when the brief's split has picks, and hands the picks to it alone", async () => {
+    const picks: PracticePick[] = [{ format: "problem-set", share: 100, focus: "graph problems", reason: "r" }];
+    const split = { readingShare: 60, practice: "problems", formats: picks, reason: "r" };
+    const { model, calls } = directedModel({ ...SCRIPTS, practice: [{ calls: [{ tool: "webSearch", input: { query: "graph problems with solutions" } }] }, { text: "Done." }] }, [LIST]);
+    const { fetcher } = fetcherFor();
+    const { events, outcome } = await collect(researchMaterials({ brief: { ...brief, split }, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }));
+    expect(outcome.arm?.workers?.map((w) => w.direction)).toEqual(["backbone", "canonical", "current", "practice"]);
+    expect(events.filter((e) => e.type === "research.search" && e.worker === "practice")).toHaveLength(1);
+    const system = (direction: string) => String(calls.find((c) => directionOf(c) === direction)!.prompt.find((m) => m.role === "system")?.content);
+    expect(system("practice")).toContain("for: graph problems");
+    expect(system("canonical")).not.toContain("graph problems");
+    const prompt = candidatePrompt(calls);
+    expect(prompt).toContain("Practice sources:");
+    expect(prompt).toContain("problem-set");
+  });
+
+  it("runs the three directions as before when the split has no picks", async () => {
+    const split = { readingShare: 100, practice: "none", formats: [], reason: "r" };
+    const { model } = directedModel(SCRIPTS, [LIST]);
+    const { fetcher } = fetcherFor();
+    const { outcome } = await collect(researchMaterials({ brief: { ...brief, split }, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books }));
+    expect(outcome.arm?.workers?.map((w) => w.direction)).toEqual(["backbone", "canonical", "current"]);
   });
 
   it("runs two workers at the smallest band, canonical covering recent material", async () => {
@@ -368,7 +458,7 @@ describe("folding the workers", () => {
   });
 
   it("merges the notes under one heading per direction with the union of URLs", () => {
-    const [backbone, canonical] = splitCaps(capsFor(6));
+    const [backbone, canonical] = splitCaps(capsFor(6), 0);
     const learner = new ResearchNotes();
     learner.fetches.push({ url: "https://learner.example.com/mine", ok: true, title: "My notes page", finalUrl: "https://learner.example.com/mine", excerpt: "mine" });
     const b = new ResearchNotes();
@@ -381,6 +471,13 @@ describe("folding the workers", () => {
     expect(merged.text).toContain("\n\nCanonical and recent material:\nRead <https://docs.example.com/a>");
     expect(merged.seenUrls).toEqual(new Set(["https://learner.example.com/mine", "https://lists.bookrecs.com/best", "https://docs.example.com/a"]));
     expect(mergeNotes(new ResearchNotes(), [{ plan: backbone, notes: new ResearchNotes() }]).text).toBe("Backbone research:\n(nothing)");
+  });
+
+  it("files a practice worker's notes under its own heading", () => {
+    const [, , , practice] = splitCaps(capsFor(72), 1);
+    const notes = new ResearchNotes();
+    notes.fetches.push({ url: "https://drills.example.com/a", ok: true, title: "Drills", finalUrl: "https://drills.example.com/a", excerpt: "d" });
+    expect(mergeNotes(new ResearchNotes(), [{ plan: practice, notes }]).text).toMatch(/^Practice sources:\nRead <https:\/\/drills.example.com\/a>/);
   });
 
   it("measures how much of what the searches returned more than one worker saw", () => {

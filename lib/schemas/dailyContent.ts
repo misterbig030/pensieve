@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** The info string of the fenced block a lesson puts a generated recall task's answers in, as markdown; the lesson shows it collapsed. */
+export const ANSWERS_FENCE = "answers";
+
 export const dailyContentSchema = z.object({
   contentMarkdown: z.string().min(1),
   citations: z.array(

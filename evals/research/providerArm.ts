@@ -6,6 +6,7 @@ import {
   briefLines,
   buildFinalPrompt,
   buildResearchInstructions,
+  picksOf,
   type ArmInput,
   type ArmResult,
   type ResearchArm,
@@ -73,7 +74,7 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
     let fetches = 0;
     let costUsd = 0;
 
-    const instructions = buildResearchInstructions(caps, TOOL_NAMES, "tool");
+    const instructions = buildResearchInstructions(caps, TOOL_NAMES, "tool", undefined, picksOf(brief));
     const prompt = briefLines(brief).join("\n");
     const agent = new ToolLoopAgent({
       model,

@@ -1,4 +1,5 @@
 import type { LanguageModel } from "ai";
+import type { PracticePick } from "@/lib/practice";
 import { hostOf } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
 import { DEFAULT_RESEARCH_MODEL, type AiModelId, type ReasoningEffort } from "../models";
@@ -8,6 +9,8 @@ import {
   todayLine,
   ResearchLoopError,
   briefLines,
+  picksOf,
+  practiceLines,
   runCandidateStep,
   runResearchLoop,
   type ArmInput,
@@ -37,14 +40,22 @@ export interface WorkerPlan {
   caps: ResearchCaps;
   /** At the smallest band the canonical worker covers currency too. */
   withCurrent: boolean;
+  /** The practice picks the practice worker looks for; set only on the practice plan. */
+  picks?: PracticePick[];
 }
 
 /**
  * Divides a band's caps between the workers. The shares sum to the band's searches and reads; the band's step cap is
  * not used, each worker has its own. With three searches or fewer there are two workers. Caps that are not a band
- * are clamped so no worker gets an empty share, and may then exceed the caps given.
+ * are clamped so no worker gets an empty share, and may then exceed the caps given. With `practiceKinds` above zero
+ * a practice worker is added; see `addPracticeWorker`.
  */
-export function splitCaps(caps: ResearchCaps): WorkerPlan[] {
+export function splitCaps(caps: ResearchCaps, practiceKinds: number): WorkerPlan[] {
+  const plans = bandPlans(caps);
+  return practiceKinds > 0 ? addPracticeWorker(plans, caps, practiceKinds) : plans;
+}
+
+function bandPlans(caps: ResearchCaps): WorkerPlan[] {
   const wallMs = Math.round(caps.wallMs * DEADLINE_SHARE);
   if (caps.searches <= 3) {
     const backbone: ResearchCaps = { steps: 3, searches: Math.max(1, caps.searches - 1), fetches: Math.max(1, Math.ceil(caps.fetches / 2)), wallMs };
@@ -68,6 +79,30 @@ export function splitCaps(caps: ResearchCaps): WorkerPlan[] {
     { direction: "canonical", caps: canonical, withCurrent: false },
     { direction: "current", caps: current, withCurrent: false },
   ];
+}
+
+/**
+ * Adds the practice worker: three steps, a quarter of the band's searches (at least one) and of its reads (at least
+ * two). Its share comes out of canonical first, then current; backbone gives only what those cannot. No worker goes
+ * below one search and one read, so the band's totals hold wherever the band has the room. On top of the quarter it
+ * gets a search for each kind of practice and a read more than that, so one kind cannot spend another's search and a
+ * page drawn by script can still be followed to a readable copy; those go past the band's totals.
+ */
+function addPracticeWorker(plans: WorkerPlan[], caps: ResearchCaps, kinds: number): WorkerPlan[] {
+  const donors = ["canonical", "current", "backbone"].flatMap((d) => plans.filter((p) => p.direction === d));
+  const take = (key: "searches" | "fetches", want: number) => {
+    let got = 0;
+    for (const donor of donors) {
+      const give = Math.min(want - got, donor.caps[key] - 1);
+      if (give <= 0) continue;
+      donor.caps[key] -= give;
+      got += give;
+    }
+    return Math.max(1, got);
+  };
+  const searches = Math.max(kinds, take("searches", Math.max(1, Math.floor(caps.searches / 4))));
+  const fetches = Math.max(kinds + 1, take("fetches", Math.max(2, Math.floor(caps.fetches / 4))));
+  return [...plans, { direction: "practice", caps: { steps: 3, searches, fetches, wallMs: plans[0].caps.wallMs }, withCurrent: false }];
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -100,10 +135,24 @@ const CURRENT_BRIEF = [
   `Boundaries: published within the last two years. No books; another researcher collects them.`,
 ];
 
+const PRACTICE_BRIEF = (picks: PracticePick[]) => [
+  `Objective: sources the learner can practise with, for each kind of practice the plan assigns:`,
+  ...practiceLines(picks),
+  `Strategy: you have three steps. In the first, make all your searches at once, one search for each kind of practice. In the second, read the pages worth reading, all at once, preferring each source's own page, to see whether it gives solutions or an answer key, how many problems, questions or steps it holds, and any time it states per item. In the third, read the readable copy of any page that came back nearly empty (its GitHub repository or a static page that lists the same problems); otherwise stop. ${TWO_STEPS}`,
+  `Boundaries: practice sources only (problem lists, question banks, labs, exercises, mock tests); other researchers collect the reading. Prefer ones that come with answers, solutions or a rubric. A source's URL is its own page.`,
+];
+
 /** One worker's system prompt: direction, tools and budget, then objective, strategy, boundaries and output, then the shared rules. */
 export function buildWorkerInstructions(plan: WorkerPlan, today: Date = new Date()): string {
   const { caps, direction } = plan;
-  const body = direction === "backbone" ? BACKBONE_BRIEF(caps.steps) : direction === "canonical" ? CANONICAL_BRIEF(plan.withCurrent) : CURRENT_BRIEF;
+  const body =
+    direction === "backbone"
+      ? BACKBONE_BRIEF(caps.steps)
+      : direction === "canonical"
+        ? CANONICAL_BRIEF(plan.withCurrent)
+        : direction === "practice"
+          ? PRACTICE_BRIEF(plan.picks ?? [])
+          : CURRENT_BRIEF;
   return [
     `Direction: ${direction}.`,
     `You research one direction of the materials for a self-study plan; other researchers cover the other directions at the same time, so stay inside yours. The learner's own sources have already been read: what they are is in the brief, so do not read them again.`,
@@ -154,6 +203,7 @@ export const DIRECTION_HEADINGS: Record<WorkerDirection, string> = {
   backbone: "Backbone research:",
   canonical: "Canonical materials:",
   current: "Recent material:",
+  practice: "Practice sources:",
 };
 
 const headingFor = (plan: WorkerPlan) => (plan.direction === "canonical" && plan.withCurrent ? "Canonical and recent material:" : DIRECTION_HEADINGS[plan.direction]);
@@ -222,7 +272,8 @@ export function createWorkersArm(options: WorkersArmOptions): ResearchArm {
   return async function researchWorkers({ brief, signal, fetcher, emit, log, caps: runCaps }: ArmInput): Promise<ArmResult> {
     const caps = options.caps ?? runCaps ?? RESEARCH_CAPS;
     const learner = await readLearnerLinks(brief.sources, fetcher, emit, signal);
-    const plans = splitCaps(caps);
+    const picks = picksOf(brief);
+    const plans = splitCaps(caps, picks.length).map((plan) => (plan.direction === "practice" ? { ...plan, picks } : plan));
     const prompt = [...briefLines(brief), ...(learner.fetches.length > 0 ? [LEARNER_HEADING, learner.render()] : [])].join("\n");
 
     // One deadline for every worker, armed once the learner's links are in.

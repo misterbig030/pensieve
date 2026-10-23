@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_PRACTICE_PICKS, PRACTICE_REGISTRY, normalizePicks, practicePickDraftSchema, practicePickSchema } from "@/lib/practice";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, MAX_DAYS_PER_WEEK, budgetFor, cloneTree, isLocked, walk, type PlanNode } from "@/lib/planTree";
 
 /**
@@ -77,12 +78,14 @@ export function hoursInText(text: string): number | null {
 
 /**
  * How a plan divides the learner's time: the share spent reading or watching the materials, and what the rest goes
- * to, in the topic's own words ("building projects", "writing summaries", "running sessions"). The drafter decides
- * it with the top level; the learner can change it.
+ * to, in the topic's own words ("building projects", "writing summaries", "running sessions") and as the practice
+ * formats it picked. The drafter decides it with the top level; the learner can change it. `formats` is absent on
+ * plans saved before practice formats existed.
  */
 export const planSplitSchema = z.object({
   readingShare: z.number().int().min(0).max(100),
   practice: z.string().trim().min(1).max(40),
+  formats: z.array(practicePickSchema).max(MAX_PRACTICE_PICKS).optional(),
   reason: z.string().trim().max(300),
 });
 export type PlanSplit = z.infer<typeof planSplitSchema>;
@@ -94,6 +97,9 @@ export const SPLIT_SET_BY_LEARNER = "Set by you.";
 export const planSplitDraftSchema = z.object({
   readingShare: z.number().describe("Percent of study time spent reading or watching the materials, 0 to 100"),
   practice: z.string().describe('What the rest of the time is spent on, in two or three words, e.g. "building projects"'),
+  picks: z
+    .array(practicePickDraftSchema)
+    .describe("The practice formats the rest of the time goes to, at most four, with shares of the practice time; empty when the plan is all reading"),
   reason: z.string().describe("One sentence: why this split suits this topic and this learner"),
 });
 export type PlanSplitDraft = z.infer<typeof planSplitDraftSchema>;
@@ -103,11 +109,47 @@ export function normalizeSplit(draft: Partial<PlanSplitDraft> | null | undefined
   const practice = (draft.practice ?? "").trim().replace(/\.$/, "");
   if (!practice) return null;
   const reason = (draft.reason ?? "").trim();
+  let readingShare = Math.min(100, Math.max(0, Math.round(draft.readingShare)));
+  // A draft with no picks field is a split written before formats existed: keep its share and leave `formats` unset.
+  let formats = draft.picks === undefined ? undefined : normalizePicks(draft.picks);
+  if (formats) {
+    if (readingShare >= 100) formats = [];
+    else if (formats.length === 0) readingShare = 100;
+  }
   return {
-    readingShare: Math.min(100, Math.max(0, Math.round(draft.readingShare))),
+    readingShare,
     practice: practice.length > 40 ? `${practice.slice(0, 39)}…` : practice,
+    ...(formats ? { formats } : {}),
     reason: reason.length > 300 ? `${reason.slice(0, 299)}…` : reason,
   };
+}
+
+/** What the non-reading time is called: the picked formats as a phrase ("problems, design and mock"), else the drafter's own words. */
+export function practiceLabelOf(split: PlanSplit): string {
+  const labels = (split.formats ?? []).map((p) => PRACTICE_REGISTRY[p.format].label.toLowerCase());
+  if (labels.length === 0) return split.practice;
+  return labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
+/**
+ * Whether the split spends nothing on practice: all of it is reading, or it is the all-reading fallback with no picks
+ * (`formats: []`). A split from before picks (no `formats`) still names its practice.
+ */
+export function isAllReading(split: PlanSplit): boolean {
+  return split.readingShare >= 100 || split.formats?.length === 0;
+}
+
+/**
+ * Whether the learner can move the reading share. A pick that chose no practice (`formats: []`) has no format to give
+ * the rest to, so moving it would leave time no one plans. A split with picks, or one from before picks, can move.
+ */
+export function shareAdjustable(split: PlanSplit): boolean {
+  return split.formats === undefined || split.formats.length > 0;
+}
+
+/** The picks that get time: none once the share is all reading, though the split keeps them for the slider. */
+export function activePicks(split: PlanSplit | null | undefined): NonNullable<PlanSplit["formats"]> {
+  return split && !isAllReading(split) ? (split.formats ?? []) : [];
 }
 
 /** The reading share as a fraction, or null when the plan has no split (older plans fall back to a fixed share). */

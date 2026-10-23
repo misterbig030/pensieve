@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { detectSourceType, type SourceInput, type SourceType } from "@/lib/schemas/source";
-import { MATERIAL_KINDS, clip, hostOf, shortId, type ChapterList, type Material, type MaterialKind, type MinutesBasis } from "@/lib/schemas/material";
+import { MATERIAL_KINDS, clip, hostOf, shortId, type ChapterList, type Material, type MaterialKind, type MaterialPractice, type MinutesBasis } from "@/lib/schemas/material";
+import { PRACTICE_REGISTRY, type PracticeFormatSpec } from "@/lib/practice";
 import type { Coverage, DroppedMaterial, ResearchEvent } from "./events";
 import { signMaterial, signingSecret } from "./signature";
 import type { FetchOutcome, SourceFetcher } from "./tools";
@@ -16,6 +17,15 @@ import { parseOpenLibraryToc, withChapterSizes, type OpenLibraryTocEntry } from 
 // ---------------------------------------------------------------------------------------------------------------
 // What an arm proposes
 
+/** What the model writes when a source is also practice. Looser than `MaterialPractice`; `normalizePractice` bounds it. */
+export const practiceDraftSchema = z.object({
+  format: z.string().describe("One of the practice formats named in the prompt"),
+  items: z.number().nullable().optional().describe("Problems, questions or steps the source holds that this plan would use; null when it is not counted"),
+  perItemMinutes: z.number().nullable().optional().describe("Minutes per item if the source says so; null to use the format's usual"),
+  answers: z.boolean().describe("True only if the source carries answers, solutions or a rubric"),
+});
+export type PracticeDraft = z.infer<typeof practiceDraftSchema>;
+
 export const candidateSchema = z.object({
   url: z.string().describe("The page for this material: its own page, not a page that mentions it"),
   title: z.string().describe("The material's title exactly as its own page gives it; for a book, its title as published"),
@@ -27,6 +37,7 @@ export const candidateSchema = z.object({
   recommendedBy: z.array(z.string()).describe("URLs of pages you saw that recommend it"),
   minutes: z.number().nullable().optional().describe("Minutes to read or watch the part of it this plan would use; null when you cannot tell"),
   uses: z.string().nullable().optional().describe('The part this plan would use when that is not the whole work, e.g. "ch. 1, 7–9"; null for the whole'),
+  practice: practiceDraftSchema.optional().describe("Set when the source is practice to do, alone or besides reading; leave out for reading only"),
 });
 export type Candidate = z.infer<typeof candidateSchema>;
 
@@ -39,6 +50,7 @@ export const learnerNoteSchema = z.object({
   year: z.number().nullable().optional(),
   why: z.string(),
   minutes: z.number().nullable().optional().describe("Minutes to read or watch it; null when you cannot tell"),
+  practice: practiceDraftSchema.optional().describe("Set when the learner's source is practice to do (a problem list, a question bank); leave out for reading"),
 });
 export type LearnerNote = z.infer<typeof learnerNoteSchema>;
 
@@ -381,6 +393,21 @@ export function sizeMaterial(input: SizeInput): { minutes: number | null; basis:
   return claimed ? { minutes: claimed, basis: "estimated" } : { minutes: null, basis: null };
 }
 
+/**
+ * Bounds and sizes what the model wrote about a source as practice. Null for a format the registry does not know and
+ * for a format that needs answers when the source has none. Doing time is items times minutes per item when the items
+ * are known, else the format's fixed block, else unknown.
+ */
+export function normalizePractice(draft: PracticeDraft, registry: Record<string, PracticeFormatSpec> = PRACTICE_REGISTRY): MaterialPractice | null {
+  const spec = Object.hasOwn(registry, draft.format) ? registry[draft.format] : null;
+  if (!spec || (spec.needsAnswers && !draft.answers)) return null;
+  const bound = (n: number | null | undefined, max: number) => (typeof n === "number" && Number.isFinite(n) && Math.round(n) >= 1 ? Math.min(max, Math.round(n)) : null);
+  const items = bound(draft.items, 5000);
+  const perItemMinutes = bound(draft.perItemMinutes, 600) ?? spec.perItemMinutes;
+  const minutes = items !== null && perItemMinutes !== null ? Math.min(60000, items * perItemMinutes) : spec.fixedMinutes;
+  return { format: spec.id, items, perItemMinutes, minutes, answers: draft.answers };
+}
+
 /** Minutes of material on a list, over the materials that have a size. */
 export function sizedMinutes(materials: Pick<Material, "minutes">[]): number {
   return materials.reduce((sum, m) => sum + (m.minutes ?? 0), 0);
@@ -520,6 +547,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     const verifiedAt = fetched ? fetched.fetchedAt : null;
     const type = source.type ?? detectSourceType(source.url);
     const kind = note?.kind ?? learnerKind(type, source.url);
+    const practice = note?.practice ? normalizePractice(note.practice) : null;
     const entry: Accepted = {
       material: {
         origin: "learner",
@@ -538,6 +566,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
         ...sizeFields({ kind, uses: null, claimedMinutes: note?.minutes, words: fetched?.page.words, durationMinutes: fetched?.page.durationMinutes }),
         uses: null,
         toc: null,
+        ...(practice ? { practice } : {}),
       },
       bookMatched: false,
       wantsBackbone: false,
@@ -552,9 +581,16 @@ export async function runGate(input: GateInput): Promise<GateResult> {
   const readable = (c: Candidate) => !!canonicalUrl(c.url) && c.url.trim().toLowerCase().startsWith("https://");
   const valid = input.candidates.filter((c) => {
     // A book goes on without an address of its own: Open Library is what vouches for it.
-    if (readable(c) || c.kind === "book") return true;
-    drop(c.title, "not an https address", c.url);
-    return false;
+    if (!(readable(c) || c.kind === "book")) {
+      drop(c.title, "not an https address", c.url);
+      return false;
+    }
+    // A source that is practice and nothing else is useless without answers to check against.
+    if (c.practice && c.minutes == null && Object.hasOwn(PRACTICE_REGISTRY, c.practice.format) && !normalizePractice(c.practice)) {
+      drop(c.title, "practice without answers", c.url);
+      return false;
+    }
+    return true;
   });
   const outcomes = await mapLimit(valid, input.concurrency ?? 6, async (c): Promise<FetchOutcome> =>
     readable(c) ? fetchAnnounced(input, c.url.trim()) : { ok: false, url: c.url, reason: "not an https address" },
@@ -613,6 +649,8 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     const ownPage = outcome.ok && checkPage(c, outcome, threshold).ok ? outcome.page : null;
     const size = { ...sizeFields({ kind: c.kind, uses, claimedMinutes: c.minutes, words: ownPage?.words, durationMinutes: ownPage?.durationMinutes, bookPages }), uses };
 
+    const practice = c.practice ? normalizePractice(c.practice) : null;
+
     // A candidate that is one of the learner's own sources enriches it instead of duplicating it.
     const mine = learnerByUrl.get(finalUrl) ?? learnerByUrl.get(canonicalUrl(c.url) ?? c.url);
     if (mine) {
@@ -620,12 +658,20 @@ export async function runGate(input: GateInput): Promise<GateResult> {
       if (toc) mine.material.toc = withChapterSizes(toc, mine.material.minutes ?? null);
       mine.bookMatched = bookMatched;
       mine.wantsBackbone = c.backbone;
+      if (practice && !mine.material.practice) mine.material.practice = practice;
       return;
     }
     const dup = byFinalUrl.get(finalUrl);
     if (dup) {
       dup.material.recommendedBy = [...new Set([...dup.material.recommendedBy, ...recommendedBy])].slice(0, 10);
       dup.wantsBackbone ||= c.backbone;
+      // Reading fields the kept material lacks come from this candidate, whichever was listed first; set ones stay.
+      // A part qualifies the minutes it came with: it moves only with minutes taken, or from a candidate with none.
+      const takesMinutes = !dup.material.minutes;
+      if (takesMinutes) Object.assign(dup.material, { minutes: size.minutes, minutesBasis: size.minutesBasis });
+      if (takesMinutes || size.minutes === null) dup.material.uses ??= size.uses;
+      if (toc && !dup.material.toc) dup.material.toc = withChapterSizes(toc, dup.material.minutes ?? null);
+      if (practice && !dup.material.practice) dup.material.practice = practice;
       return;
     }
     const entry: Accepted = {
@@ -641,6 +687,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
         sig: signMaterial({ url: finalUrl, fetchedTitle, verifiedAt }, secret),
         ...size,
         toc: toc ? withChapterSizes(toc, size.minutes) : null,
+        ...(practice ? { practice } : {}),
       },
       bookMatched,
       wantsBackbone: c.backbone,

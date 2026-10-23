@@ -269,6 +269,170 @@ describe("applyRevision with materials", () => {
   });
 });
 
+describe("applyRevision with practice", () => {
+  const source = (format: "problem-set" | "lab") => ({ format, items: 150, perItemMinutes: 10, minutes: null, answers: true });
+  // M1 is reading, M2 a problem list, M3 a lab.
+  const aliases = aliasMaterials([{ id: "book" }, { id: "neet", practice: source("problem-set") }, { id: "git-lab", practice: source("lab") }]);
+  const split = {
+    readingShare: 50,
+    practice: "problems and recall",
+    reason: "",
+    formats: [
+      { format: "problem-set" as const, share: 60, focus: "arrays", reason: "" },
+      { format: "recall" as const, share: 40, focus: "key terms", reason: "" },
+    ],
+  };
+  const row = { format: "problem-set" as const, id: "neet", task: "Arrays 1-6", done: "All six solved", minutes: 40, generated: false };
+  function withPractice() {
+    return layout(
+      makeRoot([
+        makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, materials: [{ id: "book", tier: "must", minutes: 30, note: null }], practice: [row] }),
+        makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1 }),
+      ]),
+    );
+  }
+  const revise = (original: ReturnType<typeof withPractice>, units: Parameters<typeof applyRevision>[2]["units"]) =>
+    applyRevision(original, assignRefs(original), { units }, 0, "day", aliases, undefined, 7, split);
+
+  it("keeps a leaf's practice when the model leaves it out", () => {
+    const result = revise(withPractice(), [
+      { ref: "n1", title: "A, renamed", summary: "a", days: 1 },
+      { ref: "n2", title: "B", summary: "b", days: 1 },
+    ]);
+    expect(result.children![0].practice).toEqual([row]);
+  });
+
+  it("takes a rewritten practice list through the resolver: a generated recall row from the unit's reading, a refused row dropped", () => {
+    const result = revise(withPractice(), [
+      {
+        ref: "n1",
+        title: "A",
+        summary: "a",
+        days: 1,
+        materials: [{ id: "M1", tier: "must", minutes: 30 }],
+        practice: [
+          { format: "problem-set", id: "M2", task: "Arrays 7-12", done: "Solved", minutes: 30 },
+          { format: "recall", id: "M1", task: "Six questions on the chapter", done: "Answered from memory", minutes: 10 },
+          { format: "lab", id: "M3", task: "Not a pick", done: "x", minutes: 20 },
+          { format: "problem-set", id: "M9", task: "Unknown source", done: "x", minutes: 20 },
+        ],
+      },
+      { ref: "n2", title: "B", summary: "b", days: 1 },
+    ]);
+    expect(result.children![0].practice).toEqual([
+      { format: "problem-set", id: "neet", task: "Arrays 7-12", done: "Solved", minutes: 30, generated: false },
+      { format: "recall", id: "book", task: "Six questions on the chapter", done: "Answered from memory", minutes: 10, generated: true },
+    ]);
+  });
+
+  it("keeps a heading's practice reservations when the model leaves them out, and puts practice only on leaves", () => {
+    const original = layout(
+      makeRoot([
+        makeNode({ id: "w1", level: "week", title: "W", summary: "w", len: 7, practiceCovers: [{ format: "problem-set", id: "neet", note: "Arrays" }] }),
+      ]),
+    );
+    const result = revise(original, [
+      { ref: "n1", title: "W", summary: "w", days: 7 },
+    ]);
+    expect(result.children![0].practiceCovers).toEqual([{ format: "problem-set", id: "neet", note: "Arrays" }]);
+    const rewritten = revise(original, [
+      { ref: "n1", title: "W", summary: "w", days: 7, practiceCovers: [{ format: "problem-set", id: "M2", note: "Trees" }, { format: "lab", id: "M3" }], practice: [{ format: "problem-set", id: "M2", task: "t", done: "d", minutes: 5 }] },
+    ]);
+    // The lab is no pick, so its reservation is dropped; a heading takes no practice rows.
+    expect(rewritten.children![0].practiceCovers).toEqual([{ format: "problem-set", id: "neet", note: "Trees" }]);
+    expect(rewritten.children![0].practice).toBeUndefined();
+  });
+
+  it("keeps a split week's reservation task and minutes when the model writes them back with ids only", () => {
+    const original = layout(
+      makeRoot([
+        makeNode({
+          id: "w1",
+          level: "week",
+          title: "Split",
+          summary: "s",
+          len: 2,
+          manualSplit: true,
+          practiceCovers: [
+            { format: "problem-set", id: "neet", note: null, task: "Arrays 1-6", minutes: 40 },
+          ],
+          children: [makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1 }), makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1 })],
+        }),
+      ]),
+    );
+    const result = revise(original, [
+      {
+        ref: "n1",
+        title: "Split",
+        summary: "s",
+        days: 2,
+        practiceCovers: [{ format: "problem-set", id: "M2", note: "Arrays, harder" }],
+        children: [{ ref: "n2", title: "A", summary: "a", days: 1 }, { ref: "n3", title: "B", summary: "b", days: 1 }],
+      },
+    ]);
+    expect(result.children![0].practiceCovers).toEqual([{ format: "problem-set", id: "neet", note: "Arrays, harder", task: "Arrays 1-6", minutes: 40 }]);
+  });
+
+  it("keeps a split week's generated reservations when the model rewrites the list, which it cannot name them in", () => {
+    const generated = { format: "problem-set" as const, id: null, note: null, task: "Six warm-up questions", minutes: 15 };
+    const original = layout(
+      makeRoot([
+        makeNode({
+          id: "w1",
+          level: "week",
+          title: "Split",
+          summary: "s",
+          len: 2,
+          manualSplit: true,
+          practiceCovers: [{ format: "problem-set", id: "neet", note: null, task: "Arrays 1-6", minutes: 40 }, generated],
+          children: [makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1 }), makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1 })],
+        }),
+      ]),
+    );
+    const result = revise(original, [
+      {
+        ref: "n1",
+        title: "Split, renamed",
+        summary: "s",
+        days: 2,
+        practiceCovers: [{ format: "problem-set", id: "M2" }],
+        children: [{ ref: "n2", title: "A", summary: "a", days: 1 }, { ref: "n3", title: "B", summary: "b", days: 1 }],
+      },
+    ]);
+    expect(result.children![0].practiceCovers).toEqual([{ format: "problem-set", id: "neet", note: null, task: "Arrays 1-6", minutes: 40 }, generated]);
+  });
+
+  it("keeps a split week's generated recall reservation, which cites its reading, when the model writes it back by id", () => {
+    const recall = { format: "recall" as const, id: "book", note: null, task: "Six questions on hashing", minutes: 15 };
+    const original = layout(
+      makeRoot([
+        makeNode({
+          id: "w1",
+          level: "week",
+          title: "Split",
+          summary: "s",
+          len: 2,
+          manualSplit: true,
+          practiceCovers: [{ format: "problem-set", id: "neet", note: null, task: "Arrays 1-6", minutes: 40 }, recall],
+          children: [makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1 }), makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1 })],
+        }),
+      ]),
+    );
+    // The prompt asks the model to keep each row's format and source id, so it writes the recall row back as M1.
+    const result = revise(original, [
+      {
+        ref: "n1",
+        title: "Split",
+        summary: "s",
+        days: 2,
+        practiceCovers: [{ format: "problem-set", id: "M2" }, { format: "recall", id: "M1" }],
+        children: [{ ref: "n2", title: "A", summary: "a", days: 1 }, { ref: "n3", title: "B", summary: "b", days: 1 }],
+      },
+    ]);
+    expect(result.children![0].practiceCovers).toEqual([{ format: "problem-set", id: "neet", note: null, task: "Arrays 1-6", minutes: 40 }, recall]);
+  });
+});
+
 describe("revisePlanTree checks the whole tree", () => {
   beforeEach(() => {
     mockedGenerateObject.mockReset();

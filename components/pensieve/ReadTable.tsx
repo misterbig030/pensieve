@@ -1,5 +1,7 @@
+import { budgetCeiling } from "@/lib/materials";
+import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { formatDuration } from "@/lib/researchProgress";
-import { chapterAt, type Chapter, type Material, type MaterialRef, type MaterialTier, type RefActivity } from "@/lib/schemas/material";
+import { chapterAt, type Chapter, type Material, type MaterialRef, type MaterialTier, type PracticeCover, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
 import { cn } from "@/lib/utils";
 
 export interface ReadRow {
@@ -12,6 +14,22 @@ export interface ReadRow {
   chapter: Chapter | null;
   activity: RefActivity;
   /** Unique within a node: material id and chapter position. */
+  key: string;
+}
+
+/** A practice row of a unit's Do table: what to do, how long, how it is finished, and where it comes from. */
+export interface PracticeRow {
+  format: PracticeFormat;
+  /** The format's name on its pill: "Problems", "Recall". */
+  label: string;
+  task: string;
+  /** How the learner knows it is finished; empty for a split week's reservation, which has none. */
+  done: string;
+  minutes: number;
+  /** The source the row is from, or the reading a generated recall row was made from; null for a generated row. */
+  material: Material | null;
+  generated: boolean;
+  /** Unique within a node. */
   key: string;
 }
 
@@ -32,6 +50,31 @@ export function readRowsFor(refs: MaterialRef[] | undefined, byId: ReadonlyMap<s
         : [];
     })
     .sort(byTier);
+}
+
+/** A node's Do table rows in the plan's order, skipping rows whose source is not in the list. */
+export function practiceRowsFor(refs: PracticeRef[] | undefined, byId: ReadonlyMap<string, Material>): PracticeRow[] {
+  return (refs ?? []).flatMap((r, i) => {
+    const material = r.id === null ? null : (byId.get(r.id) ?? null);
+    if (r.id !== null && !material) return [];
+    return [{ format: r.format, label: PRACTICE_REGISTRY[r.format].label, task: r.task, done: r.done, minutes: r.minutes, material, generated: r.generated, key: `${r.format}#${r.id ?? "generated"}#${i}` }];
+  });
+}
+
+/** A split week's kept practice reservations as Do rows. Only reservations that carry a task and minutes show; they have no done line. */
+export function coverPracticeRows(covers: PracticeCover[] | undefined, byId: ReadonlyMap<string, Material>): PracticeRow[] {
+  return practiceRowsFor(
+    (covers ?? []).flatMap((c) =>
+      // A cover keeps its row's id, so a generated recall row carries its reading's id: only a practice source of the
+      // cover's own format is not generated, since a book can be reading and serve another format too.
+      c.task && c.minutes ? [{ format: c.format, id: c.id, task: c.task, done: "", minutes: c.minutes, generated: c.id === null || byId.get(c.id)?.practice?.format !== c.format }] : [],
+    ),
+    byId,
+  );
+}
+
+export function sumPracticeMinutes(rows: PracticeRow[]): number {
+  return rows.reduce((t, r) => t + r.minutes, 0);
 }
 
 /** "Ch. 2 Understanding Foundation Models", or the title alone for an unnumbered chapter. */
@@ -73,6 +116,22 @@ export function TierPill({ tier }: { tier: MaterialTier }) {
   );
 }
 
+/** A practice format's pill: TierPill's shape in the second accent. */
+export function FormatPill({ label }: { label: string }) {
+  return <span className="inline-flex justify-self-start rounded-full bg-accent-2-200 px-2 py-px text-[10.5px] font-semibold text-accent-2-800">{label}</span>;
+}
+
+/** Where a Do row comes from: its source, the reading a generated recall row was made from, or a Generated tag. */
+function PracticeSource({ row, link = true }: { row: PracticeRow; link?: boolean }) {
+  if (!row.material) return <span>Generated</span>;
+  return (
+    <span>
+      <ItemLink material={row.material} link={link} />
+      {row.generated && " · from your reading"}
+    </span>
+  );
+}
+
 function ItemLink({ material: m, className, link = true }: { material: Material; className?: string; link?: boolean }) {
   if (!link || m.type === "note" || m.type === "file") return <span className={className}>{m.title}</span>;
   return (
@@ -82,27 +141,37 @@ function ItemLink({ material: m, className, link = true }: { material: Material;
   );
 }
 
-/** Must and should minutes against the budget, as a two-part bar and one line of text. */
-export function BudgetBar({
-  rows,
-  budgetMinutes,
-  variant = "compact",
-  practice = "practice",
-}: {
-  rows: ReadRow[];
-  budgetMinutes: number;
-  variant?: "compact" | "full";
-  /** What the rest of the time goes to, in the plan's words ("building projects"). */
-  practice?: string;
-}) {
+/**
+ * A unit's budget as one line: reading and practice minutes against the budget. Without practice rows it reads
+ * "3 h 11 of 6 h reading".
+ */
+export function budgetLine({ readingMinutes, practiceMinutes, budgetMinutes }: { readingMinutes: number; practiceMinutes: number; budgetMinutes: number }): string {
+  if (practiceMinutes <= 0) return `${formatDuration(readingMinutes)} of ${formatDuration(budgetMinutes)} reading`;
+  return `${formatDuration(readingMinutes)} reading · ${formatDuration(practiceMinutes)} practice · ${formatDuration(budgetMinutes)}`;
+}
+
+/**
+ * How many minutes a unit runs past its budget, once past what the drafting checks accept (`budgetCeiling`); 0 within
+ * it, so a unit the checks pass is not called over.
+ */
+export function minutesOver(totalMinutes: number, budgetMinutes: number): number {
+  return totalMinutes > budgetCeiling(budgetMinutes) ? totalMinutes - budgetMinutes : 0;
+}
+
+/** Must and should minutes against the budget, as a two-part bar and one line of text, with how far it runs over. */
+export function BudgetBar({ rows, practiceMinutes = 0, budgetMinutes, variant = "compact" }: { rows: ReadRow[]; practiceMinutes?: number; budgetMinutes: number; variant?: "compact" | "full" }) {
   const { must, should } = sumMinutes(rows);
   const budget = Math.max(budgetMinutes, 1);
-  const left = Math.max(0, budgetMinutes - must - should);
-  const over = must + should > budgetMinutes;
+  const line = budgetLine({ readingMinutes: must + should, practiceMinutes, budgetMinutes });
+  const over = minutesOver(must + should + practiceMinutes, budgetMinutes);
+  const share = (minutes: number, taken: number) => `${Math.min(100 - taken, (minutes / budget) * 100)}%`;
+  const mustPct = Math.min(100, (must / budget) * 100);
+  const shouldPct = Math.min(100 - mustPct, (should / budget) * 100);
   const bar = (
     <span className={cn("flex h-1.5 shrink-0 overflow-hidden rounded-full bg-neutral-300", variant === "full" ? "h-2 w-[220px] max-[640px]:w-full" : "w-40 max-[640px]:w-24")}>
-      <span className="block bg-accent-700" style={{ width: `${Math.min(100, (must / budget) * 100)}%` }} />
-      <span className="block bg-neutral-400" style={{ width: `${Math.min(100 - Math.min(100, (must / budget) * 100), (should / budget) * 100)}%` }} />
+      <span className="block bg-accent-700" style={{ width: `${mustPct}%` }} />
+      <span className="block bg-neutral-400" style={{ width: `${shouldPct}%` }} />
+      <span className="block bg-accent-2-500" style={{ width: share(practiceMinutes, mustPct + shouldPct) }} />
     </span>
   );
   if (variant === "full") {
@@ -110,10 +179,17 @@ export function BudgetBar({
       <div className="flex flex-wrap items-center gap-3.5 rounded-2xl bg-background px-3.5 py-3 text-[12.5px]">
         {bar}
         <span>
-          <strong className="font-semibold">{formatDuration(must)}</strong> must · <strong className="font-semibold">{formatDuration(should)}</strong> should · of {formatDuration(budgetMinutes)}
+          <strong className="font-semibold">{formatDuration(must)}</strong> must · <strong className="font-semibold">{formatDuration(should)}</strong> should
+          {practiceMinutes > 0 && (
+            <>
+              {" "}
+              · <strong className="font-semibold">{formatDuration(practiceMinutes)}</strong> practice
+            </>
+          )}
         </span>
-        <span className={cn("ml-auto text-muted-foreground", over && "text-accent-800")}>
-          {over ? `${formatDuration(must + should - budgetMinutes)} over the budget` : `Leaves ${formatDuration(left)} for ${practice}`}
+        <span className="ml-auto text-muted-foreground">
+          {line}
+          {over > 0 && <span className="text-accent-800"> · {formatDuration(over)} over</span>}
         </span>
       </div>
     );
@@ -122,7 +198,8 @@ export function BudgetBar({
     <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
       {bar}
       <span>
-        {formatDuration(must)} must-read{should > 0 ? ` · ${formatDuration(should)} optional` : ""} · {over ? `${formatDuration(must + should - budgetMinutes)} over budget` : `${formatDuration(left)} left for ${practice}`}
+        {formatDuration(must)} must-read{should > 0 ? ` · ${formatDuration(should)} optional` : ""} · {line}
+        {over > 0 && <span className="text-accent-800"> · {formatDuration(over)} over</span>}
       </span>
     </div>
   );
@@ -152,13 +229,36 @@ export function ReadRows({ rows, link = true }: { rows: ReadRow[]; link?: boolea
   );
 }
 
-/** The leaf page's Read table: Tier | Item | Min | Note, with a budget footer. */
-export function ReadTable({ rows, budgetMinutes, practice }: { rows: ReadRow[]; budgetMinutes: number; practice?: string }) {
+/** Compact Do rows for a planned unit in the plan view: format, task, minutes, and under it the done line and source. `link` is off inside a link. */
+export function DoRows({ rows, link = true }: { rows: PracticeRow[]; link?: boolean }) {
+  return (
+    <div className="grid grid-cols-[56px_minmax(0,1fr)_60px] items-start gap-x-2.5 gap-y-1.5 text-[12.5px]">
+      {rows.map((r) => (
+        <div key={r.key} className="contents">
+          <FormatPill label={r.label} />
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate font-semibold" title={r.task}>
+              {r.task}
+            </span>
+            <span className="truncate text-[11.5px] text-muted-foreground" title={r.done || undefined}>
+              <PracticeSource row={r} link={link} />
+              {r.done && ` · ${r.done}`}
+            </span>
+          </span>
+          <span className="justify-self-end text-neutral-800">{r.minutes} min</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The leaf page's Read table: Tier | Item | Min | Note, then a Do section for the unit's practice, with a budget footer. */
+export function ReadTable({ rows, practice = [], budgetMinutes }: { rows: ReadRow[]; practice?: PracticeRow[]; budgetMinutes: number }) {
   return (
     <section aria-labelledby="read-h" className="flex flex-col gap-3 rounded-[28px] bg-secondary px-[22px] py-5">
       <div className="flex items-center gap-2.5">
         <h2 id="read-h" className="m-0 font-heading text-lg font-normal">
-          Read
+          {rows.length > 0 ? "Read" : "Do"}
         </h2>
         <span className="ml-auto text-[12.5px] text-muted-foreground">From the plan&apos;s materials list</span>
       </div>
@@ -203,10 +303,35 @@ export function ReadTable({ rows, budgetMinutes, practice }: { rows: ReadRow[]; 
                 <td className="py-3 pl-3 leading-normal text-neutral-800">{r.note ?? ""}</td>
               </tr>
             ))}
+            {rows.length > 0 && practice.length > 0 && (
+              <tr className="border-t border-foreground/10">
+                <th scope="colgroup" colSpan={4} className="pt-4 pb-1 text-left font-heading text-[15px] font-normal">
+                  Do
+                </th>
+              </tr>
+            )}
+            {practice.map((r) => (
+              <tr key={r.key} className="border-t border-foreground/10 align-top">
+                <td className="py-3 pr-2">
+                  <FormatPill label={r.label} />
+                </td>
+                <td className="px-2 py-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold">{r.task}</span>
+                    <span className="text-xs text-muted-foreground">
+                      <PracticeSource row={r} />
+                      {r.done && ` · ${r.done}`}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-2 py-3 text-right font-semibold">{r.minutes}</td>
+                <td className="py-3 pl-3" />
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
-      <BudgetBar rows={rows} budgetMinutes={budgetMinutes} variant="full" practice={practice} />
+      <BudgetBar rows={rows} practiceMinutes={sumPracticeMinutes(practice)} budgetMinutes={budgetMinutes} variant="full" />
     </section>
   );
 }

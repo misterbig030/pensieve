@@ -10,7 +10,7 @@ import { ResearchProgress } from "@/components/pensieve/ResearchProgress";
 import { TimeSplitCard } from "@/components/pensieve/TimeSplitCard";
 import { KEY_ERRORS } from "@/lib/ai/models";
 import type { Coverage, DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
-import { assignmentsOf, removeMaterialRefs } from "@/lib/materials";
+import { assignmentsOf, draftedSplit, removeMaterialRefs } from "@/lib/materials";
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
@@ -54,7 +54,7 @@ import {
 } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
-import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, rebudget, totalHours, weeksLabel, type PlanSplit } from "@/lib/studyTime";
+import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, isAllReading, practiceLabelOf, rebudget, totalHours, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 export interface PlanWorkspaceProps {
@@ -521,7 +521,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
 
   function changeSplit(next: PlanSplit) {
     setSplit(next);
-    setTimeNote(`The plan now spends about ${next.readingShare}% of your time reading and the rest on ${next.practice}. Units planned from here on follow it.`);
+    const drafted = draftedSplit(next, materials);
+    setTimeNote(`The plan now spends about ${drafted.readingShare}% of your time reading${isAllReading(drafted) ? "" : ` and the rest on ${practiceLabelOf(drafted)}`}. Units planned from here on follow it.`);
   }
 
   /** One sys line for time changes, replaced as the learner keeps adjusting, so the rail is not flooded. */
@@ -619,6 +620,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             hoursPerWeek={hoursPerWeek}
             daysPerWeek={daysPerWeek}
             split={split}
+            materials={materials}
             deciding={drafting && !split}
             onChangeHours={changeHours}
             // A one-week plan is its days: a different number is a change to ask for in the conversation.
@@ -642,7 +644,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             materials={materials}
             hoursPerWeek={hoursPerWeek}
             daysPerWeek={daysPerWeek}
-            practice={split?.practice}
             root={tree}
             mode={mode}
             highlight={new Set(highlight)}
@@ -756,13 +757,17 @@ function countExpected(root: PlanNode, pending: Record<string, PendingSlots>): n
   return countArrived(root) + Object.values(pending).reduce((sum, s) => sum + s.count, 0);
 }
 
-/** A week split into days by hand: its Read table becomes the reservation its days were planned from. */
+/** A week split into days by hand: its Read table and practice rows become the reservation its days were planned from. */
 function splitWeek(week: PlanNode): void {
   week.manualSplit = true;
   week.budgetHours = null;
   if (week.materials) {
     week.covers = week.materials.map((r) => ({ id: r.id, note: r.note, chapter: r.chapter, activity: r.activity, tier: r.tier, minutes: r.minutes }));
     delete week.materials;
+  }
+  if (week.practice) {
+    week.practiceCovers = week.practice.map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes }));
+    delete week.practice;
   }
 }
 
@@ -781,7 +786,11 @@ function materialsText(materials: Material[]): string {
 function draftedText(root: PlanNode, weeks: number, materials: Material[] = [], split: PlanSplit | null = null): string {
   const tops = root.children ?? [];
   if (tops.length === 0) return "Nothing was drafted. Try again.";
-  const time = split ? `I planned about ${split.readingShare}% of your time for reading and the rest for ${split.practice}; change that above if it is off. ` : "";
+  // An all-reading plan says only that: there is no rest to name.
+  const share = (s: PlanSplit) => (s.readingShare >= 100 ? "all of your time" : `about ${s.readingShare}% of your time`);
+  // As drafted: a pick with no source was planned as reading.
+  const drafted = split && draftedSplit(split, materials);
+  const time = drafted ? `I planned ${share(drafted)} for reading${isAllReading(drafted) ? "" : ` and the rest for ${practiceLabelOf(drafted)}`}; change that above if it is off. ` : "";
   const lead = `${materialsText(materials)}${time}`;
   const level = tops[0].level;
   if (level === "day") return `${lead}Drafted ${tops.length} days, one topic each. Ask me why something sits where it does, or tell me what to change.`;

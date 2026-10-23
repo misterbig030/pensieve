@@ -16,7 +16,10 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { config } from "dotenv";
 import type { GenerationLogRow, ModelCall } from "@/lib/ai/logged";
+import { DEFAULT_OUTLINE_MODEL } from "@/lib/ai/models";
 import { streamPlanDraft } from "@/lib/ai/planDraft";
+import { pickPractice } from "@/lib/ai/practicePick";
+import { appModel } from "@/lib/ai/resolve";
 import { createAgentArm, type ResearchArm } from "@/lib/ai/research/agent";
 import { researchMaterials, type ResearchOutcome } from "@/lib/ai/research/pipeline";
 import { searchProviderFromEnv } from "@/lib/ai/research/tools";
@@ -83,17 +86,18 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
   const started = performance.now();
 
   const input = draftRequestOf(record.input);
-  const research = researchMaterials({ brief: { ...input }, arm: armFor(arm), log });
+  // The practice is picked before research, as in the app, and the draft below keeps that split.
+  const picked = await pickPractice({ ...input, model: appModel(DEFAULT_OUTLINE_MODEL), log });
+  const research = researchMaterials({ brief: { ...input, split: picked.split }, arm: armFor(arm), log });
   let next = await research.next();
   while (!next.done) next = await research.next();
   const outcome = next.value;
   const researchMs = Math.round(performance.now() - started);
 
   let plan: PlanNode | null = null;
-  let split: PlanSplit | null = null;
-  for await (const event of streamPlanDraft({ ...input, materials: outcome.materials, log })) {
+  const split: PlanSplit = picked.split;
+  for await (const event of streamPlanDraft({ ...input, split, materials: outcome.materials, log })) {
     if (event.type === "finish") plan = event.root;
-    if (event.type === "split") split = event.split;
   }
 
   const metrics = runMetrics({
@@ -106,6 +110,8 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
     latencyMs: Math.round(performance.now() - started),
     researchMs,
     extraCostUsd: arm === "C" ? (outcome.arm?.counts.searches ?? 0) * WEB_SEARCH_USD : 0,
+    split,
+    plan,
   });
   return { metrics, materials: outcome.materials, dropped: outcome.dropped, plan, split, coverage: outcome.coverage, facts: calls.flatMap((c) => c.facts.map((f) => `${c.label}: ${f}`)) };
 }
@@ -128,8 +134,10 @@ async function main() {
           results.push(result);
           const m = result.metrics;
           const time = result.split ? `, split ${result.split.readingShare}% reading / ${result.split.practice}` : "";
+          const hit = m.formatHit ? ` · missing ${m.formatHit.missing.join(", ") || "—"} · unwanted ${m.formatHit.unwanted.join(", ") || "—"}` : "";
+          const picks = `\n    picks ${m.picks.join(", ") || "—"}${hit} · ${pct(m.practiceSourcedShare)} of practice rows sourced · ${m.openPicks ?? "—"} picks left open`;
           const who = m.workers ? `, workers ${m.workers.map((w) => `${w.direction.slice(0, 3)}:${w.steps}/${w.stoppedBy}`).join(" ")}` : "";
-          console.log(`verified ${m.verified}/${m.proposed}, backbone ${m.backboneHit ?? "—"}, sized ${m.sizedHours} of ${m.totalHours} h (${pct(m.measuredShare)} measured)${time}${who}, $${m.costUsd.toFixed(3)}, ${(m.latencyMs / 1000).toFixed(0)} s (research ${(m.researchMs / 1000).toFixed(0)} s)`);
+          console.log(`verified ${m.verified}/${m.proposed}, backbone ${m.backboneHit ?? "—"}, sized ${m.sizedHours} of ${m.totalHours} h (${pct(m.measuredShare)} measured)${time}${who}, $${m.costUsd.toFixed(3)}, ${(m.latencyMs / 1000).toFixed(0)} s (research ${(m.researchMs / 1000).toFixed(0)} s)${picks}`);
         } catch (error) {
           console.log(`failed: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -139,11 +147,12 @@ async function main() {
 
   const all = results.map((r) => r.metrics);
   const summaries = arms.map((arm) => summarize(arm, all));
-  console.log("\narm  runs  verified  backbone  mustInclude  recency  unknownRefs  overBudget  regressions  cost/run  latency  research  dup   searches  reads");
+  console.log("\narm  runs  verified  backbone  mustInclude  recency  unknownRefs  overBudget  regressions  sourced  openPicks  cost/run  latency  research  dup   searches  reads");
   for (const s of summaries) {
     console.log(
       [s.arm.padEnd(4), String(s.runs).padEnd(5), pct(s.verifiedRate).padEnd(9), pct(s.backboneHit).padEnd(9), pct(s.mustIncludeRecall).padEnd(12), pct(s.recency).padEnd(8),
         (s.unknownRefs ?? 0).toFixed(1).padEnd(12), (s.overBudgetLeaves ?? 0).toFixed(1).padEnd(11), (s.chapterRegressions ?? 0).toFixed(1).padEnd(12),
+        pct(s.practiceSourcedShare).padEnd(8), (s.openPicks === null ? "—" : s.openPicks.toFixed(1)).padEnd(10),
         `$${(s.costUsd ?? 0).toFixed(3)}`.padEnd(9), `${((s.latencyMs ?? 0) / 1000).toFixed(0)} s`.padEnd(8), `${((s.researchMedianMs ?? 0) / 1000).toFixed(0)} s`.padEnd(9),
         (s.duplicateShare === null ? "—" : pct(s.duplicateShare)).padEnd(5), (s.searches ?? 0).toFixed(1).padEnd(9), (s.fetches ?? 0).toFixed(1)].join(" "),
     );

@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ReadTable, type ReadRow } from "@/components/pensieve/ReadTable";
+import { LessonMarkdown } from "@/components/pensieve/LessonMarkdown";
+import { ReadTable, type PracticeRow, type ReadRow } from "@/components/pensieve/ReadTable";
 import { ShieldCheck } from "lucide-react";
 import { formatCostUsd } from "@/lib/formatCost";
 import { pushModelCalls } from "@/lib/modelCalls";
@@ -30,12 +30,11 @@ interface Props {
   isCompleted: boolean;
   /** The leaf's Read table; empty for plans saved before materials were assigned. */
   readRows: ReadRow[];
+  practiceRows: PracticeRow[];
   budgetMinutes: number;
-  /** What the plan spends non-reading time on, for the budget line. */
-  practice?: string;
 }
 
-export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, initialContent, youtubeSources, isCompleted, readRows, budgetMinutes, practice }: Props) {
+export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, initialContent, youtubeSources, isCompleted, readRows, practiceRows, budgetMinutes }: Props) {
   const [content, setContent] = useState(initialContent);
   const [sessions, setSessions] = useState(initialSessions);
   const [hoursInput, setHoursInput] = useState("1");
@@ -125,7 +124,7 @@ export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, 
     </div>
   );
 
-  const readTable = readRows.length > 0 && <ReadTable rows={readRows} budgetMinutes={budgetMinutes} practice={practice} />;
+  const readTable = (readRows.length > 0 || practiceRows.length > 0) && <ReadTable rows={readRows} practice={practiceRows} budgetMinutes={budgetMinutes} />;
   const provenance = readRows.length > 0 && <WhereTheseComeFrom rows={readRows} />;
 
   if (!content) {
@@ -169,13 +168,7 @@ export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, 
       {sessionCard}
       <div className="elev-sm space-y-4 rounded-[32px] bg-card p-8">
         <div className="space-y-4">
-          <ReactMarkdown
-            components={{
-              p: ({ children }) => <p className="text-[15px] leading-[1.7] last:mb-0">{children}</p>,
-            }}
-          >
-            {content.contentMarkdown}
-          </ReactMarkdown>
+          <LessonMarkdown>{content.contentMarkdown}</LessonMarkdown>
         </div>
 
         {content.citations.length > 0 && (

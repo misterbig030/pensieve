@@ -1,6 +1,14 @@
 import { z } from "zod";
-import { planSplitDraftSchema } from "@/lib/studyTime";
-import { coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema } from "./material";
+import {
+  coverRefDraftSchema,
+  coverRefSchema,
+  materialRefDraftSchema,
+  materialRefSchema,
+  practiceCoverDraftSchema,
+  practiceCoverSchema,
+  practiceRefDraftSchema,
+  practiceRefSchema,
+} from "./material";
 
 export const PLAN_LEVELS = ["month", "week", "day"] as const;
 export const planLevelSchema = z.enum(PLAN_LEVELS);
@@ -8,29 +16,22 @@ export const granularityChoiceSchema = z.enum(["day", "week", "auto"]);
 export const granularitySchema = z.enum(["day", "week"]);
 
 /**
- * What the model writes for one unit whose span the server already decided. Headings reserve materials (`covers`);
- * leaves assign them (`materials`). Both are left out when the plan has no materials.
+ * What the model writes for one unit whose span the server already decided. Headings reserve materials (`covers`) and
+ * practice sources (`practiceCovers`); leaves assign them (`materials`, `practice`). Each is left out when the plan has
+ * nothing for it.
  */
 export const unitDraftSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
   covers: z.array(coverRefDraftSchema).optional().describe("Headings only: materials this unit reserves, by id"),
   materials: z.array(materialRefDraftSchema).optional().describe("Leaves only: this unit's Read table"),
+  practiceCovers: z.array(practiceCoverDraftSchema).optional().describe("Headings only: practice sources this unit reserves, by id"),
+  practice: z.array(practiceRefDraftSchema).optional().describe("Leaves only: this unit's practice rows"),
 });
 export const unitListSchema = z.object({
   units: z.array(unitDraftSchema).min(1).max(40),
 });
 export type UnitDraft = z.infer<typeof unitDraftSchema>;
-
-/**
- * The top level of a new plan: the drafter first decides how the learner's time divides (`split`), then writes the
- * units. `split` comes first so it is settled before any unit is written.
- */
-export const topUnitListSchema = z.object({
-  // Required: left optional, the model skips it and writes only the units.
-  split: planSplitDraftSchema,
-  units: z.array(unitDraftSchema).min(1).max(40),
-});
 
 /**
  * The revised tree the model returns from a change request. Depth is fixed at three levels (month → week → day) so
@@ -43,6 +44,8 @@ const revisedLeafSchema = z.object({
   days: z.number().int().min(1),
   covers: z.array(coverRefDraftSchema).optional(),
   materials: z.array(materialRefDraftSchema).optional(),
+  practiceCovers: z.array(practiceCoverDraftSchema).optional(),
+  practice: z.array(practiceRefDraftSchema).optional(),
 });
 const revisedMidSchema = revisedLeafSchema.extend({
   children: z.array(revisedLeafSchema).min(1).max(40).optional(),
@@ -68,6 +71,8 @@ const nodeInputBase = z.object({
   manualSplit: z.boolean().optional(),
   covers: z.array(coverRefSchema).max(40).optional(),
   materials: z.array(materialRefSchema).max(40).optional(),
+  practice: z.array(practiceRefSchema).max(40).optional(),
+  practiceCovers: z.array(practiceCoverSchema).max(40).optional(),
 });
 const leafInputSchema = nodeInputBase.extend({ children: z.null().optional() });
 const midInputSchema = nodeInputBase.extend({ children: z.array(leafInputSchema).max(60).nullable().optional() });
