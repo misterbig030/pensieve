@@ -51,6 +51,7 @@ export async function POST(request: Request) {
           arm: defaultArm(process.env, { model: models.research.model }),
           research: { chapters: defaultChapterFinder(process.env, { model: models.research.model }) ?? undefined },
           outlineModel: models.outline,
+          allocateModel: models.allocate,
           // A client that disconnects stops research: the signal reaches search and fetch.
           signal: request.signal,
           log,

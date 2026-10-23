@@ -11,10 +11,10 @@
  * run touches the network. The research step has its own eval in `evals/research/`.
  *
  * Records state no weekly hours, so prompts say nothing about time and budgets assume six, as before. Since the
- * study-hours build the plan's time split is picked by its own call before drafting (`streamPlanDraft` makes it); each
- * draft sample records it. Samples from before Oct 4 have none and used a slightly shorter top-level prompt, and
- * samples from before the practice formats were drafted with the split decided inside the top-level call, so do not
- * pool them with newer ones.
+ * study-hours build the plan's time split comes from its own call before drafting (`streamPlanDraft` makes it: the
+ * allocation, which sees the learner's sources as the materials); each draft sample records it. Samples from before
+ * Oct 4 have none and used a slightly shorter top-level prompt, and samples from before the practice formats were
+ * drafted with the split decided inside the top-level call, so do not pool them with newer ones.
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";

@@ -14,16 +14,20 @@ import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
 import { aliasMaterials } from "@/lib/materials";
 import { makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import { AIE_MATERIALS, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
+import { DEFAULT_HOURS_PER_WEEK } from "@/lib/studyTime";
 
 const mockedStreamObject = vi.mocked(streamObject);
-const PICK_LABEL = "Practice · pick";
 const mockedGenerateObject = vi.mocked(generateObject);
+const ALLOCATE_LABEL = "Allocate";
 
-/** What the practice-pick call returns by default: a reading-heavy split with one project pick. */
-const PICK = { readingShare: 85, practice: "building projects", reason: "A craft topic.", picks: [{ format: "project", share: 100, focus: "a small tool", reason: "Learning by building." }] };
+/** The split the first tests draft against, so they need no allocation call (the same shape the allocation yields). */
+const SPLIT = { readingShare: 85, practice: "building projects", reason: "A craft topic.", formats: [{ format: "project" as const, share: 100, focus: "a small tool", reason: "Learning by building." }] };
 
-/** Makes the pick call return `object`; every plan drafted without a split makes one pick call first. */
-function respondPick(object: unknown = PICK) {
+/** What the allocation call returns by default: one project pick, and no part changed for any material. */
+const ALLOCATION = { readingShare: 85, practice: "building projects", reason: "A craft topic.", picks: [{ format: "project", share: 100, focus: "a small tool", reason: "Learning by building." }], parts: [] };
+
+/** Makes the allocation call return `object`; every plan drafted without a split makes one allocation call first. */
+function respondAllocate(object: unknown = ALLOCATION) {
   mockedGenerateObject.mockResolvedValue({
     object,
     usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 },
@@ -51,7 +55,7 @@ describe("streamPlanDraft with materials", () => {
     // Braces matter: a returned mock would be called by the runner as a cleanup hook, with no arguments.
     mockedStreamObject.mockReset();
     mockedGenerateObject.mockReset();
-    respondPick();
+    respondAllocate();
   });
 
   it("puts covers on headings and the Read table on leaves, drops unknown ids, and reports the checks", async () => {
@@ -80,7 +84,8 @@ describe("streamPlanDraft with materials", () => {
       weeks: 4, daysPerWeek: 7,
       granularity: "day",
       materials: [material("M1", { kind: "book", backbone: true }), material("M2")],
-      log: { onCall: (c) => void (c.label !== PICK_LABEL && calls.push(c)) },
+      split: SPLIT,
+      log: { onCall: (c) => void calls.push(c) },
     })) {
       events.push(event);
     }
@@ -106,38 +111,75 @@ describe("streamPlanDraft with materials", () => {
   });
 });
 
-describe("streamPlanDraft and the practice pick", () => {
+/** A six-chapter book of ten hours, so a kept chapter set shrinks it. */
+function bookOfSix(): Material {
+  return material("M1", {
+    kind: "book",
+    backbone: true,
+    minutes: 600,
+    minutesBasis: "estimated",
+    toc: { source: "catalogue", url: "https://openlibrary.org/books/OL1M", printPages: false, end: null, chapters: Array.from({ length: 6 }, (_, i) => ({ n: i + 1, title: `Chapter ${i + 1}`, page: null, minutes: 100, sections: [] })) },
+  });
+}
+
+describe("streamPlanDraft and the allocation", () => {
   beforeEach(() => {
     // Braces matter: a returned mock would be called by the runner as a cleanup hook, with no arguments.
     mockedStreamObject.mockReset();
     mockedGenerateObject.mockReset();
-    respondPick();
+    respondAllocate();
   });
 
   const weeks = (n: number): UnitDraft[] => Array.from({ length: n }, (_, i) => ({ title: `W${i + 1}`, summary: "s" }));
+  const keepThree = { ...ALLOCATION, parts: [{ id: "M1", uses: null, minutes: null, chapters: [1, 2, 3], items: null, drop: false, dropReason: null }] };
 
-  it("picks the practice first and announces the split before any unit", async () => {
+  it("allocates after research, then sends the allocated materials and the split before any node", async () => {
+    respondAllocate(keepThree);
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const calls: ModelCall[] = [];
     const events: PlanDraftEvent[] = [];
-    for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", hoursPerWeek: 10, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
+    for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", hoursPerWeek: 10, materials: [bookOfSix()], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
 
     expect(mockedGenerateObject).toHaveBeenCalledTimes(1);
-    expect(events[0]).toEqual({
+    const kinds = events.map((e) => e.type);
+    expect(kinds.slice(0, 2)).toEqual(["allocated", "split"]);
+    expect(kinds.indexOf("node")).toBeGreaterThan(1);
+    expect(kinds.filter((k) => k === "allocated" || k === "split")).toHaveLength(2);
+    const allocated = events[0];
+    if (allocated.type !== "allocated") throw new Error("no allocated event");
+    expect(allocated.dropped).toEqual([]);
+    expect(allocated.materials).toHaveLength(1);
+    expect(allocated.materials[0].toc?.chapters).toHaveLength(3);
+    expect(allocated.materials[0].minutes).toBe(300);
+    // The reading share follows the kept chapters: 300 of the 2400 minutes.
+    expect(events[1]).toEqual({
       type: "split",
-      split: { readingShare: 85, practice: "building projects", reason: "A craft topic.", formats: [{ format: "project", share: 100, focus: "a small tool", reason: "Learning by building." }] },
+      split: { readingShare: 13, practice: "building projects", reason: "A craft topic.", formats: [{ format: "project", share: 100, focus: "a small tool", reason: "Learning by building." }] },
     });
-    expect(events.slice(1).some((e) => e.type === "split")).toBe(false);
-    expect(events.findIndex((e) => e.type === "node")).toBeGreaterThan(0);
     const finish = events.at(-1);
     expect(finish?.type === "finish" && finish.root.children!.map((n) => n.budgetHours)).toEqual([10, 10, 10, 10]);
-    // The drafter is never asked to decide a split; it is told the one the pick made.
-    expect(calls.map((c) => c.label)).toEqual([PICK_LABEL, "Top level · 4 weeks"]);
+    // The drafter is never asked to decide a split; it is told the one the allocation made, with the allocated chapters.
+    expect(calls.map((c) => c.label)).toEqual([ALLOCATE_LABEL, "Top level · 4 weeks"]);
     expect(calls[1].prompt).not.toContain('as "split"');
-    expect(calls[1].prompt).toContain("How this plan spends that time: about 85% reading or watching the materials, the rest on project.");
+    expect(calls[1].prompt).toContain("How this plan spends that time: about 13% reading or watching the materials, the rest on project.");
+    const outline = (mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(outline).toContain("ch. 1–3");
+    expect(outline).not.toContain("ch. 4");
   });
 
-  it("adds the pick call's cost to the finish event", async () => {
+  it("sends the materials the allocation dropped, and drafts without them", async () => {
+    respondAllocate({ ...ALLOCATION, parts: [{ id: "M2", uses: null, minutes: null, chapters: null, items: null, drop: true, dropReason: "the book covers it" }] });
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [material("M1"), material("M2", { title: "Found essay" })] })) events.push(event);
+    const allocated = events[0];
+    if (allocated.type !== "allocated") throw new Error("no allocated event");
+    expect(allocated.materials.map((m) => m.id)).toEqual(["M1"]);
+    expect(allocated.dropped).toEqual([{ title: "Found essay", url: "https://example.com/M2", reason: "not used by the plan: the book covers it" }]);
+    expect((mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt).not.toContain("Found essay");
+  });
+
+  it("adds the allocation's cost to the finish event", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const rows: number[] = [];
     let finish: PlanDraftEvent | undefined;
@@ -153,53 +195,84 @@ describe("streamPlanDraft and the practice pick", () => {
     const refusal = new APICallError({ message: "Your credit balance is too low", url: "https://api.anthropic.com", requestBodyValues: {}, statusCode: 400 });
     mockedGenerateObject.mockReset();
     mockedGenerateObject.mockRejectedValue(refusal);
-    const outlineModel = { id: "anthropic/claude-haiku-4.5", model: {}, keyOwner: "user" } as unknown as ResolvedModel;
+    const allocateModel = { id: "anthropic/claude-opus-5.5", model: {}, keyOwner: "user" } as unknown as ResolvedModel;
+    const events: PlanDraftEvent[] = [];
     await expect(async () => {
-      for await (const _ of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], outlineModel })) void _;
+      for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], allocateModel })) events.push(event);
     }).rejects.toBe(refusal);
+    expect(events).toEqual([]);
     expect(mockedStreamObject).not.toHaveBeenCalled();
   });
 
-  it("drafts an all-reading plan when the pick fails on the app's key", async () => {
+  it("drafts an all-reading plan when the allocation fails on the app's key", async () => {
     mockedGenerateObject.mockReset();
     mockedGenerateObject.mockRejectedValueOnce(new Error("No object generated"));
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const materials = [material("M1")];
     const events: PlanDraftEvent[] = [];
-    for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [] })) events.push(event);
-    expect(events[0]).toEqual({ type: "split", split: { readingShare: 100, practice: "reading", reason: "", formats: [] } });
+    for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials })) events.push(event);
+    expect(events[0]).toEqual({ type: "allocated", materials, dropped: [] });
+    expect(events[1]).toEqual({ type: "split", split: { readingShare: 100, practice: "reading", reason: "", formats: [] } });
     expect(events.at(-1)?.type).toBe("finish");
     error.mockRestore();
   });
 
-  it("drafts an all-reading plan when the pick returns nothing usable", async () => {
-    respondPick({ readingShare: "lots", practice: "", reason: "" });
+  it("drafts an all-reading plan when the allocation returns nothing usable", async () => {
+    respondAllocate({ readingShare: "lots", practice: "", reason: "" });
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const events: PlanDraftEvent[] = [];
     for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [] })) events.push(event);
-    expect(events[0]).toEqual({ type: "split", split: { readingShare: 100, practice: "reading", reason: "", formats: [] } });
+    expect(events.find((e) => e.type === "split")).toEqual({ type: "split", split: { readingShare: 100, practice: "reading", reason: "", formats: [] } });
     expect(events.at(-1)?.type).toBe("finish");
+    error.mockRestore();
   });
 
-  it("keeps a split it is given and makes no pick call", async () => {
+  it("does not allocate when a split is given", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const calls: ModelCall[] = [];
     const split = { readingShare: 50, practice: "building", reason: "" };
     const events: PlanDraftEvent[] = [];
     for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", split, materials: [], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
     expect(mockedGenerateObject).not.toHaveBeenCalled();
-    expect(events.some((e) => e.type === "split")).toBe(false);
+    expect(events.some((e) => e.type === "split" || e.type === "allocated")).toBe(false);
     expect(calls[0].prompt).toContain("the rest on building");
   });
 
-  it("shows the pick only the learner's own sources", async () => {
+  it("passes the allocate model and the request's signal to the allocation", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const controller = new AbortController();
+    const direct = { modelId: "claude-opus-5-5", provider: "anthropic.messages" };
+    const allocateModel: ResolvedModel = { model: direct as never, id: "anthropic/claude-opus-5.5", keyOwner: "user" };
+    for await (const _ of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], allocateModel, signal: controller.signal })) void _;
+    expect(mockedGenerateObject).toHaveBeenCalledTimes(1);
+    expect(mockedGenerateObject.mock.calls[0][0]).toMatchObject({ model: direct, abortSignal: controller.signal });
+  });
+
+  it("allocates on the app's allocate model when none is given", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const calls: ModelCall[] = [];
+    for await (const _ of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], log: { onCall: (c) => void calls.push(c) } })) void _;
+    expect(calls[0].label).toBe(ALLOCATE_LABEL);
+    expect(calls[0].model).toBe("anthropic/claude-opus-5.5");
+  });
+
+  it("allocates over the plan's hours, the default week when none is given", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const calls: ModelCall[] = [];
+    for await (const _ of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], log: { onCall: (c) => void calls.push(c) } })) void _;
+    expect(calls[0].prompt).toContain(`${4 * DEFAULT_HOURS_PER_WEEK} hours`);
+  });
+
+  it("shows the allocation every material, the learner's and the researched", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const learner = material("L1", { origin: "learner", title: "My notes" });
     const found = material("R1", { title: "Found by research" });
     for await (const _ of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [learner, found] })) void _;
     const prompt = (mockedGenerateObject.mock.calls[0][0] as { prompt: string }).prompt;
     expect(prompt).toContain("My notes");
-    expect(prompt).not.toContain("Found by research");
+    expect(prompt).toContain("Found by research");
   });
 
   it("drafts on the outline model it is given and records who paid", async () => {
@@ -227,14 +300,11 @@ describe("streamPlanDraft and the practice pick", () => {
     expect(events.at(-1)?.type).toBe("finish");
     expect(mockedStreamObject.mock.calls.length).toBeGreaterThan(0);
     for (const call of mockedStreamObject.mock.calls) expect(call[0].model).toBe(direct);
-    // The pick runs on the same outline model as the units.
+    // The allocation runs on its own model, not the units' (the app's, as none was given).
     expect(mockedGenerateObject.mock.calls).toHaveLength(1);
-    expect(mockedGenerateObject.mock.calls[0][0].model).toBe(direct);
+    expect(mockedGenerateObject.mock.calls[0][0].model).toBe("anthropic/claude-opus-5.5");
     expect(calls.length).toBe(mockedStreamObject.mock.calls.length + 1);
-    for (const c of calls) {
-      expect(c.model).toBe("anthropic/claude-haiku-4.5");
-      expect(c.keyOwner).toBe("user");
-    }
+    expect(calls.filter((c) => c.label !== ALLOCATE_LABEL).every((c) => c.model === "anthropic/claude-haiku-4.5" && c.keyOwner === "user")).toBe(true);
   });
 
   it("rethrows a stream failure instead of waiting on an object that never arrives", async () => {
@@ -263,13 +333,13 @@ describe("streamResearchedPlanDraft", () => {
   beforeEach(() => {
     mockedStreamObject.mockReset();
     mockedGenerateObject.mockReset();
-    respondPick();
+    respondAllocate();
   });
 
   const weeks = (n: number): UnitDraft[] => Array.from({ length: n }, (_, i) => ({ title: `W${i + 1}`, summary: "s" }));
   const offline = { fetcher: { fetch: vi.fn() } as never, books: vi.fn() as never };
 
-  it("picks first, announces the split before the research events, and drafts against it", async () => {
+  it("researches first, then allocates, and sends the allocation and the split before any node", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const calls: ModelCall[] = [];
     const events: PlanDraftEvent[] = [];
@@ -284,15 +354,32 @@ describe("streamResearchedPlanDraft", () => {
       log: { onCall: (c) => void calls.push(c) },
     })) events.push(event);
 
-    expect(events[0].type).toBe("split");
-    expect(events.findIndex((e) => e.type === "research.start")).toBeGreaterThan(0);
-    expect(events.filter((e) => e.type === "split")).toHaveLength(1);
+    const kinds = events.map((e) => e.type);
+    expect(kinds[0]).toBe("research.start");
+    const done = kinds.indexOf("research.done");
+    expect(done).toBeGreaterThan(0);
+    expect(kinds.slice(done + 1, done + 3)).toEqual(["allocated", "split"]);
+    expect(kinds.filter((k) => k === "split")).toHaveLength(1);
+    expect(kinds.indexOf("node")).toBeGreaterThan(done + 2);
     expect(mockedGenerateObject).toHaveBeenCalledTimes(1);
-    expect(events.at(-1)?.type).toBe("finish");
+    expect(kinds.at(-1)).toBe("finish");
     expect(calls.at(-1)?.prompt).toContain("the rest on project.");
   });
 
-  it("adds the pick's cost to the finish event", async () => {
+  it("starts research with no split, and allocates the materials research ended with", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const learner = { type: "note" as const, title: "My notes", url: "note:1", text: "Notes on branching." };
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [learner], granularity: "week", arm: null, research: offline })) events.push(event);
+    const done = events.find((e) => e.type === "research.done");
+    const allocated = events.find((e) => e.type === "allocated");
+    if (done?.type !== "research.done" || allocated?.type !== "allocated") throw new Error("missing events");
+    expect(done.materials.map((m) => m.title)).toContain("My notes");
+    expect(allocated.materials.map((m) => m.id)).toEqual(done.materials.map((m) => m.id));
+    expect((mockedGenerateObject.mock.calls[0][0] as { prompt: string }).prompt).toContain("My notes");
+  });
+
+  it("adds the allocation's cost to the finish event", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const rows: number[] = [];
     let finish: PlanDraftEvent | undefined;
@@ -303,28 +390,39 @@ describe("streamResearchedPlanDraft", () => {
     expect(finish?.type === "finish" && finish.costUsd).toBeCloseTo(rows[0] + rows[1], 10);
   });
 
-  it("keeps a split it is given and makes no pick call", async () => {
+  it("keeps a split it is given and makes no allocation call", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const split = { readingShare: 50, practice: "building", reason: "" };
     const events: PlanDraftEvent[] = [];
     for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", split, arm: null, research: offline })) events.push(event);
     expect(mockedGenerateObject).not.toHaveBeenCalled();
-    expect(events.some((e) => e.type === "split")).toBe(false);
+    expect(events.some((e) => e.type === "split" || e.type === "allocated")).toBe(false);
   });
 
-  it("lets a refusal on the learner's own key propagate before research starts", async () => {
+  it("lets a refusal on the learner's own key propagate after research and before any node", async () => {
     const refusal = new APICallError({ message: "refused", url: "https://api.anthropic.com", requestBodyValues: {}, statusCode: 401 });
     mockedGenerateObject.mockReset();
     mockedGenerateObject.mockRejectedValue(refusal);
-    const outlineModel = { id: "anthropic/claude-haiku-4.5", model: {}, keyOwner: "user" } as unknown as ResolvedModel;
+    const allocateModel = { id: "anthropic/claude-opus-5.5", model: {}, keyOwner: "user" } as unknown as ResolvedModel;
     const events: PlanDraftEvent[] = [];
     await expect(async () => {
-      for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline, outlineModel })) events.push(event);
+      for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline, allocateModel })) events.push(event);
     }).rejects.toBe(refusal);
-    expect(events).toEqual([]);
+    expect(events.some((e) => e.type === "research.done")).toBe(true);
+    expect(events.some((e) => e.type === "node" || e.type === "split" || e.type === "allocated")).toBe(false);
+    expect(mockedStreamObject).not.toHaveBeenCalled();
   });
 
-  it("passes the request's signal to the pick", async () => {
+  it("passes the allocate model and the request's signal to the allocation", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const controller = new AbortController();
+    const direct = { modelId: "claude-opus-5-5", provider: "anthropic.messages" };
+    const allocateModel: ResolvedModel = { model: direct as never, id: "anthropic/claude-opus-5.5", keyOwner: "app" };
+    for await (const _ of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline, allocateModel, signal: controller.signal })) void _;
+    expect(mockedGenerateObject.mock.calls[0][0]).toMatchObject({ model: direct, abortSignal: controller.signal });
+  });
+
+  it("stops at an aborted request instead of drafting", async () => {
     const controller = new AbortController();
     controller.abort();
     mockedGenerateObject.mockReset();
@@ -332,7 +430,7 @@ describe("streamResearchedPlanDraft", () => {
     await expect(async () => {
       for await (const _ of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline, signal: controller.signal })) void _;
     }).rejects.toThrow("aborted");
-    expect(mockedGenerateObject.mock.calls[0][0]).toMatchObject({ abortSignal: controller.signal });
+    expect(mockedStreamObject).not.toHaveBeenCalled();
   });
 });
 

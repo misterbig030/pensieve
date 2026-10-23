@@ -31,13 +31,13 @@ import {
 } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 import { unitListSchema, type UnitDraft } from "@/lib/schemas/plan";
-import type { PlanSplit } from "@/lib/studyTime";
+import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, emitGenerationLog, type GenerationLogContext } from "./logged";
-import { DEFAULT_OUTLINE_MODEL } from "./models";
+import { allocatePlan } from "./allocate";
+import { DEFAULT_ALLOCATE_MODEL, DEFAULT_OUTLINE_MODEL } from "./models";
 import { providerError } from "./providerError";
 import { appModel, type ResolvedModel } from "./resolve";
 import { buildUnitsPrompt, type UnitsPromptInput } from "./planPrompt";
-import { pickPractice } from "./practicePick";
 import type { ResearchArm } from "./research/agent";
 import { researchMaterials, type ResearchMaterialsInput } from "./research/pipeline";
 
@@ -330,12 +330,17 @@ export interface StreamPlanDraftInput extends Omit<PlanDraftRequest, "materials"
   materials: Material[];
   /** The model that drafts units; the app's outline model when omitted (eval, tests). */
   outlineModel?: ResolvedModel;
+  /** The model that allocates the plan's time after research; the app's allocate model when omitted (eval, tests). */
+  allocateModel?: ResolvedModel;
+  /** A request that goes away stops the allocation. */
+  signal?: AbortSignal;
   log?: GenerationLogContext;
 }
 
 /**
- * Drafts a new plan: the top-level units, then the first unit's children, then the first grandchild's children while
- * the first branch is still made of headings. Later units stay headings until the learner reaches them.
+ * Drafts a new plan: the allocation (unless a split is given), then the top-level units, then the first unit's
+ * children, then the first grandchild's children while the first branch is still made of headings. Later units stay
+ * headings until the learner reaches them.
  */
 export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenerator<PlanDraftEvent> {
   const topLevel = topLevelFor(input.weeks);
@@ -343,26 +348,31 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
   let costUsd = 0;
 
   const outlineModel = input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL);
-  // A plan drafted against a given split keeps it; otherwise the practice is picked before anything is drafted.
+  // A plan drafted against a given split keeps it and its materials. Otherwise the allocation runs now, with the
+  // materials in hand: it cuts each to the part the plan uses, and the units below are drafted from those parts.
   let split = input.split ?? null;
+  let materials = input.materials;
   if (!split) {
-    const picked = await pickPractice({
+    const allocated = await allocatePlan({
       topic: input.topic,
       instructions: input.instructions,
       weeks: input.weeks,
       daysPerWeek: input.daysPerWeek,
-      hoursPerWeek: input.hoursPerWeek,
-      sources: input.materials.filter((m) => m.origin === "learner"),
-      model: outlineModel,
+      hoursPerWeek: input.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
+      materials,
+      model: input.allocateModel ?? appModel(DEFAULT_ALLOCATE_MODEL),
       log: input.log,
+      signal: input.signal,
     });
-    split = picked.split;
-    costUsd += picked.costUsd;
+    split = allocated.split;
+    materials = allocated.materials;
+    costUsd += allocated.costUsd;
+    yield { type: "allocated", materials, dropped: allocated.dropped };
     yield { type: "split", split };
   }
 
   const tops: PlanNode[] = [];
-  const ctx = { ...input, split, outlineModel };
+  const ctx = { ...input, materials, split, outlineModel };
   for await (const event of draftLevel({ ctx, level: topLevel, spans: topSpans(input.weeks, input.daysPerWeek), log: input.log })) {
     if (event.type === "node") {
       tops.push(event.node);
@@ -450,6 +460,8 @@ export interface StreamResearchedDraftInput extends PlanDraftRequest {
   arm: ResearchArm | null;
   /** The model that drafts units after research; the app's outline model when omitted. */
   outlineModel?: ResolvedModel;
+  /** The model that allocates the plan's time after research; the app's allocate model when omitted. */
+  allocateModel?: ResolvedModel;
   signal?: AbortSignal;
   log?: GenerationLogContext;
   /** Tests and the eval inject these; the app uses the defaults. */
@@ -457,29 +469,11 @@ export interface StreamResearchedDraftInput extends PlanDraftRequest {
 }
 
 /**
- * One request: the practice is picked first (its split streams before anything else), then the research events stream
- * and end with the materials list, then the plan drafts against that list and split. The finish event's cost
- * includes the pick and research.
+ * One request: the research events stream and end with the materials list, then the allocation divides the plan's time
+ * over those materials (its `allocated` and `split` events come next), then the plan drafts against the allocated
+ * parts. The finish event's cost includes research and the allocation.
  */
 export async function* streamResearchedPlanDraft(input: StreamResearchedDraftInput): AsyncGenerator<PlanDraftEvent> {
-  let pickCostUsd = 0;
-  let split = input.split ?? null;
-  if (!split) {
-    const picked = await pickPractice({
-      topic: input.topic,
-      instructions: input.instructions,
-      weeks: input.weeks,
-      daysPerWeek: input.daysPerWeek,
-      hoursPerWeek: input.hoursPerWeek,
-      sources: input.materials,
-      model: input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL),
-      log: input.log,
-      signal: input.signal,
-    });
-    split = picked.split;
-    pickCostUsd = picked.costUsd;
-    yield { type: "split", split };
-  }
   const outcome = yield* researchMaterials({
     brief: { topic: input.topic, instructions: input.instructions, weeks: input.weeks, daysPerWeek: input.daysPerWeek, hoursPerWeek: input.hoursPerWeek, sources: input.materials },
     arm: input.arm,
@@ -487,8 +481,8 @@ export async function* streamResearchedPlanDraft(input: StreamResearchedDraftInp
     log: input.log,
     ...input.research,
   });
-  for await (const event of streamPlanDraft({ ...input, split, materials: outcome.materials })) {
-    if (event.type === "finish") yield { ...event, costUsd: event.costUsd + outcome.costUsd + pickCostUsd };
+  for await (const event of streamPlanDraft({ ...input, materials: outcome.materials })) {
+    if (event.type === "finish") yield { ...event, costUsd: event.costUsd + outcome.costUsd };
     else yield event;
   }
 }

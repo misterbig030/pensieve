@@ -1,6 +1,6 @@
 import type { KeyErrorKind } from "@/lib/ai/models";
 import type { ModelCall } from "@/lib/ai/logged";
-import type { ResearchEvent } from "@/lib/ai/research/events";
+import type { DroppedMaterial, ResearchEvent } from "@/lib/ai/research/events";
 import type { Granularity, PlanLevel, PlanNode } from "@/lib/planTree";
 import type { ChangedNodes } from "@/lib/planSummary";
 import type { Material } from "@/lib/schemas/material";
@@ -66,7 +66,12 @@ export interface PlanDraftRequest extends PlanContext {
 export type PlanDraftEvent =
   | ResearchEvent
   | { type: "node"; parentId: string; node: PlanNode }
-  /** Sent once the top level has validated: how the drafter divides the learner's time. */
+  /**
+   * Sent after research, before any node: the materials as the allocation cut them (the parts the plan uses; these
+   * replace the `research.done` list) and the researched ones it will not use.
+   */
+  | { type: "allocated"; materials: Material[]; dropped: DroppedMaterial[] }
+  /** Sent right after `allocated`, before any node: how the drafter divides the learner's time. */
   | { type: "split"; split: PlanSplit }
   | { type: "finish"; root: PlanNode; costUsd: number }
   | { type: "error"; message: string; code?: KeyErrorKind }
