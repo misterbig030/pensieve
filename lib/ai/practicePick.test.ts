@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("ai", () => ({ generateObject: vi.fn() }));
-import { generateObject } from "ai";
+vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof import("ai")>()), generateObject: vi.fn() }));
+import { APICallError, generateObject } from "ai";
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import type { ModelCall } from "./logged";
 import { buildPracticePickPrompt, pickPractice } from "./practicePick";
@@ -74,5 +74,29 @@ describe("pickPractice", () => {
     const { split } = await pickPractice({ ...brief, model: appModel("anthropic/claude-sonnet-5.5"), log: { onCall: (c) => void calls.push(c) } });
     expect(split).toEqual({ readingShare: 100, practice: "reading", reason: "", formats: [] });
     expect(calls[0].facts).toContain("no picks returned");
+  });
+
+  it("falls back to all reading when the call itself fails on the app's key", async () => {
+    mockedGenerateObject.mockRejectedValueOnce(new Error("No object generated: response did not match schema."));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { split, costUsd } = await pickPractice({ ...brief, model: appModel("anthropic/claude-sonnet-5.5") });
+    expect(split).toEqual({ readingShare: 100, practice: "reading", reason: "", formats: [] });
+    expect(costUsd).toBe(0);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it("lets a provider refusal on the learner's own key through, for the key guard to name", async () => {
+    const refusal = new APICallError({ message: "invalid x-api-key", url: "https://api.anthropic.com", requestBodyValues: {}, statusCode: 401 });
+    mockedGenerateObject.mockRejectedValueOnce(refusal);
+    await expect(pickPractice({ ...brief, model: { ...appModel("anthropic/claude-sonnet-5.5"), keyOwner: "user" } })).rejects.toBe(refusal);
+  });
+
+  it("passes the request's abort signal and stops when the request is gone", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    mockedGenerateObject.mockRejectedValueOnce(new DOMException("aborted", "AbortError"));
+    await expect(pickPractice({ ...brief, model: appModel("anthropic/claude-sonnet-5.5"), signal: controller.signal })).rejects.toThrow("aborted");
+    expect(mockedGenerateObject.mock.calls[0][0]).toMatchObject({ abortSignal: controller.signal });
   });
 });

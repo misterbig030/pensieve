@@ -474,6 +474,7 @@ export async function* streamResearchedPlanDraft(input: StreamResearchedDraftInp
       sources: input.materials,
       model: input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL),
       log: input.log,
+      signal: input.signal,
     });
     split = picked.split;
     pickCostUsd = picked.costUsd;

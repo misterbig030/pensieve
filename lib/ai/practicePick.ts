@@ -2,6 +2,7 @@ import { PRACTICE_FORMATS, PRACTICE_REGISTRY, MAX_PRACTICE_PICKS } from "@/lib/p
 import type { SourceInput } from "@/lib/schemas/source";
 import { normalizeSplit, planSplitDraftSchema, type PlanSplit } from "@/lib/studyTime";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
+import { providerError } from "./providerError";
 import type { ResolvedModel } from "./resolve";
 
 export interface PracticePickInput {
@@ -51,9 +52,11 @@ export function buildPracticePickPrompt(input: PracticePickInput): string {
 /**
  * Asks the outline model how the plan's time splits between reading and practice formats, before research runs. When
  * the model returns no usable split, or leaves its picks out, the plan is all reading and the call's facts say why.
+ * A call that fails is all reading too, so the draft goes on; but a refusal on the learner's own key is theirs to hear
+ * about, and a request that has gone away stops here.
  */
 export async function pickPractice(
-  input: PracticePickInput & { model: ResolvedModel; log?: GenerationLogContext },
+  input: PracticePickInput & { model: ResolvedModel; log?: GenerationLogContext; signal?: AbortSignal },
 ): Promise<{ split: PlanSplit; costUsd: number }> {
   let split: PlanSplit = ALL_READING;
   const check = (draft: Parameters<typeof normalizeSplit>[0]): string[] => {
@@ -64,17 +67,25 @@ export async function pickPractice(
     const picks = normalized.formats.map((p) => `${p.format} ${p.share}%`);
     return [`reading ${normalized.readingShare}%`, picks.length > 0 ? `picks: ${picks.join(", ")}` : "no picks"];
   };
-  const { costUsd } = await loggedGenerateObject(
-    {
-      model: input.model.id,
-      languageModel: typeof input.model.model === "string" ? undefined : input.model.model,
-      keyOwner: input.model.keyOwner,
-      schema: planSplitDraftSchema,
-      prompt: buildPracticePickPrompt(input),
-      label: "Practice · pick",
-      check,
-    },
-    { ...input.log, caller: "outline" },
-  );
-  return { split, costUsd };
+  try {
+    const { costUsd } = await loggedGenerateObject(
+      {
+        model: input.model.id,
+        languageModel: typeof input.model.model === "string" ? undefined : input.model.model,
+        keyOwner: input.model.keyOwner,
+        schema: planSplitDraftSchema,
+        prompt: buildPracticePickPrompt(input),
+        label: "Practice · pick",
+        check,
+        abortSignal: input.signal,
+      },
+      { ...input.log, caller: "outline" },
+    );
+    return { split, costUsd };
+  } catch (error) {
+    if (input.signal?.aborted) throw error;
+    if (input.model.keyOwner === "user" && providerError(error)) throw error;
+    console.error("[draft] practice pick failed; the plan is all reading", error);
+    return { split: ALL_READING, costUsd: 0 };
+  }
 }

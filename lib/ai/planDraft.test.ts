@@ -149,14 +149,27 @@ describe("streamPlanDraft and the practice pick", () => {
     expect(finish?.type === "finish" && finish.costUsd).toBeCloseTo(rows[0] + rows[1], 10);
   });
 
-  it("lets a failed pick propagate without drafting anything", async () => {
-    const refusal = Object.assign(new Error("Your credit balance is too low"), { statusCode: 400 });
+  it("lets a refusal on the learner's own key propagate without drafting anything", async () => {
+    const refusal = new APICallError({ message: "Your credit balance is too low", url: "https://api.anthropic.com", requestBodyValues: {}, statusCode: 400 });
     mockedGenerateObject.mockReset();
     mockedGenerateObject.mockRejectedValue(refusal);
+    const outlineModel = { id: "anthropic/claude-haiku-4.5", model: {}, keyOwner: "user" } as unknown as ResolvedModel;
     await expect(async () => {
-      for await (const _ of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [] })) void _;
+      for await (const _ of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], outlineModel })) void _;
     }).rejects.toBe(refusal);
     expect(mockedStreamObject).not.toHaveBeenCalled();
+  });
+
+  it("drafts an all-reading plan when the pick fails on the app's key", async () => {
+    mockedGenerateObject.mockReset();
+    mockedGenerateObject.mockRejectedValueOnce(new Error("No object generated"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [] })) events.push(event);
+    expect(events[0]).toEqual({ type: "split", split: { readingShare: 100, practice: "reading", reason: "", formats: [] } });
+    expect(events.at(-1)?.type).toBe("finish");
+    error.mockRestore();
   });
 
   it("drafts an all-reading plan when the pick returns nothing usable", async () => {
@@ -299,15 +312,27 @@ describe("streamResearchedPlanDraft", () => {
     expect(events.some((e) => e.type === "split")).toBe(false);
   });
 
-  it("lets a failed pick propagate before research starts", async () => {
-    const refusal = new Error("refused");
+  it("lets a refusal on the learner's own key propagate before research starts", async () => {
+    const refusal = new APICallError({ message: "refused", url: "https://api.anthropic.com", requestBodyValues: {}, statusCode: 401 });
     mockedGenerateObject.mockReset();
     mockedGenerateObject.mockRejectedValue(refusal);
+    const outlineModel = { id: "anthropic/claude-haiku-4.5", model: {}, keyOwner: "user" } as unknown as ResolvedModel;
     const events: PlanDraftEvent[] = [];
     await expect(async () => {
-      for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline })) events.push(event);
+      for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline, outlineModel })) events.push(event);
     }).rejects.toBe(refusal);
     expect(events).toEqual([]);
+  });
+
+  it("passes the request's signal to the pick", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    mockedGenerateObject.mockReset();
+    mockedGenerateObject.mockRejectedValueOnce(new DOMException("aborted", "AbortError"));
+    await expect(async () => {
+      for await (const _ of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline, signal: controller.signal })) void _;
+    }).rejects.toThrow("aborted");
+    expect(mockedGenerateObject.mock.calls[0][0]).toMatchObject({ abortSignal: controller.signal });
   });
 });
 
