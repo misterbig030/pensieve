@@ -562,8 +562,11 @@ export interface Breach {
   text: string;
   /** The practice rows a practice breach names, which a drop removes: one row each. */
   practice?: (Pick<PracticeRef, "format" | "id" | "task"> & { itemFrom?: number | null })[];
-  /** The practice reservations a practice breach names, which a drop removes: one each. */
-  practiceCovers?: Pick<PracticeCover, "format" | "id" | "itemFrom" | "itemTo">[];
+  /**
+   * The practice reservations a practice breach names, which a drop removes: one each. With `keep`, the drop trims
+   * the run to those items instead (its free stretch), and removes it only when it has none.
+   */
+  practiceCovers?: (Pick<PracticeCover, "format" | "id" | "itemFrom" | "itemTo"> & { keep?: { itemFrom: number; itemTo: number } })[];
 }
 
 export interface LevelChecks {
@@ -602,20 +605,41 @@ export interface LevelCheckInput {
 
 /**
  * One practice row or reservation of one unit, as revision compares it with the saved tree: unit, row or reservation,
- * format, source, item positions and task. Minutes, done and note are left out: the model's changes to them do not make
- * a row new.
+ * format, source, and the item positions it names, or its task when it names none. An item row is its item, so a
+ * reworded task does not make it new. Minutes, done and note are left out: the model's changes to them do not either.
  */
 export function practiceRowKey(nodeId: string, r: PracticeRef | PracticeCover): string {
-  return JSON.stringify([nodeId, "done" in r ? "row" : "cover", r.format, r.id, r.itemFrom ?? null, r.itemTo ?? null, r.task ?? null]);
+  const what = r.itemFrom ? [r.itemFrom, r.itemTo ?? null] : [null, null, r.task ?? null];
+  return JSON.stringify([nodeId, "done" in r ? "row" : "cover", r.format, r.id, ...what]);
 }
 
-/** The practice rows and reservations a saved tree holds, by `practiceRowKey`. */
+/**
+ * The practice rows and reservations a saved tree holds, by `practiceRowKey` and counted: a unit's rows are matched
+ * to its saved ones in order, each saved one once, so a copy past the saved count is new.
+ */
 export function savedPracticeRows(root: PlanNode): (node: PlanNode, row: PracticeRef | PracticeCover) => boolean {
-  const keys = new Set<string>();
+  const counts = new Map<string, number>();
   walk(root, (n) => {
-    for (const r of [...(n.practice ?? []), ...(n.practiceCovers ?? [])]) keys.add(practiceRowKey(n.id, r));
+    for (const r of [...(n.practice ?? []), ...(n.practiceCovers ?? [])]) counts.set(practiceRowKey(n.id, r), (counts.get(practiceRowKey(n.id, r)) ?? 0) + 1);
   });
-  return (node, row) => keys.has(practiceRowKey(node.id, row));
+  const savedOf = new Map<PlanNode, Set<PracticeRef | PracticeCover>>();
+  return (node, row) => {
+    let saved = savedOf.get(node);
+    if (!saved) {
+      saved = new Set();
+      const used = new Map<string, number>();
+      for (const r of [...(node.practice ?? []), ...(node.practiceCovers ?? [])]) {
+        const key = practiceRowKey(node.id, r);
+        const n = used.get(key) ?? 0;
+        if (n < (counts.get(key) ?? 0)) {
+          saved.add(r);
+          used.set(key, n + 1);
+        }
+      }
+      savedOf.set(node, saved);
+    }
+    return saved.has(row);
+  };
 }
 
 /** How far must-reading may run past the plan's reading share before it is worth reporting. */
@@ -781,6 +805,52 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       for (const k of itemPositions(c).map((p) => itemKey(c.id!, p))) if (!parentItems.has(k) && !heldBy.has(k)) heldBy.set(k, label(n));
     }
   });
+  /** Where a leaf's sourced row stands: another source of a reserved format, a source reserved elsewhere, an item and whether it is inside the parent's runs, or none of these. */
+  const rowPlace = (r: PracticeRef): "foreign" | "unreserved" | "free" | "outside-run" | "item" => {
+    const covers = parentCovers(r);
+    if (reservedFormats.has(r.format) && covers.length === 0) return "foreign";
+    if (parentNode && covers.length === 0 && reservedSomewhere.has(sourceKey(r))) return "unreserved";
+    if (!listedSource(r.id) || !r.itemFrom) return "free";
+    const runs = covers.filter((c) => itemPositions(c).length > 0);
+    return runs.length > 0 && !inRuns(runs, r.itemFrom) ? "outside-run" : "item";
+  };
+  /** A heading's sourced reservation: its run and the parent's runs of that source, or null when a source rule or a missing run settles it first. */
+  const coverRun = (c: PracticeCover): { own: number[]; runs: PracticeCover[] } | null => {
+    const covers = parentCovers(c);
+    if (parentNode && covers.length === 0 && (reservedFormats.has(c.format) || reservedSomewhere.has(sourceKey(c)))) return null;
+    if (!listedSource(c.id)) return null;
+    const own = itemPositions(c);
+    return own.length > 0 ? { own, runs: covers.filter((p) => itemPositions(p).length > 0) } : null;
+  };
+  // Saved rows and reservations claim their items before this level's new ones, in order, so a revision's new row or
+  // run never takes an item from a saved one, whichever unit comes first. `doneRow` and `heldCover` say which saved row
+  // or reservation holds an item, so it is not its own repeat.
+  const doneRow = new Map<string, PracticeRef>();
+  const heldCover = new Map<string, PracticeCover>();
+  if (input.saved) {
+    for (const n of input.nodes) {
+      if (input.leaves) {
+        for (const r of n.practice ?? []) {
+          if (r.generated || r.id === null || !input.saved(n, r) || rowPlace(r) !== "item") continue;
+          const key = itemKey(r.id, r.itemFrom!);
+          if (doneBy.has(key)) continue;
+          doneBy.set(key, label(n));
+          doneRow.set(key, r);
+        }
+      } else {
+        for (const c of n.practiceCovers ?? []) {
+          const run = c.id !== null && input.saved(n, c) ? coverRun(c) : null;
+          if (!run) continue;
+          for (const p of run.own) {
+            const key = itemKey(c.id!, p);
+            if ((run.runs.length > 0 && !inRuns(run.runs, p)) || heldBy.has(key)) continue;
+            heldBy.set(key, label(n));
+            heldCover.set(key, c);
+          }
+        }
+      }
+    }
+  }
 
   const withRefs = input.nodes.filter((n) => refsOf(n).length > 0);
   // Budgets are checked once the level holds anything to budget, and only where there is a budget: without the
@@ -874,27 +944,23 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     if (input.leaves) {
       const rows = node.practice ?? [];
       for (const r of rows.filter((r) => !r.generated && r.id !== null)) {
-        const covers = parentCovers(r);
         const from = aliases.alias(r.id!) ?? r.id!;
         const what = r.itemFrom ? rowLabel(r) : `${rowLabel(r)} from ${from}`;
         const notReserved = () => `${unit} assigns ${what}, which ${label(parentNode!)} did not reserve`;
         if (listedSource(r.id) && !r.itemFrom) facts.push(`${unit} assigns ${what} without an item`);
+        const place = rowPlace(r);
         // Another source of a format the parent reserved: the rule from before item lists, a breach over saved rows too.
-        if (reservedFormats.has(r.format) && covers.length === 0) {
+        if (place === "foreign") {
           practiceBreach("practice-outside", index, unit, r, notReserved());
           continue;
         }
-        if (parentNode && covers.length === 0 && reservedSomewhere.has(sourceKey(r))) {
+        if (place === "unreserved" || place === "outside-run") {
           newRule(rowBreach("practice-outside", index, unit, r, notReserved()), node, r);
           continue;
         }
-        if (!listedSource(r.id) || !r.itemFrom) continue;
-        const runs = covers.filter((c) => itemPositions(c).length > 0);
-        if (runs.length > 0 && !inRuns(runs, r.itemFrom)) {
-          newRule(rowBreach("practice-outside", index, unit, r, notReserved()), node, r);
-          continue;
-        }
-        const key = itemKey(r.id!, r.itemFrom);
+        if (place !== "item") continue;
+        const key = itemKey(r.id!, r.itemFrom!);
+        if (doneRow.get(key) === r) continue;
         const holder = doneBy.get(key);
         if (holder) newRule(rowBreach("practice-overlap", index, unit, r, `${unit} assigns ${what}, which ${holder} already assigns`), node, r);
         else doneBy.set(key, unit);
@@ -939,27 +1005,37 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
           continue;
         }
         if (!listedSource(c.id)) continue;
-        const own = itemPositions(c);
+        const { own, runs } = coverRun(c) ?? { own: [], runs: [] };
         if (own.length === 0) {
           facts.push(`${unit} reserves ${name} without a run of items`);
           continue;
         }
-        const runs = covers.filter((p) => itemPositions(p).length > 0);
-        if (runs.length > 0 && own.some((n) => !inRuns(runs, n))) {
-          newRule(coverBreach("practice-outside", index, unit, c, notReserved()), node, c);
-          continue;
-        }
+        const key = (n: number) => itemKey(c.id!, n);
+        // An item this run's own saved claim holds is not a repeat.
+        const holderOf = (n: number) => (heldCover.get(key(n)) === c ? undefined : heldBy.get(key(n)));
+        const outside = runs.length > 0 ? own.filter((n) => !inRuns(runs, n)) : [];
         const held = new Map<string, number[]>();
         for (const n of own) {
-          const holder = heldBy.get(itemKey(c.id!, n));
+          const holder = outside.includes(n) ? undefined : holderOf(n);
           if (holder) held.set(holder, [...(held.get(holder) ?? []), n]);
         }
-        const base = aliases.alias(c.id!) ?? c.id!;
-        if (held.size > 0) {
-          const whose = [...held].map(([holder, ns]) => `${holder} holds ${itemAliases(base, ns)}`).join(" and ");
-          newRule(coverBreach("practice-overlap", index, unit, c, `${unit} reserves ${name}, but ${whose}`), node, c);
+        if (outside.length === 0 && held.size === 0) {
+          for (const n of own) if (!heldBy.has(key(n))) heldBy.set(key(n), unit);
+          continue;
         }
-        for (const n of own) if (!heldBy.has(itemKey(c.id!, n))) heldBy.set(itemKey(c.id!, n), unit);
+        // Past the parent's runs or into another unit's: a drop keeps the run's longest free stretch, and the run claims
+        // only that, so one edge off by one does not empty this unit or the next. Nothing free, and the run goes.
+        const free = own.filter((n) => !outside.includes(n) && !holderOf(n));
+        const keep = numberRuns(free).reduce<[number, number] | null>((best, r) => (!best || r[1] - r[0] > best[1] - best[0] ? r : best), null);
+        const base = aliases.alias(c.id!) ?? c.id!;
+        const text =
+          outside.length > 0 ? notReserved() : `${unit} reserves ${name}, but ${[...held].map(([holder, ns]) => `${holder} holds ${itemAliases(base, ns)}`).join(" and ")}`;
+        const b = coverBreach(outside.length > 0 ? "practice-outside" : "practice-overlap", index, unit, c, text);
+        if (keep) b.practiceCovers![0].keep = { itemFrom: keep[0], itemTo: keep[1] };
+        newRule(b, node, c);
+        // A saved run claimed what was free before this level's new ones.
+        if (input.saved?.(node, c) || !keep) continue;
+        for (let n = keep[0]; n <= keep[1]; n++) heldBy.set(key(n), unit);
       }
     }
   });
@@ -1139,7 +1215,10 @@ export function treeChecks(
   return { facts, breaches, nodes };
 }
 
-/** Removes the rows of droppable breaches from `nodes[breach.index]`; one line per breach for the facts. */
+/**
+ * Removes the rows of droppable breaches from `nodes[breach.index]`, or trims a reservation's run to the stretch its
+ * breach keeps; one line per breach for the facts.
+ */
 export function dropBreaches(nodes: PlanNode[], breaches: Breach[]): string[] {
   const out: string[] = [];
   for (const b of breaches) {
@@ -1153,14 +1232,22 @@ export function dropBreaches(nodes: PlanNode[], breaches: Breach[]): string[] {
         const at = rows.findLastIndex((r) => p.format === r.format && p.id === r.id && p.task === r.task && (p.itemFrom ?? null) === (r.itemFrom ?? null));
         if (at >= 0) rows.splice(at, 1);
       }
+      let trimmed: { itemFrom: number; itemTo: number } | undefined;
       for (const p of b.practiceCovers ?? []) {
         const covers = node.practiceCovers ?? [];
         const at = covers.findLastIndex((c) => p.format === c.format && p.id === c.id && (p.itemFrom ?? null) === (c.itemFrom ?? null) && (p.itemTo ?? null) === (c.itemTo ?? null));
-        if (at >= 0) covers.splice(at, 1);
+        if (at < 0) continue;
+        if (p.keep) {
+          covers[at] = { ...covers[at], itemFrom: p.keep.itemFrom, itemTo: p.keep.itemTo };
+          trimmed = p.keep;
+        } else covers.splice(at, 1);
       }
       if (node.practice?.length === 0) delete node.practice;
       if (node.practiceCovers?.length === 0) delete node.practiceCovers;
-      out.push(`dropped ${b.names} from ${b.unit}: ${b.kind}`);
+      if (trimmed) {
+        const { itemFrom: a, itemTo: z } = trimmed;
+        out.push(`trimmed ${b.names} in ${b.unit} to ${a === z ? `item ${a}` : `items ${a}–${z}`}: ${b.kind}`);
+      } else out.push(`dropped ${b.names} from ${b.unit}: ${b.kind}`);
       continue;
     }
     const keys = new Set(b.refs.map(refKey));

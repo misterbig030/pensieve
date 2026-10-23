@@ -555,9 +555,9 @@ describe("revisePlanTree holds rows it adds or changes to the drafting rules, an
   type Draft = { format: string; id?: string; task: string; done: string; minutes: number };
   const row = (id: string, task: string): Draft => ({ format: "problem-set", id, task, done: "solved", minutes: 15 });
   /** The model's answer: every unit echoed, with these practice lists on days e1, e2 and f1. */
-  const answer = (e1: Draft[], e2: Draft[], f1: Draft[], d2: Draft[] = [row("M2", "Arrays 1-3"), row("M2.3", "Two Sum")]) => ({
+  const answer = (e1: Draft[], e2: Draft[], f1: Draft[], d2: Draft[] = [row("M2", "Arrays 1-3"), row("M2.3", "Two Sum")], d1?: Draft[]) => ({
     units: [
-      { ref: "n1", title: "W1", summary: "s", days: 2, children: [{ ref: "n2", title: "d1", summary: "s", days: 1 }, { ref: "n3", title: "d2", summary: "s", days: 1, practice: d2 }] },
+      { ref: "n1", title: "W1", summary: "s", days: 2, children: [{ ref: "n2", title: "d1", summary: "s", days: 1, ...(d1 ? { practice: d1 } : {}) }, { ref: "n3", title: "d2", summary: "s", days: 1, practice: d2 }] },
       { ref: "n4", title: "W2", summary: "s", days: 2, children: [{ ref: "n5", title: "e1", summary: "s", days: 1, practice: e1 }, { ref: "n6", title: "e2", summary: "s", days: 1, practice: e2 }] },
       { ref: "n7", title: "W3", summary: "s", days: 1, children: [{ ref: "n8", title: "f1", summary: "s", days: 1, practice: f1 }] },
     ],
@@ -596,13 +596,26 @@ describe("revisePlanTree holds rows it adds or changes to the drafting rules, an
     expect(facts.filter((f) => f.startsWith("dropped") && (f.includes("Week 1") || f.includes("Week 2 · Day 1")))).toEqual([]);
   });
 
-  it("holds a saved row whose task the model edited to the drafting rules", async () => {
+  it("keeps a saved item row whose task the model reworded, and holds an itemless row it rewrote to the drafting rules", async () => {
     const { facts, practiceOf } = await revise(answer([row("M2.3", "Two Sum, again")], [], []));
-    // (e) Changed, so the repeat of item 3 is a breach and is dropped.
-    expect(practiceOf("e1")).toBeUndefined();
-    expect(facts).toContain('dropped Problems M2.3 "Two Sum, again" from Week 2 · Day 1: practice-overlap');
-    // An itemless saved row the model rewrote with another task is new too, so it is unknown and goes.
+    // (e) An item row is its item: reworded, it is still the saved row, so its repeat of item 3 stays a fact.
+    expect(practiceOf("e1")).toEqual([item(3, "Two Sum, again")]);
+    expect(facts).toContain('Week 2 · Day 1 assigns Problems M2.3 "Two Sum, again", which Week 1 · Day 2 already assigns');
+    expect(facts.filter((f) => f.startsWith("dropped"))).toEqual([]);
+    // An itemless saved row the model rewrote with another task is new, so it is unknown and goes.
     const edited = await revise(answer([row("M2.3", "Two Sum")], [], [], [row("M2", "Arrays 1-3 and Queue"), row("M2.3", "Two Sum")]));
     expect(edited.practiceOf("d2")).toEqual([item(3)]);
+  });
+
+  it("drops a new repeat on an earlier day than the saved row that holds the item, and an extra copy of a saved row", async () => {
+    // Day 1 of Week 1 gains item 3, which Day 2 (saved, later in the week) already assigns.
+    const earlier = await revise(answer([row("M2.3", "Two Sum")], [], [], undefined, [row("M2.1", "Contains Duplicate"), row("M2.3", "Two Sum")]));
+    expect(earlier.practiceOf("d1")?.map((r) => r.itemFrom)).toEqual([1]);
+    expect(earlier.practiceOf("d2")).toEqual([{ ...old, minutes: 15 }, item(3)]);
+    expect(earlier.facts).toContain('dropped Problems M2.3 "Two Sum" from Week 1 · Day 1: practice-overlap');
+    // Day 2 written back with its item 3 twice: the copy past the saved one is new, and goes.
+    const twice = await revise(answer([row("M2.3", "Two Sum")], [], [], [row("M2", "Arrays 1-3"), row("M2.3", "Two Sum"), row("M2.3", "Two Sum")]));
+    expect(twice.practiceOf("d2")).toEqual([{ ...old, minutes: 15 }, item(3)]);
+    expect(twice.facts).toContain('dropped Problems M2.3 "Two Sum" from Week 1 · Day 2: practice-overlap');
   });
 });
