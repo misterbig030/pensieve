@@ -82,7 +82,7 @@ function draft(over: Partial<Omit<AllocationDraft, "parts">> & { parts?: (Partia
     backbone: null,
     coverage: null,
     ...rest,
-    parts: (parts ?? []).map((p) => ({ uses: null, minutes: null, chapters: null, items: null, drop: false, dropReason: null, ...p })),
+    parts: (parts ?? []).map((p) => ({ uses: null, minutes: null, chapters: null, items: null, groups: null, itemRange: null, drop: false, dropReason: null, ...p })),
   };
 }
 
@@ -540,5 +540,136 @@ describe("the allocation's backbone, coverage and fallback", () => {
     expect(failed.costUsd).toBe(0);
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+  });
+});
+
+/**
+ * A listed problem source, 21 problems in three groups: Arrays & Hashing (1–9: 3 easy, 6 medium, 195 min), Two Pointers
+ * (10–14: 2 easy, 2 medium, 1 hard, 115 min), Stack (15–21: 1 easy, 4 medium, 2 hard, 185 min); 495 min in all.
+ */
+const groupSpec: [string, ("easy" | "medium" | "hard")[]][] = [
+  ["Arrays & Hashing", ["easy", "easy", "easy", "medium", "medium", "medium", "medium", "medium", "medium"]],
+  ["Two Pointers", ["easy", "easy", "medium", "medium", "hard"]],
+  ["Stack", ["easy", "medium", "medium", "medium", "medium", "hard", "hard"]],
+];
+const listItems = groupSpec.flatMap(([group, levels], g) =>
+  levels.map((difficulty, i) => ({
+    title: `Problem ${group.split(" ")[0]} ${g + 1}.${i + 1}`,
+    number: null,
+    group,
+    difficulty,
+    url: null,
+    solutionUrl: null,
+    minutes: null,
+  })),
+);
+const listed = material({
+  id: "M3",
+  title: "Problem List",
+  kind: "repo",
+  practice: {
+    format: "problem-set",
+    items: 21,
+    totalItems: 21,
+    perItemMinutes: 10,
+    minutes: null,
+    answers: true,
+    list: { items: listItems, source: "file", url: "https://example.com/M3/list.json" },
+  },
+});
+const listedInput: AllocationInput = { ...input, materials: [book, essay, listed, note] };
+const listedOf = (out: { materials: Material[] }) => out.materials.find((m) => m.id === "M3")!.practice!;
+const titlesOf = (p: Material["practice"]) => p!.list!.items.map((i) => i.title);
+
+describe("listed practice sources", () => {
+  it("shows each listed source by group with counts, difficulty mix and minutes", () => {
+    const prompt = buildAllocationPrompt(listedInput);
+    expect(prompt).toContain("[1–9] Arrays & Hashing — 9 items: 3 easy, 6 medium · 3 h 15 min");
+    expect(prompt).toContain("[10–14] Two Pointers — 5 items: 2 easy, 2 medium, 1 hard · 1 h 55 min");
+    expect(prompt).toContain("[15–21] Stack — 7 items: 1 easy, 4 medium, 2 hard · 3 h 5 min");
+    // The groups follow the source's line, in list order.
+    const lines = prompt.split("\n");
+    const at = lines.findIndex((l) => l.startsWith("M3 "));
+    expect(lines[at]).toContain("doing about 8.3 h");
+    expect(lines.slice(at + 1, at + 4).map((l) => l.trim().split(" — ")[0])).toEqual(["[1–9] Arrays & Hashing", "[10–14] Two Pointers", "[15–21] Stack"]);
+    // Never an item's title, and no target numbers.
+    for (const item of listItems) expect(prompt).not.toContain(item.title);
+    expect(prompt).not.toMatch(/\d+\s*%/);
+    // It asks for groups and an item range, and says the kept items are the format's time.
+    const parts = prompt.slice(prompt.indexOf("How to answer")).split("\n").find((l) => l.startsWith("- parts:"))!;
+    for (const s of ["groups", "itemRange", "that format's time"]) expect(parts).toContain(s);
+  });
+
+  it("keeps the chosen groups in list order and cuts the list", () => {
+    const out = applyAllocation(draft({ parts: withRest([{ id: "M3", groups: ["Stack", "arrays & hashing"] }]) }), listedInput);
+    const p = listedOf(out);
+    expect(titlesOf(p)).toEqual([...listItems.slice(0, 9), ...listItems.slice(14)].map((i) => i.title));
+    expect(p).toMatchObject({ items: 16, totalItems: 21, minutes: 380 });
+    expect(materialSchema.safeParse(out.materials.find((m) => m.id === "M3")).success).toBe(true);
+    // A listed source kept whole is timed from its whole list.
+    expect(listedOf(applyAllocation(draft({ parts: withRest([]) }), listedInput))).toMatchObject({ items: 21, totalItems: 21, minutes: 495 });
+  });
+
+  it("keeps an item range within a group", () => {
+    const range = listedOf(applyAllocation(draft({ parts: withRest([{ id: "M3", itemRange: { from: 10, to: 12 } }]) }), listedInput));
+    expect(titlesOf(range)).toEqual(listItems.slice(9, 12).map((i) => i.title));
+    expect(range).toMatchObject({ items: 3, totalItems: 21, minutes: 55 }); // easy, easy, medium
+    // Groups and a range together: the groups whole, and the run besides them.
+    const both = listedOf(applyAllocation(draft({ parts: withRest([{ id: "M3", groups: ["Arrays & Hashing"], itemRange: { from: 12, to: 10 } }]) }), listedInput));
+    expect(titlesOf(both)).toEqual(listItems.slice(0, 12).map((i) => i.title));
+    expect(both).toMatchObject({ items: 12, minutes: 250 });
+    // A count alone on a listed source keeps the first items in list order.
+    const counted = listedOf(applyAllocation(draft({ parts: withRest([{ id: "M3", items: 4 }]) }), listedInput));
+    expect(titlesOf(counted)).toEqual(listItems.slice(0, 4).map((i) => i.title));
+    expect(counted).toMatchObject({ items: 4, minutes: 70 });
+    // Fewer items than a list holds: the part stays in the count and minutes, and the list goes, as a fact.
+    const short = applyAllocation(draft({ parts: withRest([{ id: "M3", itemRange: { from: 1, to: 2 } }]) }), listedInput);
+    expect(listedOf(short)).toMatchObject({ items: 2, totalItems: 21, minutes: 30, list: null });
+    expect(short.facts).toContain("M3: 2 items kept, fewer than a list holds; its list is not kept");
+  });
+
+  it("sets the format's time from the kept items and shares the rest", () => {
+    // Reading: the book (600) and the note (30) of 2880 min is 22%, leaving 2246 min of practice. The kept groups take
+    // 195 + 185 = 380 min: problem-set gets 17% of the practice, and mock the other 83.
+    const parts = withRest([{ id: "M1", chapters: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }, { id: "M2", drop: true }, { id: "M3", groups: ["Arrays & Hashing", "Stack"] }]);
+    const out = applyAllocation(draft({ parts }), listedInput);
+    expect(out.split.readingShare).toBe(22);
+    expect(out.split.formats!.map((p) => [p.format, p.share])).toEqual([["problem-set", 17], ["mock", 83]]);
+    expect(out.facts).toContain("model problem-set 60% → 17% from the kept items");
+    expect(out.facts.some((f) => f.startsWith("problem-set:"))).toBe(false);
+    // The other picks share the rest by the model's shares, renormalised: 30 : 20 of 83.
+    const three = applyAllocation(draft({ picks: [pick("problem-set", 50), pick("mock", 30), pick("recall", 20)], parts }), listedInput);
+    expect(three.split.formats!.map((p) => [p.format, p.share])).toEqual([["problem-set", 17], ["mock", 50], ["recall", 33]]);
+    // More kept items than the practice time: capped so every other pick keeps a share, and the mismatch is a fact.
+    const short = applyAllocation(draft({ parts: withRest([]) }), { ...listedInput, weeks: 1, materials: [listed, note] });
+    expect(short.split.formats!.map((p) => [p.format, p.share])).toEqual([["problem-set", 99], ["mock", 1]]);
+    expect(short.facts).toContain("model problem-set 60% → 99% from the kept items");
+    expect(short.facts.some((f) => f.startsWith("problem-set: kept items take 495 min"))).toBe(true);
+    // Alone, the format is all of the practice.
+    const alone = applyAllocation(draft({ picks: [pick("problem-set", 100)], parts }), listedInput);
+    expect(alone.split.formats!.map((p) => [p.format, p.share])).toEqual([["problem-set", 100]]);
+  });
+
+  it("an unknown group keeps nothing of it and is a fact", () => {
+    const out = applyAllocation(draft({ parts: withRest([{ id: "M3", groups: ["Stack", "Graphs"] }]) }), listedInput);
+    expect(titlesOf(listedOf(out))).toEqual(listItems.slice(14).map((i) => i.title));
+    expect(out.facts).toContain('M3: no group "Graphs" in its list');
+    // Nothing that matches: the model's choice says nothing usable, so the source stays whole.
+    const none = applyAllocation(draft({ parts: withRest([{ id: "M3", groups: ["Graphs"], itemRange: { from: 30, to: 40 } }]) }), listedInput);
+    expect(listedOf(none)).toMatchObject({ items: 21, minutes: 495 });
+    expect(listedOf(none).list!.items).toHaveLength(21);
+    expect(none.facts).toContain('M3: no group "Graphs" in its list');
+    expect(none.facts).toContain("M3: item range 30–40 is outside its 21 items");
+    expect(none.facts).toContain("M3: nothing named matches its list; kept whole");
+  });
+
+  it("the fallback keeps a listed source whole", () => {
+    const withReading = { ...listed, minutes: 3000, minutesBasis: "estimated" as const };
+    for (const m of [listed, withReading]) {
+      const out = fallbackAllocation({ ...listedInput, materials: [book, m, note] });
+      const kept = out.materials.find((x) => x.id === "M3")!;
+      expect(kept.practice!.list!.items).toHaveLength(21);
+      expect(kept.practice).toMatchObject({ items: 21, totalItems: 21, minutes: 495 });
+    }
   });
 });
