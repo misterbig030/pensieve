@@ -181,7 +181,7 @@ const ITEM_NOUN: Partial<Record<PracticeFormat, string>> = { "problem-set": "pro
 /** "Problems · 150 problems · answers included": what the source is as practice, how much of it, and whether it checks you. */
 export function practiceTag(p: MaterialPractice): string {
   const noun = ITEM_NOUN[p.format] ?? "item";
-  return [PRACTICE_REGISTRY[p.format].label, p.items ? `${p.items} ${noun}${p.items === 1 ? "" : "s"}` : null, p.answers ? "answers included" : null].filter(Boolean).join(" · ");
+  return [PRACTICE_REGISTRY[p.format].label, p.items ? `${p.totalItems && p.totalItems > p.items ? `${p.items} of ${p.totalItems}` : p.items} ${noun}${(p.totalItems ?? p.items) === 1 ? "" : "s"}` : null, p.answers ? "answers included" : null].filter(Boolean).join(" · ");
 }
 
 /** Minutes of reading and minutes of practice over the list. A source counts toward each role it has. */

@@ -77,6 +77,8 @@ export const materialPracticeSchema = z.object({
   format: z.enum(PRACTICE_FORMATS),
   /** Problems, questions or steps the source holds; null when it is not counted. */
   items: z.number().int().min(1).max(5000).nullable(),
+  /** The whole count when `items` was cut to the part the plan uses (75 of 150); absent or null when it was not cut. */
+  totalItems: z.number().int().min(1).max(5000).nullable().optional(),
   perItemMinutes: z.number().int().min(1).max(600).nullable(),
   minutes: z.number().int().min(1).max(60000).nullable(),
   /** Whether the source carries answers, solutions or a rubric to check against. */

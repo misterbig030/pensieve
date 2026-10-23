@@ -3,7 +3,7 @@ import { layout, makeNode, makeRoot, type NewNodeInput } from "@/lib/planTree";
 import { aliasMaterials } from "@/lib/materials";
 import { AIE_MATERIALS, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 import type { ChapterList, Material } from "@/lib/schemas/material";
-import { assignRefs, buildPlanChatSystemPrompt, buildRevisionPrompt, buildUnitsPrompt, renderChapters, renderMaterials, renderRefs, renderTree } from "./planPrompt";
+import { assignRefs, buildPlanChatSystemPrompt, buildRevisionPrompt, buildUnitsPrompt, practiceTag, renderChapters, renderMaterials, renderRefs, renderTree } from "./planPrompt";
 
 function tree() {
   return makeRoot([
@@ -463,7 +463,19 @@ describe("practice in prompts", () => {
     }
   });
   it("tags practice sources in the materials list", () => {
-    expect(renderMaterials(materials)).toContain('M2 [course · practice: Problems · the learner\'s own] "NeetCode 150"');
+    expect(renderMaterials(materials)).toContain('M2 [course · practice: Problems · 150 problems · about 10 min each · answers · the learner\'s own] "NeetCode 150"');
+  });
+  it("shows a practice source's size, per-item time and answers", () => {
+    const p = { format: "problem-set" as const, items: 75, totalItems: 150, perItemMinutes: 10, minutes: 750, answers: true };
+    expect(practiceTag(p)).toBe("practice: Problems · 75 of 150 problems · about 10 min each · answers");
+    expect(practiceTag({ ...p, totalItems: null })).toBe("practice: Problems · 75 problems · about 10 min each · answers");
+    expect(practiceTag({ format: "mock", items: null, perItemMinutes: null, minutes: null, answers: true })).toBe("practice: Mock · answers");
+  });
+  it("tells the drafter how each format is sized", () => {
+    const mockSplit = { ...split, formats: [pick("problem-set", 60, "arrays and hashing"), { format: "mock" as const, share: 40, focus: "timed interviews", reason: "" }] };
+    const prompt = days({ split: mockSplit });
+    expect(prompt).toContain("Problems is sized per problem, about 10 min each");
+    expect(prompt).toContain("Mock is one block of about 75 min");
   });
   it("renders practice rows and reservations under prompt aliases", () => {
     const A = aliasMaterials([{ id: "uuid-0" }, { id: "uuid-1" }]);

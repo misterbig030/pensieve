@@ -15,7 +15,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialRef, type PracticeCover, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
+import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialPractice, type MaterialRef, type PracticeCover, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
 import { dayMinutes, isAllReading, practiceLabelOf, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 
 export interface PlanPromptContext {
@@ -193,15 +193,33 @@ export function renderChapters(toc: ChapterList, options: { sections: boolean; a
   return lines;
 }
 
+/** What a kind of practice item is called in a count; formats without a noun have no count. */
+const ITEM_NOUN: Partial<Record<PracticeFormat, string>> = { "problem-set": "problem", recall: "question", lab: "step" };
+
+/** `practice: Problems · 75 of 150 problems · about 10 min each · answers`: the format, how much of it, the time per item and whether it checks the learner. */
+export function practiceTag(p: MaterialPractice): string {
+  const noun = ITEM_NOUN[p.format];
+  const count = noun && p.items ? `${p.totalItems && p.totalItems > p.items ? `${p.items} of ${p.totalItems}` : p.items} ${noun}${(p.totalItems ?? p.items) === 1 ? "" : "s"}` : null;
+  return ["practice: " + PRACTICE_REGISTRY[p.format].label, count, p.perItemMinutes ? `about ${p.perItemMinutes} min each` : null, p.answers ? "answers" : null].filter(Boolean).join(" · ");
+}
+
+/** How a format's time is counted: per item (`Problems is sized per problem, about 10 min each.`) or as one fixed block; none for a format that is neither. */
+function sizingSentence(format: PracticeFormat): string | null {
+  const spec = PRACTICE_REGISTRY[format];
+  if (spec.perItemMinutes) return `${spec.label} is sized per ${ITEM_NOUN[format] ?? "item"}, about ${spec.perItemMinutes} min each.`;
+  if (spec.fixedMinutes) return `${spec.label} is one block of about ${spec.fixedMinutes} min.`;
+  return null;
+}
+
 /**
  * One line per material: `M1 [book · backbone] "AI Engineering" — Chip Huyen, 2024 · about 22 h. Why: …`, followed by
  * its chapter lines when it has a list, each a resource of its own (`M1.3`), in which case the book line says so. A
- * practice source is tagged with the format it serves (`practice: Problems`).
+ * practice source is tagged with the format it serves (`practice: Problems · 150 problems · about 10 min each · answers`).
  */
 export function renderMaterials(materials: Material[], aliases: MaterialAliases = aliasMaterials(materials), options: RenderMaterialsOptions = {}): string {
   return materials
     .flatMap((m) => {
-      const practice = m.practice ? `practice: ${PRACTICE_REGISTRY[m.practice.format].label}` : null;
+      const practice = m.practice ? practiceTag(m.practice) : null;
       const tags = [m.kind, m.backbone ? "backbone" : null, practice, m.origin === "learner" ? "the learner's own" : null].filter(Boolean).join(" · ");
       const byline = [m.author, m.year].filter(Boolean).join(", ");
       const where = m.type === "note" || m.type === "file" ? "" : ` <${m.url}>`;
@@ -394,7 +412,8 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   for (const p of picks) {
     const spec = PRACTICE_REGISTRY[p.pick.format];
     const minutes = formatMinutes(budgets.practice[p.pick.format] ?? 0);
-    lines.push(`- ${pickName(p.pick.format)}: about ${minutes} ${days ? "this week" : "a week"}, aimed at ${p.pick.focus}. The learner ${spec.prompt}. ${leafPickSources(input, aliases, p)} Done when: ${spec.doneWhen}.`);
+    const sizing = sizingSentence(p.pick.format);
+    lines.push(`- ${pickName(p.pick.format)}: about ${minutes} ${days ? "this week" : "a week"}, aimed at ${p.pick.focus}. The learner ${spec.prompt}. ${leafPickSources(input, aliases, p)} Done when: ${spec.doneWhen}.${sizing ? ` ${sizing}` : ""}`);
   }
   lines.push(
     `For each unit, list its practice rows in "practice" as { format, id, task, done, minutes }: format is one of the formats above; id is the row's source (leave it out for a row you write yourself); task says exactly what to do, with the part ("NeetCode 150 · Arrays & Hashing, problems 1–6"); done says how the learner knows it is finished; minutes is the doing time.`,

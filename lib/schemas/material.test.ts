@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_CHAPTERS, MAX_HEADING, MAX_SECTIONS, chapterAt, chapterListSchema, coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema, materialSchema, normalizeCoverRef, normalizeMaterialRef, type ChapterList } from "./material";
+import { MAX_CHAPTERS, materialPracticeSchema, MAX_HEADING, MAX_SECTIONS, chapterAt, chapterListSchema, coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema, materialSchema, normalizeCoverRef, normalizeMaterialRef, type ChapterList } from "./material";
 
 function chapter(n: number) {
   return { n, title: `Chapter ${n}`, page: n * 10, minutes: 30, sections: ["A", "B"] };
@@ -50,5 +50,13 @@ describe("references with chapters", () => {
     expect(chapterAt(toc, 2)).toBeNull();
     expect(chapterAt(toc, null)).toBeNull();
     expect(chapterAt(undefined, 1)).toBeNull();
+  });
+});
+
+describe("materialPracticeSchema", () => {
+  it("keeps a practice source's whole count when its items were cut", () => {
+    const p = { format: "problem-set", items: 75, totalItems: 150, perItemMinutes: 10, minutes: 750, answers: true };
+    expect(materialPracticeSchema.parse(p).totalItems).toBe(150);
+    expect(materialPracticeSchema.parse({ ...p, totalItems: undefined }).totalItems).toBeUndefined();
   });
 });

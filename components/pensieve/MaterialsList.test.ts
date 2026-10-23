@@ -10,6 +10,7 @@ describe("practiceTag", () => {
     expect(practiceTag(practice())).toBe("Problems · 150 problems · answers included");
     expect(practiceTag(practice({ format: "recall", items: 1, answers: false }))).toBe("Recall · 1 question");
     expect(practiceTag(practice({ format: "mock", items: null, answers: true }))).toBe("Mock · answers included");
+    expect(practiceTag(practice({ items: 75, totalItems: 150 }))).toBe("Problems · 75 of 150 problems · answers included");
   });
 });
 
