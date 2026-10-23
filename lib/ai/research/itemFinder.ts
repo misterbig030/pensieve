@@ -137,6 +137,27 @@ function difficultyOf(label: string | null | undefined): PracticeDifficulty | nu
   return (PRACTICE_DIFFICULTIES as readonly string[]).includes(d ?? "") ? (d as PracticeDifficulty) : null;
 }
 
+/** A short label as a site numbers its items: "49", "Q12", "1.2", "12a". */
+const NUMBER_LABEL_RE = /^[A-Za-z]{0,3}\d{1,5}(?:[.-]\d{1,3})?[A-Za-z]?$/;
+/** The longest number label kept as it is. */
+const MAX_NUMBER_LABEL = 8;
+
+/**
+ * An item's number as a row shows it: a short label as written ("Q12", "1.2"), digits without leading zeros ("0049" is
+ * 49), or the leading number of a longer code ("0049-group-anagrams" is 49). Anything else (a slug, a title) is null.
+ */
+export function itemNumber(raw: string | null | undefined): string | null {
+  const s = raw?.trim().replace(/^#/, "").replace(/[.)]$/, "");
+  if (!s) return null;
+  if (/^\d+$/.test(s)) {
+    const n = s.replace(/^0+/, "");
+    return n && n.length <= 5 ? n : null;
+  }
+  if (s.length <= MAX_NUMBER_LABEL && NUMBER_LABEL_RE.test(s)) return s;
+  const lead = s.match(/^(\d{1,5})[\s._:-]/)?.[1].replace(/^0+/, "");
+  return lead || null;
+}
+
 function minutesOf(n: number | null | undefined): number | null {
   if (typeof n !== "number" || !Number.isFinite(n)) return null;
   const m = Math.round(n);
@@ -177,10 +198,9 @@ export function validateItemList(raw: { url: string; source: PracticeListSource;
       unseen += 1;
       continue;
     }
-    const number = d.number?.trim();
     items.push({
       title,
-      number: number && number.length <= 20 ? number : null,
+      number: itemNumber(d.number),
       group,
       difficulty: difficultyOf(d.difficulty),
       url: seenLink(d.url, seen),
@@ -277,7 +297,7 @@ export function buildMappingPrompt(source: Material, reads: Read[], fileUrl: str
     "",
     `Code will apply your mapping to every record of this file, in the file's order. Map the file to the source's ${noun}:`,
     `- "path": for JSON, the path of the records that are the ${noun}, exactly as listed above; null for CSV.`,
-    `- "title", "number", "group", "difficulty", "minutes": the field that holds each, or null when the file has none. Write ../field for a field of the object a record sits in.`,
+    `- "title", "number", "group", "difficulty", "minutes": the field that holds each, or null when the file has none. Write ../field for a field of the object a record sits in. For "number", a field that starts with the item's number (such as a code like 0049-group-anagrams) will do: code keeps the number.`,
     `- "url" and "solutionUrl": a link template over fields, such as https://example.com/problems/{slug} or https://example.com/watch?v={video}, only when the pages or the file above show that link pattern with its full address; "{field}" when a field holds the whole link. Otherwise null. Never invent a link.`,
     `- "subset": when the source is a named part of the file (for example "the 150" marked by a flag field in a file of 450), the field that marks it and the value that means "in" (e.g. "true"); null for the whole file.`,
     `If the file does not list this source's ${noun}, return found: false.`,

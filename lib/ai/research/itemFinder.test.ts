@@ -171,6 +171,15 @@ describe("the item-list finder", () => {
     expect(events.filter((e) => e.type === "research.fetch").map((e) => (e as { url: string }).url)).toEqual([SOURCE_URL, REPO_URL, RAW_URL]);
   });
 
+  it("takes an item's number from the start of a code field (0049-group-anagrams is 49)", async () => {
+    const model = answers({ list: null, read: [RAW_URL] }, { ...MAPPING, number: "code", subset: { field: "neetcode150", equals: "true" } });
+    const result = await run(model, fileRead(FIXTURE)).found;
+    const items = result.list!.items;
+    expect(items.find((i) => i.title === "Group Anagrams")!.number).toBe("49");
+    expect(items.find((i) => i.title === "Contains Duplicate")!.number).toBe("217");
+    expect(items.every((i) => i.number !== null && /^[1-9]\d*$/.test(i.number))).toBe(true);
+  });
+
   it("maps a CSV file, quoted fields and all", async () => {
     const csv = [
       "Title,Topic,Level,Slug",
@@ -314,6 +323,12 @@ describe("the item-list finder", () => {
       [null, null, null],
       [null, "hard", null],
     ]);
+  });
+
+  it("keeps a number only as a short label, or the leading number of a longer code", () => {
+    const numbers = ["0049", "Q12", "1.2", "#7", "12a", "0049-group-anagrams", "128_longest-consecutive", "group-anagrams", "Arrays and hashing", "1234567890-x", "0"];
+    const list = validateItemList({ url: RAW_URL, source: "file", items: numbers.map((number, i) => draft(`Problem ${i + 1}`, { number })) }, numbers.map((_, i) => `Problem ${i + 1}`).join(" · "))!;
+    expect(list.items.map((i) => i.number)).toEqual(["49", "Q12", "1.2", "7", "12a", "49", "128", null, null, null, null]);
   });
 
   it("still reads the source's own page when search is down, and calls no model when nothing opens", async () => {

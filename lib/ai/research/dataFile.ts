@@ -169,7 +169,7 @@ export const fieldMappingSchema = z.object({
   found: z.boolean().describe("True only when this file lists the source's items"),
   path: z.string().nullable().describe('JSON: the path of the records that are the items, exactly as listed; null for CSV'),
   title: z.string().describe("The field holding each item's title"),
-  number: z.string().nullable().describe("The field holding the item's own number or label on its site; null when none"),
+  number: z.string().nullable().describe("The field holding the item's own number or label on its site, or one that starts with it (a code like 0049-group-anagrams); null when none"),
   group: z.string().nullable().describe("The field holding the item's topic or group; ../field for the object it sits in; null when none"),
   difficulty: z.string().nullable().describe("The field holding easy/medium/hard; null when none"),
   minutes: z.string().nullable().describe("The field holding minutes; null when none"),
