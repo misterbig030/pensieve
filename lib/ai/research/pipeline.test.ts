@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { APICallError } from "@ai-sdk/provider";
-import type { ChapterList, Material } from "@/lib/schemas/material";
+import type { ChapterList, Material, PracticeList } from "@/lib/schemas/material";
 import { providerError } from "../providerError";
 import type { ResearchArm } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
-import { defaultChapterFinder, researchMaterials } from "./pipeline";
+import { defaultChapterFinder, defaultItemFinder, researchMaterials } from "./pipeline";
 import { SourceFetcher, type PageFetcher } from "./tools";
 import type { BookLookup } from "./verify";
 
@@ -167,5 +167,137 @@ describe("the chapters stage", () => {
   it("defaultChapterFinder is null without a search key", () => {
     expect(defaultChapterFinder({})).toBeNull();
     expect(defaultChapterFinder({ TAVILY_API_KEY: "k" })).not.toBeNull();
+  });
+});
+
+describe("the item lists stage", () => {
+  const practiceUrl = (slug: string) => `https://practice.example.com/${slug}`;
+  const LIST: PracticeList = {
+    source: "file",
+    url: "https://files.example.com/list.json",
+    items: ["A", "B", "C", "D"].map((title) => ({ title, number: null, group: "G", difficulty: "easy" as const, url: null, solutionUrl: null, minutes: null })),
+  };
+  const practiceArm = (sources: { slug: string; title: string; items: number | null; format?: string; why?: string }[]): ResearchArm => async () => ({
+    candidates: sources.map((s) => ({
+      url: practiceUrl(s.slug),
+      title: s.title,
+      kind: "course" as const,
+      why: s.why ?? "Problems with solutions",
+      recommendedBy: [],
+      practice: { format: s.format ?? "problem-set", items: s.items, answers: true },
+    })),
+    learnerNotes: [],
+    seenUrls: new Set(),
+    counts: { steps: 1, searches: 0, fetches: 0 },
+    searchesOk: 1,
+    stoppedBy: "model",
+    costUsd: 0,
+    coverage: null,
+  });
+  const fetcherOf = (titles: Record<string, string>) => fetcherFor(Object.fromEntries(Object.entries(titles).map(([slug, title]) => [practiceUrl(slug), page(practiceUrl(slug), title)]))).fetcher;
+  const byTitle = (materials: Material[], title: string) => materials.find((m) => m.title === title)!;
+
+  it("keeps working by count when no list is found", async () => {
+    const arm = practiceArm([{ slug: "p", title: "Problem Set", items: 150 }]);
+    const fetcher = fetcherOf({ p: "Problem Set" });
+    const bare = await collect(researchMaterials({ brief, arm, fetcher, books }));
+    const finder = { find: vi.fn(async () => ({ list: null, counts: { searches: 2, fetches: 3 }, costUsd: 0.01 })) };
+    const { events, outcome } = await collect(researchMaterials({ brief, arm, fetcher, books, items: finder }));
+    expect(finder.find).toHaveBeenCalledTimes(1);
+    expect(byTitle(outcome.materials, "Problem Set")).toEqual(byTitle(bare.outcome.materials, "Problem Set"));
+    expect(events.find((e) => e.type === "research.items")).toMatchObject({ title: "Problem Set", items: 0, groups: 0 });
+    expect(outcome.costUsd).toBeCloseTo(0.01);
+    const done = events.find((e) => e.type === "research.done") as Extract<ResearchEvent, { type: "research.done" }>;
+    expect(done.counts).toEqual({ searches: 2, fetches: 3 });
+  });
+
+  it("sets the list and its count on the source, and the count when research gave none", async () => {
+    const arm = practiceArm([
+      { slug: "a", title: "Counted Set", items: 150 },
+      { slug: "b", title: "Uncounted List", items: null, why: "A list of problems with solutions" },
+    ]);
+    const finder = { find: vi.fn(async () => ({ list: LIST, counts: { searches: 1, fetches: 1 }, costUsd: 0 })) };
+    const { events, outcome } = await collect(researchMaterials({ brief, arm, fetcher: fetcherOf({ a: "Counted Set", b: "Uncounted List" }), books, items: finder }));
+    const counted = byTitle(outcome.materials, "Counted Set").practice!;
+    expect(counted).toMatchObject({ items: 150, totalItems: 4, list: LIST, minutes: 1500 });
+    const uncounted = byTitle(outcome.materials, "Uncounted List").practice!;
+    // Four easy problems at 15 minutes each.
+    expect(uncounted).toMatchObject({ items: 4, totalItems: 4, list: LIST, minutes: 60 });
+    expect(events.find((e) => e.type === "research.items")).toMatchObject({ items: 4, groups: 1, url: LIST.url });
+  });
+
+  it("runs for at most three practice sources, in parallel", async () => {
+    const arm = practiceArm([
+      { slug: "small", title: "Small Set", items: 10 },
+      { slug: "big", title: "Big Set", items: 300 },
+      { slug: "mid", title: "Mid Set", items: 100 },
+      { slug: "large", title: "Large Set", items: 200 },
+      // Not counted by item, and not a list: never looked for.
+      { slug: "mock", title: "Mock Interview", items: null, format: "mock", why: "A full mock interview" },
+    ]);
+    const fetcher = fetcherOf({ small: "Small Set", big: "Big Set", mid: "Mid Set", large: "Large Set", mock: "Mock Interview" });
+    let inFlight = 0;
+    let most = 0;
+    const finder = {
+      find: vi.fn(async (source: Material) => {
+        inFlight += 1;
+        most = Math.max(most, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight -= 1;
+        return { list: source.title === "Big Set" ? LIST : null, counts: { searches: 1, fetches: 1 }, costUsd: 0.01 };
+      }),
+    };
+    const { events, outcome } = await collect(researchMaterials({ brief, arm, fetcher, books, items: finder }));
+    expect(finder.find.mock.calls.map(([s]) => s.title)).toEqual(["Big Set", "Large Set", "Mid Set"]);
+    expect(most).toBe(3);
+    expect(events.filter((e) => e.type === "research.items")).toHaveLength(3);
+    expect(byTitle(outcome.materials, "Big Set").practice!.list).toEqual(LIST);
+    expect(byTitle(outcome.materials, "Small Set").practice!.list ?? null).toBeNull();
+    expect(outcome.costUsd).toBeCloseTo(0.03);
+  });
+
+  it("runs beside the chapter finder, not after it", async () => {
+    const both: ResearchArm = async (input) => {
+      const books = await arm(input);
+      const practice = await practiceArm([{ slug: "p", title: "Problem Set", items: 150 }])(input);
+      return { ...books, candidates: [...books.candidates, ...practice.candidates] };
+    };
+    const fetcher = fetcherFor({ [bookUrl]: page(bookUrl, "Core Textbook"), [practiceUrl("p")]: page(practiceUrl("p"), "Problem Set") }).fetcher;
+    let inFlight = 0;
+    let most = 0;
+    const slow = async <T,>(value: T) => {
+      inFlight += 1;
+      most = Math.max(most, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return value;
+    };
+    const chapters = { find: vi.fn(() => slow({ toc: null, counts: { searches: 0, fetches: 0 }, costUsd: 0 })) };
+    const items = { find: vi.fn(() => slow({ list: null, counts: { searches: 0, fetches: 0 }, costUsd: 0 })) };
+    await collect(researchMaterials({ brief, arm: both, fetcher, books, chapters, items }));
+    expect(chapters.find).toHaveBeenCalledTimes(1);
+    expect(items.find).toHaveBeenCalledTimes(1);
+    expect(most).toBe(2);
+  });
+
+  it("swallows an item finder error on the app's key and rethrows a provider refusal on the user's", async () => {
+    const arm = practiceArm([{ slug: "p", title: "Problem Set", items: 150 }]);
+    const fetcher = fetcherOf({ p: "Problem Set" });
+    const boom = { find: vi.fn(async () => Promise.reject(new Error("boom"))) };
+    const { outcome } = await collect(researchMaterials({ brief, arm, fetcher, books, items: boom }));
+    expect(byTitle(outcome.materials, "Problem Set").practice!.list ?? null).toBeNull();
+    const refusal = {
+      find: vi.fn(async () =>
+        Promise.reject(new APICallError({ message: "credit balance is too low", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 400, responseBody: "Your credit balance is too low", isRetryable: false })),
+      ),
+    };
+    await expect(collect(researchMaterials({ brief, arm, fetcher, books, items: refusal, log: { keyOwner: "user" } }))).rejects.toSatisfy(
+      (e: unknown) => providerError(e)?.statusCode === 400,
+    );
+  });
+
+  it("defaultItemFinder is null without a search key", () => {
+    expect(defaultItemFinder({})).toBeNull();
+    expect(defaultItemFinder({ TAVILY_API_KEY: "k" })).not.toBeNull();
   });
 });

@@ -38,6 +38,8 @@ export type ResearchEvent =
   | { type: "research.dropped"; title: string; url?: string; reason: string }
   /** A book's chapter list was found (or, for a likely backbone the web finder looked for, not found: `chapters: 0, source: null`). */
   | { type: "research.chapters"; id: string; title: string; chapters: number; source: "catalogue" | "page" | null; url?: string }
+  /** A practice source's item list was found (or not: `items: 0`, no url); `groups` counts its distinct group names. */
+  | { type: "research.items"; id: string; title: string; items: number; groups: number; url?: string }
   | {
       type: "research.done";
       materials: Material[];

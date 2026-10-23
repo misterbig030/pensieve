@@ -1,12 +1,14 @@
 import type { LanguageModel } from "ai";
 import { isPracticeOnly } from "@/lib/materials";
-import type { Material } from "@/lib/schemas/material";
+import { PRACTICE_REGISTRY, itemMinutes } from "@/lib/practice";
+import type { Material, MaterialPractice, PracticeList } from "@/lib/schemas/material";
 import type { GenerationLogContext } from "../logged";
 import type { AiModelId } from "../models";
 import { providerError } from "../providerError";
 import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type ResearchBrief } from "./agent";
 import { createChapterFinder, type ChapterFinder, type ChapterFinderResult } from "./chapterFinder";
 import { isPracticeOpen, type Coverage, type DroppedMaterial, type ResearchEvent, type ResearchNotice } from "./events";
+import { createItemFinder, listGroups, type ItemFinder, type ItemFinderResult } from "./itemFinder";
 import { SourceFetcher, capsFor, searchProviderFromEnv, type ResearchCaps } from "./tools";
 import { BACKBONE_MIN_DOMAINS, createOpenLibraryLookup, recommendingDomains, runGate, sizedMinutes, type BookLookup } from "./verify";
 import { createWorkersArm } from "./workers";
@@ -27,6 +29,39 @@ export function likelyBackbones(materials: Material[]): Material[] {
     .sort((a, b) => b.domains - a.domains)
     .slice(0, MAX_CHAPTER_SEARCHES)
     .map((x) => x.m);
+}
+
+/** The most practice sources the item-list finder runs for before the allocation. */
+export const MAX_ITEM_SEARCHES = 3;
+
+/** Words in a source's title or description that say it is a list of things to do. */
+const LIST_LIKE_RE = /\b(lists?|problems|questions|exercises|flashcards|cards|challenges|puzzles|katas?|steps|levels|lessons)\b/i;
+
+/**
+ * The practice sources worth finding an item list for: verified, of a format counted by item (problems, recall, labs),
+ * with no list yet, and with a count research gave or a description that reads like a list. At most
+ * `MAX_ITEM_SEARCHES`, the most practice time first; a tie keeps the list's order.
+ */
+export function likelyItemLists(materials: Material[]): Material[] {
+  return materials
+    .map((m, i) => ({ m, i }))
+    .filter(({ m }) => {
+      const p = m.practice;
+      if (!p || p.list || !m.verifiedAt || PRACTICE_REGISTRY[p.format].perItemMinutes === null) return false;
+      return (p.items ?? 0) > 0 || LIST_LIKE_RE.test(`${m.title} ${m.why ?? ""} ${m.uses ?? ""}`);
+    })
+    .sort((a, b) => (b.m.practice!.minutes ?? 0) - (a.m.practice!.minutes ?? 0) || a.i - b.i)
+    .slice(0, MAX_ITEM_SEARCHES)
+    .map(({ m }) => m);
+}
+
+/**
+ * A practice source with its found list: `totalItems` is the list's length, and the count and doing time research
+ * gave are kept; when it gave none, they come from the list.
+ */
+export function withItemList(practice: MaterialPractice, list: PracticeList): MaterialPractice {
+  const minutes = practice.minutes ?? Math.min(60000, list.items.reduce((sum, item) => sum + itemMinutes(practice.format, item), 0));
+  return { ...practice, list, totalItems: list.items.length, items: practice.items ?? list.items.length, minutes };
 }
 
 /** Fewer researched materials than this and the plan carries the "thin" notice, whatever they cover. */
@@ -112,6 +147,8 @@ export interface ResearchMaterialsInput {
   caps?: ResearchCaps;
   /** Finds a likely backbone's chapters on a web page when the catalogue had none. Omitted, the stage is skipped. */
   chapters?: ChapterFinder;
+  /** Finds a practice source's real items. Omitted, the stage is skipped and sources are worked by count. */
+  items?: ItemFinder;
 }
 
 /**
@@ -135,6 +172,15 @@ export function defaultChapterFinder(
 ): ChapterFinder | null {
   const provider = searchProviderFromEnv(env);
   return provider ? createChapterFinder({ provider, model: options.model }) : null;
+}
+
+/** The item-list finder the app ships, on the same search provider as the arm. Null when `TAVILY_API_KEY` is unset. */
+export function defaultItemFinder(
+  env: Record<string, string | undefined> = process.env,
+  options: { model?: AiModelId | LanguageModel } = {},
+): ItemFinder | null {
+  const provider = searchProviderFromEnv(env);
+  return provider ? createItemFinder({ provider, model: options.model }) : null;
 }
 
 /**
@@ -176,39 +222,75 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
     }),
   );
 
-  // The likely backbones' chapters: the gate took them from the catalogue when it could; otherwise one search and a
-  // few reads look for a page that lists them, so the allocation can still cut by chapter whichever it chooses.
+  // Before the allocation, two lookups run side by side. The likely backbones' chapters: the gate took them from the
+  // catalogue when it could; otherwise one search and a few reads look for a page that lists them, so the allocation can
+  // still cut by chapter whichever it chooses. And the practice sources' real items: a few searches and reads look for
+  // a readable copy of each list, so the plan can name the problems rather than a count.
   let materials = gate.materials;
   let costUsd = arm?.costUsd ?? 0;
   const counts = { searches: arm?.counts.searches ?? 0, fetches: arm?.counts.fetches ?? 0 };
-  const finder = input.chapters;
-  const likely = finder ? likelyBackbones(materials) : [];
-  if (finder && likely.length > 0) {
-    const found = yield* streamWhile<ResearchEvent, (ChapterFinderResult | null)[]>((emit) =>
-      Promise.all(
-        likely.map(async (book) => {
-          let result: ChapterFinderResult | null = null;
-          try {
-            result = await finder.find(book, { fetcher, emit, signal: input.signal, log: input.log });
-          } catch (error) {
-            if (input.log?.keyOwner === "user" && providerError(error)) throw error;
-            console.error(`[research] chapter finder failed for "${book.title}"`, error);
-          }
-          const toc = result?.toc ?? null;
-          emit({ type: "research.chapters", id: book.id, title: book.title, chapters: toc?.chapters.length ?? 0, source: toc?.source ?? null, ...(toc ? { url: toc.url } : {}) });
-          return result;
-        }),
-      ),
+  const chapterFinder = input.chapters;
+  const itemFinder = input.items;
+  const likely = chapterFinder ? likelyBackbones(materials) : [];
+  const listed = itemFinder ? likelyItemLists(materials) : [];
+  if (likely.length > 0 || listed.length > 0) {
+    const [tocResults, itemResults] = yield* streamWhile<ResearchEvent, [(ChapterFinderResult | null)[], (ItemFinderResult | null)[]]>((emit) =>
+      Promise.all([
+        Promise.all(
+          likely.map(async (book) => {
+            let result: ChapterFinderResult | null = null;
+            try {
+              result = await chapterFinder!.find(book, { fetcher, emit, signal: input.signal, log: input.log });
+            } catch (error) {
+              if (input.log?.keyOwner === "user" && providerError(error)) throw error;
+              console.error(`[research] chapter finder failed for "${book.title}"`, error);
+            }
+            const toc = result?.toc ?? null;
+            emit({ type: "research.chapters", id: book.id, title: book.title, chapters: toc?.chapters.length ?? 0, source: toc?.source ?? null, ...(toc ? { url: toc.url } : {}) });
+            return result;
+          }),
+        ),
+        Promise.all(
+          listed.map(async (source) => {
+            let result: ItemFinderResult | null = null;
+            try {
+              result = await itemFinder!.find(source, { fetcher, emit, signal: input.signal, log: input.log });
+            } catch (error) {
+              if (input.log?.keyOwner === "user" && providerError(error)) throw error;
+              console.error(`[research] item finder failed for "${source.title}"`, error);
+            }
+            const list = result?.list ?? null;
+            emit({ type: "research.items", id: source.id, title: source.title, items: list?.items.length ?? 0, groups: list ? listGroups(list).length : 0, ...(list ? { url: list.url } : {}) });
+            return result;
+          }),
+        ),
+      ]),
     );
-    const tocs = new Map<string, NonNullable<ChapterFinderResult["toc"]>>();
-    found.forEach((result, i) => {
-      if (!result) return;
+    const merge = (result: { counts: { searches: number; fetches: number }; costUsd: number }) => {
       counts.searches += result.counts.searches;
       counts.fetches += result.counts.fetches;
       costUsd += result.costUsd;
+    };
+    const tocs = new Map<string, NonNullable<ChapterFinderResult["toc"]>>();
+    tocResults.forEach((result, i) => {
+      if (!result) return;
+      merge(result);
       if (result.toc) tocs.set(likely[i].id, result.toc);
     });
-    if (tocs.size > 0) materials = materials.map((m) => (tocs.has(m.id) ? { ...m, toc: tocs.get(m.id)! } : m));
+    const lists = new Map<string, PracticeList>();
+    itemResults.forEach((result, i) => {
+      if (!result) return;
+      merge(result);
+      if (result.list) lists.set(listed[i].id, result.list);
+    });
+    if (tocs.size > 0 || lists.size > 0) {
+      materials = materials.map((m) => {
+        const toc = tocs.get(m.id);
+        const list = lists.get(m.id);
+        if (!toc && !(list && m.practice)) return m;
+        return { ...m, ...(toc ? { toc } : {}), ...(list && m.practice ? { practice: withItemList(m.practice, list) } : {}) };
+      });
+    }
   }
 
   const unavailable = !arm || arm.stoppedBy === "cancelled" || arm.stoppedBy === "clock-idle" || (arm.stoppedBy === "search-error" && arm.searchesOk === 0);

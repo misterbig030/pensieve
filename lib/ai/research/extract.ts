@@ -191,7 +191,8 @@ export function extractText(text: string, finalUrl: string): PageInfo {
   };
 }
 
-function decode(bytes: Uint8Array, charset: string | null): string {
+/** The body as text, in its declared charset when the decoder knows it, else UTF-8. */
+export function decodeBody(bytes: Uint8Array, charset: string | null): string {
   try {
     return new TextDecoder(charset ?? "utf-8").decode(bytes);
   } catch {
@@ -202,7 +203,8 @@ function decode(bytes: Uint8Array, charset: string | null): string {
 /** Turns a guarded response into page info, by content type. */
 export function extractPage(res: GuardedResponse): PageInfo {
   if (res.contentType === "application/pdf") return extractPdf(res.body, res.finalUrl);
-  const text = decode(res.body, res.charset);
-  if (res.contentType === "text/plain") return extractText(text, res.finalUrl);
+  const text = decodeBody(res.body, res.charset);
+  // Plain text, and the JSON or CSV a caller may have widened the guard to, read as text.
+  if (res.contentType !== "text/html") return extractText(text, res.finalUrl);
   return extractHtml(text, res.finalUrl);
 }

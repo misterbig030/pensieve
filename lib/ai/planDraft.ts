@@ -465,7 +465,7 @@ export interface StreamResearchedDraftInput extends PlanDraftRequest {
   signal?: AbortSignal;
   log?: GenerationLogContext;
   /** Tests and the eval inject these; the app uses the defaults. */
-  research?: Pick<ResearchMaterialsInput, "fetcher" | "books" | "caps" | "chapters">;
+  research?: Pick<ResearchMaterialsInput, "fetcher" | "books" | "caps" | "chapters" | "items">;
 }
 
 /**
