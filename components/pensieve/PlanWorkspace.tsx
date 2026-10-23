@@ -18,9 +18,11 @@ import { formatCostUsd } from "@/lib/formatCost";
 import { pushModelCalls } from "@/lib/modelCalls";
 import { readNdjson } from "@/lib/ndjson";
 import {
+  applyDraftEvent,
   nextMessageId,
   toTranscript,
   type ChatMessage,
+  type DraftMaterials,
   type PlanChatEvent,
   type PlanChatRequest,
   type PlanDraftEvent,
@@ -179,7 +181,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     const draftRoot = makeRoot([]);
     draftRoot.len = spans.reduce((a, b) => a + b, 0);
     const slots: Record<string, PendingSlots> = { root: { count: spans.length, groups: !leafLevel(topLevel, granularity) } };
-    let researched: Material[] = [];
+    let held: DraftMaterials = { materials: [], dropped: [] };
     let decided: PlanSplit | null = null;
     const publish = () => {
       setTree(cloneTree(layout(draftRoot, 1, new Set(Object.keys(slots)))));
@@ -199,13 +201,18 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           const researchEvent = event as Extract<PlanDraftEvent, { type: `research.${string}` }>;
           setResearch((r) => reduceResearch(r ?? initialResearch(), researchEvent, learnerUrls));
           if (researchEvent.type === "research.done") {
-            researched = researchEvent.materials;
-            setMaterials(researchEvent.materials);
-            setDropped(researchEvent.dropped);
+            held = applyDraftEvent(held, researchEvent);
+            setMaterials(held.materials);
+            setDropped(held.dropped);
             setNotice(researchEvent.notice);
             setCoverage(researchEvent.coverage ?? null);
             publish();
           }
+        } else if (event.type === "allocated") {
+          // The list the draft is written against: the nodes' chapter positions refer to it, not to research's.
+          held = applyDraftEvent(held, event);
+          setMaterials(held.materials);
+          setDropped(held.dropped);
         } else if (event.type === "split") {
           decided = event.split;
           setSplit(event.split);
@@ -231,7 +238,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           setPending({});
           setCostUsd((c) => c + event.costUsd);
           setDrafting(false);
-          pushAssistant(draftedText(layout(event.root), weeks, researched, decided));
+          pushAssistant(draftedText(layout(event.root), weeks, held.materials, decided));
         } else if (event.type === "error") {
           throw Object.assign(new Error(event.message), { code: event.code });
         }

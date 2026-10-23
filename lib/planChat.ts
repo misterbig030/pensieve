@@ -77,6 +77,23 @@ export type PlanDraftEvent =
   | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
 
+/** The materials list the page holds while a draft streams in, and what was left off it. */
+export interface DraftMaterials {
+  materials: Material[];
+  dropped: DroppedMaterial[];
+}
+
+/**
+ * Folds one draft event into the materials the page holds. `research.done` sets the researched list; `allocated`
+ * replaces it with the list the plan drafts against (so node references match what would save) and adds the
+ * materials the plan won't use to research's own drops. Any other event leaves the state as it was.
+ */
+export function applyDraftEvent(state: DraftMaterials, event: PlanDraftEvent): DraftMaterials {
+  if (event.type === "research.done") return { materials: event.materials, dropped: event.dropped };
+  if (event.type === "allocated") return { materials: event.materials, dropped: [...state.dropped, ...event.dropped] };
+  return state;
+}
+
 /** Request body for POST /api/plan/expand: plan the children of one node of the draft. */
 export interface PlanExpandRequest extends PlanContext {
   /** The plan's materials list; node references point into it. */
