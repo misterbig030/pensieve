@@ -159,14 +159,16 @@ describe("research tools", () => {
     expect(notes.seenUrls().has("https://a.example/")).toBe(true);
   });
 
-  it("tells the model that a nearly empty page is drawn by script and to find a readable copy", async () => {
+  it("tells the model that a nearly empty page may be drawn by script and to look for a readable copy", async () => {
     const { tools, fetchPage, notes } = setup({ steps: 12, searches: 1, fetches: 4, wallMs: 60_000 });
     // neetcode.io/practice as a plain fetch sees it: the title and nothing else.
     fetchPage.mockResolvedValueOnce({ ...page("https://neetcode.io/practice", "NeetCode | Coding Interview Prep, Courses, Versus Mode"), text: "NeetCode | Coding Interview Prep, Courses, Versus Mode", words: 8 });
     const empty = await tools.fetchSource.execute!({ url: "https://neetcode.io/practice" }, execOpts);
-    expect(empty).toMatchObject({ title: "NeetCode | Coding Interview Prep, Courses, Versus Mode", note: expect.stringMatching(/drawn by script.*GitHub repository or a static page/) });
+    expect(empty).toMatchObject({ title: "NeetCode | Coding Interview Prep, Courses, Versus Mode", note: expect.stringMatching(/may be drawn by script.*GitHub repository or a static page/) });
+    expect((empty as { note: string }).note).toMatch(/^This page came back nearly empty \(8 words\)/);
+    expect((empty as { note: string }).note).not.toMatch(/\bit is drawn by script/);
     // The candidates step reads the notes, not the tool result, so they say it too.
-    expect(notes.render()).toContain("(8 words; nearly empty, drawn by script: it shows nothing of its content)");
+    expect(notes.render()).toContain("(8 words; nearly empty, perhaps drawn by script: it may show nothing of its content)");
 
     fetchPage.mockResolvedValueOnce({ ...page("https://a.example/", "Full"), words: 1667 });
     expect(await tools.fetchSource.execute!({ url: "https://a.example/" }, execOpts)).not.toHaveProperty("note");

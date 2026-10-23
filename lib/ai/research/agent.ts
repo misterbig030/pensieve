@@ -163,7 +163,9 @@ export function buildResearchInstructions(
     `2. Backbone. Search from several angles (best book for the topic, university course syllabi, reading lists) and note which pages recommend each book. Independent agreement across different sites beats a single listicle. Note the leading book's exact title and its author: a book is checked against a library catalogue by those two, not by a page. Try its publisher's or author's page once for a link; if that page cannot be read, move on.`,
     `3. Canonical materials: official documentation, the well-known courses and talks, the standard papers.`,
     `4. Currency: if the field moves fast, material from the last two years that covers what the backbone predates.`,
-    `5. Size: note how long each material is whenever a page says so (pages, runtime, course hours, words). The learner's total study time is in the brief; a list that takes longer than that to get through is too long.`,
+    picks.length > 0
+      ? `5. Size: note how long each material is whenever a page says so (pages, runtime, course hours, words). The learner's study time is in the brief, and the plan spends part of it on practice: only the reading part of the study time goes to what the list asks the learner to read, so a reading list longer than that is too long.`
+      : `5. Size: note how long each material is whenever a page says so (pages, runtime, course hours, words). The learner's total study time is in the brief; a list that takes longer than that to get through is too long.`,
     ...(picks.length > 0
       ? [
           `6. Practice: the plan assigns practice, so also look for sources the learner can do, one kind at a time, preferring ones that come with answers, solutions or a rubric. Note how many problems, questions or steps each holds, any time it states per item, and whether it gives answers:`,

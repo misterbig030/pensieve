@@ -7,7 +7,7 @@ import { DaysPerWeekPicker } from "@/components/pensieve/DaysPerWeekPicker";
 import { splitHours } from "@/lib/materials";
 import { capitalize } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
-import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, SPLIT_SET_BY_LEARNER, clampHours, presetFor, totalHours, type PlanSplit } from "@/lib/studyTime";
+import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, SPLIT_SET_BY_LEARNER, clampHours, presetFor, shareAdjustable, totalHours, type PlanSplit } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 /** Shades of the practice colour, one per picked format, darkest first. */
@@ -172,7 +172,10 @@ export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, materia
               <p className="m-0 text-xs leading-normal text-muted-foreground">Applies to weeks you split from now on. Weeks already split keep their days.</p>
             </div>
           )}
-          {onChangeSplit && split && (
+          {onChangeSplit && split && !shareAdjustable(split) && (
+            <p className="m-0 text-xs leading-normal text-muted-foreground">All reading: no practice was picked for this topic, so there is no share to move.</p>
+          )}
+          {onChangeSplit && split && shareAdjustable(split) && (
             <div className="flex flex-col gap-2">
               <label htmlFor="share" className="text-[11px] tracking-wide text-muted-foreground uppercase">
                 Reading and watching: {split.readingShare}% of your time

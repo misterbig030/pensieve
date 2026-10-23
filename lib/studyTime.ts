@@ -139,6 +139,19 @@ export function isAllReading(split: PlanSplit): boolean {
   return split.readingShare >= 100 || split.formats?.length === 0;
 }
 
+/**
+ * Whether the learner can move the reading share. A pick that chose no practice (`formats: []`) has no format to give
+ * the rest to, so moving it would leave time no one plans. A split with picks, or one from before picks, can move.
+ */
+export function shareAdjustable(split: PlanSplit): boolean {
+  return split.formats === undefined || split.formats.length > 0;
+}
+
+/** The picks that get time: none once the share is all reading, though the split keeps them for the slider. */
+export function activePicks(split: PlanSplit | null | undefined): NonNullable<PlanSplit["formats"]> {
+  return split && !isAllReading(split) ? (split.formats ?? []) : [];
+}
+
 /** The reading share as a fraction, or null when the plan has no split (older plans fall back to a fixed share). */
 export function readingShareOf(split: PlanSplit | null | undefined): number | null {
   return split ? split.readingShare / 100 : null;

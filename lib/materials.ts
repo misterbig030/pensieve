@@ -1,7 +1,7 @@
 import { learnerKind } from "@/lib/ai/research/verify";
 import { budgetFor, cloneTree, daysInWeekOf, fullLabelOf, parentOf, walk, weeksOf, type Granularity, type PlanNode } from "@/lib/planTree";
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, weekBudgets, type PracticeFormat, type PracticePick } from "@/lib/practice";
-import { dayMinutes, readingShareOf, type PlanSplit } from "@/lib/studyTime";
+import { activePicks, dayMinutes, isAllReading, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
   normalizeMaterialRef,
@@ -140,7 +140,7 @@ export function resolveCoverRefs(refs: CoverRefDraft[] | undefined, aliases: Mat
 function pickedFormat(format: string, split: PlanSplit | null | undefined): PracticeFormat | null {
   const f = format.trim().toLowerCase();
   if (!(PRACTICE_FORMATS as readonly string[]).includes(f)) return null;
-  return (split?.formats ?? []).some((p) => p.format === f) ? (f as PracticeFormat) : null;
+  return activePicks(split).some((p) => p.format === f) ? (f as PracticeFormat) : null;
 }
 
 /** "Problems "Arrays 1–6"": a refused row as the facts name it. */
@@ -260,7 +260,7 @@ export function isPracticeOnly(m: Pick<Material, "minutes" | "practice">): boole
 export function pickSources(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice" | "minutes">[]): PickSources[] {
   // A source that also serves as practice is still reading, so recall can be written from it.
   const hasReading = materials.some((m) => !isPracticeOnly(m));
-  return (split?.formats ?? []).map((pick) => {
+  return activePicks(split).map((pick) => {
     const sources = materials.filter((m) => m.practice?.format === pick.format).map((m) => m.id);
     const rule = PRACTICE_REGISTRY[pick.format].generated;
     const writable = rule !== "never" && (rule !== "from-reading" || hasReading);
@@ -278,7 +278,11 @@ export function practiceBudgets(
   weekMinutes: number,
   materials: Pick<Material, "id" | "practice" | "minutes">[],
 ): ReturnType<typeof weekBudgets> {
-  if ((split?.formats ?? []).length === 0) return { reading: Math.round(weekMinutes * (readingShareOf(split) ?? MUST_SHARE)), practice: {} };
+  if (activePicks(split).length === 0) {
+    // All reading is all of the week, whatever share an all-reading pick shows.
+    const share = split && isAllReading(split) ? 1 : (readingShareOf(split) ?? MUST_SHARE);
+    return { reading: Math.round(weekMinutes * share), practice: {} };
+  }
   const budgets = weekBudgets(split, weekMinutes);
   for (const { pick, assignable } of pickSources(split, materials)) {
     if (assignable) continue;

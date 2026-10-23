@@ -19,6 +19,7 @@ import {
   resolvePracticeCovers,
   resolvePracticeRefs,
   noSourceFacts,
+  pickSources,
   practiceBudgets,
   sizeChapterRows,
   tierMinutes,
@@ -623,6 +624,19 @@ describe("practice budgets", () => {
     expect(draftedSplit({ ...split, formats: [split.formats![2]] }, materials)).toMatchObject({ readingShare: 100, formats: [] });
     // Nothing to fold: the split comes back as it is.
     expect(draftedSplit({ readingShare: 60, practice: "projects", reason: "" }, materials)).toEqual({ readingShare: 60, practice: "projects", reason: "" });
+  });
+  it("asks for no practice once the learner slides the share to all reading, and refuses a row written anyway", () => {
+    const all = { ...split, readingShare: 100 };
+    expect(pickSources(all, materials)).toEqual([]);
+    expect(practiceBudgets(all, 360, materials)).toEqual({ reading: 360, practice: {} });
+    expect(noSourceFacts(all, materials)).toEqual([]);
+    const { refs, refused } = resolvePracticeRefs([{ format: "problem-set", id: "M2", task: "Arrays 1–6", done: "all pass", minutes: 40 }], aliasMaterials(materials), all);
+    expect(refs).toEqual([]);
+    expect(refused).toHaveLength(1);
+  });
+  it("keeps an all-reading pick all reading whatever its share says", () => {
+    // The pick chose no practice; a share below 100 has no format to give the rest to.
+    expect(practiceBudgets({ readingShare: 60, practice: "reading", reason: "", formats: [] }, 360, materials)).toEqual({ reading: 360, practice: {} });
   });
   it("gives recall's time to reading when the list has no reading to write it from", () => {
     const practiceOnly = [materials[1]];

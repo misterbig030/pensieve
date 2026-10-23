@@ -389,7 +389,11 @@ describe("the practice picks in the research prompts", () => {
     for (const pick of PICKS) expect(text).toContain(`${PRACTICE_REGISTRY[pick.format].research} for: ${pick.focus}`);
     expect(text).not.toContain("not by you");
     expect(text.indexOf("5. Size")).toBeLessThan(text.indexOf("6. Practice"));
+    // The candidates step holds what is read to the plan's reading time, so the work order says the same.
+    expect(text).toContain("only the reading part of the study time goes to what the list asks the learner to read");
+    expect(text).not.toContain("a list that takes longer than that to get through is too long");
     const plain = buildResearchInstructions(caps);
+    expect(plain).toContain("The learner's total study time is in the brief; a list that takes longer than that to get through is too long.");
     expect(plain).not.toContain("Practice");
     // The split is picked before research, so it is decided already, all reading when there are no picks.
     expect(plain).toContain("How the learner's time divides between reading and practice is already decided, not by you.");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot } from "@/lib/planTree";
-import { clampHours, dayMinutes, formatDayTime, hoursInText, isAllReading, normalizeSplit, planSplitSchema, practiceLabelOf, presetFor, readingShareOf, rebudget, totalHours, weeksLabel } from "./studyTime";
+import { clampHours, dayMinutes, formatDayTime, hoursInText, isAllReading, normalizeSplit, planSplitSchema, practiceLabelOf, presetFor, readingShareOf, rebudget, shareAdjustable, totalHours, weeksLabel } from "./studyTime";
 
 describe("hours", () => {
   it("totals the plan's hours over its weeks", () => {
@@ -114,6 +114,15 @@ describe("split", () => {
     expect(isAllReading({ readingShare: 100, practice: "projects", reason: "" })).toBe(true);
     expect(isAllReading({ readingShare: 60, practice: "projects", reason: "" })).toBe(false);
     expect(isAllReading({ readingShare: 60, practice: "problems", reason: "", formats: [pick] })).toBe(false);
+  });
+
+  it("lets the learner move the reading share only when there is practice to give the time to", () => {
+    const pick = { format: "problem-set" as const, share: 100, focus: "f", reason: "" };
+    expect(shareAdjustable({ readingShare: 100, practice: "reading", reason: "", formats: [] })).toBe(false);
+    expect(shareAdjustable({ readingShare: 25, practice: "problems", reason: "", formats: [pick] })).toBe(true);
+    expect(shareAdjustable({ readingShare: 100, practice: "problems", reason: "", formats: [pick] })).toBe(true);
+    // A split from before picks keeps its slider: its rest is open practice.
+    expect(shareAdjustable({ readingShare: 60, practice: "projects", reason: "" })).toBe(true);
   });
 
   it("is null without a share or a practice", () => {

@@ -252,7 +252,7 @@ describe("buildWorkerInstructions", () => {
     expect(text).toContain("Prefer ones that come with answers");
     expect(text).toContain("Budget: 2 searches, 3 page reads and 3 steps in all");
     expect(text).toContain("one search for each kind of practice");
-    expect(text).toContain("In the third, read the readable copy of any page that came back drawn by script");
+    expect(text).toContain("In the third, read the readable copy of any page that came back nearly empty");
     expect(text).toContain("Do not write notes");
     expect(text).toContain(RESEARCH_RULES);
   });

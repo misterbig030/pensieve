@@ -138,7 +138,7 @@ const CURRENT_BRIEF = [
 const PRACTICE_BRIEF = (picks: PracticePick[]) => [
   `Objective: sources the learner can practise with, for each kind of practice the plan assigns:`,
   ...practiceLines(picks),
-  `Strategy: you have three steps. In the first, make all your searches at once, one search for each kind of practice. In the second, read the pages worth reading, all at once, preferring each source's own page, to see whether it gives solutions or an answer key, how many problems, questions or steps it holds, and any time it states per item. In the third, read the readable copy of any page that came back drawn by script (its GitHub repository or a static page that lists the same problems); otherwise stop. ${TWO_STEPS}`,
+  `Strategy: you have three steps. In the first, make all your searches at once, one search for each kind of practice. In the second, read the pages worth reading, all at once, preferring each source's own page, to see whether it gives solutions or an answer key, how many problems, questions or steps it holds, and any time it states per item. In the third, read the readable copy of any page that came back nearly empty (its GitHub repository or a static page that lists the same problems); otherwise stop. ${TWO_STEPS}`,
   `Boundaries: practice sources only (problem lists, question banks, labs, exercises, mock tests); other researchers collect the reading. Prefer ones that come with answers, solutions or a rubric. A source's URL is its own page.`,
 ];
 

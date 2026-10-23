@@ -243,7 +243,7 @@ export class ResearchNotes {
     }
     for (const f of this.fetches) {
       if (f.ok) {
-        const size = f.durationMinutes ? ` (runtime ${f.durationMinutes} min)` : f.words ? ` (${f.words} words${nearlyEmpty(f) ? "; nearly empty, drawn by script: it shows nothing of its content" : ""})` : "";
+        const size = f.durationMinutes ? ` (runtime ${f.durationMinutes} min)` : f.words ? ` (${f.words} words${nearlyEmpty(f) ? "; nearly empty, perhaps drawn by script: it may show nothing of its content" : ""})` : "";
         parts.push(`Read <${f.url}>${f.finalUrl && f.finalUrl !== f.url ? ` → <${f.finalUrl}>` : ""}: title "${f.title ?? "(none)"}"${size}\n  ${f.excerpt}`);
       }
       else parts.push(`Could not read <${f.url}>: ${f.reason}`);
@@ -279,8 +279,9 @@ export function nearlyEmpty(page: { words?: number | null; durationMinutes?: num
   return typeof page.words === "number" && page.words < NEARLY_EMPTY_WORDS && !page.durationMinutes;
 }
 
-const DRAWN_BY_SCRIPT =
-  "This page came back nearly empty: it is drawn by script in the browser, which this reader does not run, so its content cannot be read here and says nothing about solutions or size. Look for a readable copy of the same content: the site's GitHub repository or a static page that lists it.";
+/** The note on a nearly empty read: a guess, since a short page or a failed extraction looks the same. */
+const drawnByScript = (words: number) =>
+  `This page came back nearly empty (${words} words). It may be drawn by script in the browser, which this reader does not run, or it may just be short or have failed to read; either way it says nothing about solutions or size. If it should hold more, look for a readable copy of the same content: the site's GitHub repository or a static page that lists it.`;
 
 export function createResearchTools(opts: ResearchToolsOptions) {
   const { provider, fetcher, budget, notes, emit } = opts;
@@ -327,7 +328,7 @@ export function createResearchTools(opts: ResearchToolsOptions) {
         durationMinutes: page.durationMinutes ?? null,
       });
       emit({ type: "research.fetch", url, ok: true });
-      return nearlyEmpty(page) ? { ...page, note: DRAWN_BY_SCRIPT } : page;
+      return nearlyEmpty(page) ? { ...page, note: drawnByScript(page.words ?? 0) } : page;
     },
   });
 
