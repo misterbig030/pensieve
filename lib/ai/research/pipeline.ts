@@ -37,17 +37,20 @@ export const MAX_ITEM_SEARCHES = 3;
 /** Words in a source's title or description that say it is a list of things to do. */
 const LIST_LIKE_RE = /\b(lists?|problems|questions|exercises|flashcards|cards|challenges|puzzles|katas?|steps|levels|lessons)\b/i;
 
+/** A chapter list: a source with one keeps its numbered suffixes for chapters (`M1.3`), so it never gets an item list. */
+const hasChapters = (m: Pick<Material, "toc">) => (m.toc?.chapters.length ?? 0) > 0;
+
 /**
  * The practice sources worth finding an item list for: verified, of a format counted by item (problems, recall, labs),
- * with no list yet, and with a count research gave or a description that reads like a list. At most
- * `MAX_ITEM_SEARCHES`, the most practice time first; a tie keeps the list's order.
+ * with no list yet and no chapter list, and with a count research gave or a description that reads like a list. At
+ * most `MAX_ITEM_SEARCHES`, the most practice time first; a tie keeps the list's order.
  */
 export function likelyItemLists(materials: Material[]): Material[] {
   return materials
     .map((m, i) => ({ m, i }))
     .filter(({ m }) => {
       const p = m.practice;
-      if (!p || p.list || !m.verifiedAt || PRACTICE_REGISTRY[p.format].perItemMinutes === null) return false;
+      if (!p || p.list || hasChapters(m) || !m.verifiedAt || PRACTICE_REGISTRY[p.format].perItemMinutes === null) return false;
       return (p.items ?? 0) > 0 || LIST_LIKE_RE.test(`${m.title} ${m.why ?? ""} ${m.uses ?? ""}`);
     })
     .sort((a, b) => (b.m.practice!.minutes ?? 0) - (a.m.practice!.minutes ?? 0) || a.i - b.i)
@@ -285,7 +288,8 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
     if (tocs.size > 0 || lists.size > 0) {
       materials = materials.map((m) => {
         const toc = tocs.get(m.id);
-        const list = lists.get(m.id);
+        // The chapter finder ran beside the item finder: a source that has chapters now stays unlisted.
+        const list = toc || hasChapters(m) ? undefined : lists.get(m.id);
         if (!toc && !(list && m.practice)) return m;
         return { ...m, ...(toc ? { toc } : {}), ...(list && m.practice ? { practice: withItemList(m.practice, list) } : {}) };
       });

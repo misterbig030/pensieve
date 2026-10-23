@@ -5,7 +5,8 @@ import { providerError } from "../providerError";
 import type { ResearchArm } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
-import { defaultChapterFinder, defaultItemFinder, researchMaterials } from "./pipeline";
+import { aliasMaterials } from "@/lib/materials";
+import { defaultChapterFinder, defaultItemFinder, likelyItemLists, researchMaterials } from "./pipeline";
 import { SourceFetcher, type PageFetcher } from "./tools";
 import type { BookLookup } from "./verify";
 
@@ -294,6 +295,29 @@ describe("the item lists stage", () => {
     await expect(collect(researchMaterials({ brief, arm, fetcher, books, items: refusal, log: { keyOwner: "user" } }))).rejects.toSatisfy(
       (e: unknown) => providerError(e)?.statusCode === 400,
     );
+  });
+
+  it("gives no item list to a source with a chapter list, found beside it or already there", async () => {
+    // A book that is both a likely backbone and a problem set: its suffixes are chapters, so it stays unlisted.
+    const dual: ResearchArm = async (input) => {
+      const out = await arm(input);
+      return { ...out, candidates: out.candidates.map((c) => ({ ...c, practice: { format: "problem-set" as const, items: 189, answers: true } })) };
+    };
+    const chapters = { find: vi.fn(async () => ({ toc: TOC, counts: { searches: 0, fetches: 0 }, costUsd: 0 })) };
+    const items = { find: vi.fn(async () => ({ list: LIST, counts: { searches: 0, fetches: 0 }, costUsd: 0 })) };
+    const { outcome } = await collect(researchMaterials({ brief, arm: dual, fetcher, books, chapters, items }));
+    const book = core(outcome.materials);
+    expect(book.toc).toEqual(TOC);
+    expect(book.practice).toMatchObject({ format: "problem-set", items: 189 });
+    expect(book.practice!.list ?? null).toBeNull();
+    // Its aliases stay chapters.
+    const aliases = aliasMaterials([book]);
+    expect(aliases.resolve("M1.3")).toEqual({ id: book.id, chapter: 3 });
+    expect(aliases.items(book.id)).toBe(0);
+    // A source that already has its chapters is never looked for.
+    const withToc = { ...book, toc: TOC, practice: { ...book.practice!, list: undefined } };
+    expect(likelyItemLists([withToc])).toEqual([]);
+    expect(likelyItemLists([{ ...withToc, toc: undefined }])).toHaveLength(1);
   });
 
   it("defaultItemFinder is null without a search key", () => {
