@@ -1,4 +1,4 @@
-import { aliasMaterials, draftedSplit, formatAliases, pickSources, practiceBudgets, type MaterialAliases, type PickSources, type ResolvedAlias } from "@/lib/materials";
+import { aliasMaterials, draftedSplit, formatAliases, pickSources, placedMinutes, planBlockBudgets, practiceBudgets, type MaterialAliases, type PickSources, type ResolvedAlias } from "@/lib/materials";
 import { PRACTICE_REGISTRY, isBlockFormat, type PracticeFormat, type PracticeGenerated } from "@/lib/practice";
 import {
   budgetFor,
@@ -300,11 +300,13 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   // Days are the days of one week, so the week's day count is the number of units asked for.
   const daysInWeek = input.level === "day" ? n : input.daysPerWeek;
   const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
-  // A week leaf holds its whole week's practice, so its line says each pick's share of it.
+  // A week leaf holds its whole week's practice, so its line says each per-item pick's share of it; a block format is
+  // budgeted over the plan, which the practice rules state.
   const weekMinutes = weekBudgetsOf(input).practice;
+  const perItem = picks.filter((p) => !isBlockFormat(p.pick.format));
   const weekPractice =
-    input.unitsAreLeaves && input.level !== "day" && picks.length > 0
-      ? `; practice: ${picks.map((p) => `${PRACTICE_REGISTRY[p.pick.format].label} ${formatMinutes(weekMinutes[p.pick.format] ?? 0)}`).join(", ")}`
+    input.unitsAreLeaves && input.level !== "day" && perItem.length > 0
+      ? `; practice: ${perItem.map((p) => `${PRACTICE_REGISTRY[p.pick.format].label} ${formatMinutes(weekMinutes[p.pick.format] ?? 0)}`).join(", ")}`
       : "";
   // A week leaf's must-reading is the week's reading budget, as the practice rules and the checks have it: the one
   // place the prompt states it.
@@ -410,13 +412,21 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const daysInWeek = days ? input.spans.length : input.daysPerWeek;
   const half = Math.round(leafBudgetMinutes("day", daysInWeek, input.hoursPerWeek) / 2 / 5) * 5;
   const lines = [`Practice: ${days ? "the" : "each"} week's time, about ${formatMinutes(week)}, is about ${formatMinutes(budgets.reading)} of reading and, by format:`];
+  // A block is never split to fit a week's slice: it is budgeted over the plan, less what earlier units placed.
+  const planBlocks = planBlockBudgets(input.split, budgetFor(input.weeks, input.hoursPerWeek) * 60, input.materials);
+  const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
   for (const p of picks) {
     const spec = PRACTICE_REGISTRY[p.pick.format];
-    const minutes = formatMinutes(budgets.practice[p.pick.format] ?? 0);
-    // A block is never split to fit a week's slice: the checks budget it over the plan.
-    const block = isBlockFormat(p.pick.format) ? `${spec.label} comes in whole blocks: place one where a week has room, not a part of one each week.` : null;
-    const sizing = [sizingSentence(p.pick.format), block].filter((s) => s !== null).join(" ");
-    lines.push(`- ${pickName(p.pick.format)}: about ${minutes} ${days ? "this week" : "a week"}, aimed at ${p.pick.focus}. The learner ${spec.prompt}. ${leafPickSources(input, aliases, p)} Done when: ${spec.doneWhen}.${sizing ? ` ${sizing}` : ""}`);
+    let time = `about ${formatMinutes(budgets.practice[p.pick.format] ?? 0)} ${days ? "this week" : "a week"}`;
+    let sizing = sizingSentence(p.pick.format);
+    if (isBlockFormat(p.pick.format)) {
+      const total = planBlocks[p.pick.format] ?? 0;
+      const placed = input.tree && parent ? placedMinutes(input.tree, p.pick.format, parent.start - 1) : 0;
+      const left = Math.max(0, total - placed);
+      time = `about ${formatMinutes(total)} over the whole plan, ${placed > 0 ? `about ${formatMinutes(placed)} placed so far, so about ${formatMinutes(left)} left` : "none placed so far"}`;
+      sizing = `${spec.label} comes in whole blocks of about ${spec.fixedMinutes} min: place one where a week has room, not a part of one each week.`;
+    }
+    lines.push(`- ${pickName(p.pick.format)}: ${time}, aimed at ${p.pick.focus}. The learner ${spec.prompt}. ${leafPickSources(input, aliases, p)} Done when: ${spec.doneWhen}.${sizing ? ` ${sizing}` : ""}`);
   }
   lines.push(
     `For each unit, list its practice rows in "practice" as { format, id, task, done, minutes }: format is one of the formats above; id is the row's source (leave it out for a row you write yourself); task says exactly what to do, with the part ("NeetCode 150 · Arrays & Hashing, problems 1–6"); done says how the learner knows it is finished; minutes is the doing time.`,

@@ -797,6 +797,36 @@ describe("checks follow the drafted split and budget whole blocks over the week"
     expect(allReading.breaches).toEqual([]);
   });
 
+  describe("block formats over the plan", () => {
+    // Eight weeks at 6 h: 2880 min, 432 of reading, 2448 of practice shared 45/25/15/15 as problems 1102, design 612,
+    // mock 367 and recall 367 over the plan. Mock's ceiling is 367 × 1.25 + 10 = 468.75 min.
+    const materials = [{ id: "R1" }, { id: "P", practice: problems }];
+    const plan = (practice: () => PracticeRef[]) => {
+      const weeks = [...Array(8)].map((_, i) => makeNode({ id: `w${i + 1}`, level: "week", title: `W${i + 1}`, summary: "s", len: 5, budgetHours: 6, practice: practice() }));
+      return { root: layout(makeRoot(weeks)), weeks };
+    };
+    const check = (root: PlanNode, nodes: PlanNode[]) => levelChecks({ root, nodes, leaves: true, top: true, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split });
+
+    it("states a block format placed past its share of the plan as a fact, not a breach", () => {
+      // A mock and a design every week: 8 × 75 = 600 min of mock by the last week; designs, 400 of 612, are within.
+      const { root, weeks } = plan(() => [row("mock", 75), row("design-exercise", 50)]);
+      const out = check(root, weeks);
+      expect(out.breaches).toEqual([]);
+      expect(out.facts.filter((f) => f.includes("over the plan"))).toEqual(["Mock placed so far is 600 min, past its about 367 min over the plan"]);
+      // Through week 4 only 300 min of mock is placed: within its share.
+      expect(check(root, weeks.slice(0, 4)).facts.filter((f) => f.includes("over the plan"))).toEqual([]);
+    });
+    it("states a picked block format the plan never placed as a fact once its last unit is drafted", () => {
+      // Each week: problems 190 within what a 50-min design leaves them (192), and no mock.
+      const { root, weeks } = plan(() => [row("problem-set", 190, "P"), row("design-exercise", 50)]);
+      const out = check(root, weeks);
+      expect(out.breaches).toEqual([]);
+      expect(out.facts.filter((f) => f.includes("over the plan"))).toEqual(["no Mock placed over the plan, against about 367 min for it"]);
+      // Weeks 1–4 are not the plan's last: no fact yet.
+      expect(check(root, weeks.slice(0, 4)).facts.filter((f) => f.includes("over the plan"))).toEqual([]);
+    });
+  });
+
   it("lets a week hold a whole mock and gives a week without one its time for other practice", () => {
     const materials = [{ id: "R1" }, { id: "R2" }, { id: "R3" }, { id: "P", practice: problems }];
     // Week A holds one 75-min mock: problems and recall share 138 + 46 + 76 + 46 − 75 = 231 min 45:15, so 173 and 58.

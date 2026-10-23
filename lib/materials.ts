@@ -327,6 +327,29 @@ export function draftedSplit(split: PlanSplit, materials: Pick<Material, "id" | 
   return { ...split, readingShare, formats: kept.map((p, i) => ({ ...p, share: shares[i] })) };
 }
 
+/**
+ * Each picked block format's minutes over the whole plan of `planMinutes`: its share of the plan's practice, shared as
+ * a week's is (`practiceBudgets`). A block comes whole, so it is budgeted over the plan rather than per week.
+ */
+export function planBlockBudgets(
+  split: PlanSplit | null | undefined,
+  planMinutes: number,
+  materials: Pick<Material, "id" | "practice" | "minutes">[],
+): Partial<Record<PracticeFormat, number>> {
+  const { practice } = practiceBudgets(split, planMinutes, materials);
+  return Object.fromEntries(PRACTICE_FORMATS.filter((f) => isBlockFormat(f) && practice[f] !== undefined).map((f) => [f, practice[f]!]));
+}
+
+/** The minutes of `format`'s practice rows in the tree's leaves that end by study day `through`. */
+export function placedMinutes(root: PlanNode, format: PracticeFormat, through: number): number {
+  let minutes = 0;
+  walk(root, (n) => {
+    if ((n.children?.length ?? 0) > 0 || n.end > through) return;
+    for (const r of n.practice ?? []) if (r.format === format) minutes += r.minutes;
+  });
+  return minutes;
+}
+
 /** One fact per pick that can't be assigned, for the drafting call's facts. */
 export function noSourceFacts(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice" | "minutes">[]): string[] {
   return pickSources(split, materials)
@@ -721,6 +744,20 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     if (unread.length > 0) {
       const unit = label(parentNode);
       breach("unread-reservation", -1, unit, unread, `${unit} reserved ${names(unread)}, which no ${input.nodes[0].level} reads`);
+    }
+  }
+
+  // Block formats over the plan, as guidance and facts: what the leaves placed up to these units, against each
+  // format's share of the plan's practice; and, once the plan's last unit is drafted, a picked block never placed.
+  if (input.leaves) {
+    const planMinutes = budgetFor(weeksOf(input.root, input.root, input.daysPerWeek), input.hoursPerWeek) * 60;
+    const through = input.nodes[input.nodes.length - 1].end;
+    const last = through >= input.root.end;
+    for (const [f, total] of Object.entries(planBlockBudgets(input.split, planMinutes, input.materials)) as [PracticeFormat, number][]) {
+      const placed = placedMinutes(input.root, f, through);
+      const name = PRACTICE_REGISTRY[f].label;
+      if (placed > budgetCeiling(total)) facts.push(`${name} placed so far is ${placed} min, past its about ${total} min over the plan`);
+      else if (last && placed === 0 && total > 0) facts.push(`no ${name} placed over the plan, against about ${total} min for it`);
     }
   }
 

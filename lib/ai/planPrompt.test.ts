@@ -489,16 +489,32 @@ describe("practice in prompts", () => {
     const mockSplit = { ...split, formats: [pick("problem-set", 60, "arrays and hashing"), { format: "mock" as const, share: 40, focus: "timed interviews", reason: "" }] };
     const prompt = days({ split: mockSplit });
     expect(prompt).toContain("Problems is sized per problem, about 10 min each");
-    expect(prompt).toContain("Mock is one block of about 75 min");
+    expect(prompt).toContain("Mock comes in whole blocks of about 75 min");
   });
   it("tells the drafter a block format is placed whole over the plan", () => {
     const mockSplit = { ...split, formats: [pick("problem-set", 60, "arrays and hashing"), { format: "mock" as const, share: 40, focus: "timed interviews", reason: "" }] };
     const prompt = days({ split: mockSplit });
-    expect(prompt).toContain("Mock is one block of about 75 min. Mock comes in whole blocks: place one where a week has room, not a part of one each week.");
+    expect(prompt).toContain("Mock comes in whole blocks of about 75 min: place one where a week has room, not a part of one each week.");
+    expect(prompt).not.toContain("Mock is one block");
     expect(prompt).toContain("Across the week, each format's minutes add up to about its time, except Mock's: a week that holds a block takes its minutes from the other formats, and a week without one gives its time to them.");
     // Per-item formats keep the plain rule and get no block line.
     expect(days()).not.toContain("whole blocks");
     expect(days()).toContain("Across the week, each format's minutes add up to about its time. Place a task");
+  });
+  it("gives a block pick its time over the whole plan and what earlier units left of it, and a per-item pick its week's", () => {
+    // Five weeks at 6 h: 1800 min, half practice, 60/40 → problems 540 min over the plan (108 a week), mock 360 (6 h).
+    // Week 1 placed one 75-min mock, so 285 min (4.75 h) is left for weeks 2–5.
+    const mockSplit = { ...split, formats: [pick("problem-set", 60, "arrays and hashing"), { format: "mock" as const, share: 40, focus: "timed interviews", reason: "" }] };
+    const mock = { format: "mock" as const, id: null, task: "A 60-minute mock", done: "scored", minutes: 75, generated: true };
+    const root = makeRoot([makeNode({ id: "w1", level: "week", title: "Arrays", summary: "s", len: 5, practice: [mock] }), makeNode({ id: "w2", level: "week", title: "Graphs", summary: "s", len: 5 })]);
+    const prompt = days({ split: mockSplit, weeks: 5, tree: root, parentId: "w2" });
+    expect(prompt).toContain('- Mock (format "mock"): about 6 h over the whole plan, about 75 min placed so far, so about 4.8 h left, aimed at timed interviews.');
+    expect(prompt).toContain('- Problems (format "problem-set"): about 1.8 h this week, aimed at arrays and hashing.');
+    // At the start nothing is placed yet; week leaves' lines list only the per-item picks' week minutes.
+    const first = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "week", level: "week", spans: [5, 5, 5, 5, 5], weeks: 5, daysPerWeek: 5, hoursPerWeek: 6, split: mockSplit, unitsAreLeaves: true });
+    expect(first).toContain('- Mock (format "mock"): about 6 h over the whole plan, none placed so far, aimed at timed interviews.');
+    expect(first).toContain("1. Week 1 (5 study days) — budget about 6 h, so about 3 h of must-reading; practice: Problems 1.8 h\n");
+    expect(first).not.toContain("a week, aimed at timed interviews");
   });
   it("renders practice rows and reservations under prompt aliases", () => {
     const A = aliasMaterials([{ id: "uuid-0" }, { id: "uuid-1" }]);
