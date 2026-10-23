@@ -408,7 +408,7 @@ function practiceChips(covers: PracticeCover[] | undefined, byId: ReadonlyMap<st
   });
 }
 
-/** A heading's reservation as chips: one per material and activity, the backbone first, then one per practice source, "+ N more" past three. */
+/** A heading's reservation as chips: one per material and activity, the backbone first, then one per practice source, "+ N more" past three. At least one practice chip always shows. */
 export function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, Material> }) {
   const groups = new Map<string, { m: Material; review: boolean; chapters: number[]; note: string | null }>();
   for (const r of node.covers ?? []) {
@@ -429,9 +429,13 @@ export function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<st
   const reading = [...groups.values()]
     .sort((a, b) => Number(b.m.backbone) - Number(a.m.backbone))
     .map((g) => ({ key: `${g.m.id}#${g.review ? "review" : "read"}`, text: text(g), backbone: g.m.backbone }));
-  const chips = [...reading, ...practiceChips(node.practiceCovers, byId).map((c) => ({ ...c, backbone: false }))];
-  if (chips.length === 0) return null;
-  const shown = chips.slice(0, SHOWN_COVERS);
+  const practice = practiceChips(node.practiceCovers, byId).map((c) => ({ ...c, backbone: false }));
+  if (reading.length + practice.length === 0) return null;
+  // The week's practice always shows: at least one practice chip stays whatever the reading count, and reading gives way first.
+  const practiceShown = Math.min(practice.length, Math.max(1, SHOWN_COVERS - reading.length));
+  const readingShown = Math.min(reading.length, SHOWN_COVERS - practiceShown);
+  const shown = [...reading.slice(0, readingShown), ...practice.slice(0, practiceShown)];
+  const hidden = [...reading.slice(readingShown), ...practice.slice(practiceShown)];
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="mr-0.5 text-muted-foreground">Covers</span>
@@ -440,7 +444,11 @@ export function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<st
           {c.text}
         </span>
       ))}
-      {chips.length > SHOWN_COVERS && <span className="rounded-full bg-background px-[9px] py-[3px]">+ {chips.length - SHOWN_COVERS} more</span>}
+      {hidden.length > 0 && (
+        <span title={hidden.map((c) => c.text).join("\n")} className="rounded-full bg-background px-[9px] py-[3px]">
+          + {hidden.length} more
+        </span>
+      )}
     </div>
   );
 }

@@ -32,7 +32,32 @@ describe("CoversRow practice reservations", () => {
     const html = render(week([{ format: "problem-set", id: "nc", note: null, itemFrom: 1, itemTo: 9 }, { format: "mock", id: "mock", note: null }], covers));
     expect(html.indexOf(AIE_MATERIALS.find((m) => m.id === "aie")!.title)).toBeLessThan(html.indexOf("NeetCode 150"));
     expect(html).toContain("+ 1 more");
-    expect(html).not.toContain("Mock Bank");
+    expect(html).toContain('title="Mock Bank"');
+  });
+  it("keeps a practice chip visible on a reading-heavy week; reading gives way, named in the overflow's title", () => {
+    const titles = ["aie", "evals", "oaievals"].map((id) => AIE_MATERIALS.find((m) => m.id === id)!);
+    const covers: CoverRef[] = titles.map((m) => ({ id: m.id, note: null }));
+    const html = render(week([{ format: "problem-set", id: "nc", note: null, itemFrom: 1, itemTo: 9 }], covers));
+    expect(html).toContain("NeetCode 150 · Arrays &amp; Hashing");
+    expect(html).toContain("+ 1 more");
+    const shownReading = titles.filter((m) => html.includes(`>${m.title.replace(/&/g, "&amp;")}</span>`) || html.includes(`>${m.title.replace(/&/g, "&amp;")} ·`));
+    expect(shownReading).toHaveLength(2);
+    const hiddenTitle = html.match(/title="([^"]*)" class="rounded-full bg-background px-\[9px\] py-\[3px\]">\+ 1 more/)![1];
+    const hidden = titles.filter((m) => !shownReading.includes(m));
+    expect(hiddenTitle).toContain(hidden[0].title.replace(/&/g, "&amp;"));
+  });
+  it("with several practice chips and little room, shows at least one and counts the rest", () => {
+    const covers: CoverRef[] = ["aie", "evals", "oaievals"].map((id) => ({ id, note: null }));
+    const html = render(week([{ format: "problem-set", id: "nc", note: null, itemFrom: 1, itemTo: 9 }, { format: "mock", id: "mock", note: null }], covers));
+    expect(html).toContain("NeetCode 150 · Arrays &amp; Hashing");
+    expect(html).not.toMatch(/>Mock Bank</);
+    expect(html).toContain("+ 2 more");
+    expect(html).toMatch(/title="[^"]*Mock Bank[^"]*"[^>]*>\+ 2 more/);
+  });
+  it("shows several practice chips when reading leaves room", () => {
+    const html = render(week([{ format: "problem-set", id: "nc", note: null, itemFrom: 1, itemTo: 9 }, { format: "mock", id: "mock", note: "two rounds" }], [{ id: "aie", note: null }]));
+    expect(html).toContain("Mock Bank · two rounds");
+    expect(html).not.toContain("more");
   });
   it("shows a week that reserves only practice, and nothing for a reservation without a source", () => {
     expect(render(week([{ format: "mock", id: "mock", note: null }]))).toContain("Mock Bank");
