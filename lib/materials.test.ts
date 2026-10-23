@@ -695,6 +695,8 @@ describe("checks over the week", () => {
     expect(breaches.map((b) => [b.kind, b.unit, b.text])).toEqual([["over-budget", "Week 1", "Week 1's must-reading is 250 min against a budget of about 180 min"]]);
   });
   it("breaches a pick's minutes over its share of the week, and states a pick left short as a fact", () => {
+    // Per-item formats only: problems 90 and recall 90 of the week's 180 min of practice.
+    const perItem = { ...split, formats: [split.formats[0], { format: "recall" as const, share: 50, focus: "terms", reason: "" }] };
     const { root, days } = week([
       { practice: [solve("Arrays 1–6", 65)] },
       { practice: [solve("Arrays 7–12", 65)] },
@@ -702,9 +704,9 @@ describe("checks over the week", () => {
       { materials: [must("R2", 60)] },
       { materials: [must("R3", 60)] },
     ]);
-    const out = check(root, days);
+    const out = levelChecks({ root, nodes: days, leaves: true, top: false, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split: perItem });
     expect(out.breaches.map((b) => [b.kind, b.text])).toEqual([["over-budget", "Week 1's Problems practice is 130 min against a budget of about 90 min"]]);
-    expect(out.facts).toEqual(["Week 1 practice short: Mock 0 of about 90 min"]);
+    expect(out.facts).toEqual(["Week 1 practice short: Recall 0 of about 90 min"]);
   });
   it("breaches a 60-minute mock on a 25-minute day against that day's own budget", () => {
     // Three hours over seven days: 25 min a day.
@@ -750,15 +752,68 @@ describe("checks over the week", () => {
     expect(days[0].practice).toEqual([recall("R1")]);
   });
   it("holds a week leaf to the week's budgets", () => {
-    const w1 = makeNode({ id: "w1", level: "week", title: "W", summary: "s", len: 5, budgetHours: 6, materials: [must("R1", 150)], practice: [solve("Arrays 1–12", 130), mock] });
+    // The 75-min mock takes 75 of the week's 180 min of practice, so problems have 90 + 90 − 75 = 105.
+    const w1 = makeNode({ id: "w1", level: "week", title: "W", summary: "s", len: 5, budgetHours: 6, materials: [must("R1", 150)], practice: [solve("Arrays 1–15", 150), mock] });
     const root = layout(makeRoot([w1]));
     const out = levelChecks({ root, nodes: [w1], leaves: true, top: true, materials, unknownIds: [], daysPerWeek: 5, split });
-    expect(out.breaches.map((b) => b.text)).toEqual(["Week 1's Problems practice is 130 min against a budget of about 90 min"]);
+    expect(out.breaches.map((b) => b.text)).toEqual(["Week 1's Problems practice is 150 min against a budget of about 105 min"]);
   });
   it("treeChecks takes the split", () => {
-    const { root } = week([{ practice: [solve("Arrays 1–12", 130)] }, { materials: [must("R1", 60)] }]);
+    // No mock this week: problems have all 180 min of practice.
+    const { root } = week([{ practice: [solve("Arrays 1–24", 240)] }, { materials: [must("R1", 60)] }]);
     const out = treeChecks(root, materials, { granularity: "day", hoursPerWeek: 6, daysPerWeek: 5, split });
-    expect(out.breaches.map((b) => b.text)).toContain("Week 1's Problems practice is 130 min against a budget of about 90 min");
+    expect(out.breaches.map((b) => b.text)).toContain("Week 1's Problems practice is 240 min against a budget of about 180 min");
+  });
+});
+
+describe("checks follow the drafted split and budget whole blocks over the week", () => {
+  // 6 h a week over 5 days: 360 min. Reading 15%: 54 min; practice 306 min, shared out 45/25/15/15 as problems 138,
+  // design 76, mock 46 and recall 46.
+  const pick = (format: "problem-set" | "design-exercise" | "mock" | "recall", share: number) => ({ format, share, focus: format, reason: "" });
+  const split = {
+    readingShare: 15,
+    practice: "problems, design, mock and recall",
+    reason: "",
+    formats: [pick("problem-set", 45), pick("design-exercise", 25), pick("mock", 15), pick("recall", 15)],
+  };
+  const problems = { format: "problem-set" as const, items: 150, perItemMinutes: 10, minutes: null, answers: true };
+  const must = (id: string, minutes: number): MaterialRef => ({ id, tier: "must", minutes, note: null });
+  const row = (format: PracticeRef["format"], minutes: number, id: string | null = null): PracticeRef => ({ format, id, task: `${format} ${minutes}`, done: "done", minutes, generated: id === null || format === "recall" });
+
+  it("holds headings to the drafted reading share when a pick has no source", () => {
+    // No problem list: problems' 45% of the practice is reading, so the drafted share is 15 + 85 × 45% → 53%. A month
+    // of 4 weeks at 6 h is 1440 min: 763 min of reading, not the split's 216. Reserving 700 min passes.
+    const materials = [{ id: "C", minutes: 700 }];
+    const m1 = makeNode({ id: "m1", level: "month", title: "M", summary: "s", len: 20, covers: [{ id: "C", note: null }] });
+    const root = layout(makeRoot([m1]));
+    const out = levelChecks({ root, nodes: [m1], leaves: false, top: true, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split });
+    expect(out.breaches.map((b) => b.text)).toEqual([]);
+    // With a problem list nothing folds: 216 min of reading, and 700 min is over it.
+    const listed = [...materials, { id: "P", practice: problems }];
+    const over = levelChecks({ root, nodes: [m1], leaves: false, top: true, materials: listed, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split });
+    expect(over.breaches.map((b) => b.text)).toEqual(["Month 1 reserves about 700 min of reading against a budget of about 216 min"]);
+    // An all-reading pick is all reading at every level, as its leaves are, whatever share it shows.
+    const allReading = levelChecks({ root, nodes: [m1], leaves: false, top: true, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split: { readingShare: 30, practice: "reading", reason: "", formats: [] } });
+    expect(allReading.breaches).toEqual([]);
+  });
+
+  it("lets a week hold a whole mock and gives a week without one its time for other practice", () => {
+    const materials = [{ id: "R1" }, { id: "R2" }, { id: "R3" }, { id: "P", practice: problems }];
+    // Week A holds one 75-min mock: problems and recall share 138 + 46 + 76 + 46 − 75 = 231 min 45:15, so 173 and 58.
+    const a = makeNode({ id: "a", level: "week", title: "A", summary: "s", len: 5, budgetHours: 6, materials: [must("R1", 50)], practice: [row("mock", 75), row("problem-set", 170, "P"), row("recall", 55, "R1")] });
+    // Week B holds no block: problems and recall share all 306 min, so 230 and 76.
+    const b = makeNode({ id: "b", level: "week", title: "B", summary: "s", len: 5, budgetHours: 6, materials: [must("R2", 50)], practice: [row("problem-set", 225, "P"), row("recall", 75, "R2")] });
+    // Week C holds four mocks and two designs, 400 min: past 306 × 1.25 + 10 = 392.5 for the week's practice.
+    const blocks = [...Array(4)].map(() => row("mock", 75)).concat([row("design-exercise", 50), row("design-exercise", 50)]);
+    const c = makeNode({ id: "c", level: "week", title: "C", summary: "s", len: 5, budgetHours: 6, materials: [must("R3", 50)], practice: blocks });
+    const root = layout(makeRoot([a, b, c]));
+    const out = levelChecks({ root, nodes: [a, b, c], leaves: true, top: true, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split });
+    expect(out.breaches.map((x) => [x.kind, x.unit, x.text])).toEqual([["over-budget", "Week 3", "Week 3's practice is 400 min against a budget of about 306 min"]]);
+    expect(out.facts.filter((f) => f.includes("short"))).toEqual([]);
+    // Week A's problems past its reduced budget breach against it: 173 × 1.25 + 10 = 226.25.
+    a.practice = [row("mock", 75), row("problem-set", 230, "P"), row("recall", 55, "R1")];
+    const overA = levelChecks({ root, nodes: [a], leaves: true, top: true, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split });
+    expect(overA.breaches.map((x) => x.text)).toEqual(["Week 1's Problems practice is 230 min against a budget of about 173 min"]);
   });
 });
 

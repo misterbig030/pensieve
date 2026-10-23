@@ -1,5 +1,5 @@
 import { aliasMaterials, draftedSplit, formatAliases, pickSources, practiceBudgets, type MaterialAliases, type PickSources, type ResolvedAlias } from "@/lib/materials";
-import { PRACTICE_REGISTRY, type PracticeFormat, type PracticeGenerated } from "@/lib/practice";
+import { PRACTICE_REGISTRY, isBlockFormat, type PracticeFormat, type PracticeGenerated } from "@/lib/practice";
 import {
   budgetFor,
   capitalize,
@@ -413,13 +413,18 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   for (const p of picks) {
     const spec = PRACTICE_REGISTRY[p.pick.format];
     const minutes = formatMinutes(budgets.practice[p.pick.format] ?? 0);
-    const sizing = sizingSentence(p.pick.format);
+    // A block is never split to fit a week's slice: the checks budget it over the plan.
+    const block = isBlockFormat(p.pick.format) ? `${spec.label} comes in whole blocks: place one where a week has room, not a part of one each week.` : null;
+    const sizing = [sizingSentence(p.pick.format), block].filter((s) => s !== null).join(" ");
     lines.push(`- ${pickName(p.pick.format)}: about ${minutes} ${days ? "this week" : "a week"}, aimed at ${p.pick.focus}. The learner ${spec.prompt}. ${leafPickSources(input, aliases, p)} Done when: ${spec.doneWhen}.${sizing ? ` ${sizing}` : ""}`);
   }
   lines.push(
     `For each unit, list its practice rows in "practice" as { format, id, task, done, minutes }: format is one of the formats above; id is the row's source (leave it out for a row you write yourself); task says exactly what to do, with the part ("NeetCode 150 · Arrays & Hashing, problems 1–6"); done says how the learner knows it is finished; minutes is the doing time.`,
   );
-  lines.push(`${days ? "Across the week" : "Within each week"}, each format's minutes add up to about its time. Place a task longer than half a day's budget (about ${formatMinutes(half)}) on a day of its own.`);
+  // Block formats are held over the plan, so a week's minutes follow the blocks it holds.
+  const blocks = picks.filter((p) => isBlockFormat(p.pick.format)).map((p) => `${PRACTICE_REGISTRY[p.pick.format].label}'s`);
+  const except = blocks.length === 0 ? "" : `, except ${blocks.join(" and ")}: a week that holds a block takes its minutes from the other formats, and a week without one gives its time to them`;
+  lines.push(`${days ? "Across the week" : "Within each week"}, each format's minutes add up to about its time${except}. Place a task longer than half a day's budget (about ${formatMinutes(half)}) on a day of its own.`);
   return lines.join("\n");
 }
 

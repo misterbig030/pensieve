@@ -491,6 +491,15 @@ describe("practice in prompts", () => {
     expect(prompt).toContain("Problems is sized per problem, about 10 min each");
     expect(prompt).toContain("Mock is one block of about 75 min");
   });
+  it("tells the drafter a block format is placed whole over the plan", () => {
+    const mockSplit = { ...split, formats: [pick("problem-set", 60, "arrays and hashing"), { format: "mock" as const, share: 40, focus: "timed interviews", reason: "" }] };
+    const prompt = days({ split: mockSplit });
+    expect(prompt).toContain("Mock is one block of about 75 min. Mock comes in whole blocks: place one where a week has room, not a part of one each week.");
+    expect(prompt).toContain("Across the week, each format's minutes add up to about its time, except Mock's: a week that holds a block takes its minutes from the other formats, and a week without one gives its time to them.");
+    // Per-item formats keep the plain rule and get no block line.
+    expect(days()).not.toContain("whole blocks");
+    expect(days()).toContain("Across the week, each format's minutes add up to about its time. Place a task");
+  });
   it("renders practice rows and reservations under prompt aliases", () => {
     const A = aliasMaterials([{ id: "uuid-0" }, { id: "uuid-1" }]);
     expect(renderRefs({ practiceCovers: [{ format: "problem-set", id: "uuid-1", note: "Arrays & Hashing" }] }, A)).toBe("practice covers Problems M2 (Arrays & Hashing)");

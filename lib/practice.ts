@@ -117,6 +117,11 @@ export const PRACTICE_REGISTRY: Record<PracticeFormat, PracticeFormatSpec> = {
   },
 };
 
+/** Whether a format comes in whole blocks of a fixed size (mock, design-exercise), budgeted over the plan, not per week. */
+export function isBlockFormat(format: PracticeFormat): boolean {
+  return PRACTICE_REGISTRY[format].fixedMinutes !== null;
+}
+
 /** One practice format the plan's split picked, with its share of the practice time and what it is aimed at. */
 export const practicePickSchema = z.object({
   format: z.enum(PRACTICE_FORMATS),
@@ -166,13 +171,16 @@ export function normalizePicks(drafts: PracticePickDraft[] | null | undefined): 
 }
 
 /**
- * A whole number shared out by percent: floors plus the spare units by largest remainder, so the parts sum exactly to
- * `total`. Ties go to the earlier share. `shares` are percents that sum to 100.
+ * A whole number shared out by share: floors plus the spare units by largest remainder, so the parts sum exactly to
+ * `total`. Ties go to the earlier share. `shares` are whole numbers, usually percents that sum to 100; any other sum
+ * shares by proportion, and shares that sum to 0 get nothing.
  */
 export function shareOut(total: number, shares: readonly number[]): number[] {
-  // Whole-number arithmetic: a part's exact value is total * share / 100.
-  const parts = shares.map((share) => Math.floor((total * share) / 100));
-  const order = shares.map((share, i) => ({ i, remainder: (total * share) % 100 })).sort((x, y) => y.remainder - x.remainder || x.i - y.i);
+  const whole = shares.reduce((sum, n) => sum + n, 0);
+  if (whole <= 0) return shares.map(() => 0);
+  // Whole-number arithmetic: a part's exact value is total * share / whole.
+  const parts = shares.map((share) => Math.floor((total * share) / whole));
+  const order = shares.map((share, i) => ({ i, remainder: (total * share) % whole })).sort((x, y) => y.remainder - x.remainder || x.i - y.i);
   const leftover = total - parts.reduce((sum, n) => sum + n, 0);
   for (const { i } of order.slice(0, leftover)) parts[i] += 1;
   return parts;

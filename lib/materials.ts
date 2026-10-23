@@ -1,6 +1,6 @@
 import { learnerKind } from "@/lib/ai/research/verify";
 import { budgetFor, cloneTree, daysInWeekOf, fullLabelOf, parentOf, walk, weeksOf, type Granularity, type PlanNode } from "@/lib/planTree";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, weekBudgets, type PracticeFormat, type PracticePick } from "@/lib/practice";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, isBlockFormat, shareOut, weekBudgets, type PracticeFormat, type PracticePick } from "@/lib/practice";
 import { activePicks, dayMinutes, isAllReading, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
@@ -517,7 +517,10 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     if (listed(r.id)) return 0;
     return m?.minutes ?? 0;
   };
-  const share = readingShareOf(input.split) ?? MUST_SHARE;
+  // As drafted: a pick with no source is reading here too, as the leaves' budgets have it (`practiceBudgets`), and an
+  // all-reading pick is all of the time whatever share it shows.
+  const drafted = input.split ? draftedSplit(input.split, input.materials) : null;
+  const share = drafted && isAllReading(drafted) ? 1 : (readingShareOf(drafted) ?? MUST_SHARE);
   const leafBudget = (node: PlanNode) => budgetMinutes(node, input.hoursPerWeek, daysInWeekOf(input.root, node, input.daysPerWeek));
   const verb = input.leaves ? "reads" : "reserves";
   const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
@@ -589,7 +592,13 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     if (noMust.length > 0) facts.push(`no must: ${noMust.map(label).join(", ")}`);
   }
 
-  /** The week rule over `units` (a week leaf, or a week's days): must-reading and each pick within the week's budgets. */
+  /**
+   * The week rule over `units` (a week leaf, or a week's days): must-reading within the week's reading budget, and
+   * practice within the week's practice budgets. A block format (`isBlockFormat`) comes whole, so it is budgeted over
+   * the plan, not the week: the blocks a week holds take their minutes from the per-item formats' budgets, and a week
+   * without one gives its slice to them, shared by their picks' shares. Block formats have no budget of their own in
+   * a week; the week's practice as a whole is held to its total instead.
+   */
   const weekRule = (units: PlanNode[], index: number, unit: string, weekMinutes: number) => {
     const budgets = practiceBudgets(input.split, weekMinutes, input.materials);
     let must = 0;
@@ -607,15 +616,34 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     const left = Math.max(0, budgets.reading - must);
     if (should > left) facts.push(`${unit} should-reading is ${should} min, more than the ${left} min must-reading leaves of the reading budget`);
     const formats = PRACTICE_FORMATS.filter((f) => budgets.practice[f] !== undefined || assigned.has(f));
+    const sum = (fs: PracticeFormat[], of: (f: PracticeFormat) => number) => fs.reduce((total, f) => total + of(f), 0);
+    const budgetOf = (f: PracticeFormat) => budgets.practice[f] ?? 0;
+    const usedOf = (f: PracticeFormat) => assigned.get(f) ?? 0;
+    const blocks = formats.filter(isBlockFormat);
+    const perItem = formats.filter((f) => !isBlockFormat(f));
+    // The per-item formats' budgets, with the block slices the week leaves them (none below 0), shared by their picks.
+    const pool = Math.max(0, sum(perItem, budgetOf) + sum(blocks, budgetOf) - sum(blocks, usedOf));
+    const shares = perItem.map((f) => (budgets.practice[f] === undefined ? 0 : (activePicks(input.split).find((p) => p.format === f)?.share ?? 0)));
+    const scaled = blocks.length > 0 ? shareOut(pool, shares) : perItem.map(budgetOf);
     const short: string[] = [];
-    for (const f of formats) {
-      const minutes = assigned.get(f) ?? 0;
-      const budget = budgets.practice[f] ?? 0;
+    let perItemOver = false;
+    perItem.forEach((f, i) => {
+      const minutes = usedOf(f);
+      const budget = scaled[i];
       const name = PRACTICE_REGISTRY[f].label;
-      if (minutes > budgetCeiling(budget)) breach("over-budget", index, unit, [], `${unit}'s ${name} practice is ${minutes} min against a budget of about ${budget} min`);
-      else if (minutes < budget / SHARE_TOLERANCE - BUDGET_SLACK) short.push(`${name} ${minutes} of about ${budget} min`);
-    }
+      if (minutes > budgetCeiling(budget)) {
+        perItemOver = true;
+        breach("over-budget", index, unit, [], `${unit}'s ${name} practice is ${minutes} min against a budget of about ${budget} min`);
+      } else if (minutes < budget / SHARE_TOLERANCE - BUDGET_SLACK) short.push(`${name} ${minutes} of about ${budget} min`);
+    });
     if (short.length > 0) facts.push(`${unit} practice short: ${short.join(", ")}`);
+    // With blocks, the week's practice as a whole; a per-item breach already names the excess against what the blocks
+    // left. Without blocks the per-format budgets are the whole practice budget and hold it on their own.
+    const total = sum(formats, usedOf);
+    const totalBudget = sum(formats, budgetOf);
+    if (blocks.length > 0 && !perItemOver && total > budgetCeiling(totalBudget)) {
+      breach("over-budget", index, unit, [], `${unit}'s practice is ${total} min against a budget of about ${totalBudget} min`);
+    }
   };
 
   input.nodes.forEach((node, index) => {

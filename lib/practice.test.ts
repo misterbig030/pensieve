@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, normalizePicks, shareOut, weekBudgets, type PracticePickDraft } from "@/lib/practice";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, isBlockFormat, normalizePicks, shareOut, weekBudgets, type PracticePickDraft } from "@/lib/practice";
 
 const draft = (format: string, share = 25, focus = "Arrays", reason = "Because."): PracticePickDraft => ({ format, share, focus, reason });
 
@@ -145,5 +145,16 @@ describe("shareOut", () => {
   it("shares a total by percent so the parts sum to the total", () => {
     expect(shareOut(10, [45, 35, 20])).toEqual([5, 3, 2]);
     expect(shareOut(0, [50, 50])).toEqual([0, 0]);
+  });
+  it("shares by proportion when the shares are a subset of the picks, and gives nothing to shares that sum to 0", () => {
+    // Problems 45 and recall 15 of 231 min: 173.25 and 57.75, the spare minute to recall's larger remainder.
+    expect(shareOut(231, [45, 15])).toEqual([173, 58]);
+    expect(shareOut(40, [0, 0])).toEqual([0, 0]);
+  });
+});
+
+describe("isBlockFormat", () => {
+  it("is the formats with a fixed size", () => {
+    expect(PRACTICE_FORMATS.filter(isBlockFormat)).toEqual(["design-exercise", "mock"]);
   });
 });
