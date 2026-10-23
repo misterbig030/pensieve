@@ -182,7 +182,7 @@ describe("runGate", () => {
   const catalogue = "https://openlibrary.org/works/OL1W";
   const now = () => new Date("2026-09-28T11:00:00Z");
 
-  it("keeps verified candidates, drops mismatches with a reason, and picks a backbone", async () => {
+  it("keeps verified candidates, drops mismatches with a reason, and marks the matched book catalogued", async () => {
     const f = gateFixture(
       {
         [book]: info(book, "AI Engineering [Book]"),
@@ -209,15 +209,15 @@ describe("runGate", () => {
       secret: SECRET,
     });
 
-    expect(result.materials.map((m) => [m.id, m.title, m.backbone])).toEqual([
-      ["M1", "AI Engineering", true],
-      ["M2", "Evals guide", false],
+    expect(result.materials.map((m) => [m.id, m.title, m.backbone, m.catalogued])).toEqual([
+      ["M1", "AI Engineering", false, true],
+      ["M2", "Evals guide", false, undefined],
     ]);
-    const backbone = result.materials[0];
-    expect(backbone.year).toBe(2024);
-    expect(backbone.recommendedBy).toEqual(recs);
-    expect(backbone.fetchedTitle).toBe("AI Engineering [Book]");
-    expect(verifyMaterialSig(backbone, backbone.sig, SECRET)).toBe(true);
+    const matched = result.materials[0];
+    expect(matched.year).toBe(2024);
+    expect(matched.recommendedBy).toEqual(recs);
+    expect(matched.fetchedTitle).toBe("AI Engineering [Book]");
+    expect(verifyMaterialSig(matched, matched.sig, SECRET)).toBe(true);
     expect(result.dropped.map((d) => d.title)).toEqual(["Insecure", "Broken", "Prompt engineering guide"]);
     expect(result.dropped[2].reason).toMatch(/title doesn't match/);
     expect(result.verified).toBe(2);
@@ -226,36 +226,129 @@ describe("runGate", () => {
     expect(types.filter((t) => t === "research.dropped")).toHaveLength(3);
   });
 
-  it("gives no backbone when the book is recommended by only one other site", async () => {
-    const f = gateFixture({ [book]: info(book, "AI Engineering") }, bookLookup);
+  it("marks matched books catalogued and chooses no backbone, keeping the arm's order", async () => {
+    const other = "https://www.oreilly.com/library/view/other-book/9781098000000";
+    const down = "https://www.oreilly.com/library/view/down-book/9781098000001";
+    const three = [...recs, "https://www.reddit.com/r/books/comments/1"];
+    const lookup: BookLookup = {
+      find: async (title) => {
+        if (title === "Down Book") throw new BookLookupUnavailable("503");
+        return title === "AI Engineering" ? { key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 } : { key: "/works/OL2W", title: "Other Book", authors: ["O. Author"], year: 2020 };
+      },
+    };
+    const f = gateFixture({ [book]: info(book, "AI Engineering"), [other]: info(other, "Other Book"), [down]: info(down, "Down Book") }, lookup);
     const result = await runGate({
-      candidates: [candidate({ url: book, title: "AI Engineering", kind: "book", recommendedBy: [recs[0]] })],
+      candidates: [
+        candidate({ url: book, title: "AI Engineering", kind: "book", author: "Chip Huyen", recommendedBy: recs }),
+        candidate({ url: other, title: "Other Book", kind: "book", author: "O. Author", recommendedBy: three }),
+        candidate({ url: down, title: "Down Book", kind: "book", author: "D. Author", recommendedBy: three }),
+      ],
       learner: [],
       learnerNotes: [],
       fetcher: f.fetcher,
       books: f.books,
-      seenUrls: new Set(recs),
+      seenUrls: new Set(three),
       emit: f.emit,
       secret: SECRET,
     });
-    expect(result.materials[0].backbone).toBe(false);
+    // The book with the most recommending sites is no longer moved first or flagged: the allocation chooses.
+    expect(result.materials.map((m) => [m.id, m.title, m.backbone, m.catalogued])).toEqual([
+      ["M1", "AI Engineering", false, true],
+      ["M2", "Other Book", false, true],
+      ["M3", "Down Book", false, undefined],
+    ]);
+    const verified = f.events.filter((e) => e.type === "research.verified");
+    expect(verified.every((e) => e.type === "research.verified" && !e.backbone)).toBe(true);
   });
 
-  it("no longer reads a backbone from the candidates: the book with more recommending domains is the backbone, whatever the order", async () => {
-    const other = "https://www.oreilly.com/library/view/other-book/9781098000000";
-    const three = [...recs, "https://www.reddit.com/r/books/comments/1"];
-    const twoBooks: BookLookup = {
-      find: async (title) => (title === "AI Engineering" ? { key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 } : { key: "/works/OL2W", title: "Other Book", authors: ["O. Author"], year: 2020 }),
+  it("falls back to the page title only when the author agrees, taking the catalogue's title", async () => {
+    const url = "https://bytebytego.com/courses/coding-patterns";
+    const shown = "System Design · Coding · Behavioral | ByteByteGo";
+    const run = async (claim: Partial<Candidate>, catalogueAuthor: string) => {
+      const find = vi.fn<BookLookup["find"]>(async (title) =>
+        title === shown ? { key: "/works/OL9W", title: "Coding Interview Patterns: Nail Your Next Coding Interview", authors: [catalogueAuthor], year: 2024 } : null,
+      );
+      const f = gateFixture({ [url]: info(url, shown) }, { find });
+      const result = await runGate({
+        candidates: [candidate({ url, kind: "book", title: "Coding Interview Patterns", pageTitle: shown, author: "Alex Xu", recommendedBy: recs, ...claim })],
+        learner: [],
+        learnerNotes: [],
+        fetcher: f.fetcher,
+        books: f.books,
+        seenUrls: new Set(recs),
+        emit: f.emit,
+        secret: SECRET,
+        now,
+      });
+      return { result, find };
     };
-    const run = async (order: "ai-first" | "other-first") => {
-      const f = gateFixture({ [book]: info(book, "AI Engineering"), [other]: info(other, "Other Book") }, twoBooks);
-      const a = candidate({ url: book, title: "AI Engineering", kind: "book", author: "Chip Huyen", recommendedBy: recs });
-      const b = candidate({ url: other, title: "Other Book", kind: "book", author: "O. Author", recommendedBy: three });
-      const result = await runGate({ candidates: order === "ai-first" ? [a, b] : [b, a], learner: [], learnerNotes: [], fetcher: f.fetcher, books: f.books, seenUrls: new Set(three), emit: f.emit, secret: SECRET });
-      return result.materials.filter((m) => m.backbone).map((m) => m.title);
-    };
-    expect(await run("ai-first")).toEqual(["Other Book"]);
-    expect(await run("other-first")).toEqual(["Other Book"]);
+
+    const agrees = await run({}, "Alex Xu");
+    expect(agrees.find.mock.calls.map(([title, author]) => [title, author])).toEqual([
+      ["Coding Interview Patterns", "Alex Xu"],
+      [shown, "Alex Xu"],
+    ]);
+    expect(agrees.result.dropped).toEqual([]);
+    // The page carries neither title, so the catalogue entry is the link, and the matched work names the material.
+    expect(agrees.result.materials).toHaveLength(1);
+    expect(agrees.result.materials[0]).toMatchObject({
+      title: "Coding Interview Patterns: Nail Your Next Coding Interview",
+      url: "https://openlibrary.org/works/OL9W",
+      catalogued: true,
+      backbone: false,
+      year: 2024,
+    });
+
+    const disagrees = await run({}, "Someone Else");
+    expect(disagrees.result.materials).toHaveLength(0);
+    expect(disagrees.result.dropped.map((d) => d.reason)).toEqual(["no matching book on Open Library"]);
+
+    // With no author to agree, a page title is not enough.
+    const anonymous = await run({ author: null }, "Alex Xu");
+    expect(anonymous.result.materials).toHaveLength(0);
+    expect(anonymous.result.dropped.map((d) => d.reason)).toEqual(["no matching book on Open Library"]);
+
+    // A page title that is the claimed title is not asked for twice.
+    const same = await run({ pageTitle: "Coding Interview Patterns" }, "Alex Xu");
+    expect(same.find).toHaveBeenCalledTimes(1);
+    expect(same.result.materials).toHaveLength(0);
+  });
+
+  it("carries each candidate's foundBy onto its material, and the learner's own are found by the learner", async () => {
+    const essay = "https://blog.example.com/evals";
+    const guide = "https://docs.example.com/guide";
+    const plain = "https://docs.example.com/plain";
+    const mine = "https://learner.example.com/post";
+    const f = gateFixture({
+      [essay]: info(essay, "Evals guide"),
+      [guide]: info(guide, "The guide"),
+      "https://docs.example.com/g": info(guide, "The guide"),
+      [plain]: info(plain, "Plain page"),
+      [mine]: info(mine, "My post"),
+    });
+    const result = await runGate({
+      candidates: [
+        candidate({ url: essay, title: "Evals guide", kind: "essay", foundBy: ["practice"] }),
+        candidate({ url: guide, title: "The guide", foundBy: ["canonical"] }),
+        candidate({ url: "https://docs.example.com/g", title: "The guide", foundBy: ["current", "canonical"] }),
+        candidate({ url: plain, title: "Plain page" }),
+        candidate({ url: mine, title: "My post", foundBy: ["canonical"] }),
+      ],
+      learner: [{ url: mine, type: "link" }],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+    });
+    expect(result.materials.map((m) => [m.title, m.foundBy])).toEqual([
+      ["My post", ["learner"]],
+      ["Evals guide", ["practice"]],
+      // Two candidates for one page: the directions that found either.
+      ["The guide", ["canonical", "current"]],
+      ["Plain page", undefined],
+    ]);
   });
 
   it("keeps at most 25 candidates", () => {
@@ -290,6 +383,8 @@ describe("runGate", () => {
     const b = await runGate({ candidates: cands, learner: [], learnerNotes: [], fetcher: down.fetcher, books: down.books, seenUrls: new Set(recs), emit: down.emit, secret: SECRET });
     expect(b.materials).toHaveLength(1);
     expect(b.materials[0]).toMatchObject({ year: null, backbone: false });
+    // Unmatched, so never one the allocation may make the backbone.
+    expect(b.materials[0].catalogued).toBeUndefined();
   });
 
   it("keeps a book Open Library matches when its own page cannot be used, and links to the catalogue entry", async () => {
@@ -320,7 +415,8 @@ describe("runGate", () => {
       kind: "book",
       type: "link",
       year: 2024,
-      backbone: true,
+      backbone: false,
+      catalogued: true,
       fetchedTitle: "AI Engineering",
       verifiedAt: "2026-09-28T11:00:00.000Z",
       recommendedBy: recs,

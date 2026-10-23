@@ -33,6 +33,19 @@ describe("chapterListSchema", () => {
   });
 });
 
+describe("research's transient fields on a material", () => {
+  const base = { id: "M1", origin: "research", type: "link", kind: "book", url: "https://e.x/", title: "T", author: null, year: null, why: null, backbone: false, verifiedAt: null, fetchedTitle: null, recommendedBy: [], sig: null };
+  it("keeps catalogued and foundBy when given and needs neither", () => {
+    expect(materialSchema.parse({ ...base, catalogued: true, foundBy: ["backbone", "practice"] })).toMatchObject({ catalogued: true, foundBy: ["backbone", "practice"] });
+    const bare = materialSchema.parse(base);
+    expect(bare).not.toHaveProperty("catalogued");
+    expect(bare).not.toHaveProperty("foundBy");
+  });
+  it("rejects a direction research does not have", () => {
+    expect(materialSchema.safeParse({ ...base, foundBy: ["somewhere"] }).success).toBe(false);
+  });
+});
+
 describe("references with chapters", () => {
   it("accepts chapter and activity on both ref shapes and defaults neither", () => {
     expect(materialRefSchema.parse({ id: "a", tier: "must", minutes: 10, note: null, chapter: 3, activity: "review" })).toMatchObject({ chapter: 3, activity: "review" });

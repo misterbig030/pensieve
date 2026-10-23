@@ -166,9 +166,10 @@ describe("arm A through the pipeline", () => {
       "research.done",
     ]);
     expect(fetchPage).toHaveBeenCalledTimes(5);
+    // Research chooses no backbone (the allocation does): the learner's source first, then the arm's order.
     expect(outcome.materials.map((m) => [m.id, m.title, m.origin, m.backbone])).toEqual([
-      ["M1", "Core Textbook", "research", true],
-      ["M2", "My notes page", "learner", false],
+      ["M1", "My notes page", "learner", false],
+      ["M2", "Core Textbook", "research", false],
       ["M3", "Guide A", "research", false],
       ["M4", "Guide B", "research", false],
     ]);

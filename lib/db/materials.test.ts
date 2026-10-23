@@ -47,7 +47,8 @@ const TOC: ChapterList = {
 };
 
 const MATERIALS: Material[] = [
-  material("M1", "AI Engineering", { kind: "book", backbone: true, year: 2024, recommendedBy: ["https://a.example/", "https://b.example/"], minutes: 1320, minutesBasis: "measured", toc: TOC }),
+  // Research's transient fields ride along to the save and are not stored.
+  material("M1", "AI Engineering", { kind: "book", backbone: true, catalogued: true, foundBy: ["backbone"], year: 2024, recommendedBy: ["https://a.example/", "https://b.example/"], minutes: 1320, minutesBasis: "measured", toc: TOC }),
   material("M2", "My notes", { origin: "learner", type: "note", kind: "note", url: "My notes", verifiedAt: null, fetchedTitle: null, sig: null }),
   material("M3", "Evals guide", { minutes: 300, uses: "units 1–4" }),
   material("M4", "Problem list", { practice: { format: "problem-set", items: 20, perItemMinutes: 10, minutes: 200, answers: true } }),
@@ -98,6 +99,7 @@ describe("persistence of materials", () => {
     expect(detail.materials.every((m) => /^[0-9a-f-]{36}$/.test(m.id))).toBe(true);
     expect(detail.materials[0].recommendedBy).toEqual(["https://a.example/", "https://b.example/"]);
     expect(detail.materials[0].verifiedAt).toBe("2026-09-28T10:00:00.000Z");
+    expect(detail.materials.some((m) => "catalogued" in m || "foundBy" in m)).toBe(false);
   });
 
   it("keeps a book's chapter list through save and load, and null for the rest", async () => {

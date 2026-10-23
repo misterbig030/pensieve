@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { detectSourceType, type SourceInput, type SourceType } from "@/lib/schemas/source";
-import { MATERIAL_KINDS, clip, hostOf, shortId, type ChapterList, type Material, type MaterialKind, type MaterialPractice, type MinutesBasis } from "@/lib/schemas/material";
+import { FOUND_BY, MATERIAL_KINDS, clip, hostOf, shortId, type ChapterList, type FoundBy, type Material, type MaterialKind, type MaterialPractice, type MinutesBasis } from "@/lib/schemas/material";
 import { PRACTICE_REGISTRY, type PracticeFormatSpec } from "@/lib/practice";
 import type { Coverage, DroppedMaterial, ResearchEvent } from "./events";
 import { signMaterial, signingSecret } from "./signature";
@@ -26,9 +26,7 @@ export const practiceDraftSchema = z.object({
 });
 export type PracticeDraft = z.infer<typeof practiceDraftSchema>;
 
-/** The directions a source can be found by: a research worker's, the learner's own, or arm A's single loop. */
-export const FOUND_BY = ["backbone", "canonical", "current", "practice", "learner", "research"] as const;
-export type FoundBy = (typeof FOUND_BY)[number];
+export { FOUND_BY, type FoundBy };
 
 /** The most sources one candidates call may list; more are cut after the call, in the order the model gave them. */
 export const MAX_CANDIDATES = 25;
@@ -462,10 +460,19 @@ export interface GateResult {
   proposed: number;
 }
 
-interface Accepted {
-  material: Omit<Material, "id">;
-  /** Open Library matched this book, so it may be the backbone. */
-  bookMatched: boolean;
+/** A kept material before ids are given. */
+type Accepted = Omit<Material, "id">;
+
+/** Directions in `FOUND_BY` order, once each; undefined when there are none. */
+function foundByOf(...lists: (readonly FoundBy[] | undefined)[]): FoundBy[] | undefined {
+  const all = new Set(lists.flatMap((l) => l ?? []));
+  const out = FOUND_BY.filter((d) => all.has(d));
+  return out.length > 0 ? out : undefined;
+}
+
+/** For a match found by a book's page title: both sides name an author, and they share one. */
+function authorsAgree(claimed: string | null | undefined, authors: string[]): boolean {
+  return !!claimed?.trim() && authors.length > 0 && authorsOverlap(claimed, authors);
 }
 
 /** Runs `fn` over `items` at most `limit` at a time, results in input order. */
@@ -561,26 +568,24 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     const kind = note?.kind ?? learnerKind(type, source.url);
     const practice = note?.practice ? normalizePractice(note.practice) : null;
     const entry: Accepted = {
-      material: {
-        origin: "learner",
-        type,
-        kind,
-        url,
-        title: clip(learnerTitle(source, fetchedTitle ?? note?.title ?? null), 300)!,
-        author: clip(note?.author, 200),
-        year: validYear(note?.year),
-        why: clip(note?.why, 400),
-        backbone: false,
-        verifiedAt,
-        fetchedTitle,
-        recommendedBy: [],
-        sig: verifiedAt ? signMaterial({ url, fetchedTitle, verifiedAt }, secret) : null,
-        ...sizeFields({ kind, uses: null, claimedMinutes: note?.minutes, words: fetched?.page.words, durationMinutes: fetched?.page.durationMinutes }),
-        uses: null,
-        toc: null,
-        ...(practice ? { practice } : {}),
-      },
-      bookMatched: false,
+      origin: "learner",
+      type,
+      kind,
+      url,
+      title: clip(learnerTitle(source, fetchedTitle ?? note?.title ?? null), 300)!,
+      author: clip(note?.author, 200),
+      year: validYear(note?.year),
+      why: clip(note?.why, 400),
+      backbone: false,
+      verifiedAt,
+      fetchedTitle,
+      recommendedBy: [],
+      sig: verifiedAt ? signMaterial({ url, fetchedTitle, verifiedAt }, secret) : null,
+      ...sizeFields({ kind, uses: null, claimedMinutes: note?.minutes, words: fetched?.page.words, durationMinutes: fetched?.page.durationMinutes }),
+      uses: null,
+      toc: null,
+      ...(practice ? { practice } : {}),
+      foundBy: ["learner"],
     };
     learner.push(entry);
     learnerByUrl.set(key, entry);
@@ -609,12 +614,22 @@ export async function runGate(input: GateInput): Promise<GateResult> {
   const bookChecks = await mapLimit(valid, 4, async (c) => {
     if (c.kind !== "book") return null;
     try {
-      const match = await input.books.find(c.title, c.author ?? null, input.signal);
+      let match = await input.books.find(c.title, c.author ?? null, input.signal);
+      // A book named only by its web page's title is found by that title, but only when the authors agree too.
+      let byPageTitle = false;
+      const shown = c.pageTitle?.trim();
+      if (!match && shown && shown !== c.title.trim()) {
+        const hit = await input.books.find(shown, c.author ?? null, input.signal);
+        if (hit && authorsAgree(c.author, hit.authors)) {
+          match = hit;
+          byPageTitle = true;
+        }
+      }
       // Chapters are a bonus on top of the match: a failed lookup leaves the book verified without them.
       const toc = match && input.books.chapters ? await input.books.chapters(match, input.signal).catch(() => null) : null;
-      return { match, unavailable: false, toc };
+      return { match, byPageTitle, unavailable: false, toc };
     } catch {
-      return { match: null, unavailable: true, toc: null };
+      return { match: null, byPageTitle: false, unavailable: true, toc: null };
     }
   });
 
@@ -626,17 +641,20 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     let bookMatched = false;
     let bookPages: number | null = null;
     let toc: ChapterList | null = null;
+    // The claimed title, or the catalogue's when only the page's title found the book.
+    let title = c.title;
     if (c.kind === "book") {
       const check = bookChecks[i];
       if (check?.match) {
         bookMatched = true;
+        if (check.byPageTitle) title = check.match.title;
         year = check.match.year ?? year;
         bookPages = check.match.pages ?? null;
         toc = check.toc;
         // The book is real. If its own page cannot be used, its Open Library entry is the link.
         if (!page.ok) page = catalogueEntry(check.match, c.author, now) ?? page;
       } else if (check?.unavailable) {
-        // With a page that passes, keep the book but unmatched: no Open Library year, and never the backbone.
+        // With a page that passes, keep the book but not catalogued: no Open Library year, and never the backbone.
         year = null;
         if (!page.ok) page = { ok: false, reason: `${page.reason}; Open Library was unavailable` };
       } else {
@@ -667,59 +685,54 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     const practice = c.practice ? normalizePractice(c.practice) : null;
 
     // A candidate that is one of the learner's own sources enriches it instead of duplicating it.
+    // The learner's own stays found by the learner.
     const mine = learnerByUrl.get(finalUrl) ?? learnerByUrl.get(canonicalUrl(c.url) ?? c.url);
     if (mine) {
-      Object.assign(mine.material, { ...fields, why: mine.material.why ?? fields.why, ...(mine.material.minutes ? {} : size) });
-      if (toc) mine.material.toc = withChapterSizes(toc, mine.material.minutes ?? null);
-      mine.bookMatched = bookMatched;
-      if (practice && !mine.material.practice) mine.material.practice = practice;
+      Object.assign(mine, { ...fields, why: mine.why ?? fields.why, ...(mine.minutes ? {} : size) });
+      if (toc) mine.toc = withChapterSizes(toc, mine.minutes ?? null);
+      if (bookMatched) mine.catalogued = true;
+      if (practice && !mine.practice) mine.practice = practice;
       return;
     }
     const dup = byFinalUrl.get(finalUrl);
     if (dup) {
-      dup.material.recommendedBy = [...new Set([...dup.material.recommendedBy, ...recommendedBy])].slice(0, 10);
+      dup.recommendedBy = [...new Set([...dup.recommendedBy, ...recommendedBy])].slice(0, 10);
       // Reading fields the kept material lacks come from this candidate, whichever was listed first; set ones stay.
       // A part qualifies the minutes it came with: it moves only with minutes taken, or from a candidate with none.
-      const takesMinutes = !dup.material.minutes;
-      if (takesMinutes) Object.assign(dup.material, { minutes: size.minutes, minutesBasis: size.minutesBasis });
-      if (takesMinutes || size.minutes === null) dup.material.uses ??= size.uses;
-      if (toc && !dup.material.toc) dup.material.toc = withChapterSizes(toc, dup.material.minutes ?? null);
-      if (practice && !dup.material.practice) dup.material.practice = practice;
+      const takesMinutes = !dup.minutes;
+      if (takesMinutes) Object.assign(dup, { minutes: size.minutes, minutesBasis: size.minutesBasis });
+      if (takesMinutes || size.minutes === null) dup.uses ??= size.uses;
+      if (toc && !dup.toc) dup.toc = withChapterSizes(toc, dup.minutes ?? null);
+      if (practice && !dup.practice) dup.practice = practice;
+      if (bookMatched) dup.catalogued = true;
+      const foundBy = foundByOf(dup.foundBy, c.foundBy);
+      if (foundBy) dup.foundBy = foundBy;
       return;
     }
+    const foundBy = foundByOf(c.foundBy);
     const entry: Accepted = {
-      material: {
-        origin: "research",
-        type: VIDEO_HOSTS.test(hostOf(finalUrl) ?? "") ? "youtube" : "link",
-        ...fields,
-        url: finalUrl,
-        title: clip(c.title, 300)!,
-        backbone: false,
-        verifiedAt,
-        fetchedTitle,
-        sig: signMaterial({ url: finalUrl, fetchedTitle, verifiedAt }, secret),
-        ...size,
-        toc: toc ? withChapterSizes(toc, size.minutes) : null,
-        ...(practice ? { practice } : {}),
-      },
-      bookMatched,
+      origin: "research",
+      type: VIDEO_HOSTS.test(hostOf(finalUrl) ?? "") ? "youtube" : "link",
+      ...fields,
+      url: finalUrl,
+      title: clip(title, 300)!,
+      backbone: false,
+      verifiedAt,
+      fetchedTitle,
+      sig: signMaterial({ url: finalUrl, fetchedTitle, verifiedAt }, secret),
+      ...size,
+      toc: toc ? withChapterSizes(toc, size.minutes) : null,
+      ...(practice ? { practice } : {}),
+      ...(bookMatched ? { catalogued: true } : {}),
+      ...(foundBy ? { foundBy } : {}),
     };
     accepted.push(entry);
     byFinalUrl.set(finalUrl, entry);
   });
 
-  // 3. Backbone: the matched book that pages on the most other sites recommend, at least two.
-  const all = [...learner, ...accepted];
-  const qualifying = all
-    .filter((a) => a.material.kind === "book" && a.bookMatched)
-    .map((a) => ({ a, domains: recommendingDomains(a.material.url, a.material.recommendedBy).length }))
-    .filter((q) => q.domains >= BACKBONE_MIN_DOMAINS);
-  const backbone = [...qualifying].sort((x, y) => y.domains - x.domains)[0]?.a ?? null;
-  if (backbone) backbone.material.backbone = true;
-
-  // 4. Order: backbone, then the learner's sources, then the rest as the arm ranked them. Ids follow that order.
-  const ordered = [...(backbone ? [backbone] : []), ...learner.filter((a) => a !== backbone), ...accepted.filter((a) => a !== backbone)];
-  const materials: Material[] = ordered.map((a, i) => ({ id: shortId(i), ...a.material }));
+  // 3. Order: the learner's sources, then the rest as the arm ranked them. Ids follow that order. The backbone is the
+  // allocation's choice, among catalogued books and the learner's own.
+  const materials: Material[] = [...learner, ...accepted].map((m, i) => ({ id: shortId(i), ...m }));
   for (const m of materials) {
     if (m.origin === "research") {
       input.emit({ type: "research.verified", id: m.id, title: m.title, kind: m.kind, backbone: m.backbone, minutes: m.minutes ?? null, basis: m.minutesBasis ?? null });

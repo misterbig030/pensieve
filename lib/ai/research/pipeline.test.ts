@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { APICallError } from "@ai-sdk/provider";
-import type { ChapterList } from "@/lib/schemas/material";
+import type { ChapterList, Material } from "@/lib/schemas/material";
 import { providerError } from "../providerError";
 import type { ResearchArm } from "./agent";
 import type { ResearchEvent } from "./events";
@@ -60,19 +60,23 @@ const TOC: ChapterList = {
   ],
 };
 
+const core = (materials: Material[]) => materials.find((m) => m.title === "Core Textbook")!;
+
 describe("the chapters stage", () => {
-  it("runs the finder for a backbone without chapters and merges the list, counts and cost", async () => {
+  it("runs the finder for a catalogued book without chapters that two sites recommend, and merges the list, counts and cost", async () => {
     const finder = { find: vi.fn(async () => ({ toc: TOC, counts: { searches: 1, fetches: 2 }, costUsd: 0.02 })) };
     const { events, outcome } = await collect(researchMaterials({ brief, arm, fetcher, books, chapters: finder }));
     expect(finder.find).toHaveBeenCalledTimes(1);
-    expect(outcome.materials.find((m) => m.backbone)!.toc).toEqual(TOC);
+    // Research leaves the backbone to the allocation; the finder looked because the book could be it.
+    expect(outcome.materials.some((m) => m.backbone)).toBe(false);
+    expect(core(outcome.materials).toc).toEqual(TOC);
     expect(outcome.costUsd).toBeCloseTo(0.02);
     const done = events.find((e) => e.type === "research.done") as Extract<ResearchEvent, { type: "research.done" }>;
     expect(done.counts).toEqual({ searches: 1, fetches: 2 });
-    expect(done.materials.find((m) => m.backbone)!.toc).toEqual(TOC);
+    expect(core(done.materials).toc).toEqual(TOC);
     expect(events.find((e) => e.type === "research.chapters")).toMatchObject({ chapters: 3, source: "page", url: TOC.url });
   });
-  it("skips the finder when the catalogue already gave the backbone its chapters", async () => {
+  it("skips the finder when the catalogue already gave the book its chapters", async () => {
     const finder = { find: vi.fn() };
     const catalogue: BookLookup = {
       ...books,
@@ -97,7 +101,7 @@ describe("the chapters stage", () => {
       }),
     };
     const { outcome } = await collect(researchMaterials({ brief, arm, fetcher, books, chapters: boom }));
-    expect(outcome.materials.find((m) => m.backbone)!.toc ?? null).toBeNull();
+    expect(core(outcome.materials).toc ?? null).toBeNull();
     const refusal = {
       find: vi.fn(async () => {
         throw new APICallError({ message: "credit balance is too low", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 400, responseBody: "Your credit balance is too low", isRetryable: false });
@@ -106,6 +110,59 @@ describe("the chapters stage", () => {
     await expect(collect(researchMaterials({ brief, arm, fetcher, books, chapters: refusal, log: { keyOwner: "user" } }))).rejects.toSatisfy(
       (e: unknown) => providerError(e)?.statusCode === 400,
     );
+  });
+  it("looks for chapters for up to two likely backbones, most recommending sites first, in parallel", async () => {
+    const site = (n: number) => `https://reviews${n}.org/books`;
+    const seen = [1, 2, 3, 4].map(site);
+    const url = (slug: string) => `https://books.example.com/${slug}`;
+    const listed = [
+      { slug: "one", title: "One Site Book", recs: [site(1)] },
+      { slug: "three", title: "Three Sites Book", recs: [site(1), site(2), site(3)] },
+      { slug: "two", title: "Two Sites Book", recs: [site(1), site(2)] },
+      // Recommended most, but Open Library was down for it: never a backbone, so not looked up.
+      { slug: "down", title: "Unmatched Book", recs: seen },
+    ];
+    const manyArm: ResearchArm = async () => ({
+      candidates: listed.map((b) => ({ url: url(b.slug), title: b.title, kind: "book" as const, author: "A. Author", why: "w", recommendedBy: b.recs })),
+      learnerNotes: [],
+      seenUrls: new Set(seen),
+      counts: { steps: 1, searches: 0, fetches: 0 },
+      searchesOk: 1,
+      stoppedBy: "model",
+      costUsd: 0,
+      coverage: null,
+    });
+    const lookup: BookLookup = {
+      find: async (title) => {
+        if (title === "Unmatched Book") throw new Error("Open Library down");
+        return { key: "/works/OL1W", title, authors: ["A. Author"], year: 2023, pages: 400 };
+      },
+    };
+    const { fetcher: many } = fetcherFor(Object.fromEntries(listed.map((b) => [url(b.slug), page(url(b.slug), b.title)])));
+    let inFlight = 0;
+    let most = 0;
+    const finder = {
+      find: vi.fn(async (book: Material) => {
+        inFlight += 1;
+        most = Math.max(most, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight -= 1;
+        return { toc: book.title === "Three Sites Book" ? TOC : null, counts: { searches: 1, fetches: 1 }, costUsd: 0.01 };
+      }),
+    };
+    const { events, outcome } = await collect(researchMaterials({ brief, arm: manyArm, fetcher: many, books: lookup, chapters: finder }));
+    expect(finder.find.mock.calls.map(([book]) => book.title)).toEqual(["Three Sites Book", "Two Sites Book"]);
+    expect(most).toBe(2);
+    const chapters = events.filter((e) => e.type === "research.chapters");
+    expect(chapters.map((e) => (e.type === "research.chapters" ? [e.title, e.chapters, e.source] : null)).sort()).toEqual([
+      ["Three Sites Book", 3, "page"],
+      ["Two Sites Book", 0, null],
+    ]);
+    expect(outcome.materials.find((m) => m.title === "Three Sites Book")!.toc).toEqual(TOC);
+    expect(outcome.materials.some((m) => m.backbone)).toBe(false);
+    expect(outcome.costUsd).toBeCloseTo(0.02);
+    const done = events.find((e) => e.type === "research.done") as Extract<ResearchEvent, { type: "research.done" }>;
+    expect(done.counts).toEqual({ searches: 2, fetches: 2 });
   });
   it("defaultChapterFinder is null without a search key", () => {
     expect(defaultChapterFinder({})).toBeNull();

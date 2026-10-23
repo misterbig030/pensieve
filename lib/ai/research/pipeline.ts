@@ -8,8 +8,26 @@ import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type Rese
 import { createChapterFinder, type ChapterFinder, type ChapterFinderResult } from "./chapterFinder";
 import { isPracticeOpen, type Coverage, type DroppedMaterial, type ResearchEvent, type ResearchNotice } from "./events";
 import { SourceFetcher, capsFor, searchProviderFromEnv, type ResearchCaps } from "./tools";
-import { createOpenLibraryLookup, runGate, sizedMinutes, type BookLookup } from "./verify";
+import { BACKBONE_MIN_DOMAINS, createOpenLibraryLookup, recommendingDomains, runGate, sizedMinutes, type BookLookup } from "./verify";
 import { createWorkersArm } from "./workers";
+
+/** The most books the web chapter finder runs for before the allocation. */
+export const MAX_CHAPTER_SEARCHES = 2;
+
+/**
+ * The books the allocation could reasonably make the backbone and that have no chapter list yet: catalogued, and
+ * recommended by at least `BACKBONE_MIN_DOMAINS` other sites. At most `MAX_CHAPTER_SEARCHES`, most recommended first;
+ * a tie keeps the list's order.
+ */
+export function likelyBackbones(materials: Material[]): Material[] {
+  return materials
+    .filter((m) => m.kind === "book" && m.catalogued && !m.toc)
+    .map((m) => ({ m, domains: recommendingDomains(m.url, m.recommendedBy).length }))
+    .filter((x) => x.domains >= BACKBONE_MIN_DOMAINS)
+    .sort((a, b) => b.domains - a.domains)
+    .slice(0, MAX_CHAPTER_SEARCHES)
+    .map((x) => x.m);
+}
 
 /** Fewer researched materials than this and the plan carries the "thin" notice, whatever they cover. */
 export const THIN_BELOW = 3;
@@ -92,7 +110,7 @@ export interface ResearchMaterialsInput {
   signal?: AbortSignal;
   log?: GenerationLogContext;
   caps?: ResearchCaps;
-  /** Finds the backbone's chapters on a web page when the catalogue had none. Omitted, the stage is skipped. */
+  /** Finds a likely backbone's chapters on a web page when the catalogue had none. Omitted, the stage is skipped. */
   chapters?: ChapterFinder;
 }
 
@@ -158,29 +176,39 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
     }),
   );
 
-  // The backbone's chapters: the gate took them from the catalogue when it could; otherwise one search and a few
-  // reads look for a page that lists them. Only the backbone, because only its chapters are reserved across units.
+  // The likely backbones' chapters: the gate took them from the catalogue when it could; otherwise one search and a
+  // few reads look for a page that lists them, so the allocation can still cut by chapter whichever it chooses.
   let materials = gate.materials;
   let costUsd = arm?.costUsd ?? 0;
   const counts = { searches: arm?.counts.searches ?? 0, fetches: arm?.counts.fetches ?? 0 };
-  const backbone = materials.find((m) => m.backbone);
-  if (backbone && !backbone.toc && input.chapters) {
-    const finder = input.chapters;
-    let found: ChapterFinderResult | null = null;
-    try {
-      found = yield* streamWhile<ResearchEvent, ChapterFinderResult>((emit) => finder.find(backbone, { fetcher, emit, signal: input.signal, log: input.log }));
-    } catch (error) {
-      if (input.log?.keyOwner === "user" && providerError(error)) throw error;
-      console.error("[research] chapter finder failed", error);
-    }
-    if (found) {
-      counts.searches += found.counts.searches;
-      counts.fetches += found.counts.fetches;
-      costUsd += found.costUsd;
-    }
-    const toc = found?.toc ?? null;
-    if (toc) materials = materials.map((m) => (m === backbone ? { ...m, toc } : m));
-    yield { type: "research.chapters", id: backbone.id, title: backbone.title, chapters: toc?.chapters.length ?? 0, source: toc?.source ?? null, ...(toc ? { url: toc.url } : {}) };
+  const finder = input.chapters;
+  const likely = finder ? likelyBackbones(materials) : [];
+  if (finder && likely.length > 0) {
+    const found = yield* streamWhile<ResearchEvent, (ChapterFinderResult | null)[]>((emit) =>
+      Promise.all(
+        likely.map(async (book) => {
+          let result: ChapterFinderResult | null = null;
+          try {
+            result = await finder.find(book, { fetcher, emit, signal: input.signal, log: input.log });
+          } catch (error) {
+            if (input.log?.keyOwner === "user" && providerError(error)) throw error;
+            console.error(`[research] chapter finder failed for "${book.title}"`, error);
+          }
+          const toc = result?.toc ?? null;
+          emit({ type: "research.chapters", id: book.id, title: book.title, chapters: toc?.chapters.length ?? 0, source: toc?.source ?? null, ...(toc ? { url: toc.url } : {}) });
+          return result;
+        }),
+      ),
+    );
+    const tocs = new Map<string, NonNullable<ChapterFinderResult["toc"]>>();
+    found.forEach((result, i) => {
+      if (!result) return;
+      counts.searches += result.counts.searches;
+      counts.fetches += result.counts.fetches;
+      costUsd += result.costUsd;
+      if (result.toc) tocs.set(likely[i].id, result.toc);
+    });
+    if (tocs.size > 0) materials = materials.map((m) => (tocs.has(m.id) ? { ...m, toc: tocs.get(m.id)! } : m));
   }
 
   const unavailable = !arm || arm.stoppedBy === "cancelled" || arm.stoppedBy === "clock-idle" || (arm.stoppedBy === "search-error" && arm.searchesOk === 0);

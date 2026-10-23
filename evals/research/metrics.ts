@@ -174,6 +174,11 @@ export function runMetrics(input: {
   split?: PlanSplit | null;
   /** The drafted plan, for its practice rows. */
   plan?: PlanNode | null;
+  /**
+   * The materials as the allocation left them (its `allocated` event), where the backbone is chosen; research alone
+   * chooses none. Null or absent when the draft ended before the allocation: no backbone, so a miss.
+   */
+  allocated?: Material[] | null;
 }): RunMetrics {
   const { outcome, record } = input;
   const picks = input.split?.formats ?? [];
@@ -184,7 +189,7 @@ export function runMetrics(input: {
     verifiedRate: outcome.proposed > 0 ? outcome.verified / outcome.proposed : null,
     proposed: outcome.proposed,
     verified: outcome.verified,
-    backboneHit: backboneHit(outcome.materials, record.labels?.expectedBackbone),
+    backboneHit: backboneHit(input.allocated ?? [], record.labels?.expectedBackbone),
     mustIncludeRecall: mustIncludeRecall(outcome.materials, record.labels?.mustInclude),
     recency: recencyShare(outcome.materials),
     notice: outcome.notice ?? null,
@@ -197,7 +202,7 @@ export function runMetrics(input: {
     researchMs: input.researchMs,
     toolCalls: outcome.arm?.counts ?? { searches: 0, fetches: 0, steps: 0 },
     stoppedBy: outcome.arm?.stoppedBy ?? null,
-    chaptersSource: chaptersSource(outcome.materials),
+    chaptersSource: chaptersSource(input.allocated ?? []),
     workers: outcome.arm?.workers ?? null,
     duplicateShare: outcome.arm?.duplicateShare ?? null,
     picks: picks.map((p) => p.format),

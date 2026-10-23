@@ -305,9 +305,10 @@ describe("arm W through the pipeline", () => {
     const prompt = candidatePrompt(calls);
     for (const heading of ["The learner's sources", "Backbone research:", "Canonical materials:", "Recent material:", "grouped by the research direction"]) expect(prompt).toContain(heading);
     expect(prompt.indexOf("Backbone research:")).toBeLessThan(prompt.indexOf("Canonical materials:"));
+    // Research chooses no backbone (the allocation does): the learner's source first, then the arm's order.
     expect(outcome.materials.map((m) => [m.title, m.origin, m.backbone])).toEqual([
-      ["Core Textbook", "research", true],
       ["My notes page", "learner", false],
+      ["Core Textbook", "research", false],
       ["Guide A", "research", false],
       ["Guide B", "research", false],
     ]);

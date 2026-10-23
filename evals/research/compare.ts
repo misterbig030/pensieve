@@ -115,6 +115,7 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
     extraCostUsd: arm === "C" ? (outcome.arm?.counts.searches ?? 0) * WEB_SEARCH_USD : 0,
     split,
     plan,
+    allocated: allocation?.materials ?? null,
   });
   return { metrics, materials: outcome.materials, dropped: outcome.dropped, plan, allocation, split, coverage: outcome.coverage, facts: calls.flatMap((c) => c.facts.map((f) => `${c.label}: ${f}`)) };
 }

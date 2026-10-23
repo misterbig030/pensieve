@@ -36,7 +36,7 @@ export type ResearchEvent =
   | { type: "research.fetch"; url: string; ok: boolean; reason?: string; worker?: WorkerDirection }
   | { type: "research.verified"; id: string; title: string; kind: MaterialKind; backbone: boolean; minutes?: number | null; basis?: MinutesBasis | null }
   | { type: "research.dropped"; title: string; url?: string; reason: string }
-  /** A book's chapter list was found (or, for the backbone, not found: `chapters: 0, source: null`). */
+  /** A book's chapter list was found (or, for a likely backbone the web finder looked for, not found: `chapters: 0, source: null`). */
   | { type: "research.chapters"; id: string; title: string; chapters: number; source: "catalogue" | "page" | null; url?: string }
   | {
       type: "research.done";

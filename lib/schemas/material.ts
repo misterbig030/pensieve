@@ -14,6 +14,10 @@ export type MaterialTier = (typeof MATERIAL_TIERS)[number];
 export const REF_ACTIVITIES = ["read", "review"] as const;
 export type RefActivity = (typeof REF_ACTIVITIES)[number];
 
+/** The directions a source can be found by: a research worker's, the learner's own, or arm A's single loop. */
+export const FOUND_BY = ["backbone", "canonical", "current", "practice", "learner", "research"] as const;
+export type FoundBy = (typeof FOUND_BY)[number];
+
 /** Where a material's size came from: counted by code (pages, runtime, page length) or estimated by the model. */
 export const MINUTES_BASES = ["measured", "estimated"] as const;
 export type MinutesBasis = (typeof MINUTES_BASES)[number];
@@ -120,6 +124,12 @@ export const materialSchema = z.object({
   toc: chapterListSchema.nullable().optional(),
   /** Set when the source also serves as practice. Absent on materials saved before practice formats existed. */
   practice: materialPracticeSchema.nullable().optional(),
+  /**
+   * Research's notes for the allocation while drafting, never stored (no column): `catalogued` when Open Library
+   * matched the book, so it may be the backbone; `foundBy`, the directions whose notes carried it.
+   */
+  catalogued: z.boolean().optional(),
+  foundBy: z.array(z.enum(FOUND_BY)).max(FOUND_BY.length).optional(),
 });
 export type Material = z.infer<typeof materialSchema>;
 /** Up to 50 of the learner's own plus what research adds (at most 25 are asked for). */

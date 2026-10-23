@@ -10,7 +10,7 @@ import type { SearchProvider, SourceFetcher } from "./tools";
 import { canonicalUrl, mainTitle } from "./verify";
 
 /**
- * The page half of a book's chapters: when the catalogue has no table of contents for the backbone, one search for
+ * The page half of a book's chapters: when the catalogue has no table of contents for a likely backbone, one search for
  * it, up to three pages read through the shared fetcher, and one structured model call that lists the chapters and
  * names the page it read them from. A list the model cannot source to a page that was read is thrown away.
  */
