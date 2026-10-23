@@ -9,10 +9,12 @@ import {
   ResearchLoopError,
   briefLines,
   practiceLines,
+  readsOf,
   runCandidateStep,
   runResearchLoop,
   type ArmInput,
   type ArmResult,
+  type FoundSource,
   type LoopResult,
   type ResearchArm,
   type StopReason,
@@ -334,16 +336,18 @@ export function createWorkersArm(options: WorkersArmOptions): ResearchArm {
     };
     if (stoppedBy === "cancelled") return { ...base, candidates: [], learnerNotes: [], stoppedBy, costUsd: loopCost };
 
+    const found: FoundSource[] = [{ direction: "learner", notes: learner }, ...runs.map((r) => ({ direction: r.plan.direction, notes: r.notes }))];
     const { list, costUsd } = await runCandidateStep({
       model,
       brief,
       notes: merged.text,
       grouped: true,
+      found,
       signal,
       log,
       facts: [`stopped by ${stoppedBy}`, ...workers.map((w) => `${w.direction}: ${w.steps} steps, ${w.stoppedBy}`)],
       effort: options.effort,
     });
-    return { ...base, candidates: list.candidates, learnerNotes: list.learner, stoppedBy, costUsd: loopCost + costUsd, coverage: normalizeCoverage(list.coverage) };
+    return { ...base, candidates: list.candidates, learnerNotes: list.learner, stoppedBy, costUsd: loopCost + costUsd, reads: readsOf(found), coverage: normalizeCoverage(list.coverage) };
   };
 }

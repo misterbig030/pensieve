@@ -6,7 +6,10 @@ import { signMaterial, verifyMaterialSig } from "./signature";
 import { SourceFetcher, type PageFetcher } from "./tools";
 import {
   BookLookupUnavailable,
+  MAX_CANDIDATES,
+  candidateListSchema,
   canonicalUrl,
+  capCandidates,
   createOpenLibraryLookup,
   kindProblem,
   mainTitle,
@@ -158,7 +161,7 @@ describe("signature", () => {
 });
 
 function candidate(overrides: Partial<Candidate> & { url: string; title: string }): Candidate {
-  return { kind: "docs", backbone: false, why: "why", recommendedBy: [], ...overrides };
+  return { kind: "docs", why: "why", recommendedBy: [], ...overrides };
 }
 
 function gateFixture(pages: Record<string, PageInfo | Error>, books: BookLookup = { find: async () => null }) {
@@ -191,7 +194,7 @@ describe("runGate", () => {
     );
     const result = await runGate({
       candidates: [
-        candidate({ url: book, title: "AI Engineering", kind: "book", backbone: true, author: "Chip Huyen", recommendedBy: [...recs, "https://never-seen.example/"] }),
+        candidate({ url: book, title: "AI Engineering", kind: "book", author: "Chip Huyen", recommendedBy: [...recs, "https://never-seen.example/"] }),
         candidate({ url: "https://docs.example.com/evals", title: "Evals guide" }),
         candidate({ url: "https://broken.example.com/", title: "Broken" }),
         candidate({ url: "https://wrong.example.com/", title: "Prompt engineering guide" }),
@@ -226,7 +229,7 @@ describe("runGate", () => {
   it("gives no backbone when the book is recommended by only one other site", async () => {
     const f = gateFixture({ [book]: info(book, "AI Engineering") }, bookLookup);
     const result = await runGate({
-      candidates: [candidate({ url: book, title: "AI Engineering", kind: "book", backbone: true, recommendedBy: [recs[0]] })],
+      candidates: [candidate({ url: book, title: "AI Engineering", kind: "book", recommendedBy: [recs[0]] })],
       learner: [],
       learnerNotes: [],
       fetcher: f.fetcher,
@@ -236,6 +239,43 @@ describe("runGate", () => {
       secret: SECRET,
     });
     expect(result.materials[0].backbone).toBe(false);
+  });
+
+  it("no longer reads a backbone from the candidates: the book with more recommending domains is the backbone, whatever the order", async () => {
+    const other = "https://www.oreilly.com/library/view/other-book/9781098000000";
+    const three = [...recs, "https://www.reddit.com/r/books/comments/1"];
+    const twoBooks: BookLookup = {
+      find: async (title) => (title === "AI Engineering" ? { key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 } : { key: "/works/OL2W", title: "Other Book", authors: ["O. Author"], year: 2020 }),
+    };
+    const run = async (order: "ai-first" | "other-first") => {
+      const f = gateFixture({ [book]: info(book, "AI Engineering"), [other]: info(other, "Other Book") }, twoBooks);
+      const a = candidate({ url: book, title: "AI Engineering", kind: "book", author: "Chip Huyen", recommendedBy: recs });
+      const b = candidate({ url: other, title: "Other Book", kind: "book", author: "O. Author", recommendedBy: three });
+      const result = await runGate({ candidates: order === "ai-first" ? [a, b] : [b, a], learner: [], learnerNotes: [], fetcher: f.fetcher, books: f.books, seenUrls: new Set(three), emit: f.emit, secret: SECRET });
+      return result.materials.filter((m) => m.backbone).map((m) => m.title);
+    };
+    expect(await run("ai-first")).toEqual(["Other Book"]);
+    expect(await run("other-first")).toEqual(["Other Book"]);
+  });
+
+  it("keeps at most 25 candidates", () => {
+    const many = Array.from({ length: 30 }, (_, i) => candidate({ url: `https://docs.example.com/p${i}`, title: `P${i}` }));
+    expect(MAX_CANDIDATES).toBe(25);
+    expect(capCandidates(many).map((c) => c.title)).toEqual(many.slice(0, 25).map((c) => c.title));
+    expect(capCandidates(many.slice(0, 3))).toHaveLength(3);
+  });
+
+  it("takes a book's published title, its page's title and who found it, and no backbone flag", () => {
+    const parsed = candidateListSchema.parse({
+      learner: [],
+      candidates: [
+        { url: book, title: "System Design Interview – An Insider's Guide", pageTitle: "System Design Interview | ByteByteGo", kind: "book", author: "Alex Xu", why: "w", recommendedBy: [], foundBy: ["backbone", "practice"], backbone: true },
+        { url: "https://docs.example.com/a", title: "Guide", pageTitle: null, kind: "docs", why: "w", recommendedBy: [] },
+      ],
+    });
+    expect(parsed.candidates[0]).toMatchObject({ pageTitle: "System Design Interview | ByteByteGo", foundBy: ["backbone", "practice"] });
+    expect(parsed.candidates[0]).not.toHaveProperty("backbone");
+    expect(parsed.candidates[1].pageTitle).toBeNull();
   });
 
   it("drops a book with no Open Library match, and keeps it unmatched when Open Library is down", async () => {
@@ -257,7 +297,7 @@ describe("runGate", () => {
     const f = gateFixture({ [book]: new Error("403"), [author]: info(author, "Books") }, bookLookup);
     const result = await runGate({
       candidates: [
-        candidate({ url: book, title: "AI Engineering: Building Applications with Foundation Models", kind: "book", backbone: true, author: "Chip Huyen", recommendedBy: recs }),
+        candidate({ url: book, title: "AI Engineering: Building Applications with Foundation Models", kind: "book", author: "Chip Huyen", recommendedBy: recs }),
         candidate({ url: author, title: "AI Engineering", kind: "book", author: "Chip Huyen", recommendedBy: [recs[0]] }),
         candidate({ url: "none", title: "AI Engineering", kind: "book", author: "Chip Huyen" }),
       ],

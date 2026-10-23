@@ -26,13 +26,21 @@ export const practiceDraftSchema = z.object({
 });
 export type PracticeDraft = z.infer<typeof practiceDraftSchema>;
 
+/** The directions a source can be found by: a research worker's, the learner's own, or arm A's single loop. */
+export const FOUND_BY = ["backbone", "canonical", "current", "practice", "learner", "research"] as const;
+export type FoundBy = (typeof FOUND_BY)[number];
+
+/** The most sources one candidates call may list; more are cut after the call, in the order the model gave them. */
+export const MAX_CANDIDATES = 25;
+
 export const candidateSchema = z.object({
   url: z.string().describe("The page for this material: its own page, not a page that mentions it"),
-  title: z.string().describe("The material's title exactly as its own page gives it; for a book, its title as published"),
+  title: z.string().describe("For a book, its title as published, with its author in the author field; otherwise the page's own title, exactly as the page gives it"),
+  pageTitle: z.string().nullable().optional().describe("For a book, the title its web page shows, when the notes give one; null otherwise"),
   kind: z.enum(MATERIAL_KINDS),
   author: z.string().nullable().optional(),
   year: z.number().nullable().optional(),
-  backbone: z.boolean().describe("True only for the one textbook the plan should follow in order"),
+  foundBy: z.array(z.enum(FOUND_BY)).optional().describe("The research directions whose notes mention it; left out when the notes are not grouped by direction"),
   why: z.string().describe("One line: why this material, what it covers that the others don't"),
   recommendedBy: z.array(z.string()).describe("URLs of pages you saw that recommend it"),
   minutes: z.number().nullable().optional().describe("Minutes to read or watch the part of it this plan would use; null when you cannot tell"),
@@ -56,7 +64,7 @@ export type LearnerNote = z.infer<typeof learnerNoteSchema>;
 
 export const candidateListSchema = z.object({
   learner: z.array(learnerNoteSchema).describe("One entry per source the learner provided, in their order"),
-  candidates: z.array(candidateSchema).describe("The researched materials, the backbone first"),
+  candidates: z.array(candidateSchema).describe(`Every credible source the notes found, once each; at most ${MAX_CANDIDATES}, the best-evidenced if there are more`),
   coverage: z
     .object({
       covered: z.array(z.string()).describe("The topic's main areas that the list covers, one to three words each"),
@@ -65,6 +73,11 @@ export const candidateListSchema = z.object({
     .optional(),
 });
 export type CandidateList = z.infer<typeof candidateListSchema>;
+
+/** The first `MAX_CANDIDATES` of a list. The schema states the bound to the model but does not reject a longer answer. */
+export function capCandidates<T>(candidates: T[]): T[] {
+  return candidates.length > MAX_CANDIDATES ? candidates.slice(0, MAX_CANDIDATES) : candidates;
+}
 
 // ---------------------------------------------------------------------------------------------------------------
 // Pure checks
@@ -453,7 +466,6 @@ interface Accepted {
   material: Omit<Material, "id">;
   /** Open Library matched this book, so it may be the backbone. */
   bookMatched: boolean;
-  wantsBackbone: boolean;
 }
 
 /** Runs `fn` over `items` at most `limit` at a time, results in input order. */
@@ -569,7 +581,6 @@ export async function runGate(input: GateInput): Promise<GateResult> {
         ...(practice ? { practice } : {}),
       },
       bookMatched: false,
-      wantsBackbone: false,
     };
     learner.push(entry);
     learnerByUrl.set(key, entry);
@@ -661,14 +672,12 @@ export async function runGate(input: GateInput): Promise<GateResult> {
       Object.assign(mine.material, { ...fields, why: mine.material.why ?? fields.why, ...(mine.material.minutes ? {} : size) });
       if (toc) mine.material.toc = withChapterSizes(toc, mine.material.minutes ?? null);
       mine.bookMatched = bookMatched;
-      mine.wantsBackbone = c.backbone;
       if (practice && !mine.material.practice) mine.material.practice = practice;
       return;
     }
     const dup = byFinalUrl.get(finalUrl);
     if (dup) {
       dup.material.recommendedBy = [...new Set([...dup.material.recommendedBy, ...recommendedBy])].slice(0, 10);
-      dup.wantsBackbone ||= c.backbone;
       // Reading fields the kept material lacks come from this candidate, whichever was listed first; set ones stay.
       // A part qualifies the minutes it came with: it moves only with minutes taken, or from a candidate with none.
       const takesMinutes = !dup.material.minutes;
@@ -694,22 +703,18 @@ export async function runGate(input: GateInput): Promise<GateResult> {
         ...(practice ? { practice } : {}),
       },
       bookMatched,
-      wantsBackbone: c.backbone,
     };
     accepted.push(entry);
     byFinalUrl.set(finalUrl, entry);
   });
 
-  // 3. Backbone: a matched book that pages on at least two other sites recommend. The arm's pick wins if it qualifies.
+  // 3. Backbone: the matched book that pages on the most other sites recommend, at least two.
   const all = [...learner, ...accepted];
   const qualifying = all
     .filter((a) => a.material.kind === "book" && a.bookMatched)
     .map((a) => ({ a, domains: recommendingDomains(a.material.url, a.material.recommendedBy).length }))
     .filter((q) => q.domains >= BACKBONE_MIN_DOMAINS);
-  const backbone =
-    qualifying.find((q) => q.a.wantsBackbone)?.a ??
-    [...qualifying].sort((x, y) => y.domains - x.domains)[0]?.a ??
-    null;
+  const backbone = [...qualifying].sort((x, y) => y.domains - x.domains)[0]?.a ?? null;
   if (backbone) backbone.material.backbone = true;
 
   // 4. Order: backbone, then the learner's sources, then the rest as the arm ranked them. Ids follow that order.

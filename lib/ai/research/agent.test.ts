@@ -5,12 +5,12 @@ import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
-import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, practiceLines } from "./agent";
+import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, practiceLines, readButNotListed } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
 import { isThin, researchMaterials, streamWhile, verifiedReading } from "./pipeline";
 import { RESEARCH_CAPS, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
-import type { BookLookup, CandidateList } from "./verify";
+import { MAX_CANDIDATES, type BookLookup, type Candidate, type CandidateList } from "./verify";
 
 const usage = {
   inputTokens: { total: 100, noCache: 100, cacheRead: undefined, cacheWrite: undefined },
@@ -89,10 +89,10 @@ const books: BookLookup = { find: async () => ({ key: "/works/OL1W", title: "Cor
 const LIST: CandidateList = {
   learner: [{ url: "https://learner.example.com/mine", kind: "essay", why: "Where the learner started" }],
   candidates: [
-    { url: "https://books.example.com/core", title: "Core Textbook", kind: "book", backbone: true, author: "A. Author", why: "The standard text", recommendedBy: ["https://lists.bookrecs.com/best", "https://blog.readinglist.org/reading"] },
-    { url: "https://docs.example.com/a", title: "Guide A", kind: "docs", backbone: false, why: "Official docs", recommendedBy: [] },
-    { url: "https://docs.example.com/b", title: "Guide B", kind: "docs", backbone: false, why: "More docs", recommendedBy: [] },
-    { url: "https://gone.example.com/", title: "Gone", kind: "essay", backbone: false, why: "Dead link", recommendedBy: [] },
+    { url: "https://books.example.com/core", title: "Core Textbook", kind: "book", author: "A. Author", why: "The standard text", recommendedBy: ["https://lists.bookrecs.com/best", "https://blog.readinglist.org/reading"] },
+    { url: "https://docs.example.com/a", title: "Guide A", kind: "docs", why: "Official docs", recommendedBy: [] },
+    { url: "https://docs.example.com/b", title: "Guide B", kind: "docs", why: "More docs", recommendedBy: [] },
+    { url: "https://gone.example.com/", title: "Gone", kind: "essay", why: "Dead link", recommendedBy: [] },
   ],
 };
 
@@ -351,7 +351,7 @@ describe("research prompts", () => {
     expect(briefLines({ topic: "T", weeks: 1, sources: [] })[1]).toContain("6 hours of study in all");
     const prompt = buildFinalPrompt({ topic: "T", weeks: 12, hoursPerWeek: 30, sources: [] }, "notes");
     expect(prompt).not.toMatch(/12 to 25/);
-    expect(prompt).toContain("must not exceed 360 hours");
+    expect(prompt).not.toMatch(/must not exceed \d+ hours/);
     expect(prompt).toContain('"coverage"');
     expect(prompt).toContain("- minutes:");
   });
@@ -409,14 +409,14 @@ describe("practice in the research prompts", () => {
     expect(prompt).toContain('a kind of practice the topic needs that nothing serves goes in "open" as "practice: <label>"');
   });
 
-  it("caps the candidates' minutes at all study hours again and lists materials whole", () => {
+  it("lists materials whole and states the learner's hours without capping the list by them", () => {
     const prompt = buildFinalPrompt({ topic: "T", weeks: 8, hoursPerWeek: 6, sources: [] }, "notes");
     expect(prompt).toContain("48 hours of study in all");
-    expect(prompt).toContain("must not exceed 48 hours");
+    expect(prompt).not.toMatch(/must not exceed \d+ hours/);
     expect(prompt).not.toContain("the plan's reading time");
     expect(prompt).toContain("list each material at its whole size");
     expect(prompt).toContain("which part the plan uses is decided after research");
-    expect(prompt).toContain("When the notes name a leading book, list it first even when the whole book runs past the time");
+    expect(prompt).toContain("List every book the notes recommend, under its title as published and its author");
     expect(prompt).not.toContain("the part this plan would use takes");
   });
 
@@ -426,6 +426,80 @@ describe("practice in the research prompts", () => {
     await collect(researchMaterials({ brief, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
     const system = calls.map((c) => c.prompt.find((m) => m.role === "system")?.content).find((c) => typeof c === "string" && c.includes("You gather"));
     expect(system).toContain("6. Practice");
+  });
+});
+
+describe("extraction: every credible source, no choosing", () => {
+  const cand = (url: string, extra: Partial<Candidate> = {}): Candidate => ({ url, title: "T", kind: "docs", why: "w", recommendedBy: [], ...extra });
+
+  it("asks the candidates step to record every credible source, with no hour cap", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 8, hoursPerWeek: 6, sources: [] }, "notes");
+    expect(prompt).not.toMatch(/must not exceed \d+ hours/);
+    expect(prompt).toContain("every credible source the notes found");
+    expect(prompt).toContain("a search result seen only as a snippet only when the notes recommend it");
+    expect(prompt).toContain(`at most ${MAX_CANDIDATES}, keeping the best-evidenced if there are more`);
+    expect(prompt).toContain("Choosing what the plan uses happens later, with sizes in hand, so a source left out here is lost.");
+    expect(prompt).toContain("title as published");
+    expect(prompt).toContain("pageTitle");
+    expect(prompt).not.toMatch(/backbone: true/);
+    expect(prompt).not.toContain("backbone textbook first");
+    expect(prompt).not.toContain("- backbone:");
+  });
+
+  it("records pages a researcher read that the list leaves out", () => {
+    const reads = [
+      { url: "https://github.com/mdmzfzl/NeetCode-Solutions", finalUrl: null, direction: "practice" },
+      { url: "https://a.example/x", finalUrl: null, direction: "canonical" },
+      { url: "https://b.example/old", finalUrl: "https://b.example/new/", direction: "current" },
+      { url: "https://learner.example.com/mine", finalUrl: null, direction: "learner" },
+    ];
+    const listed = [cand("https://a.example/x"), cand("https://b.example/new")];
+    expect(readButNotListed(reads, listed, [])).toEqual(["read but not listed: https://github.com/mdmzfzl/NeetCode-Solutions (practice)"]);
+    // A learner source is always kept, so a page read for it is not "left out".
+    expect(readButNotListed([{ url: "https://c.example/mine", finalUrl: null, direction: "research" }], [], [{ url: "https://c.example/mine" }])).toEqual([]);
+    // One page read by two directions is one fact.
+    const twice = [
+      { url: "https://d.example/p", finalUrl: null, direction: "canonical" },
+      { url: "https://d.example/p", finalUrl: null, direction: "practice" },
+    ];
+    expect(readButNotListed(twice, [], [])).toEqual(["read but not listed: https://d.example/p (canonical, practice)"]);
+  });
+
+  it("tags arm A's candidates 'research' and returns every page read, and logs what the list left out", async () => {
+    const list: CandidateList = { learner: [], candidates: [{ url: "https://docs.example.com/a", title: "Guide A", kind: "docs", why: "Official docs", recommendedBy: [] }] };
+    const { model } = scriptedModel(
+      [
+        { calls: [{ tool: "fetchSource", input: { url: "https://docs.example.com/a" } }, { tool: "fetchSource", input: { url: "https://docs.example.com/b" } }] },
+        { text: "Done." },
+      ],
+      [list],
+    );
+    const { fetcher } = fetcherFor();
+    const rows: ModelCall[] = [];
+    const result = await createAgentArm({ provider: fakeProvider(), model })({ brief: { topic: "T", weeks: 4, sources: [] }, fetcher, emit: () => {}, log: { onCall: (c) => void rows.push(c) } });
+    expect(result.candidates[0].foundBy).toEqual(["research"]);
+    expect(result.reads).toEqual([
+      { url: "https://docs.example.com/a", finalUrl: "https://docs.example.com/a", direction: "research" },
+      { url: "https://docs.example.com/b", finalUrl: "https://docs.example.com/b", direction: "research" },
+    ]);
+    const candidates = rows.find((r) => r.label === "Research · candidates");
+    expect(candidates?.facts).toContain("read but not listed: https://docs.example.com/b (research)");
+    expect(candidates?.facts).not.toContain("read but not listed: https://docs.example.com/a (research)");
+  });
+
+  it("cuts a longer list to the first 25 and says so", async () => {
+    const many: CandidateList = {
+      learner: [],
+      candidates: Array.from({ length: 30 }, (_, i) => ({ url: `https://docs.example.com/p${i}`, title: `P${i}`, kind: "docs" as const, why: "w", recommendedBy: [] })),
+    };
+    const { model } = scriptedModel([{ text: "Done." }], [many]);
+    const { fetcher } = fetcherFor();
+    const rows: ModelCall[] = [];
+    const result = await createAgentArm({ provider: fakeProvider(), model })({ brief: { topic: "T", weeks: 4, sources: [] }, fetcher, emit: () => {}, log: { onCall: (c) => void rows.push(c) } });
+    expect(result.candidates).toHaveLength(MAX_CANDIDATES);
+    expect(result.candidates.map((c) => c.title).slice(0, 2)).toEqual(["P0", "P1"]);
+    expect(result.candidates.at(-1)?.title).toBe("P24");
+    expect(rows.find((r) => r.label === "Research · candidates")?.facts).toContain("list cut to 25 of 30");
   });
 });
 

@@ -12,7 +12,7 @@ import {
   type StopReason,
 } from "@/lib/ai/research/agent";
 import { RESEARCH_CAPS, ResearchNotes, type ResearchCaps, type SearchResult } from "@/lib/ai/research/tools";
-import { candidateListSchema, normalizeCoverage, type Candidate, type CandidateList, type LearnerNote } from "@/lib/ai/research/verify";
+import { candidateListSchema, capCandidates, normalizeCoverage, type Candidate, type CandidateList, type LearnerNote } from "@/lib/ai/research/verify";
 
 /**
  * Arm C, eval only: the same Claude model with Anthropic's server-side `web_search` and `web_fetch` tools, prompted
@@ -205,7 +205,7 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
             { ...log, caller: "research" },
           );
           costUsd += cost;
-          list = object;
+          list = { ...object, candidates: capCandidates(object.candidates) };
           break;
         } catch (error) {
           if (signal?.aborted) break;

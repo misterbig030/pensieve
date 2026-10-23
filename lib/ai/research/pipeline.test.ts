@@ -36,7 +36,7 @@ const brief = { topic: "LLM engineering", weeks: 4, sources: [] };
 const recs = ["https://lists.bookrecs.com/best", "https://blog.readinglist.org/reading"];
 const bookUrl = "https://books.example.com/core";
 const arm: ResearchArm = async () => ({
-  candidates: [{ url: bookUrl, title: "Core Textbook", kind: "book", backbone: true, author: "A. Author", why: "The standard text", recommendedBy: recs }],
+  candidates: [{ url: bookUrl, title: "Core Textbook", kind: "book", author: "A. Author", why: "The standard text", recommendedBy: recs }],
   learnerNotes: [],
   seenUrls: new Set(recs),
   counts: { steps: 1, searches: 0, fetches: 0 },

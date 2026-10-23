@@ -16,7 +16,7 @@ const finish: LanguageModelV4StreamPart = { type: "finish", finishReason: { unif
 
 const LIST: CandidateList = {
   learner: [],
-  candidates: [{ url: "https://docs.example.com/a", title: "Guide A", kind: "docs", backbone: false, why: "w", recommendedBy: ["https://lists.example.org/best"] }],
+  candidates: [{ url: "https://docs.example.com/a", title: "Guide A", kind: "docs", why: "w", recommendedBy: ["https://lists.example.org/best"] }],
 };
 
 const SEARCH: LanguageModelV4StreamPart[] = [

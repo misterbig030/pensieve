@@ -15,7 +15,7 @@ import {
   type SearchProvider,
   type SourceFetcher,
 } from "./tools";
-import { candidateListSchema, normalizeCoverage, type Candidate, type CandidateList, type LearnerNote } from "./verify";
+import { FOUND_BY, MAX_CANDIDATES, candidateListSchema, canonicalUrl, capCandidates, normalizeCoverage, type Candidate, type CandidateList, type FoundBy, type LearnerNote } from "./verify";
 
 /** What research knows about the learner: the brief, unchanged. */
 export interface ResearchBrief {
@@ -60,6 +60,13 @@ export interface WorkerSummary {
   costUsd: number;
 }
 
+/** One page a researcher read successfully, with the direction that read it (`"research"` for arm A, `"learner"` for the learner's own links). */
+export interface ArmRead {
+  url: string;
+  finalUrl: string | null;
+  direction: string;
+}
+
 export interface ArmResult {
   candidates: Candidate[];
   learnerNotes: LearnerNote[];
@@ -70,7 +77,9 @@ export interface ArmResult {
   searchesOk: number;
   stoppedBy: StopReason;
   costUsd: number;
-  /** The topic's main areas the list covers and the ones it leaves open, as the arm named them. */
+  /** Every page read successfully, whoever read it; what the list left out of them is logged as facts. */
+  reads?: ArmRead[];
+  /** What research found: the topic's main areas the notes cover and the ones they leave open, as the arm named them. */
   coverage?: Coverage | null;
   /** Arm W only: how each worker ran. */
   workers?: WorkerSummary[];
@@ -171,18 +180,17 @@ export function buildFinalPrompt(brief: ResearchBrief, notes: string, options: {
     [
       `Now list the materials.`,
       `"learner": one entry per source the learner provided, in their order, with its url exactly as given, its kind and one line on what it is.${practice.learner}`,
-      `"candidates": the researched materials, the backbone textbook first. Choose a list that covers the topic's main areas and that this learner could get through: together the minutes of what the plan reads or watches must not exceed ${briefHours(brief)} hours, the learner's study time in all; practice-only sources have no minutes and do not count. When the notes name a leading book, list it first even when the whole book runs past the time available; leaving the book out is not a way to meet the cap. A short plan needs only a handful. Never invent one.`,
-      `- url: the material's own page, preferably one from the notes. title: exactly as that page gives it; a candidate whose page is titled something else is thrown away.`,
-      `- a book is checked against a library catalogue instead, by title and author: give its title as published and always its author. Its url is the publisher's or the author's page for that one book, read or not, and never a shop listing (Amazon or another retailer).`,
+      `"candidates": every credible source the notes found, from every direction, once each: pages read, and sources a researcher's notes name or recommend; a search result seen only as a snippet only when the notes recommend it. List at most ${MAX_CANDIDATES}, keeping the best-evidenced if there are more. Choosing what the plan uses happens later, with sizes in hand, so a source left out here is lost. List every book the notes recommend, under its title as published and its author. Never invent one.`,
+      `- url: the material's own page, preferably one from the notes. title: for anything but a book, exactly as that page gives it; a candidate whose page is titled something else is thrown away.`,
+      `- a book is checked against a library catalogue instead, by title and author: give its title as published (not its web page's title) and always its author. pageTitle: the title the book's web page shows, when the notes give one; null for anything else. Its url is the publisher's or the author's page for that one book, read or not, and never a shop listing (Amazon or another retailer).`,
       `- kind: book, course, video, docs, essay, paper, repo, tool or note.`,
-      `- backbone: true on at most one book, the one pages on at least two different sites recommend. Otherwise false everywhere.`,
       `- recommendedBy: URLs from the notes of pages that recommend it; empty when none.`,
       `- why: one line on why this material and what it covers that the others don't.`,
       `- year and author when the notes give them.`,
       `- list each material at its whole size (uses null, minutes the whole work): which part the plan uses is decided after research.`,
       `- minutes: how long the whole work takes to read or watch, from what the notes say about its length (pages, runtime, course hours, words). A rough number is better than none; null only when there is nothing to go on.`,
       practice.candidate,
-      `"coverage": "covered" names the three to eight main areas of the topic that the list covers; "open" names main areas nothing on the list covers. One to three words each.${practice.coverage}`,
+      `"coverage" is what research found: "covered" names the three to eight main areas of the topic that the sources you listed cover; "open" names main areas nothing the notes found covers. One to three words each.${practice.coverage}`,
     ].join("\n"),
   ].join("\n");
 }
@@ -357,6 +365,54 @@ export async function runResearchLoop(input: LoopInput): Promise<LoopResult> {
 
 export type CandidateStepList = Pick<CandidateList, "coverage"> & { candidates: Candidate[]; learner: LearnerNote[] };
 
+/** One set of notes and the direction that made it: a worker's, the learner's links, or arm A's whole loop. */
+export interface FoundSource {
+  direction: FoundBy;
+  notes: ResearchNotes;
+}
+
+/** Every successful page read in these notes, each with the direction that read it. */
+export function readsOf(sources: FoundSource[]): ArmRead[] {
+  return sources.flatMap(({ direction, notes }) => notes.fetches.filter((f) => f.ok).map((f) => ({ url: f.url, finalUrl: f.finalUrl, direction })));
+}
+
+/**
+ * Facts for the candidates call: each page a researcher read that no candidate and no learner source points to, by
+ * address or final address. A page the learner supplied is kept whatever the list says, so it is never "left out".
+ * A page two directions read is one fact.
+ */
+export function readButNotListed(reads: ArmRead[], candidates: { url: string }[], learner: { url: string }[]): string[] {
+  const key = (url: string) => canonicalUrl(url) ?? url;
+  const listed = new Set([...candidates, ...learner].map((c) => key(c.url)));
+  const left = new Map<string, { url: string; directions: string[] }>();
+  for (const read of reads) {
+    if (read.direction === "learner") continue;
+    if (listed.has(key(read.url)) || (read.finalUrl && listed.has(key(read.finalUrl)))) continue;
+    const entry = left.get(key(read.url)) ?? { url: read.url, directions: [] };
+    if (!entry.directions.includes(read.direction)) entry.directions.push(read.direction);
+    left.set(key(read.url), entry);
+  }
+  return [...left.values()].map((e) => `read but not listed: ${e.url} (${e.directions.join(", ")})`);
+}
+
+/**
+ * Which directions found a candidate: those whose notes carry its address, in a search result or a read, in the
+ * order of `FOUND_BY`. The learner's own links count as found by "learner". A candidate no notes carry keeps the
+ * model's own `foundBy`, a fallback only.
+ */
+export function deriveFoundBy(candidate: Candidate, sources: FoundSource[], learnerUrls: string[]): Candidate {
+  const key = (url: string) => canonicalUrl(url) ?? url;
+  const found = new Set<FoundBy>();
+  const mine = key(candidate.url);
+  for (const { direction, notes } of sources) {
+    const carried = notes.searches.some((s) => s.results.some((r) => key(r.url) === mine)) || notes.fetches.some((f) => key(f.url) === mine || (f.finalUrl && key(f.finalUrl) === mine));
+    if (carried) found.add(direction);
+  }
+  if (learnerUrls.some((u) => key(u) === mine)) found.add("learner");
+  const derived = FOUND_BY.filter((d) => found.has(d));
+  return derived.length > 0 ? { ...candidate, foundBy: derived } : candidate;
+}
+
 export interface CandidateStepInput {
   model: AiModelId | LanguageModel;
   brief: ResearchBrief;
@@ -364,6 +420,8 @@ export interface CandidateStepInput {
   notes: string;
   /** Arm W: the notes are grouped by direction, and the prompt says so. */
   grouped?: boolean;
+  /** The notes behind `notes`, by direction: where `foundBy` comes from, and what "read but not listed" is checked against. */
+  found?: FoundSource[];
   signal?: AbortSignal;
   log?: GenerationLogContext;
   /** Shown beside the response in the admin panel. */
@@ -373,12 +431,15 @@ export interface CandidateStepInput {
 }
 
 /**
- * The structured step that turns the notes into candidates. Retried once on a schema failure; after that research
- * continues with the learner's sources only (an empty list), never an error.
+ * The structured step that turns the notes into a record of every credible source. Retried once on a schema failure;
+ * after that research continues with the learner's sources only (an empty list), never an error. A list longer than
+ * `MAX_CANDIDATES` is cut after the call, and `foundBy` is filled in from the notes.
  */
 export async function runCandidateStep(input: CandidateStepInput): Promise<{ list: CandidateStepList; costUsd: number }> {
   const modelId = (typeof input.model === "string" ? input.model : DEFAULT_RESEARCH_MODEL) as AiModelId;
   const prompt = buildFinalPrompt(input.brief, input.notes, { grouped: input.grouped });
+  const found = input.found ?? [];
+  const learnerUrls = input.brief.sources.map((s) => s.url);
   let list: CandidateStepList = { candidates: [], learner: [] };
   let costUsd = 0;
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -393,11 +454,15 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
           abortSignal: input.signal,
           facts: input.facts,
           effort: input.effort ?? CANDIDATE_STEP_EFFORT,
+          check: (object) => [
+            ...(object.candidates.length > MAX_CANDIDATES ? [`list cut to ${MAX_CANDIDATES} of ${object.candidates.length}`] : []),
+            ...readButNotListed(readsOf(found), capCandidates(object.candidates), [...object.learner, ...learnerUrls.map((url) => ({ url }))]),
+          ],
         },
         { ...input.log, caller: "research" },
       );
       costUsd += cost;
-      list = object;
+      list = { ...object, candidates: capCandidates(object.candidates).map((c) => deriveFoundBy(c, found, learnerUrls)) };
       break;
     } catch (error) {
       if (input.signal?.aborted) break;
@@ -460,7 +525,8 @@ export function createAgentArm(options: AgentArmOptions): ResearchArm {
       return { candidates: [], learnerNotes: [], seenUrls: notes.seenUrls(), counts, searchesOk: loop.searchesOk, stoppedBy: "cancelled", costUsd: loop.costUsd };
     }
 
-    const { list, costUsd } = await runCandidateStep({ model, brief, notes: notes.render(), signal, log, facts: [`stopped by ${loop.stoppedBy}`, `${loop.steps} steps`], effort: options.effort });
+    const found: FoundSource[] = [{ direction: "research", notes }];
+    const { list, costUsd } = await runCandidateStep({ model, brief, notes: notes.render(), found, signal, log, facts: [`stopped by ${loop.stoppedBy}`, `${loop.steps} steps`], effort: options.effort });
     return {
       candidates: list.candidates,
       learnerNotes: list.learner,
@@ -469,6 +535,7 @@ export function createAgentArm(options: AgentArmOptions): ResearchArm {
       searchesOk: loop.searchesOk,
       stoppedBy: loop.stoppedBy,
       costUsd: loop.costUsd + costUsd,
+      reads: readsOf(found),
       coverage: normalizeCoverage(list.coverage),
     };
   };

@@ -113,9 +113,9 @@ const books: BookLookup = { find: async () => ({ key: "/works/OL1W", title: "Cor
 const LIST: CandidateList = {
   learner: [{ url: "https://learner.example.com/mine", kind: "essay", why: "Where the learner started" }],
   candidates: [
-    { url: "https://books.example.com/core", title: "Core Textbook", kind: "book", backbone: true, author: "A. Author", why: "The standard text", recommendedBy: ["https://lists.bookrecs.com/best", "https://blog.readinglist.org/reading"] },
-    { url: "https://docs.example.com/a", title: "Guide A", kind: "docs", backbone: false, why: "Official docs", recommendedBy: [] },
-    { url: "https://docs.example.com/b", title: "Guide B", kind: "docs", backbone: false, why: "More docs", recommendedBy: [] },
+    { url: "https://books.example.com/core", title: "Core Textbook", kind: "book", author: "A. Author", why: "The standard text", recommendedBy: ["https://lists.bookrecs.com/best", "https://blog.readinglist.org/reading"] },
+    { url: "https://docs.example.com/a", title: "Guide A", kind: "docs", why: "Official docs", recommendedBy: [] },
+    { url: "https://docs.example.com/b", title: "Guide B", kind: "docs", why: "More docs", recommendedBy: [] },
   ],
 };
 
@@ -335,6 +335,42 @@ describe("arm W through the pipeline", () => {
     expect(system("practice")).toContain("Budget: 4 searches, 5 page reads and 3 steps in all");
     const prompt = candidatePrompt(calls);
     expect(prompt).toContain("Practice sources:");
+  });
+
+  it("derives each candidate's foundBy from the directions whose notes carry its URL, and lists what the list left out", async () => {
+    const drills = "https://drills.example.com/problems";
+    const spare = "https://drills.example.com/spare";
+    const pages = { ...PAGES, [drills]: page(drills, "Problem set"), [spare]: page(spare, "Spare set") };
+    const list: CandidateList = {
+      learner: LIST.learner,
+      candidates: [
+        ...LIST.candidates,
+        // The model's own foundBy is only a fallback: here the practice worker's notes say who found it.
+        { url: drills, title: "Problem set", kind: "docs", why: "Problems with answers", recommendedBy: [], foundBy: ["canonical"] },
+        // No worker's notes carry this URL, so the model's word stands.
+        { url: "https://elsewhere.example.com/x", title: "Elsewhere", kind: "essay", why: "w", recommendedBy: [], foundBy: ["current"] },
+      ],
+    };
+    const practice: Step[] = [
+      { calls: [{ tool: "webSearch", input: { query: "problems with solutions" } }] },
+      { calls: [{ tool: "fetchSource", input: { url: drills } }, { tool: "fetchSource", input: { url: spare } }] },
+    ];
+    const { model } = directedModel({ ...SCRIPTS, practice }, [list]);
+    const { fetcher } = fetcherFor(pages);
+    const rows: ModelCall[] = [];
+    const arm = createWorkersArm({ provider: fakeProvider(), model });
+    const result = await arm({ brief, fetcher, emit: () => {}, log: { onCall: (c) => void rows.push(c) } });
+    const foundBy = (url: string) => result.candidates.find((c) => c.url === url)?.foundBy;
+    expect(foundBy(drills)).toEqual(["practice"]);
+    expect(foundBy("https://books.example.com/core")).toEqual(["backbone"]);
+    expect(foundBy("https://docs.example.com/a")).toEqual(["canonical"]);
+    expect(foundBy("https://elsewhere.example.com/x")).toEqual(["current"]);
+    // Reads carry the direction that made them, the learner's link included.
+    expect(result.reads).toContainEqual({ url: "https://learner.example.com/mine", finalUrl: "https://learner.example.com/mine", direction: "learner" });
+    expect(result.reads).toContainEqual({ url: spare, finalUrl: spare, direction: "practice" });
+    const facts = rows.find((r) => r.label === "Research · candidates")?.facts ?? [];
+    expect(facts).toContain(`read but not listed: ${spare} (practice)`);
+    expect(facts.filter((f) => f.startsWith("read but not listed"))).toHaveLength(1);
   });
 
   it("runs backbone and canonical, with canonical covering recent material, and the practice worker at the smallest band", async () => {
