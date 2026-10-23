@@ -442,6 +442,38 @@ describe("the allocation's backbone, coverage and fallback", () => {
     for (const m of [sixUncatalogued, sixEssay, sixProblems, sixCourse]) expect(out.facts).toContain(`dropped ${m.id} "${m.title}": not chosen`);
   });
 
+  it("falls back when the answer mentions no researched material", () => {
+    const expected = fallbackAllocation(six);
+    // (a) no parts at all, (b) parts naming only unknown ids: nothing usable, so code chooses.
+    for (const parts of [[], [{ id: "M9" }, { id: "X" }]]) {
+      const out = applyAllocation(draft({ backbone: "M2", parts }), six);
+      expect(out.materials).toEqual(expected.materials);
+      expect(out.dropped).toEqual(expected.dropped);
+      expect(out.split).toEqual(ALL_READING);
+      expect(out.coverage).toBeNull();
+      expect(out.materials.filter((m) => m.backbone).map((m) => m.id)).toEqual(["M1"]);
+      expect(out.facts).toContain("no researched material mentioned");
+      expect(out.facts).toContain("fallback chose the materials");
+    }
+    // A learner's own part alone mentions no researched material either.
+    expect(applyAllocation(draft({ parts: [{ id: "M5", minutes: 10 }] }), six).facts).toContain("no researched material mentioned");
+    // (c) one researched material mentioned: applied, the rest not chosen.
+    const one = applyAllocation(draft({ parts: [{ id: "M3" }] }), six);
+    expect(one.materials.map((m) => m.id)).toEqual(["M3", "M5"]);
+    expect(one.facts).not.toContain("fallback chose the materials");
+    expect(one.facts).not.toContain("no researched material mentioned");
+    // A drop is a mention too.
+    const dropped = applyAllocation(draft({ parts: [{ id: "M6", drop: true, dropReason: "too long" }] }), six);
+    expect(dropped.materials.map((m) => m.id)).toEqual(["M5"]);
+    expect(dropped.facts).not.toContain("fallback chose the materials");
+    // (d) only the learner's own: an empty answer is applied as it stands.
+    const own = applyAllocation(draft({ picks: [pick("recall", 100)], parts: [] }), { ...six, materials: [sixNote] });
+    expect(own.materials).toEqual([sixNote]);
+    expect(own.facts).not.toContain("fallback chose the materials");
+    expect(own.facts).not.toContain("no researched material mentioned");
+    expect(own.split.formats!.map((p) => p.format)).toEqual(["recall"]);
+  });
+
   it("normalises the plan's coverage", async () => {
     const coverage = { covered: [" Arrays ", "Arrays", "Graphs", ""], open: ["Graphs", "System design"] };
     expect(applyAllocation(draft({ parts: sixWhole, coverage }), six).coverage).toEqual({ covered: ["Arrays", "Graphs"], open: ["System design"] });

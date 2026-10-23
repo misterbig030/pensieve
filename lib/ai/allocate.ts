@@ -287,7 +287,8 @@ function coverageOf(draft: AllocationDraft): Coverage | null {
  * reading, and the picks kept only where something serves them or they can be written, reshared to 100. The model's
  * own reading share is only a fact. A blank practice label is named from the picks; the parts never depend on it. The
  * backbone is the model's choice when it is a kept book Open Library matched, or the learner's own; else there is none.
- * A partial answer is applied as it stands; only an answer that yields no valid split is replaced by the fallback.
+ * A partial answer is applied as it stands; an answer that mentions none of research's materials, or yields no valid
+ * split, is nothing usable and is replaced by the fallback.
  */
 export function applyAllocation(draft: AllocationDraft, input: AllocationInput): Allocation {
   const totalMinutes = totalHours(input.weeks, input.hoursPerWeek) * 60;
@@ -296,6 +297,13 @@ export function applyAllocation(draft: AllocationDraft, input: AllocationInput):
   for (const part of draft.parts ?? []) {
     const id = typeof part?.id === "string" ? part.id.trim() : "";
     if (known.has(id) && !parts.has(id)) parts.set(id, part);
+  }
+  // Nothing usable: research supplied materials and the answer has no part or drop for any of them. Dropping them all
+  // as not chosen would empty the plan, so code chooses instead. A partial answer is applied as it stands.
+  const researched = input.materials.filter((m) => m.origin !== "learner");
+  if (researched.length > 0 && !researched.some((m) => parts.has(m.id))) {
+    const fallback = fallbackAllocation(input);
+    return { ...fallback, facts: ["no researched material mentioned", ...fallback.facts] };
   }
 
   const materials: Material[] = [];
