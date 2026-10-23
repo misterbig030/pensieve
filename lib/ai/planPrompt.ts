@@ -398,6 +398,13 @@ function leafPickSources(input: UnitsPromptInput, aliases: MaterialAliases, { pi
   return `${from}${practiceHeld(input, aliases, pick.format)} ${rule}`;
 }
 
+/** When a picked format's source is cut to part of its items: share out only that part. Null when none is cut. */
+function cutSourceRule(picks: PickSources[], materials: Material[]): string | null {
+  const ids = new Set(picks.flatMap((p) => p.sources));
+  const cut = materials.some((m) => ids.has(m.id) && m.practice?.items && m.practice.totalItems && m.practice.totalItems > m.practice.items);
+  return cut ? 'A source the plan uses only part of says so in its tag ("N of M problems"): share out only the kept items, never past them.' : null;
+}
+
 /**
  * The practice rules for leaves: the week's reading and each pick's minutes (a pick that can't be assigned is left out
  * and its minutes go to reading), each pick's focus, what it is, where its rows come from and when one is done, then
@@ -428,6 +435,8 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     }
     lines.push(`- ${pickName(p.pick.format)}: ${time}, aimed at ${p.pick.focus}. The learner ${spec.prompt}. ${leafPickSources(input, aliases, p)} Done when: ${spec.doneWhen}.${sizing ? ` ${sizing}` : ""}`);
   }
+  const cutRule = cutSourceRule(picks, input.materials);
+  if (cutRule) lines.push(cutRule);
   lines.push(
     `For each unit, list its practice rows in "practice" as { format, id, task, done, minutes }: format is one of the formats above; id is the row's source (leave it out for a row you write yourself); task says exactly what to do, with the part ("NeetCode 150 · Arrays & Hashing, problems 1–6"); done says how the learner knows it is finished; minutes is the doing time.`,
   );
@@ -443,8 +452,10 @@ function headingPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases)
   const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
   if (!picks.some((p) => p.sources.length > 0)) return null;
   const kids = UNIT_NOUN[childLevel(input.level) ?? "day"];
+  const cutRule = cutSourceRule(picks, input.materials);
   const lines = [
     `Practice: for each unit, list in "practiceCovers" the practice sources its ${kids}s will use, as { format, id, note }: take each format's sources in order across the units, with the part this unit takes in note ("Arrays & Hashing; Two Pointers"). A source too long for one unit runs on in the next, a different part in each.`,
+    ...(cutRule ? [cutRule] : []),
   ];
   for (const p of picks) {
     const name = `- ${pickName(p.pick.format)}, aimed at ${p.pick.focus}`;

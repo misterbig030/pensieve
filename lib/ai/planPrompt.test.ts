@@ -465,6 +465,16 @@ describe("practice in prompts", () => {
     expect(prompt).toContain('- Recall (format "recall"), aimed at key terms: no source; its rows are written from the reading later, so reserve nothing for it.');
     expect(prompt).not.toContain('"practice" as');
   });
+  it("tells headings and leaves to share out only the kept part of a cut source", () => {
+    const cut = [MATERIALS[0], { ...PROBLEMS, practice: { ...PROBLEMS.practice!, items: 75, totalItems: 150 } }];
+    const heading = buildUnitsPrompt({ topic: "Interviews", materials: cut, granularity: "day", level: "month", spans: [20, 20], weeks: 8, daysPerWeek: 5, hoursPerWeek: 6, split, unitsAreLeaves: false });
+    const leaf = days({ materials: cut });
+    for (const prompt of [heading, leaf]) {
+      expect(prompt).toContain("75 of 150 problems");
+      expect(prompt).toContain("share out only the kept items, never past them");
+    }
+    expect(days()).not.toContain("share out only the kept items, never past them");
+  });
   it("says nothing about practice when the plan is all reading", () => {
     for (const s of [{ readingShare: 100, practice: "reading", reason: "", formats: [] }, { readingShare: 60, practice: "projects", reason: "" }]) {
       const leaf = days({ split: s });
