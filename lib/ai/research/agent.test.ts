@@ -5,7 +5,7 @@ import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "
 import { PRACTICE_REGISTRY, type PracticePick } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
-import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm } from "./agent";
+import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, readingHours } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
 import { isThin, researchMaterials, streamWhile, verifiedReading } from "./pipeline";
@@ -411,10 +411,24 @@ describe("the practice picks in the research prompts", () => {
     expect(prompt).toContain("practice: Problems");
   });
 
-  it("leaves the final prompt as it was without picks", () => {
+  it("leaves the final prompt as it was without picks, but for the reading cap", () => {
     const base = buildFinalPrompt({ topic: "T", weeks: 4, sources: [] }, "notes");
     expect(base).not.toContain("practice");
-    expect(buildFinalPrompt({ topic: "T", weeks: 4, sources: [], split: splitOf([]) }, "notes")).toBe(base);
+    expect(base).toContain("must not exceed 24 hours");
+    // 60% of 24 hours.
+    expect(buildFinalPrompt({ topic: "T", weeks: 4, sources: [], split: splitOf([]) }, "notes")).toBe(base.replace("must not exceed 24 hours", "must not exceed 14 hours"));
+  });
+
+  it("caps the candidates' reading at the plan's reading hours, not all its study hours", () => {
+    // An SDE interview loop: 8 weeks at 6 hours, a quarter of it reading, drafted about 31 hours of reading.
+    const brief = { topic: "T", weeks: 8, hoursPerWeek: 6, sources: [], split: { ...splitOf(PICKS), readingShare: 25 } };
+    expect(readingHours(brief)).toBe(12);
+    const prompt = buildFinalPrompt(brief, "notes");
+    expect(prompt).toContain("48 hours of study in all");
+    expect(prompt).toContain("together the minutes of what the plan reads or watches must not exceed 12 hours, the plan's reading time; practice-only sources have no minutes and do not count");
+    expect(readingHours({ weeks: 8, hoursPerWeek: 6 })).toBe(48);
+    expect(readingHours({ ...brief, split: { ...brief.split, readingShare: 100 } })).toBe(48);
+    expect(readingHours({ ...brief, split: { ...brief.split, readingShare: 0 } })).toBe(1);
   });
 
   it("gives arm A the picks of the brief's split", async () => {
