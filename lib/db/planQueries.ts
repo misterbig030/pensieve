@@ -428,6 +428,8 @@ export async function getNodePracticeList(nodeId: string) {
       done: nodePractice.done,
       minutes: nodePractice.minutes,
       generated: nodePractice.generated,
+      itemFrom: nodePractice.itemFrom,
+      itemTo: nodePractice.itemTo,
     })
     .from(nodePractice)
     .leftJoin(sources, eq(nodePractice.sourceId, sources.id))

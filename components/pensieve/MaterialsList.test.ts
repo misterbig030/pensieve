@@ -2,7 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Material, MaterialPractice } from "@/lib/schemas/material";
-import { MaterialsList, materialTotals, practiceTag, shownRows, splitCoverage, type MaterialsListProps } from "./MaterialsList";
+import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
+import { listSummary, MaterialsList, materialTotals, practiceTag, shownRows, splitCoverage, type MaterialsListProps } from "./MaterialsList";
 
 const practice = (over: Partial<MaterialPractice> = {}): MaterialPractice => ({ format: "problem-set", items: 150, perItemMinutes: 10, minutes: 1500, answers: true, ...over });
 const material = (over: Partial<Material>): Material => ({ id: "M1", title: "T", kind: "book", minutes: null, practice: null, ...over }) as Material;
@@ -113,5 +114,22 @@ describe("MaterialsList while the allocation is pending", () => {
     const thin = { notice: "thin" as const, coverage: { covered: [], open: [] } };
     expect(text(thin)).toContain("no textbook stood out");
     expect(text({ ...thin, awaitingBackbone: true })).not.toContain("no textbook stood out");
+  });
+});
+
+describe("a listed practice source in the materials list", () => {
+  const cut = (items: number, totalItems: number) => ({ ...LISTED_PROBLEMS, items, totalItems, list: { ...LISTED_PROBLEMS.list!, items: Array.from({ length: items }, (_, i) => LISTED_PROBLEMS.list!.items[i % 21]) } });
+  it("summarises a listed source's groups and how many of its items the plan keeps", () => {
+    expect(listSummary({ ...cut(100, 150), list: { ...LISTED_PROBLEMS.list!, items: Array.from({ length: 100 }, (_, i) => ({ ...LISTED_PROBLEMS.list!.items[0], group: `G${i % 9}` })) } })).toBe("9 groups · 100 of 150");
+    expect(listSummary(LISTED_PROBLEMS)).toBe("3 groups");
+    expect(listSummary({ ...LISTED_PROBLEMS, list: { ...LISTED_PROBLEMS.list!, items: LISTED_PROBLEMS.list!.items.map((i) => ({ ...i, group: i.group === "Stack" ? "Arrays & Hashing" : i.group })) } })).toBe("2 groups");
+  });
+  it("says nothing for a source without a list or without groups", () => {
+    expect(listSummary(practice())).toBeNull();
+    expect(listSummary({ ...LISTED_PROBLEMS, list: { ...LISTED_PROBLEMS.list!, items: LISTED_PROBLEMS.list!.items.map((i) => ({ ...i, group: null })) } })).toBeNull();
+  });
+  it("shows the summary under the source's practice line", () => {
+    const html = render({ materials: [material({ id: "M1", title: "NeetCode 150", origin: "research", practice: { ...LISTED_PROBLEMS, items: 21, totalItems: 150 } })] }).replace(/<!-- -->/g, "");
+    expect(html).toContain("3 groups · 21 of 150");
   });
 });

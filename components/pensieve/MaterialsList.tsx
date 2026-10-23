@@ -283,10 +283,26 @@ function SizeLine({ material: m }: { material: Material }) {
   );
 }
 
-/** "Problems · 150 problems · answers included · ≈ 25 h": the source's role as practice, with the time it takes to do. */
+/** "9 groups · 100 of 150": a listed source's groups and, when the plan cut the list, how many of its items it keeps. Null without a list or groups. */
+export function listSummary(p: MaterialPractice): string | null {
+  const items = p.list?.items;
+  if (!items) return null;
+  const groups = new Set(items.flatMap((i) => (i.group ? [i.group] : []))).size;
+  if (groups === 0) return null;
+  const whole = p.totalItems ?? items.length;
+  return `${groups} group${groups === 1 ? "" : "s"}${whole > items.length ? ` · ${items.length} of ${whole}` : ""}`;
+}
+
+/** "Problems · 150 problems · answers included · ≈ 25 h": the source's role as practice, with the time it takes to do; a listed source's groups under it. */
 function PracticeLine({ material: m }: { material: Material }) {
   if (!m.practice) return null;
-  return <span className="text-xs text-muted-foreground">{[practiceTag(m.practice), m.practice.minutes ? approxDuration(m.practice.minutes) : null].filter(Boolean).join(" · ")}</span>;
+  const summary = listSummary(m.practice);
+  return (
+    <>
+      <span className="text-xs text-muted-foreground">{[practiceTag(m.practice), m.practice.minutes ? approxDuration(m.practice.minutes) : null].filter(Boolean).join(" · ")}</span>
+      {summary && <span className="text-xs text-muted-foreground">{summary}</span>}
+    </>
+  );
 }
 
 /** One group of what was considered and left out, with its count and each one's reason; nothing when it is empty. */

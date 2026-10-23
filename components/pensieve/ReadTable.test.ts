@@ -1,6 +1,10 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
-import { budgetLine, byTier, chapterLabel, coverPracticeRows, minutesOver, partLabel, practiceRowsFor, readRowsFor, rowBrief } from "./ReadTable";
+import type { Material, PracticeItem } from "@/lib/schemas/material";
+import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
+import { budgetLine, byTier, chapterLabel, coverPracticeRows, DoRows, itemLabel, minutesOver, partLabel, practiceRowsFor, readRowsFor, ReadTable, rowBrief } from "./ReadTable";
 
 describe("readRowsFor", () => {
   it("fills chapter, activity and a key per row", () => {
@@ -151,5 +155,59 @@ describe("coverPracticeRows", () => {
     const [row] = coverPracticeRows([{ format: "recall", id: "drills", note: null, task: "Questions on ch. 2", minutes: 30 }], byId);
     expect(row.generated).toBe(true);
     expect(row.material?.id).toBe("drills");
+  });
+});
+
+describe("a listed item row", () => {
+  const items: PracticeItem[] = PROBLEM_ITEMS.map((it) => ({ ...it }));
+  items[3] = { ...items[3], url: "https://leetcode.com/problems/group-anagrams/", solutionUrl: "https://neetcode.io/solutions/group-anagrams" };
+  items[2] = { ...items[2], number: null, title: "Two Sum, no number" };
+  const bank: Material = {
+    ...AIE_MATERIALS.find((m) => m.id === "evals")!,
+    id: "nc",
+    title: "NeetCode 150",
+    practice: { ...LISTED_PROBLEMS, list: { ...LISTED_PROBLEMS.list!, items } },
+  };
+  const byId = new Map([...AIE_MATERIALS, bank].map((m) => [m.id, m]));
+  const row = (itemFrom: number | null, over = {}) => ({ format: "problem-set" as const, id: "nc", task: "NeetCode 150 · problem", done: "solved without hints", minutes: 25, generated: false, itemFrom, itemTo: itemFrom, ...over });
+
+  it("reads the item the row's position names from the source's list", () => {
+    const [listed, plain, outOfList] = practiceRowsFor([row(4), row(null), row(99)], byId);
+    expect(listed.item?.title).toBe("Group Anagrams");
+    expect(plain.item).toBeNull();
+    expect(outOfList.item).toBeNull();
+  });
+  it("labels an item with its number, or its title alone without one", () => {
+    expect(itemLabel(items[3])).toBe("49. Group Anagrams");
+    expect(itemLabel(items[2])).toBe("Two Sum, no number");
+  });
+  it("shows the item as number and title, linked, with a solution link and its group as a label", () => {
+    const html = renderToStaticMarkup(createElement(DoRows, { rows: practiceRowsFor([row(4)], byId) }));
+    expect(html).toContain('<a href="https://leetcode.com/problems/group-anagrams/" target="_blank" rel="noopener noreferrer"');
+    expect(html.replace(/<!-- -->/g, "")).toMatch(/>49\. Group Anagrams<\/a>/);
+    expect(html).toMatch(/<a href="https:\/\/neetcode.io\/solutions\/group-anagrams" target="_blank" rel="noopener noreferrer"[^>]*>solution<\/a>/);
+    expect(html).toContain("Arrays &amp; Hashing");
+    expect(html).toContain("solved without hints");
+  });
+  it("shows the title alone when the item has no number, and no link when it has no url", () => {
+    const html = renderToStaticMarkup(createElement(DoRows, { rows: practiceRowsFor([row(3)], byId) }));
+    expect(html).toContain("Two Sum, no number");
+    expect(html).not.toContain("<a href=\"https://leetcode");
+    expect(html).not.toContain("solution</a>");
+    expect(html).not.toMatch(/\d\. Two Sum/);
+  });
+  it("leaves other practice rows as they were", () => {
+    const html = renderToStaticMarkup(createElement(DoRows, { rows: practiceRowsFor([row(null, { task: "Problems 1-20" })], byId) }));
+    expect(html).toContain("Problems 1-20");
+    expect(html).not.toContain("solution");
+  });
+  it("draws no links inside a link, and shows the item on the day page's Do table too", () => {
+    const rows = practiceRowsFor([row(4)], byId);
+    const inLink = renderToStaticMarkup(createElement(DoRows, { rows, link: false }));
+    expect(inLink).toContain("Group Anagrams");
+    expect(inLink).not.toContain("leetcode.com");
+    const table = renderToStaticMarkup(createElement(ReadTable, { rows: [], practice: rows, budgetMinutes: 60 })).replace(/<!-- -->/g, "");
+    expect(table).toMatch(/>49\. Group Anagrams<\/a>/);
+    expect(table).toContain(">solution</a>");
   });
 });
