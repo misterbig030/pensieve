@@ -1,6 +1,7 @@
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY, MAX_PRACTICE_PICKS } from "@/lib/practice";
 import type { SourceInput } from "@/lib/schemas/source";
 import { normalizeSplit, planSplitDraftSchema, type PlanSplit } from "@/lib/studyTime";
+import { ALL_READING } from "./allocate";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { providerError } from "./providerError";
 import type { ResolvedModel } from "./resolve";
@@ -13,9 +14,6 @@ export interface PracticePickInput {
   hoursPerWeek?: number;
   sources: SourceInput[];
 }
-
-/** The split used when the model gives none: all reading, which is what a plan without practice formats always was. */
-const ALL_READING: PlanSplit = { readingShare: 100, practice: "reading", reason: "", formats: [] };
 
 /**
  * The prompt for the pick: the learner's brief, one line per practice format, and worked examples of how a topic maps

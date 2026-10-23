@@ -204,7 +204,7 @@ export function practiceTag(p: MaterialPractice): string {
 }
 
 /** How a format's time is counted: per item (`Problems is sized per problem, about 10 min each.`) or as one fixed block; none for a format that is neither. */
-function sizingSentence(format: PracticeFormat): string | null {
+export function sizingSentence(format: PracticeFormat): string | null {
   const spec = PRACTICE_REGISTRY[format];
   if (spec.perItemMinutes) return `${spec.label} is sized per ${ITEM_NOUN[format] ?? "item"}, about ${spec.perItemMinutes} min each.`;
   if (spec.fixedMinutes) return `${spec.label} is one block of about ${spec.fixedMinutes} min.`;
@@ -457,7 +457,7 @@ function unitLine(level: PlanLevel, index: number, len: number, daysPerWeek: num
   return `${label} (${weeks} week${weeks === 1 ? "" : "s"})`;
 }
 
-function formatMinutes(minutes: number): string {
+export function formatMinutes(minutes: number): string {
   if (minutes < 90) return `${minutes} min`;
   const hours = minutes / 60;
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} h`;
