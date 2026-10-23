@@ -38,6 +38,11 @@ export const chapterSchema = z.object({
   minutes: z.number().int().min(1).max(60000).nullable(),
   /** Headings one level below the chapter, in order. */
   sections: z.array(z.string().trim().min(1).max(MAX_HEADING)).max(MAX_SECTIONS),
+  /**
+   * Where this chapter's span ends (the start of the chapter after it in the whole book), set when the list was cut
+   * right after it; null when that start is unknown. Absent on uncut lists: the span ends at the next listed chapter.
+   */
+  end: z.number().int().min(0).nullable().optional(),
 });
 export type Chapter = z.infer<typeof chapterSchema>;
 

@@ -20,6 +20,11 @@ describe("chapterListSchema", () => {
     expect(chapterListSchema.safeParse({ ...list, chapters: [{ ...chapter(1), sections: Array.from({ length: MAX_SECTIONS + 1 }, () => "s") }, chapter(2), chapter(3)] }).success).toBe(false);
     expect(chapterListSchema.safeParse({ ...list, chapters: [{ ...chapter(1), title: "x".repeat(MAX_HEADING + 1) }, chapter(2), chapter(3)] }).success).toBe(false);
   });
+  it("takes a chapter's own end on a cut list and keeps a chapter without one valid", () => {
+    const cut = { ...list, chapters: [{ ...chapter(1), end: 20 }, { ...chapter(3), end: null }, chapter(5)] };
+    expect(chapterListSchema.parse(cut).chapters.map((c) => c.end)).toEqual([20, null, undefined]);
+    expect(chapterListSchema.safeParse({ ...list, chapters: [{ ...chapter(1), end: -1 }, chapter(2), chapter(3)] }).success).toBe(false);
+  });
   it("is optional and nullable on a material", () => {
     const base = { id: "M1", origin: "research", type: "link", kind: "book", url: "https://e.x/", title: "T", author: null, year: null, why: null, backbone: true, verifiedAt: null, fetchedTitle: null, recommendedBy: [], sig: null };
     expect(materialSchema.safeParse(base).success).toBe(true);

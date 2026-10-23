@@ -146,7 +146,11 @@ function readingPart(m: Material, part: AllocationPart): Material {
     const positions = [...new Set(part.chapters.filter((n) => Number.isInteger(n) && n >= 1 && n <= toc.chapters.length))].sort((a, b) => a - b);
     // No valid position: the model's chapter set says nothing usable, so the book stays whole.
     if (positions.length === 0) return m;
-    const kept: Chapter[] = positions.map((p) => toc.chapters[p - 1]);
+    // A kept chapter whose successor is cut carries its own end, so its pages never run into the cut chapter's.
+    const kept: Chapter[] = positions.map((p) => {
+      const successor = toc.chapters[p];
+      return successor && !positions.includes(p + 1) ? { ...toc.chapters[p - 1], end: successor.page } : toc.chapters[p - 1];
+    });
     const sized = kept.filter((c) => c.minutes !== null);
     let minutes = m.minutes ?? null;
     if (sized.length > 0) minutes = sized.reduce((sum, c) => sum + c.minutes!, 0);

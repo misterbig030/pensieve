@@ -197,6 +197,20 @@ describe("chapters in prompts", () => {
     );
     expect(renderMaterials(withToc)).not.toContain("A1; A2");
   });
+  it("ends a chapter's pages at its own end when the list was cut after it", () => {
+    const cut: ChapterList = {
+      source: "catalogue",
+      url: "https://openlibrary.org/books/OL1M",
+      printPages: true,
+      end: 90,
+      chapters: [
+        { n: 4, title: "Four", page: 40, minutes: null, sections: [], end: 50 },
+        { n: 7, title: "Seven", page: 70, minutes: null, sections: [] },
+      ],
+    };
+    expect(renderChapters(cut, { sections: false }).slice(0, 2)).toEqual(['  ch. 4 "Four" · pp. 40–49', '  ch. 7 "Seven" · pp. 70–89']);
+    expect(renderChapters({ ...cut, chapters: [{ ...cut.chapters[0], end: null }, cut.chapters[1]] }, { sections: false })[0]).toBe('  ch. 4 "Four" · p. 40');
+  });
   it("omits the number, the pages and the size when the list has none, and names the page host", () => {
     const sparse: ChapterList = {
       source: "page",

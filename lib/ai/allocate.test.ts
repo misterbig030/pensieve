@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof import("ai")>()), generateObject: vi.fn() }));
 import { APICallError, generateObject } from "ai";
-import type { Material } from "@/lib/schemas/material";
+import { materialSchema, type Material } from "@/lib/schemas/material";
 import { ALL_READING, allocatePlan, applyAllocation, buildAllocationPrompt, type AllocationDraft, type AllocationInput } from "./allocate";
 import type { ModelCall } from "./logged";
+import { renderChapters } from "./planPrompt";
 import { appModel } from "./resolve";
 
 const mockedGenerateObject = vi.mocked(generateObject);
@@ -112,6 +113,20 @@ describe("applyAllocation", () => {
     expect(m1.toc!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4]);
     expect(m1.uses).toBe("ch. 1–4");
     expect(m1.minutes).toBe(240);
+  });
+
+  it("never runs a kept chapter's pages into a cut one", () => {
+    const paged = {
+      ...book,
+      toc: { ...book.toc!, printPages: true, end: 220, chapters: book.toc!.chapters.map((c, i) => ({ ...c, page: 20 * (i + 1) })) },
+    };
+    const m1 = applyAllocation(draft({ parts: [{ id: "M1", chapters: [1, 2, 3, 4, 7] }] }), { ...input, materials: [paged] }).materials[0];
+    expect(m1.uses).toBe("ch. 1–4, 7");
+    const lines = renderChapters(m1.toc!, { sections: false });
+    expect(lines[3]).toBe('  ch. 4 "Chapter 4" · pp. 80–99 · about 60 min');
+    expect(lines[4]).toBe('  ch. 7 "Chapter 7" · pp. 140–159 · about 60 min');
+    expect(lines[2]).toBe('  ch. 3 "Chapter 3" · pp. 60–79 · about 60 min');
+    expect(materialSchema.safeParse(m1).success).toBe(true);
   });
 
   it("drops the chapter list but keeps the part when fewer chapters than a list holds are kept", () => {

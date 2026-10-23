@@ -182,7 +182,8 @@ export function renderChapters(toc: ChapterList, options: { sections: boolean; a
   const lines = toc.chapters.map((c, i) => {
     const parts = [`${options.alias ? `${options.alias}.${i + 1} ` : ""}${c.n !== null ? `ch. ${c.n} ` : ""}"${c.title}"`];
     if (toc.printPages && c.page !== null) {
-      const next = i + 1 < toc.chapters.length ? toc.chapters[i + 1].page : toc.end;
+      // A chapter whose successor was cut carries its own end; otherwise its span ends where the next one starts.
+      const next = c.end !== undefined ? c.end : i + 1 < toc.chapters.length ? toc.chapters[i + 1].page : toc.end;
       parts.push(next !== null && next > c.page ? `pp. ${c.page}–${next - 1}` : `p. ${c.page}`);
     }
     if (c.minutes !== null) parts.push(`about ${formatMinutes(c.minutes)}`);
