@@ -134,6 +134,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [materials, setMaterials] = useState<Material[]>(() => props.initialMaterials ?? []);
   const [dropped, setDropped] = useState<DroppedMaterial[]>([]);
   const [notice, setNotice] = useState<ResearchNotice | undefined>(undefined);
+  // True from research's list to the allocation, which alone chooses the backbone: the list says nothing of one meanwhile.
+  const [awaitingAllocation, setAwaitingAllocation] = useState(false);
   const [research, setResearch] = useState<ResearchProgressState | null>(null);
   const [coverage, setCoverage] = useState<Coverage | null>(null);
   // What research found, kept for the thin-list notice after the plan's coverage replaces `coverage`.
@@ -172,6 +174,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setMaterials([]);
     setDropped([]);
     setNotice(undefined);
+    setAwaitingAllocation(false);
     setCoverage(null);
     setCoverageSource("research");
     setResearchCoverage(null);
@@ -210,6 +213,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             setMaterials(held.materials);
             setDropped(held.dropped);
             setNotice(researchEvent.notice);
+            setAwaitingAllocation(true);
             setCoverage(held.coverage);
             setCoverageSource(held.coverageSource);
             setResearchCoverage(held.coverage);
@@ -218,6 +222,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         } else if (event.type === "allocated") {
           // The list the draft is written against: the nodes' chapter positions refer to it, not to research's.
           held = applyDraftEvent(held, event);
+          setAwaitingAllocation(false);
           setMaterials(held.materials);
           setDropped(held.dropped);
           setCoverage(held.coverage);
@@ -243,6 +248,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           publish();
         } else if (event.type === "finish") {
           finished = true;
+          setAwaitingAllocation(false);
           setTree(layout(event.root));
           setPending({});
           setCostUsd((c) => c + event.costUsd);
@@ -255,6 +261,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       if (!finished) throw new Error("The draft ended early. Try again.");
     } catch (err) {
       setDrafting(false);
+      setAwaitingAllocation(false);
       setPending({});
       setResearch((r) => (r ? { ...r, running: false, reading: null } : r));
       setError(err instanceof Error ? err.message : "Drafting failed. Try again.");
@@ -649,6 +656,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             materials={materials}
             dropped={dropped}
             notice={notice}
+            awaitingBackbone={awaitingAllocation}
             coverage={coverage}
             coverageSource={coverageSource}
             researchCoverage={researchCoverage}

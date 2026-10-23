@@ -61,6 +61,8 @@ export interface MaterialsListProps {
   onRemove?: (id: string) => void;
   /** Offered only before the plan is confirmed, with the "unavailable" notice. */
   onResearchAgain?: () => void;
+  /** True between research and the allocation, which alone chooses the backbone: nothing is said about one yet. */
+  awaitingBackbone?: boolean;
   /** Rows shown before "Show all", of the reading groups and of the Practice group each. */
   initialShown?: number;
 }
@@ -85,7 +87,7 @@ export function MaterialsList(props: MaterialsListProps) {
   return (
     <div className="flex flex-col gap-3">
       {notice && (
-        <ResearchNoticeBanner notice={notice} topic={props.topic} researched={researched} sizedMinutes={sized} coverage={props.researchCoverage ?? coverage} hasBackbone={!!backbone} onResearchAgain={props.onResearchAgain} />
+        <ResearchNoticeBanner notice={notice} topic={props.topic} researched={researched} sizedMinutes={sized} coverage={props.researchCoverage ?? coverage} hasBackbone={!!backbone} backboneKnown={!props.awaitingBackbone} onResearchAgain={props.onResearchAgain} />
       )}
 
       {materials.length > 0 && (
@@ -112,7 +114,7 @@ export function MaterialsList(props: MaterialsListProps) {
 
           {backbone ? (
             <BackboneCard material={backbone} onRemove={props.onRemove ? () => setRemoving(backbone) : undefined} />
-          ) : (
+          ) : props.awaitingBackbone ? null : (
             <span className="text-[13px] text-muted-foreground">No backbone: units draw on the materials below directly.</span>
           )}
 
@@ -446,6 +448,7 @@ function ResearchNoticeBanner({
   sizedMinutes,
   coverage,
   hasBackbone,
+  backboneKnown,
   onResearchAgain,
 }: {
   notice: ResearchNotice;
@@ -454,6 +457,7 @@ function ResearchNoticeBanner({
   sizedMinutes: number;
   coverage?: Coverage | null;
   hasBackbone: boolean;
+  backboneKnown: boolean;
   onResearchAgain?: () => void;
 }) {
   if (notice === "unavailable") {
@@ -474,7 +478,7 @@ function ResearchNoticeBanner({
     <div role="status" className="flex gap-3 rounded-[20px] bg-accent-200 px-4 py-3.5 text-[13px] leading-normal text-accent-900">
       <CircleAlert className="mt-px size-[18px] shrink-0 text-accent-700" strokeWidth={2.5} />
       <span>
-        {thinText({ researched, sizedMinutes, open: splitCoverage(coverage?.open ?? []).areas, hasBackbone })} for <strong className="font-semibold">{topic}</strong>.{" "}
+        {thinText({ researched, sizedMinutes, open: splitCoverage(coverage?.open ?? []).areas, hasBackbone, backboneKnown })} for <strong className="font-semibold">{topic}</strong>.{" "}
         {researched === 0 ? "The plan uses your own sources" : "The plan uses what was found plus your own sources"} and leans on practice where there is nothing to read. Paste links in the
         conversation to have them checked the same way.
       </span>
@@ -483,11 +487,11 @@ function ResearchNoticeBanner({
 }
 
 /** "Pensieve could check only 3 materials, about 9 h, and found nothing on advanced stitches or finishing" */
-export function thinText(input: { researched: number; sizedMinutes: number; open: string[]; hasBackbone: boolean }): string {
-  const { researched, sizedMinutes, open } = input;
+export function thinText(input: { researched: number; sizedMinutes: number; open: string[]; hasBackbone: boolean; backboneKnown?: boolean }): string {
+  const { researched, sizedMinutes, open, backboneKnown = true } = input;
   const count = researched === 0 ? "Pensieve could not check any materials" : `Pensieve could check ${researched < 5 ? "only " : ""}${researched} material${researched === 1 ? "" : "s"}`;
   const size = researched > 0 && sizedMinutes > 0 ? `, ${approxDuration(sizedMinutes).replace("≈", "about")},` : "";
-  const gaps = open.length > 0 ? ` and found nothing on ${joinAnd(open.map((a) => a.toLowerCase()))}` : input.hasBackbone ? "" : " and no textbook stood out";
+  const gaps = open.length > 0 ? ` and found nothing on ${joinAnd(open.map((a) => a.toLowerCase()))}` : input.hasBackbone || !backboneKnown ? "" : " and no textbook stood out";
   return `${count}${gaps ? size : size.replace(/,$/, "")}${gaps}`;
 }
 

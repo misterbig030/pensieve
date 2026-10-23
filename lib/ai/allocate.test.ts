@@ -393,6 +393,7 @@ describe("the allocation's backbone, coverage and fallback", () => {
     const answer = prompt.slice(prompt.indexOf("How to answer"));
     const field = (name: string) => answer.split("\n").find((l) => l.startsWith(`- ${name}:`))!;
     expect(field("backbone")).toContain("null");
+    expect(field("backbone")).toContain("give it a part");
     expect(field("coverage")).toContain("covered");
     expect(field("coverage")).toContain("open");
     expect(field("coverage")).toContain("one to three words");
@@ -420,6 +421,31 @@ describe("the allocation's backbone, coverage and fallback", () => {
     const taken = applyAllocation(draft({ backbone: "M1", parts: sixWhole }), six);
     expect(taken.materials.filter((m) => m.backbone).map((m) => m.id)).toEqual(["M1"]);
     expect(taken.facts).toContain("backbone M1");
+  });
+
+  it("keeps a backbone the answer names but gives no part, whole", () => {
+    const rest = sixWhole.slice(1);
+    // Named, no part: kept whole and the backbone, not dropped as "not chosen".
+    const out = applyAllocation(draft({ backbone: "M1", parts: rest }), six);
+    expect(out.materials.find((m) => m.id === "M1")).toEqual({ ...sixBook, backbone: true });
+    expect(out.materials.filter((m) => m.backbone).map((m) => m.id)).toEqual(["M1"]);
+    expect(out.dropped.map((d) => d.title)).not.toContain(sixBook.title);
+    expect(out.facts).toContain("backbone M1");
+    // Named and explicitly dropped: refused, as before.
+    const refused = applyAllocation(draft({ backbone: "M1", parts: [...rest, { id: "M1", drop: true, dropReason: "too long" }] }), six);
+    expect(refused.materials.filter((m) => m.backbone)).toEqual([]);
+    expect(refused.facts).toContain("backbone M1 refused: dropped by the plan");
+    // A named backbone is a mention: it alone is not "nothing usable", so no fallback.
+    const alone = applyAllocation(draft({ backbone: "M1", parts: [] }), six);
+    expect(alone.facts).not.toContain("no researched material mentioned");
+    expect(alone.facts).not.toContain("fallback chose the materials");
+    expect(alone.materials.map((m) => m.id)).toEqual(["M1", "M5"]);
+    expect(alone.materials[0].backbone).toBe(true);
+    // A name that could not be the backbone is no mention and keeps no material: the fallback still applies.
+    expect(applyAllocation(draft({ backbone: "M2", parts: [] }), six).facts).toContain("no researched material mentioned");
+    // A named backbone that is not eligible and has no part is dropped as before.
+    const ineligible = applyAllocation(draft({ backbone: "M2", parts: [{ id: "M3" }] }), six);
+    expect(ineligible.materials.map((m) => m.id)).toEqual(["M3", "M5"]);
   });
 
   it("keeps one backbone at most", () => {

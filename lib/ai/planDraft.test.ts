@@ -142,11 +142,13 @@ describe("streamPlanDraft and the allocation", () => {
     expect(first[0]).toMatchObject({ type: "allocated", coverage });
 
     mockedGenerateObject.mockReset();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
     mockedGenerateObject.mockRejectedValue(new Error("down"));
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const second: PlanDraftEvent[] = [];
     for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", hoursPerWeek: 10, materials: [bookOfSix()] })) second.push(event);
     expect(second[0]).toMatchObject({ type: "allocated", coverage: null });
+    error.mockRestore();
   });
 
   it("allocates after research, then sends the allocated materials and the split before any node", async () => {

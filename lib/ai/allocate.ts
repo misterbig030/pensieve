@@ -160,7 +160,7 @@ export function buildAllocationPrompt(input: AllocationInput): string {
     "How to answer:",
     "- parts: one entry for every material listed, by id, with the part the plan uses or a drop; a researched material with no entry is not used. For a material with a chapter list, chapters are the bracketed positions the plan keeps. For other reading, minutes and uses name the part. Give minutes for any kept reading whose size is unknown, so its time is counted. For a practice source, items is how many of its items the plan works through, and uses says which. Leave a field null to keep that material whole.",
     "- drop: true, with dropReason, for a researched material the plan won't use; say why in a few words. Length alone is not a reason.",
-    "- backbone: the id of the book the plan follows in order, or null when no book suits.",
+    "- backbone: the id of the book the plan follows in order, or null when no book suits. The backbone stays in the plan: give it a part.",
     `- picks: the formats the practice time goes to, at most ${MAX_PRACTICE_PICKS}, each with its share of the practice time (the shares sum to 100), a focus saying what it is aimed at, and a one-sentence reason. Pick none when the plan is all reading.`,
     "- readingShare: your own estimate of the percent of all study time spent reading or watching.",
     "- practice: the practice in two or three words, in the topic's own terms.",
@@ -258,6 +258,11 @@ export interface Allocation {
   coverage: Coverage | null;
 }
 
+/** A part that keeps a material whole: every field null, no drop. */
+function wholePart(id: string): AllocationPart {
+  return { id, uses: null, minutes: null, chapters: null, items: null, drop: false, dropReason: null };
+}
+
 /** Why a book may not be the backbone, or null when it may: only a kept book Open Library matched, or the learner's own. */
 function backboneRefusal(id: string, input: Material[], kept: Material[]): string | null {
   const m = input.find((x) => x.id === id);
@@ -298,10 +303,14 @@ export function applyAllocation(draft: AllocationDraft, input: AllocationInput):
     const id = typeof part?.id === "string" ? part.id.trim() : "";
     if (known.has(id) && !parts.has(id)) parts.set(id, part);
   }
+  // A backbone the answer names but gives no part is kept whole: it is a mention, and the plan follows it. Only an
+  // explicit drop (a part with drop: true) loses it. One that couldn't be the backbone keeps nothing by being named.
+  const proposed = typeof draft.backbone === "string" && draft.backbone.trim() ? draft.backbone.trim() : null;
+  const namedBackbone = proposed && !parts.has(proposed) && backboneRefusal(proposed, input.materials, input.materials) === null ? proposed : null;
   // Nothing usable: research supplied materials and the answer has no part or drop for any of them. Dropping them all
   // as not chosen would empty the plan, so code chooses instead. A partial answer is applied as it stands.
   const researched = input.materials.filter((m) => m.origin !== "learner");
-  if (researched.length > 0 && !researched.some((m) => parts.has(m.id))) {
+  if (researched.length > 0 && !researched.some((m) => parts.has(m.id) || m.id === namedBackbone)) {
     const fallback = fallbackAllocation(input);
     return { ...fallback, facts: ["no researched material mentioned", ...fallback.facts] };
   }
@@ -310,7 +319,7 @@ export function applyAllocation(draft: AllocationDraft, input: AllocationInput):
   const dropped: DroppedMaterial[] = [];
   const materialFacts: string[] = [];
   for (const m of input.materials) {
-    const part = parts.get(m.id);
+    const part = parts.get(m.id) ?? (m.id === namedBackbone ? wholePart(m.id) : undefined);
     if (!part) {
       // The prompt asks for a part or a drop for every material: a researched one left out is not used.
       if (m.origin === "learner") materials.push(m);
@@ -361,7 +370,6 @@ export function applyAllocation(draft: AllocationDraft, input: AllocationInput):
   // The parts never depend on the split: an unusable one makes the plan all reading and keeps them.
   const split = splitOf(normalizePicks(kept)) ?? ALL_READING;
 
-  const proposed = typeof draft.backbone === "string" && draft.backbone.trim() ? draft.backbone.trim() : null;
   const refusal = proposed ? backboneRefusal(proposed, input.materials, materials) : null;
   const backbone = proposed && !refusal ? proposed : null;
   const backboneFact = !proposed ? "no backbone" : refusal ? `backbone ${proposed} refused: ${refusal}` : `backbone ${proposed}`;

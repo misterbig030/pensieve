@@ -379,11 +379,13 @@ export function readsOf(sources: FoundSource[]): ArmRead[] {
 /**
  * Facts for the candidates call: each page a researcher read that no candidate and no learner source points to, by
  * address or final address. A page the learner supplied is kept whatever the list says, so it is never "left out".
- * A page two directions read is one fact.
+ * A page some candidate lists in `recommendedBy` was read for its recommendations, not missed as a source, so it is
+ * not a fact either. A page two directions read is one fact.
  */
-export function readButNotListed(reads: ArmRead[], candidates: { url: string }[], learner: { url: string }[]): string[] {
+export function readButNotListed(reads: ArmRead[], candidates: { url: string; recommendedBy?: string[] }[], learner: { url: string }[]): string[] {
   const key = (url: string) => canonicalUrl(url) ?? url;
   const listed = new Set([...candidates, ...learner].map((c) => key(c.url)));
+  for (const c of candidates) for (const r of c.recommendedBy ?? []) listed.add(key(r));
   const left = new Map<string, { url: string; directions: string[] }>();
   for (const read of reads) {
     if (read.direction === "learner") continue;

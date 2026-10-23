@@ -458,6 +458,12 @@ describe("extraction: every credible source, no choosing", () => {
     expect(readButNotListed(reads, listed, [])).toEqual(["read but not listed: https://github.com/mdmzfzl/NeetCode-Solutions (practice)"]);
     // A learner source is always kept, so a page read for it is not "left out".
     expect(readButNotListed([{ url: "https://c.example/mine", finalUrl: null, direction: "research" }], [], [{ url: "https://c.example/mine" }])).toEqual([]);
+    // A page a candidate lists as a recommender was read for its recommendations, not missed as a source.
+    const guide = { url: "https://blog.example/best-books", finalUrl: "https://blog.example/best-books/", direction: "canonical" };
+    const recommending = { ...cand("https://books.example/b"), recommendedBy: ["https://blog.example/best-books"] };
+    expect(readButNotListed([guide], [recommending], [])).toEqual([]);
+    expect(readButNotListed([{ ...guide, url: "https://blog.example/best-books/", finalUrl: null }], [recommending], [])).toEqual([]);
+    expect(readButNotListed([guide], [cand("https://books.example/b")], [])).toEqual(["read but not listed: https://blog.example/best-books (canonical)"]);
     // One page read by two directions is one fact.
     const twice = [
       { url: "https://d.example/p", finalUrl: null, direction: "canonical" },

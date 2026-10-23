@@ -96,3 +96,22 @@ describe("MaterialsList coverage and dropped groups", () => {
     expect(html).not.toContain("Rejected by checks");
   });
 });
+
+describe("MaterialsList while the allocation is pending", () => {
+  const text = (props: Partial<MaterialsListProps>) => render(props).replace(/<!-- -->/g, "");
+
+  it("says nothing about the backbone until the allocation has chosen one", () => {
+    expect(text({})).toContain("No backbone");
+    const pending = text({ awaitingBackbone: true });
+    expect(pending).not.toContain("No backbone");
+    expect(pending).toContain("Book");
+    // Once chosen, the backbone card shows whether or not the flag is still up.
+    expect(text({ awaitingBackbone: false, materials: [material({ id: "M1", title: "Book", origin: "research", backbone: true })] })).toContain("Backbone");
+  });
+
+  it("does not tell the learner no textbook stood out before the allocation has looked", () => {
+    const thin = { notice: "thin" as const, coverage: { covered: [], open: [] } };
+    expect(text(thin)).toContain("no textbook stood out");
+    expect(text({ ...thin, awaitingBackbone: true })).not.toContain("no textbook stood out");
+  });
+});

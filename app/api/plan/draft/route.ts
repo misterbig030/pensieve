@@ -13,7 +13,8 @@ import { sourceInputSchema } from "@/lib/schemas/source";
 import { MAX_WEEKS } from "@/lib/planTree";
 import { DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema } from "@/lib/studyTime";
 
-// Research (a minute or two at most) runs before drafting in the same request.
+// One request runs it all in series: research (the workers, then the candidates step), the gate's page and catalogue
+// checks, the chapter finders, the allocation (Opus at high effort), then the outline. Several minutes in all.
 export const maxDuration = 300;
 
 const bodySchema = z.object({
