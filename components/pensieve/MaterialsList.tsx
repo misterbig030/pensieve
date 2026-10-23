@@ -48,8 +48,12 @@ export interface MaterialsListProps {
   /** Candidates the gate refused, shown struck through with the reason. */
   dropped?: DroppedMaterial[];
   notice?: ResearchNotice;
-  /** The topic's main areas research covered and left open. Known only right after research. */
+  /** The topic's main areas: what research found until the allocation states the plan's. Known only for a fresh draft. */
   coverage?: Coverage | null;
+  /** Whose `coverage` it is. Research's is labelled "Research found", never "Covered / Not covered". Default: research. */
+  coverageSource?: "plan" | "research";
+  /** What research found, for the thin-list notice; defaults to `coverage`. */
+  researchCoverage?: Coverage | null;
   /** The plan's study hours in all, to set the list's size against. */
   totalHours?: number;
   /** Where each material is used, for the remove confirmation. Omit with `onRemove` for a read-only list. */
@@ -63,7 +67,9 @@ export interface MaterialsListProps {
 
 /** The plan-level materials list: the backbone pinned first, the rest grouped by kind. */
 export function MaterialsList(props: MaterialsListProps) {
-  const { materials, dropped = [], notice, coverage, initialShown = 6 } = props;
+  const { materials, dropped = [], notice, coverage, coverageSource = "research", initialShown = 6 } = props;
+  const checked = dropped.filter((d) => d.stage !== "plan");
+  const unused = dropped.filter((d) => d.stage === "plan");
   const [showAll, setShowAll] = useState(false);
   const [removing, setRemoving] = useState<Material | null>(null);
 
@@ -79,7 +85,7 @@ export function MaterialsList(props: MaterialsListProps) {
   return (
     <div className="flex flex-col gap-3">
       {notice && (
-        <ResearchNoticeBanner notice={notice} topic={props.topic} researched={researched} sizedMinutes={sized} coverage={coverage} hasBackbone={!!backbone} onResearchAgain={props.onResearchAgain} />
+        <ResearchNoticeBanner notice={notice} topic={props.topic} researched={researched} sizedMinutes={sized} coverage={props.researchCoverage ?? coverage} hasBackbone={!!backbone} onResearchAgain={props.onResearchAgain} />
       )}
 
       {materials.length > 0 && (
@@ -102,7 +108,7 @@ export function MaterialsList(props: MaterialsListProps) {
               {unsized > 0 ? `, not counting ${unsized} with no size` : ""}. Sizes are for the part the plan uses. How much of it is required is the plan&apos;s call, week by week.
             </p>
           )}
-          {coverage && (coverage.covered.length > 0 || coverage.open.length > 0) && <CoverageChips coverage={coverage} />}
+          {coverage && (coverage.covered.length > 0 || coverage.open.length > 0) && <CoverageChips coverage={coverage} source={coverageSource} />}
 
           {backbone ? (
             <BackboneCard material={backbone} onRemove={props.onRemove ? () => setRemoving(backbone) : undefined} />
@@ -127,23 +133,8 @@ export function MaterialsList(props: MaterialsListProps) {
             </Button>
           )}
 
-          {dropped.length > 0 && (
-            <details className="group text-[12.5px]">
-              <summary className="cursor-pointer text-muted-foreground select-none hover:text-foreground">
-                {dropped.length} more considered and left out
-              </summary>
-              <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0">
-                {dropped.map((d, i) => (
-                  <li key={`${d.title}-${i}`} className="flex min-w-0 items-baseline gap-2 text-muted-foreground">
-                    <X className="size-3 shrink-0 translate-y-0.5" strokeWidth={2.75} />
-                    <span className="min-w-0">
-                      <span className="line-through">{d.title}</span> · {d.reason}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
+          <DroppedGroup heading="Rejected by checks" items={checked} />
+          <DroppedGroup heading="Found but not used" items={unused} />
         </section>
       )}
 
@@ -296,17 +287,41 @@ function PracticeLine({ material: m }: { material: Material }) {
   return <span className="text-xs text-muted-foreground">{[practiceTag(m.practice), m.practice.minutes ? approxDuration(m.practice.minutes) : null].filter(Boolean).join(" · ")}</span>;
 }
 
-function CoverageChips({ coverage }: { coverage: Coverage }) {
+/** One group of what was considered and left out, with its count and each one's reason; nothing when it is empty. */
+function DroppedGroup({ heading, items }: { heading: string; items: DroppedMaterial[] }) {
+  if (items.length === 0) return null;
+  return (
+    <details className="group text-[12.5px]">
+      <summary className="cursor-pointer text-muted-foreground select-none hover:text-foreground">
+        {heading} ({items.length})
+      </summary>
+      <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0">
+        {items.map((d, i) => (
+          <li key={`${d.title}-${i}`} className="flex min-w-0 items-baseline gap-2 text-muted-foreground">
+            <X className="size-3 shrink-0 translate-y-0.5" strokeWidth={2.75} />
+            <span className="min-w-0">
+              <span className="line-through">{d.title}</span> · {d.reason}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** Research's coverage reads "Research found" (what it found, not what the plan does); the plan's reads covered / not covered. */
+function CoverageChips({ coverage, source }: { coverage: Coverage; source: "plan" | "research" }) {
   const { areas, practice } = splitCoverage(coverage.open);
+  const research = source === "research";
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      {coverage.covered.length > 0 && <span className="text-muted-foreground">Covered</span>}
+      {coverage.covered.length > 0 && <span className="text-muted-foreground">{research ? "Research found" : "Covered"}</span>}
       {coverage.covered.map((area) => (
         <span key={`c-${area}`} className="rounded-full bg-accent-2-200 px-2.5 py-1 font-semibold text-accent-2-800">
           {area}
         </span>
       ))}
-      {areas.length > 0 && <span className={cn("text-muted-foreground", coverage.covered.length > 0 && "ml-2")}>Not covered</span>}
+      {areas.length > 0 && <span className={cn("text-muted-foreground", coverage.covered.length > 0 && "ml-2")}>{research ? "Research found nothing on" : "Not covered"}</span>}
       {areas.map((area) => (
         <span key={`o-${area}`} className="rounded-full border border-dashed border-neutral-600 px-2.5 py-1 text-neutral-800">
           {area}

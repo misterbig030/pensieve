@@ -55,4 +55,6 @@ export interface DroppedMaterial {
   title: string;
   url?: string;
   reason: string;
+  /** Who refused it: the verification `"checks"` (also when unset) or the allocation, which judged it `"plan"`. */
+  stage?: "checks" | "plan";
 }

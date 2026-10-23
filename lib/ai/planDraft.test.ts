@@ -133,6 +133,22 @@ describe("streamPlanDraft and the allocation", () => {
   const weeks = (n: number): UnitDraft[] => Array.from({ length: n }, (_, i) => ({ title: `W${i + 1}`, summary: "s" }));
   const keepThree = { ...ALLOCATION, parts: [{ id: "M1", uses: null, minutes: null, chapters: [1, 2, 3], items: null, drop: false, dropReason: null }] };
 
+  it("emits the plan's coverage with the allocated materials, and null when the allocation fails", async () => {
+    const coverage = { covered: ["Branching"], open: ["Rebasing"] };
+    respondAllocate({ ...keepThree, coverage });
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const first: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", hoursPerWeek: 10, materials: [bookOfSix()] })) first.push(event);
+    expect(first[0]).toMatchObject({ type: "allocated", coverage });
+
+    mockedGenerateObject.mockReset();
+    mockedGenerateObject.mockRejectedValue(new Error("down"));
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const second: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", hoursPerWeek: 10, materials: [bookOfSix()] })) second.push(event);
+    expect(second[0]).toMatchObject({ type: "allocated", coverage: null });
+  });
+
   it("allocates after research, then sends the allocated materials and the split before any node", async () => {
     respondAllocate(keepThree);
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
@@ -215,7 +231,7 @@ describe("streamPlanDraft and the allocation", () => {
     const allocated = events[0];
     if (allocated.type !== "allocated") throw new Error("no allocated event");
     expect(allocated.materials.map((m) => m.id)).toEqual(["M1"]);
-    expect(allocated.dropped).toEqual([{ title: "Found essay", url: "https://example.com/M2", reason: "not used by the plan: the book covers it" }]);
+    expect(allocated.dropped).toEqual([{ title: "Found essay", url: "https://example.com/M2", reason: "not used by the plan: the book covers it", stage: "plan" }]);
     expect((mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt).not.toContain("Found essay");
   });
 
@@ -252,7 +268,7 @@ describe("streamPlanDraft and the allocation", () => {
     const materials = [material("M1")];
     const events: PlanDraftEvent[] = [];
     for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials })) events.push(event);
-    expect(events[0]).toEqual({ type: "allocated", materials, dropped: [] });
+    expect(events[0]).toEqual({ type: "allocated", materials, dropped: [], coverage: null });
     expect(events[1]).toEqual({ type: "split", split: { readingShare: 100, practice: "reading", reason: "", formats: [] } });
     expect(events.at(-1)?.type).toBe("finish");
     error.mockRestore();

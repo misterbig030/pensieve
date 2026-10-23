@@ -1,6 +1,8 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Material, MaterialPractice } from "@/lib/schemas/material";
-import { materialTotals, practiceTag, shownRows, splitCoverage } from "./MaterialsList";
+import { MaterialsList, materialTotals, practiceTag, shownRows, splitCoverage, type MaterialsListProps } from "./MaterialsList";
 
 const practice = (over: Partial<MaterialPractice> = {}): MaterialPractice => ({ format: "problem-set", items: 150, perItemMinutes: 10, minutes: 1500, answers: true, ...over });
 const material = (over: Partial<Material>): Material => ({ id: "M1", title: "T", kind: "book", minutes: null, practice: null, ...over }) as Material;
@@ -45,5 +47,52 @@ describe("shownRows", () => {
     expect(shownRows(ordered, 4).map((m) => m.id)).toEqual(["R1", "R2", "R3", "R4", "P1", "P2"]);
     expect(shownRows([...ordered, bank("P3"), bank("P4"), bank("P5")], 4).map((m) => m.id)).toEqual(["R1", "R2", "R3", "R4", "P1", "P2", "P3", "P4"]);
     expect(shownRows(reading.slice(0, 2), 4)).toHaveLength(2);
+  });
+});
+
+const render = (props: Partial<MaterialsListProps>) =>
+  renderToStaticMarkup(createElement(MaterialsList, { topic: "T", materials: [material({ id: "M1", title: "Book", origin: "research" })], ...props }));
+
+describe("MaterialsList coverage and dropped groups", () => {
+  const coverage = { covered: ["Arrays"], open: ["Graphs"] };
+
+  it("labels research's coverage as what research found, and the plan's as covered and not covered", () => {
+    const research = render({ coverage, coverageSource: "research" });
+    expect(research).toContain("Research found");
+    expect(research).toContain("Arrays");
+    expect(research).not.toContain("Covered");
+    expect(research).not.toContain("Not covered");
+
+    const plan = render({ coverage, coverageSource: "plan" });
+    expect(plan).toContain("Covered");
+    expect(plan).toContain("Not covered");
+    expect(plan).not.toContain("Research found");
+  });
+
+  it("splits what was left out into rejected by checks and found but not used", () => {
+    const html = render({
+      dropped: [
+        { title: "Dead page", reason: "page would not open" },
+        { title: "Old edition", reason: "title mismatch", stage: "checks" },
+        { title: "Long video", reason: "not used by the plan: too long", stage: "plan" },
+      ],
+    });
+    expect(html).toContain("Rejected by checks");
+    expect(html).toContain("Found but not used");
+    const [checks, notUsed] = html.split("Found but not used").map((part, i) => (i === 0 ? part.slice(part.indexOf("Rejected by checks")) : part));
+    expect(checks).toContain("Dead page");
+    expect(checks).toContain("Old edition");
+    expect(checks).not.toContain("Long video");
+    expect(notUsed).toContain("Long video");
+    expect(notUsed).toContain("not used by the plan: too long");
+    const text = html.replace(/<!-- -->/g, "");
+    expect(text).toContain("Rejected by checks (2)");
+    expect(text).toContain("Found but not used (1)");
+  });
+
+  it("shows only the group that has entries", () => {
+    const html = render({ dropped: [{ title: "Long video", reason: "too long", stage: "plan" }] });
+    expect(html).toContain("Found but not used");
+    expect(html).not.toContain("Rejected by checks");
   });
 });

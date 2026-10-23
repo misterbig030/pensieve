@@ -136,6 +136,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [notice, setNotice] = useState<ResearchNotice | undefined>(undefined);
   const [research, setResearch] = useState<ResearchProgressState | null>(null);
   const [coverage, setCoverage] = useState<Coverage | null>(null);
+  // What research found, kept for the thin-list notice after the plan's coverage replaces `coverage`.
+  const [researchCoverage, setResearchCoverage] = useState<Coverage | null>(null);
+  const [coverageSource, setCoverageSource] = useState<DraftMaterials["coverageSource"]>("research");
   // The learner's hours and the plan's split: both can be changed here, and both are sent with every later request.
   const [hoursPerWeek, setHoursPerWeek] = useState<number>(props.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK);
   const [daysPerWeek, setDaysPerWeek] = useState<number>(props.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK);
@@ -170,6 +173,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setDropped([]);
     setNotice(undefined);
     setCoverage(null);
+    setCoverageSource("research");
+    setResearchCoverage(null);
     setSplit(null);
     setResearch(initialResearch());
     const topLevel = topLevelFor(weeks);
@@ -181,7 +186,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     const draftRoot = makeRoot([]);
     draftRoot.len = spans.reduce((a, b) => a + b, 0);
     const slots: Record<string, PendingSlots> = { root: { count: spans.length, groups: !leafLevel(topLevel, granularity) } };
-    let held: DraftMaterials = { materials: [], dropped: [] };
+    let held: DraftMaterials = { materials: [], dropped: [], coverage: null, coverageSource: "research" };
     let decided: PlanSplit | null = null;
     const publish = () => {
       setTree(cloneTree(layout(draftRoot, 1, new Set(Object.keys(slots)))));
@@ -205,7 +210,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             setMaterials(held.materials);
             setDropped(held.dropped);
             setNotice(researchEvent.notice);
-            setCoverage(researchEvent.coverage ?? null);
+            setCoverage(held.coverage);
+            setCoverageSource(held.coverageSource);
+            setResearchCoverage(held.coverage);
             publish();
           }
         } else if (event.type === "allocated") {
@@ -213,6 +220,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           held = applyDraftEvent(held, event);
           setMaterials(held.materials);
           setDropped(held.dropped);
+          setCoverage(held.coverage);
+          setCoverageSource(held.coverageSource);
         } else if (event.type === "split") {
           decided = event.split;
           setSplit(event.split);
@@ -641,6 +650,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             dropped={dropped}
             notice={notice}
             coverage={coverage}
+            coverageSource={coverageSource}
+            researchCoverage={researchCoverage}
             totalHours={totalHours(planWeeks, hoursPerWeek)}
             usesOf={(id) => assignmentsOf(tree, id).map(({ label, role }) => ({ label, role }))}
             onRemove={streaming || busy || confirming ? undefined : removeMaterial}

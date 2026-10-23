@@ -367,7 +367,7 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
     split = allocated.split;
     materials = allocated.materials;
     costUsd += allocated.costUsd;
-    yield { type: "allocated", materials, dropped: allocated.dropped };
+    yield { type: "allocated", materials, dropped: allocated.dropped, coverage: allocated.coverage };
     yield { type: "split", split };
   }
 

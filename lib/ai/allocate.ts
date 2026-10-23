@@ -315,7 +315,7 @@ export function applyAllocation(draft: AllocationDraft, input: AllocationInput):
       // The prompt asks for a part or a drop for every material: a researched one left out is not used.
       if (m.origin === "learner") materials.push(m);
       else {
-        dropped.push({ title: m.title, url: m.url, reason: "not used by the plan: not chosen" });
+        dropped.push({ title: m.title, url: m.url, reason: "not used by the plan: not chosen", stage: "plan" });
         materialFacts.push(`dropped ${m.id} "${m.title}": not chosen`);
       }
       continue;
@@ -325,7 +325,7 @@ export function applyAllocation(draft: AllocationDraft, input: AllocationInput):
         materialFacts.push(`${m.id} is the learner's own; kept`);
       } else {
         const reason = clip(part.dropReason, 200) ?? "no reason given";
-        dropped.push({ title: m.title, url: m.url, reason: `not used by the plan: ${reason}` });
+        dropped.push({ title: m.title, url: m.url, reason: `not used by the plan: ${reason}`, stage: "plan" });
         materialFacts.push(`dropped ${m.id} "${m.title}": ${reason}`);
         continue;
       }
@@ -430,7 +430,7 @@ export function fallbackAllocation(input: AllocationInput): Allocation {
       input.materials.filter((m) => kept.has(m.id)),
       backbone?.id ?? null,
     ),
-    dropped: skipped.map((m) => ({ title: m.title, url: m.url, reason: "not used by the plan: did not fit the plan's hours" })),
+    dropped: skipped.map((m) => ({ title: m.title, url: m.url, reason: "not used by the plan: did not fit the plan's hours", stage: "plan" })),
     facts: [
       "fallback chose the materials",
       backbone ? `backbone ${backbone.id}` : "no backbone",

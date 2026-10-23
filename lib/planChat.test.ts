@@ -8,6 +8,8 @@ describe("applyDraftEvent", () => {
   const researched: DraftMaterials = {
     materials: [material("book"), material("videos")],
     dropped: [{ title: "old", reason: "off topic" }],
+    coverage: null,
+    coverageSource: "research",
   };
 
   it("an allocated event replaces the materials and keeps research's drops, adding its own", () => {
@@ -15,13 +17,14 @@ describe("applyDraftEvent", () => {
     const event: PlanDraftEvent = {
       type: "allocated",
       materials: cut,
-      dropped: [{ title: "videos", reason: "not used by the plan: too long" }],
+      dropped: [{ title: "videos", reason: "not used by the plan: too long", stage: "plan" }],
+      coverage: null,
     };
     const next = applyDraftEvent(researched, event);
     expect(next.materials).toBe(cut);
     expect(next.dropped).toEqual([
       { title: "old", reason: "off topic" },
-      { title: "videos", reason: "not used by the plan: too long" },
+      { title: "videos", reason: "not used by the plan: too long", stage: "plan" },
     ]);
     expect(researched.dropped).toHaveLength(1);
   });
@@ -32,9 +35,26 @@ describe("applyDraftEvent", () => {
       materials: [material("a")],
       dropped: [{ title: "x", reason: "dead link" }],
     } as unknown as PlanDraftEvent;
-    const next = applyDraftEvent({ materials: [], dropped: [{ title: "stale", reason: "r" }] }, event);
+    const next = applyDraftEvent({ materials: [], dropped: [{ title: "stale", reason: "r" }], coverage: null, coverageSource: "research" }, event);
     expect(next.materials).toHaveLength(1);
     expect(next.dropped).toEqual([{ title: "x", reason: "dead link" }]);
+  });
+
+  it("takes the plan's coverage from the allocated event, and research's only as what research found", () => {
+    const R = { covered: ["Arrays"], open: ["Graphs"] };
+    const P = { covered: ["Arrays", "Graphs"], open: [] };
+    const done = { type: "research.done", materials: [material("a")], dropped: [], coverage: R } as unknown as PlanDraftEvent;
+    const afterResearch = applyDraftEvent({ materials: [], dropped: [], coverage: null, coverageSource: "research" }, done);
+    expect(afterResearch).toMatchObject({ coverage: R, coverageSource: "research" });
+
+    const planned = applyDraftEvent(afterResearch, { type: "allocated", materials: [material("a")], dropped: [], coverage: P });
+    expect(planned).toMatchObject({ coverage: P, coverageSource: "plan" });
+
+    const fallback = applyDraftEvent(afterResearch, { type: "allocated", materials: [material("a")], dropped: [], coverage: null });
+    expect(fallback).toMatchObject({ coverage: R, coverageSource: "research" });
+
+    const none = applyDraftEvent(afterResearch, { type: "research.done", materials: [], dropped: [] } as unknown as PlanDraftEvent);
+    expect(none).toMatchObject({ coverage: null, coverageSource: "research" });
   });
 
   it("leaves the state alone for any other event", () => {

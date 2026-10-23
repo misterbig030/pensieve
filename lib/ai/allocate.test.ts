@@ -100,13 +100,13 @@ describe("applyAllocation", () => {
     expect(out.split.readingShare).toBe(22); // (600 + 30) / 2880
     expect(out.facts).toContain("model reading 70% → 22% from the parts");
     expect(out.facts).toContain("reading parts 10.5 h of 48 h");
-    expect(out.dropped).toEqual([{ title: "Essay", url: "https://e.example/a", reason: "not used by the plan: covered by the book" }]);
+    expect(out.dropped).toEqual([{ title: "Essay", url: "https://e.example/a", reason: "not used by the plan: covered by the book", stage: "plan" }]);
     expect(out.materials.map((m) => m.id)).toEqual(["M1", "M3", "M4"]);
   });
 
   it("says a dropped material had no reason when the model gave none", () => {
     const out = applyAllocation(draft({ parts: withRest([{ id: "M2", drop: true }]) }), input);
-    expect(out.dropped).toEqual([{ title: "Essay", url: "https://e.example/a", reason: "not used by the plan: no reason given" }]);
+    expect(out.dropped).toEqual([{ title: "Essay", url: "https://e.example/a", reason: "not used by the plan: no reason given", stage: "plan" }]);
   });
 
   it("keeps only the chosen chapters and sizes the book from them", () => {
@@ -437,7 +437,7 @@ describe("the allocation's backbone, coverage and fallback", () => {
     expect(out.materials.map((m) => m.id)).toEqual(["M1", "M5"]);
     expect(out.materials[1]).toEqual(sixNote);
     expect(out.dropped).toEqual(
-      [sixUncatalogued, sixEssay, sixProblems, sixCourse].map((m) => ({ title: m.title, url: m.url, reason: "not used by the plan: not chosen" })),
+      [sixUncatalogued, sixEssay, sixProblems, sixCourse].map((m) => ({ title: m.title, url: m.url, reason: "not used by the plan: not chosen", stage: "plan" })),
     );
     for (const m of [sixUncatalogued, sixEssay, sixProblems, sixCourse]) expect(out.facts).toContain(`dropped ${m.id} "${m.title}": not chosen`);
   });
@@ -489,6 +489,7 @@ describe("the allocation's backbone, coverage and fallback", () => {
     expect(out.materials.map((m) => m.id)).toEqual(["M1", "M2", "M3", "M4", "M5"]);
     expect(out.materials.filter((m) => m.backbone).map((m) => m.id)).toEqual(["M1"]);
     expect(out.dropped.map((d) => d.title)).toEqual(["Long Course"]);
+    expect(out.dropped.every((d) => d.stage === "plan")).toBe(true);
     expect(out.split).toEqual(ALL_READING);
     expect(out.coverage).toBeNull();
     expect(out.facts).toContain("fallback chose the materials");
