@@ -25,14 +25,14 @@ export interface ResearchBrief {
   weeks: number;
   /** Study days a week; seven when not stated. */
   daysPerWeek?: number;
-  /** Hours a week the learner can give. Research sizes its list against the total; six when not stated. */
+  /** Hours a week the learner can give. Research sizes its reading list against the total's reading part; six when not stated. */
   hoursPerWeek?: number;
   sources: SourceInput[];
   /** How the plan's time divides between reading and practice, picked before research; its practice picks tell research what else to look for. */
   split?: PlanSplit;
 }
 
-/** Study hours over the whole plan: the ceiling research sizes its list against. */
+/** Study hours over the whole plan: what research's budget scales with. Its reading list is sized by `readingHours`. */
 export function briefHours(brief: Pick<ResearchBrief, "weeks" | "hoursPerWeek">): number {
   return totalHours(brief.weeks, brief.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK);
 }
@@ -124,6 +124,16 @@ export function practiceLines(picks: PracticePick[]): string[] {
   return picks.map((pick) => `- ${PRACTICE_REGISTRY[pick.format].research} for: ${pick.focus}`);
 }
 
+/**
+ * The hours of reading or watching the plan has room for: its study hours times the split's reading share, at least
+ * one, and all of them without a split. What research lists to read is sized against this, not the study hours, so
+ * a plan that is mostly practice is not handed a reading list it has no time for.
+ */
+export function readingHours(brief: Pick<ResearchBrief, "weeks" | "hoursPerWeek" | "split">): number {
+  const hours = briefHours(brief);
+  return brief.split ? Math.max(1, Math.round((hours * brief.split.readingShare) / 100)) : hours;
+}
+
 /** The practice picks of a brief's split; none when the plan is all reading or has no split. */
 export function picksOf(brief: Pick<ResearchBrief, "split">): PracticePick[] {
   return brief.split?.formats ?? [];
@@ -188,7 +198,7 @@ export function buildFinalPrompt(brief: ResearchBrief, notes: string, options: {
     [
       `Now list the materials.`,
       `"learner": one entry per source the learner provided, in their order, with its url exactly as given, its kind and one line on what it is.${practice?.learner ?? ""}`,
-      `"candidates": the researched materials, the backbone textbook first. Choose a list that covers the topic's main areas and that this learner could get through: together the candidates' minutes must not exceed ${briefHours(brief)} hours, and a short plan needs only a handful. Never invent one.`,
+      `"candidates": the researched materials, the backbone textbook first. Choose a list that covers the topic's main areas and that this learner could get through: together the minutes of what the plan reads or watches must not exceed ${readingHours(brief)} hours, the plan's reading time${practice ? "; practice-only sources have no minutes and do not count" : ""}. A short plan needs only a handful. Never invent one.`,
       `- url: the material's own page, preferably one from the notes. title: exactly as that page gives it; a candidate whose page is titled something else is thrown away.`,
       `- a book is checked against a library catalogue instead, by title and author: give its title as published and always its author. Its url is the publisher's or the author's page for that one book, read or not, and never a shop listing (Amazon or another retailer).`,
       `- kind: book, course, video, docs, essay, paper, repo, tool or note.`,
