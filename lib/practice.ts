@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PracticeItem } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 
 /**
@@ -116,6 +117,21 @@ export const PRACTICE_REGISTRY: Record<PracticeFormat, PracticeFormatSpec> = {
     needsAnswers: false,
   },
 };
+
+/** Minutes for a problem by its difficulty label. Problem lists only: other formats' items are not sized by difficulty. */
+const DIFFICULTY_MINUTES = { easy: 15, medium: 25, hard: 35 } as const;
+
+/**
+ * Minutes of doing for one listed item: its own when the list gives them; for a problem list, by difficulty (easy 15,
+ * medium 25, hard 35); otherwise the format's `perItemMinutes`. A format sized by a block has no per-item time, so it
+ * falls back to its fixed block, and failing that to 10.
+ */
+export function itemMinutes(format: PracticeFormat, item: PracticeItem): number {
+  if (item.minutes) return item.minutes;
+  if (format === "problem-set" && item.difficulty) return DIFFICULTY_MINUTES[item.difficulty];
+  const spec = PRACTICE_REGISTRY[format];
+  return spec.perItemMinutes ?? spec.fixedMinutes ?? 10;
+}
 
 /** Whether a format comes in whole blocks of a fixed size (mock, design-exercise), budgeted over the plan, not per week. */
 export function isBlockFormat(format: PracticeFormat): boolean {

@@ -31,13 +31,18 @@ export interface ResolvedAlias {
   id: string;
   /** 1-based position in the material's chapter list; null for the whole resource. */
   chapter: number | null;
+  /** 1-based position in a practice source's item list; set only by an item alias (`M4.12`), absent otherwise. */
+  item?: number;
 }
 
 export interface MaterialAliases {
-  alias(id: string, chapter?: number | null): string | undefined;
+  /** `M1`, `M1.3` for a chapter (a number), `M4.12` for an item (`{ item: 12 }`). */
+  alias(id: string, part?: number | null | { item: number }): string | undefined;
   resolve(alias: string): ResolvedAlias | undefined;
   /** How many chapters the material's list has; 0 without a list. */
   chapters(id: string): number;
+  /** How many items the practice source's list has; 0 without a list. */
+  items(id: string): number;
   /** The format a practice source serves; null for a material that is reading only. */
   practice(id: string): PracticeFormat | null;
 }
@@ -48,18 +53,22 @@ export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practic
   const toAlias = new Map<string, string>();
   const fromAlias = new Map<string, string>();
   const counts = new Map<string, number>();
+  const itemCounts = new Map<string, number>();
   const formats = new Map<string, PracticeFormat>();
   materials.forEach((m, i) => {
     const alias = `M${i + 1}`;
     toAlias.set(m.id, alias);
     fromAlias.set(alias.toLowerCase(), m.id);
     counts.set(m.id, m.toc?.chapters.length ?? 0);
+    itemCounts.set(m.id, m.practice?.list?.items.length ?? 0);
     if (m.practice) formats.set(m.id, m.practice.format);
   });
   return {
-    alias: (id, chapter) => {
+    alias: (id, part) => {
       const base = toAlias.get(id);
-      return base === undefined ? undefined : chapter ? `${base}.${chapter}` : base;
+      if (base === undefined) return undefined;
+      const n = typeof part === "object" && part !== null ? part.item : part;
+      return n ? `${base}.${n}` : base;
     },
     resolve: (alias) => {
       const m = alias.match(ALIAS_RE);
@@ -67,10 +76,14 @@ export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practic
       const id = fromAlias.get(m[1].toLowerCase());
       if (!id) return undefined;
       if (m[2] === undefined) return { id, chapter: null };
-      const chapter = Number(m[2]);
-      return chapter >= 1 && chapter <= (counts.get(id) ?? 0) ? { id, chapter } : undefined;
+      // A suffix names a chapter of a book with a chapter list, or an item of a practice source with an item list.
+      const n = Number(m[2]);
+      if (n >= 1 && n <= (counts.get(id) ?? 0)) return { id, chapter: n };
+      if (n >= 1 && n <= (itemCounts.get(id) ?? 0)) return { id, chapter: null, item: n };
+      return undefined;
     },
     chapters: (id) => counts.get(id) ?? 0,
+    items: (id) => itemCounts.get(id) ?? 0,
     practice: (id) => formats.get(id) ?? null,
   };
 }
@@ -108,7 +121,8 @@ export function resolveMaterialRefs(
   const seen = new Set<string>();
   for (const draft of refs ?? []) {
     const resolved = aliases.resolve(draft.id);
-    if (!resolved) {
+    // An item alias names a practice row's item, never a reading.
+    if (!resolved || resolved.item !== undefined) {
       unknown.push(draft.id);
       continue;
     }
@@ -125,7 +139,8 @@ export function resolveCoverRefs(refs: CoverRefDraft[] | undefined, aliases: Mat
   const seen = new Set<string>();
   for (const draft of refs ?? []) {
     const resolved = aliases.resolve(draft.id);
-    if (!resolved) {
+    // An item alias names a practice row's item, never a reading.
+    if (!resolved || resolved.item !== undefined) {
       unknown.push(draft.id);
       continue;
     }

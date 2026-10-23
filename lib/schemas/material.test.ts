@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_CHAPTERS, materialPracticeSchema, MAX_HEADING, MAX_SECTIONS, chapterAt, chapterListSchema, coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema, materialSchema, normalizeCoverRef, normalizeMaterialRef, type ChapterList } from "./material";
+import { MAX_CHAPTERS, MAX_PRACTICE_ITEMS, practiceCoverDraftSchema, practiceCoverSchema, practiceRefDraftSchema, practiceRefSchema, materialPracticeSchema, MAX_HEADING, MAX_SECTIONS, chapterAt, chapterListSchema, coverRefDraftSchema, coverRefSchema, materialRefDraftSchema, materialRefSchema, materialSchema, normalizeCoverRef, normalizeMaterialRef, type ChapterList } from "./material";
 
 function chapter(n: number) {
   return { n, title: `Chapter ${n}`, page: n * 10, minutes: 30, sections: ["A", "B"] };
@@ -76,5 +76,41 @@ describe("materialPracticeSchema", () => {
     const p = { format: "problem-set", items: 75, totalItems: 150, perItemMinutes: 10, minutes: 750, answers: true };
     expect(materialPracticeSchema.parse(p).totalItems).toBe(150);
     expect(materialPracticeSchema.parse({ ...p, totalItems: undefined }).totalItems).toBeUndefined();
+  });
+});
+
+describe("a practice source's item list", () => {
+  const item = (i: number) => ({ title: `Problem ${i}`, number: String(i), group: "Arrays", difficulty: "easy" as const, url: `https://example.com/p/${i}`, solutionUrl: null, minutes: null });
+  const practice = { format: "problem-set", items: 3, perItemMinutes: 10, minutes: 30, answers: true };
+  const list = (n: number) => ({ items: Array.from({ length: n }, (_, i) => item(i + 1)), source: "file" as const, url: "https://example.com/list.json" });
+  it("parses a list of three items and is optional and nullable", () => {
+    expect(materialPracticeSchema.parse({ ...practice, list: list(3) }).list?.items).toHaveLength(3);
+    expect(materialPracticeSchema.safeParse(practice).success).toBe(true);
+    expect(materialPracticeSchema.safeParse({ ...practice, list: null }).success).toBe(true);
+  });
+  it("rejects a list of two items or of 501, and a bad difficulty or source", () => {
+    expect(MAX_PRACTICE_ITEMS).toBe(500);
+    expect(materialPracticeSchema.safeParse({ ...practice, list: list(2) }).success).toBe(false);
+    expect(materialPracticeSchema.safeParse({ ...practice, list: list(500) }).success).toBe(true);
+    expect(materialPracticeSchema.safeParse({ ...practice, list: list(501) }).success).toBe(false);
+    expect(materialPracticeSchema.safeParse({ ...practice, list: { ...list(3), source: "web" } }).success).toBe(false);
+    expect(materialPracticeSchema.safeParse({ ...practice, list: { ...list(3), items: [{ ...item(1), difficulty: "brutal" }, item(2), item(3)] } }).success).toBe(false);
+    expect(materialPracticeSchema.safeParse({ ...practice, list: { ...list(3), items: [{ ...item(1), title: " " }, item(2), item(3)] } }).success).toBe(false);
+  });
+  it("keeps a row's and a reservation's item positions when given, and parses without them", () => {
+    const row = { format: "problem-set", id: "u", task: "49. Group Anagrams", done: "solved", minutes: 25, generated: false };
+    expect(practiceRefSchema.safeParse(row).success).toBe(true);
+    expect(practiceRefSchema.parse({ ...row, itemFrom: 12, itemTo: 12 })).toMatchObject({ itemFrom: 12, itemTo: 12 });
+    expect(practiceRefSchema.safeParse({ ...row, itemFrom: null, itemTo: null }).success).toBe(true);
+    expect(practiceRefSchema.safeParse({ ...row, itemFrom: 0 }).success).toBe(false);
+    const cover = { format: "problem-set", id: "u", note: null };
+    expect(practiceCoverSchema.safeParse(cover).success).toBe(true);
+    expect(practiceCoverSchema.parse({ ...cover, itemFrom: 1, itemTo: 9 })).toMatchObject({ itemFrom: 1, itemTo: 9 });
+    expect(practiceCoverSchema.safeParse({ ...cover, itemTo: 501 }).success).toBe(false);
+  });
+  it("lets the model write an item alias as a row's id and a run on a reservation", () => {
+    expect(practiceRefDraftSchema.parse({ format: "problem-set", id: "M4.12", task: "t", done: "d", minutes: 25 }).id).toBe("M4.12");
+    expect(practiceCoverDraftSchema.parse({ format: "problem-set", id: "M4", from: 1, to: 9 })).toMatchObject({ from: 1, to: 9 });
+    expect(practiceCoverDraftSchema.safeParse({ format: "problem-set", id: "M4" }).success).toBe(true);
   });
 });

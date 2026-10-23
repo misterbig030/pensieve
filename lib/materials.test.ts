@@ -15,6 +15,7 @@ import {
   refKey,
   remapTreeRefs,
   removeMaterialRefs,
+  resolveCoverRefs,
   resolveMaterialRefs,
   resolvePracticeCovers,
   resolvePracticeRefs,
@@ -934,3 +935,39 @@ describe("keepPracticeCovers", () => {
   });
 });
 
+describe("item aliases on a listed practice source", () => {
+  const items = (n: number) => Array.from({ length: n }, (_, i) => ({ title: `P${i + 1}`, number: String(i + 1), group: "Arrays", difficulty: null, url: null, solutionUrl: null, minutes: null }));
+  const practice = (n: number | null) => ({ format: "problem-set" as const, items: n ?? 150, perItemMinutes: 10, minutes: null, answers: true, ...(n ? { list: { items: items(n), source: "file" as const, url: "https://example.com/list.json" } } : {}) });
+  const toc = { source: "catalogue" as const, url: "u", printPages: false, end: null, chapters: [1, 2, 3].map((n) => ({ n, title: `C${n}`, page: null, minutes: null, sections: [] })) };
+  // M1 a book, M2 a book without a toc, M3 a practice source with no list, M4 a 100-item list.
+  const aliases = aliasMaterials([{ id: "book", toc }, { id: "plain" }, { id: "bare", practice: practice(null) }, { id: "list", practice: practice(100) }]);
+  it("resolves M4.12 to item 12 of a 100-item list, and nothing past it", () => {
+    expect(aliases.resolve("M4.12")).toEqual({ id: "list", chapter: null, item: 12 });
+    expect(aliases.resolve("m4.100")).toEqual({ id: "list", chapter: null, item: 100 });
+    expect(aliases.resolve("M4.101")).toBeUndefined();
+    expect(aliases.resolve("M4.0")).toBeUndefined();
+    expect(aliases.items("list")).toBe(100);
+    expect(aliases.items("book")).toBe(0);
+  });
+  it("keeps chapter aliases to books: M1.3 is a chapter, M2.3 and an item on a source with no list are unknown", () => {
+    expect(aliases.resolve("M1.3")).toEqual({ id: "book", chapter: 3 });
+    expect(aliases.resolve("M1.3")?.item).toBeUndefined();
+    expect(aliases.resolve("M2.3")).toBeUndefined();
+    expect(aliases.resolve("M3.3")).toBeUndefined();
+    expect(aliases.resolve("M4")).toEqual({ id: "list", chapter: null });
+  });
+  it("a chapter alias on a practice source and an item alias on a book are unknown", () => {
+    const both = aliasMaterials([{ id: "book", toc, practice: undefined }, { id: "list", practice: practice(10) }]);
+    expect(both.resolve("M1.4")).toBeUndefined(); // past a 3-chapter book, and a book has no items
+    expect(both.alias("list", { item: 7 })).toBe("M2.7");
+    expect(both.resolve("M2.7")).toEqual({ id: "list", chapter: null, item: 7 });
+    expect(both.alias("missing", { item: 1 })).toBeUndefined();
+    expect(both.alias("list")).toBe("M2");
+  });
+  it("does not turn an item alias into a reading ref", () => {
+    const { refs, unknown } = resolveMaterialRefs([{ id: "M4.12", tier: "must", minutes: 30 }, { id: "M1.2", tier: "must", minutes: 30 }], aliases);
+    expect(refs.map((r) => r.id)).toEqual(["book"]);
+    expect(unknown).toEqual(["M4.12"]);
+    expect(resolveCoverRefs([{ id: "M4.12" }], aliases).unknown).toEqual(["M4.12"]);
+  });
+});

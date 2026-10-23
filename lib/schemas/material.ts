@@ -78,6 +78,40 @@ export const KIND_LABEL: Record<MaterialKind, string> = {
   note: "Notes",
 };
 
+/** Caps on a practice source's item list: fewer than MIN_PRACTICE_ITEMS is unusable; the rest bound what the prompts carry. */
+export const MIN_PRACTICE_ITEMS = 3;
+export const MAX_PRACTICE_ITEMS = 500;
+
+/** Where a practice source's item list came from: a page that lists the items, or a machine-readable file. */
+export const PRACTICE_LIST_SOURCES = ["page", "file"] as const;
+export type PracticeListSource = (typeof PRACTICE_LIST_SOURCES)[number];
+
+export const PRACTICE_DIFFICULTIES = ["easy", "medium", "hard"] as const;
+export type PracticeDifficulty = (typeof PRACTICE_DIFFICULTIES)[number];
+
+/** One problem, question or step as its source lists it. Its position in the list (1-based) is its identity. */
+export const practiceItemSchema = z.object({
+  title: z.string().trim().min(1).max(300),
+  /** The item's own label on its site ("49"); null when it has none. */
+  number: z.string().trim().min(1).max(20).nullable(),
+  /** The list's own topic name for it; null when the list is not grouped. */
+  group: z.string().trim().min(1).max(120).nullable(),
+  difficulty: z.enum(PRACTICE_DIFFICULTIES).nullable(),
+  url: z.string().trim().min(1).max(2000).nullable(),
+  solutionUrl: z.string().trim().min(1).max(2000).nullable(),
+  /** Minutes of doing, when the list gives them. */
+  minutes: z.number().int().min(1).max(600).nullable(),
+});
+export type PracticeItem = z.infer<typeof practiceItemSchema>;
+
+/** A practice source's items in the source's own order, where they came from, and the page or file they were read from. */
+export const practiceListSchema = z.object({
+  items: z.array(practiceItemSchema).min(MIN_PRACTICE_ITEMS).max(MAX_PRACTICE_ITEMS),
+  source: z.enum(PRACTICE_LIST_SOURCES),
+  url: z.string().trim().min(1).max(2000),
+});
+export type PracticeList = z.infer<typeof practiceListSchema>;
+
 /**
  * A material's role as practice: problems to solve, questions to answer, a lab to follow. `minutes` is doing time,
  * not reading time; `Material.minutes` stays the reading time and is null for a source that is practice only.
@@ -92,6 +126,8 @@ export const materialPracticeSchema = z.object({
   minutes: z.number().int().min(1).max(60000).nullable(),
   /** Whether the source carries answers, solutions or a rubric to check against. */
   answers: z.boolean(),
+  /** The source's items, when research found them. Absent on materials saved before item lists existed. */
+  list: practiceListSchema.nullable().optional(),
 });
 export type MaterialPractice = z.infer<typeof materialPracticeSchema>;
 
@@ -173,6 +209,9 @@ export const practiceRefSchema = z.object({
   done: z.string().trim().min(1).max(300),
   minutes: z.number().int().min(1).max(600),
   generated: z.boolean(),
+  /** 1-based position in the source's item list; a row holds one item, so the two are equal. Null or absent without a list. */
+  itemFrom: z.number().int().min(1).max(MAX_PRACTICE_ITEMS).nullable().optional(),
+  itemTo: z.number().int().min(1).max(MAX_PRACTICE_ITEMS).nullable().optional(),
 });
 export type PracticeRef = z.infer<typeof practiceRefSchema>;
 
@@ -186,6 +225,9 @@ export const practiceCoverSchema = z.object({
   note: z.string().max(300).nullable(),
   task: z.string().max(300).optional(),
   minutes: z.number().int().min(1).max(600).optional(),
+  /** The run of items (inclusive, 1-based) the units inside take from the source's list. Null or absent without a list. */
+  itemFrom: z.number().int().min(1).max(MAX_PRACTICE_ITEMS).nullable().optional(),
+  itemTo: z.number().int().min(1).max(MAX_PRACTICE_ITEMS).nullable().optional(),
 });
 export type PracticeCover = z.infer<typeof practiceCoverSchema>;
 
@@ -210,7 +252,7 @@ export type CoverRefDraft = z.infer<typeof coverRefDraftSchema>;
 /** What the model writes for a leaf's practice row. Code decides `generated`: a row with no source is one the model wrote. */
 export const practiceRefDraftSchema = z.object({
   format: z.string().describe(`One of the plan's picked formats: ${PRACTICE_FORMATS.join(", ")}`),
-  id: z.string().nullable().optional().describe("The practice source's id, or the unit's reading for recall written from it; left out for a row you write"),
+  id: z.string().nullable().optional().describe("The practice source's id (or one of its items, e.g. M4.12), or the unit's reading for recall written from it; left out for a row you write"),
   task: z.string().describe('Exactly what to do and which part ("NeetCode 150 · Arrays & Hashing, problems 1–6")'),
   done: z.string().describe("How the learner knows it is finished"),
   minutes: z.number().describe("Minutes of doing"),
@@ -220,6 +262,8 @@ export const practiceCoverDraftSchema = z.object({
   format: z.string().describe("The picked format this source serves"),
   id: z.string().describe("A practice source's id from the list"),
   note: z.string().optional().describe('The part this unit takes ("Arrays & Hashing; Two Pointers")'),
+  from: z.number().optional().describe("For a source with an item list: the first item this unit takes, by position"),
+  to: z.number().optional().describe("For a source with an item list: the last item this unit takes, by position"),
 });
 export type PracticeRefDraft = z.infer<typeof practiceRefDraftSchema>;
 export type PracticeCoverDraft = z.infer<typeof practiceCoverDraftSchema>;

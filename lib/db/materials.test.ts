@@ -11,7 +11,7 @@ vi.mock("./client", async () => {
 
 import { db } from "./client";
 import { createTrackWithPlan, getTrackDetail, updateTrackStudyTime } from "./queries";
-import { insertChildren, replacePlanTree } from "./planQueries";
+import { insertChildren, practiceByNode, practiceRows, replacePlanTree } from "./planQueries";
 import { nodeMaterials, nodePractice, sources } from "./schema";
 
 function material(id: string, title: string, extra: Partial<Material> = {}): Material {
@@ -249,6 +249,50 @@ describe("persistence of materials", () => {
     const after = (await getTrackDetail(trackId, "u1"))!;
     expect(after.root.children![0].children![0].materials).toBeUndefined();
   });
+  describe("item positions on practice rows (pure mapping)", () => {
+    const base = { nodeId: "n1", sourceId: "s1", format: "problem-set" as const, note: null, done: null, minutes: null, generated: false };
+    it("loads a reservation's run and a row's item, and leaves both off a row without positions", () => {
+      const out = practiceByNode([
+        { ...base, role: "covers", position: 0, task: "", note: "Arrays", itemFrom: 1, itemTo: 9 },
+        { ...base, role: "covers", position: 1, task: "", note: "no list", itemFrom: null, itemTo: null },
+        { ...base, role: "assigned", position: 0, task: "49. Group Anagrams", done: "solved", minutes: 25, itemFrom: 12, itemTo: 12 },
+        { ...base, role: "assigned", position: 1, task: "By count", done: "solved", minutes: 30, itemFrom: null, itemTo: null },
+      ]).get("n1")!;
+      expect(out.covers).toEqual([
+        { format: "problem-set", id: "s1", note: "Arrays", itemFrom: 1, itemTo: 9 },
+        { format: "problem-set", id: "s1", note: "no list" },
+      ]);
+      expect(out.practice).toEqual([
+        { format: "problem-set", id: "s1", task: "49. Group Anagrams", done: "solved", minutes: 25, generated: false, itemFrom: 12, itemTo: 12 },
+        { format: "problem-set", id: "s1", task: "By count", done: "solved", minutes: 30, generated: false },
+      ]);
+    });
+    it("saves a reservation's run and a leaf's item, null when there are none", () => {
+      const ids = new Set(["s1"]);
+      const leaf = practiceRows("n1", { children: null, practice: [{ format: "problem-set", id: "s1", task: "t", done: "d", minutes: 25, generated: false, itemFrom: 12, itemTo: 12 }, { format: "problem-set", id: "s1", task: "u", done: "d", minutes: 25, generated: false }] }, ids);
+      expect(leaf.map((r) => [r.role, r.itemFrom, r.itemTo])).toEqual([["assigned", 12, 12], ["assigned", null, null]]);
+      const heading = practiceRows("n2", { children: [], practiceCovers: [{ format: "problem-set", id: "s1", note: null, itemFrom: 1, itemTo: 9 }, { format: "problem-set", id: "s1", note: null }] }, ids);
+      expect(heading.map((r) => [r.role, r.itemFrom, r.itemTo])).toEqual([["covers", 1, 9], ["covers", null, null]]);
+    });
+    it("turns a hand-split week's item rows into one-item reservations", () => {
+      const week = practiceRows("n3", { children: [], practice: [{ format: "problem-set", id: "s1", task: "t", done: "d", minutes: 25, generated: false, itemFrom: 12, itemTo: 12 }] }, new Set(["s1"]));
+      expect(week.map((r) => [r.role, r.itemFrom, r.itemTo])).toEqual([["covers", 12, 12]]);
+    });
+    it("round-trips through save and load", async () => {
+      const row = { format: "problem-set", id: "M4", task: "12. Group Anagrams", done: "solved", minutes: 25, generated: false, itemFrom: 12, itemTo: 12 } as const;
+      const root = makeRoot([
+        makeNode({ level: "week", title: "W1", summary: "s", len: 7, budgetHours: 6, practice: [row] }),
+        makeNode({ level: "month", title: "M2", summary: "s", len: 28, practiceCovers: [{ format: "problem-set", id: "M4", note: null, itemFrom: 1, itemTo: 9 }] }),
+      ]);
+      const created = await createTrackWithPlan({ userId: "u-items", title: "T", granularity: "week", root, materials: MATERIALS, hoursPerWeek: 6, split: null });
+      const detail = (await getTrackDetail(created.trackId, "u-items"))!;
+      const m4 = detail.materials.find((m) => m.title === "Problem list")!;
+      const [week, month] = detail.root.children!;
+      expect(week.practice).toEqual([{ ...row, id: m4.id }]);
+      expect(month.practiceCovers).toEqual([{ format: "problem-set", id: m4.id, note: null, itemFrom: 1, itemTo: 9 }]);
+    });
+  });
+
   describe("practice rows", () => {
     const sourced = { format: "problem-set", id: "M4", task: "Problems 1-10", done: "All ten solved", minutes: 60, generated: false } as const;
     const generated = { format: "recall", id: null, task: "Answer from memory: what does a harness do?", done: "Checked against the notes", minutes: 15, generated: true } as const;
