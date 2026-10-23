@@ -17,6 +17,7 @@ import {
 import { loggedGenerateObject, type GenerationLogContext } from "../logged";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, type AiModelId, type ReasoningEffort } from "../models";
 import { providerError } from "../providerError";
+import { applyMapping, fieldMappingSchema, parseDataFile, sampleDataFile, type DataFile, type FieldMapping } from "./dataFile";
 import { describeEgressError, guardedFetch, type AcceptedContentType, type GuardedFetchOptions } from "./egress";
 import type { ResearchCounts, ResearchEvent } from "./events";
 import { decodeBody, readableText } from "./extract";
@@ -24,36 +25,38 @@ import type { SearchProvider, SearchResult, SourceFetcher } from "./tools";
 import { canonicalUrl, mainTitle } from "./verify";
 
 /**
- * A practice source's real items: two searches, the source's own page and the best result read through the shared
- * fetcher, then one structured model call that lists the items from what it read. When nothing read lists them all but
- * points to a readable copy (a data file in the source's repository, a static page), the model names it, the finder
- * reads it whole through the egress guard, and a second call lists the items from that. A list the model cannot
- * source to something that was read is thrown away; links survive only to hosts that appear in what was read.
+ * A practice source's real items. Two searches and the source's own page and the best result, read through the shared
+ * fetcher; then a short call that says where the full list is: a page already read, or up to two addresses to read in
+ * full (a data file in the source's repository, a static page). A data file (JSON or CSV) is never copied out by the
+ * model: it sees a sample of the records and returns a field mapping, and code applies it to every record in file order.
+ * A page is transcribed by the model. Either way the list must trace to something read, its titles must appear in what
+ * was read, and its links survive only to hosts that appear in what was read.
  */
 
 export const ITEM_FINDER_RESULTS = 5;
 /** Pages read through the shared fetcher before the first call (the source's own page first). */
 export const ITEM_FIRST_READS = 2;
-/** Reads tried before the first call, failures included. */
-const ITEM_FIRST_TRIES = 3;
 /** Files or pages the model may have read in full. */
 export const ITEM_FULL_READS = 2;
 /** Every read tried in all, the full reads included. */
 export const ITEM_FINDER_READS = 4;
-/** The clock on searching and reading. */
-export const ITEM_FINDER_WALL_MS = 45_000;
+
+/** Clocks, one per stage, so a slow stage never starves the next. */
+export const ITEM_GATHER_MS = 15_000;
+export const ITEM_LOCATE_MS = 10_000;
+export const ITEM_FULL_READ_MS = 10_000;
+export const ITEM_MAP_MS = 10_000;
+/** The data-file path's worst case: searching and reading, the where call, the full reads, the mapping call. */
+export const ITEM_FINDER_WALL_MS = ITEM_GATHER_MS + ITEM_LOCATE_MS + ITEM_FULL_READ_MS + ITEM_MAP_MS;
 /**
- * The clock on each listing call, apart from the reading wall: listing 150 problems is several thousand output tokens,
- * which the reading wall would cut off. A call that runs out leaves the source worked by count.
+ * The clock on transcribing a page, the path for lists with no data file: listing 150 problems is several thousand
+ * output tokens. A call that runs out leaves the source worked by count.
  */
 export const ITEM_ANSWER_MS = 90_000;
 /** A data file is read whole up to this many bytes: a 450-entry problem file is well under it. */
 export const ITEM_FILE_BYTES = 400 * 1024;
-/** A page read in full is cut to this much readable text: a 500-item list fits. */
+/** A page (or a file that is not data) read in full is cut to this much text: a 500-item list fits. */
 export const ITEM_FULL_PAGE_CHARS = 60_000;
-/** Everything read in full, together, in one prompt. */
-export const ITEM_PROMPT_CHARS = 450_000;
-const ITEM_FILE_TIMEOUT_MS = 15_000;
 /** What a full read accepts: pages, plain text and data files; never a PDF. */
 const FULL_READ_TYPES: readonly AcceptedContentType[] = ["text/html", "text/plain", "application/json", "text/csv"];
 
@@ -81,7 +84,7 @@ export type FullReader = (url: string, signal?: AbortSignal) => Promise<FullRead
 export const guardedFullReader =
   (options: Omit<GuardedFetchOptions, "signal" | "contentTypes" | "maxBytes"> = {}): FullReader =>
   async (url, signal) => {
-    const res = await guardedFetch(url, { timeoutMs: ITEM_FILE_TIMEOUT_MS, ...options, signal, contentTypes: FULL_READ_TYPES, maxBytes: ITEM_FILE_BYTES });
+    const res = await guardedFetch(url, { timeoutMs: ITEM_FULL_READ_MS, ...options, signal, contentTypes: FULL_READ_TYPES, maxBytes: ITEM_FILE_BYTES });
     const text = decodeBody(res.body, res.charset);
     if (res.contentType === "text/html") return { finalUrl: res.finalUrl, text: readableText(text).slice(0, ITEM_FULL_PAGE_CHARS), file: false, truncated: res.truncated };
     return { finalUrl: res.finalUrl, text, file: true, truncated: res.truncated };
@@ -102,12 +105,17 @@ export const itemDraftSchema = z.object({
 export type ItemDraft = z.infer<typeof itemDraftSchema>;
 
 export const itemsAnswerSchema = z.object({
-  found: z.boolean().describe("True only when a page or file above lists this source's items"),
-  url: z.string().nullable().describe("The one page or file the list came from"),
+  found: z.boolean().describe("True only when a page above lists this source's items"),
+  url: z.string().nullable().describe("The one page the list came from"),
   items: z.array(itemDraftSchema).describe("The items in the source's own order; empty when not found"),
-  read: z.array(z.string()).describe("When not found: up to two https URLs to read in full that should list every item; otherwise empty"),
 });
 export type ItemsAnswer = z.infer<typeof itemsAnswerSchema>;
+
+export const locateAnswerSchema = z.object({
+  list: z.string().nullable().describe("A page above that shows every item, uncut; null when none does"),
+  read: z.array(z.string()).describe("Up to two https URLs to read in full that should list every item; empty when none"),
+});
+export type LocateAnswer = z.infer<typeof locateAnswerSchema>;
 
 /** A link kept only when it is https and its host appears in what the finder read. */
 function seenLink(link: string | null | undefined, readText: string): string | null {
@@ -135,17 +143,28 @@ function minutesOf(n: number | null | undefined): number | null {
   return m >= 1 && m <= 600 ? m : null;
 }
 
+/** Text reduced to its letters and digits, lower-cased, single-spaced: so a title matches its place in a page or file. */
+function normalText(text: string): string {
+  return text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+/** More than this share of titles missing from what was read and the whole list is refused: it was not read, it was made. */
+export const MAX_UNSEEN_SHARE = 0.1;
+
 /**
- * The model's items as a `PracticeList`, or null when the list's address is not https or fewer than
- * `MIN_PRACTICE_ITEMS` or more than `MAX_PRACTICE_ITEMS` items remain. Blank titles are skipped, a title repeated
- * within its group is kept once (its first place), and the order is the model's: the list's own. Links survive only
- * when https and their host appears in `readText`, the text the finder read.
+ * The drafted items as a `PracticeList`, or null when the list's address is not https, when more than
+ * `MAX_UNSEEN_SHARE` of the titles do not appear in `readText`, or when fewer than `MIN_PRACTICE_ITEMS` or more than
+ * `MAX_PRACTICE_ITEMS` items remain. Blank titles are skipped, a title repeated within its group is kept once (its first
+ * place), a title not found in what was read is dropped, and the order is the drafts': the list's own. Links survive
+ * only when https and their host appears in `readText`, the text the finder read.
  */
 export function validateItemList(raw: { url: string; source: PracticeListSource; items: ItemDraft[] }, readText: string): PracticeList | null {
   if (!raw.url.toLowerCase().startsWith("https://") || !canonicalUrl(raw.url)) return null;
   const seen = readText.toLowerCase();
+  const haystack = ` ${normalText(readText)} `;
   const keys = new Set<string>();
   const items: PracticeItem[] = [];
+  let unseen = 0;
   for (const d of raw.items) {
     const title = clip(d.title, 300);
     if (!title) continue;
@@ -153,6 +172,11 @@ export function validateItemList(raw: { url: string; source: PracticeListSource;
     const key = `${group ?? ""}\u0000${title.toLowerCase().replace(/\s+/g, " ")}`;
     if (keys.has(key)) continue;
     keys.add(key);
+    const words = normalText(title.replace(/…$/, ""));
+    if (!words || !haystack.includes(` ${words} `)) {
+      unseen += 1;
+      continue;
+    }
     const number = d.number?.trim();
     items.push({
       title,
@@ -165,6 +189,7 @@ export function validateItemList(raw: { url: string; source: PracticeListSource;
     });
     if (items.length > MAX_PRACTICE_ITEMS) return null;
   }
+  if (unseen > MAX_UNSEEN_SHARE * (items.length + unseen)) return null;
   if (items.length < MIN_PRACTICE_ITEMS) return null;
   const list = practiceListSchema.safeParse({ items, source: raw.source, url: raw.url.trim() });
   return list.success ? list.data : null;
@@ -189,7 +214,7 @@ export function itemListFacts(list: PracticeList | null, claimed: number | null 
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// The prompt
+// The prompts
 
 interface Read {
   url: string;
@@ -201,17 +226,21 @@ interface Read {
   truncated: boolean;
 }
 
-export function buildItemsPrompt(source: Material, results: SearchResult[], reads: Read[], final: boolean): string {
+function nounOf(source: Material): string {
+  return (source.practice && ITEM_NOUN[source.practice.format]) ?? "items";
+}
+
+/** The source, what research said of it, and what was read: the head of every prompt. */
+function sourceLines(source: Material, results: SearchResult[], reads: Read[]): string[] {
   const practice = source.practice;
-  const noun = (practice && ITEM_NOUN[practice.format]) ?? "items";
-  const said = [
-    source.why ? `Research said: ${source.why}` : null,
-    source.uses ? `The part it would use: ${source.uses}.` : null,
-    practice?.items ? `It was said to hold about ${practice.items} ${noun}.` : null,
-  ].filter(Boolean);
+  const noun = nounOf(source);
   const lines = [
-    `Find the full list of ${noun} in the practice source "${source.title}" (${source.url}) in what was read below.`,
-    ...said,
+    `The practice source "${source.title}" (${source.url}) is a list of ${noun}.`,
+    ...[
+      source.why ? `Research said: ${source.why}` : null,
+      source.uses ? `The part it would use: ${source.uses}.` : null,
+      practice?.items ? `It was said to hold about ${practice.items} ${noun}.` : null,
+    ].filter((l): l is string => l !== null),
   ];
   if (results.length > 0) {
     lines.push("", "Search results:");
@@ -221,20 +250,52 @@ export function buildItemsPrompt(source: Material, results: SearchResult[], read
     const how = r.full ? (r.file ? "a file, read in full" : "a page, read in full") : "a page, cut short";
     lines.push("", `--- ${r.url} --- (${how}${r.truncated ? ", cut at the size limit" : ""})`, r.text);
   }
-  lines.push(
+  return lines;
+}
+
+/** The first call: where is the whole list? A page already read, or addresses to read in full. */
+export function buildLocatePrompt(source: Material, results: SearchResult[], reads: Read[]): string {
+  const noun = nounOf(source);
+  return [
+    ...sourceLines(source, results, reads),
     "",
-    `List the source's ${noun} in the source's own order, from the one page or file above that lists them all. Prefer a machine-readable copy of the list (a data file in the source's repository, such as JSON or CSV) or a static page that lists every item over a page that shows only part of it.`,
-    `If the source is a named part of a larger list (for example "the 150" marked by a flag in a file of 450), return only the items in that part, in the file's order.`,
-    `For each item give its title; its own number or label on its site, or null; the list's own group or topic name, or null; its difficulty (easy, medium or hard) when the list gives one; a link to the item and a link to its solution; and its minutes when the list gives them.`,
+    `Say where the full list of this source's ${noun} can be read.`,
+    `If one page above shows every item, set "list" to its address.`,
+    `If what you read shows where a readable copy is, or a page above that lists them was cut short, name up to two https URLs in "read" to read in full. Prefer a machine-readable data file in the source's repository (JSON or CSV; for a file in a code repository, its raw file URL, not the page that displays it), then a static page that lists every item.`,
+    `Name only addresses that appear above or follow directly from them (a file a repository page names). If neither, leave "list" null and "read" empty.`,
+  ].join("\n");
+}
+
+/** The mapping call: the pages read (where link patterns show), and a sample of the data file's records. */
+export function buildMappingPrompt(source: Material, reads: Read[], fileUrl: string, file: DataFile): string {
+  const noun = nounOf(source);
+  return [
+    ...sourceLines(source, [], reads),
+    "",
+    `--- ${fileUrl} --- (a ${file.kind === "json" ? "JSON" : "CSV"} file, read in full; its records are sampled below)`,
+    sampleDataFile(file),
+    "",
+    `Code will apply your mapping to every record of this file, in the file's order. Map the file to the source's ${noun}:`,
+    `- "path": for JSON, the path of the records that are the ${noun}, exactly as listed above; null for CSV.`,
+    `- "title", "number", "group", "difficulty", "minutes": the field that holds each, or null when the file has none. Write ../field for a field of the object a record sits in.`,
+    `- "url" and "solutionUrl": a link template over fields, such as https://example.com/problems/{slug} or https://example.com/watch?v={video}, only when the pages or the file above show that link pattern with its full address; "{field}" when a field holds the whole link. Otherwise null. Never invent a link.`,
+    `- "subset": when the source is a named part of the file (for example "the 150" marked by a flag field in a file of 450), the field that marks it and the value that means "in" (e.g. "true"); null for the whole file.`,
+    `If the file does not list this source's ${noun}, return found: false.`,
+  ].join("\n");
+}
+
+/** The transcription call, for a list on a page with no data file. */
+export function buildItemsPrompt(source: Material, results: SearchResult[], reads: Read[]): string {
+  const noun = nounOf(source);
+  return [
+    ...sourceLines(source, results, reads),
+    "",
+    `List the source's ${noun} in the source's own order, from the one page above that lists them all.`,
+    `If the source is a named part of a larger list (for example "the 150" marked in a list of 450), return only the items in that part, in the list's order.`,
+    `For each item give its title as written; its own number or label on its site, or null; the list's own group or topic name, or null; its difficulty (easy, medium or hard) when the list gives one; a link to the item and a link to its solution; and its minutes when the list gives them.`,
     `Write a link only as it appears in what you read, or built from the item's own fields (a slug, a video id) when what you read shows that link pattern with its full address. Otherwise null. Never invent a link.`,
-    `Set "url" to the one page or file the list came from. Do not add items from memory.`,
-  );
-  if (final) lines.push(`If nothing above lists this source's ${noun}, return found: false with no items. Leave "read" empty.`);
-  else
-    lines.push(
-      `If nothing above lists every item but it shows where a readable copy is (a data file in the source's repository, a static page that lists them all, or one of the pages above that was cut short), return found: false and name up to two https URLs in "read" to read in full. For a file in a code repository, name its raw file URL, not the page that displays it. Otherwise return found: false with "read" empty.`,
-    );
-  return lines.join("\n");
+    `Set "url" to the one page the list came from. Do not add items from memory. If no page above lists this source's ${noun}, return found: false with no items.`,
+  ].join("\n");
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -267,10 +328,15 @@ export interface ItemFinderOptions {
   read?: FullReader;
 }
 
+/** Every read's address and the text it gave: what a title or a link's host must appear in. */
+function textOf(reads: Read[]): string {
+  return reads.map((r) => `${r.url}\n${r.finalUrl}\n${r.text}`).join("\n");
+}
+
 /**
- * Search → read → extract, and once more from a full read when the model names one, outside the arm's budget: the
- * searching and reading under `ITEM_FINDER_WALL_MS`, each listing call under `ITEM_ANSWER_MS`. Nothing here throws
- * except a provider refusal on the user's own key.
+ * Search → read → where → (full read → mapping) or transcription, outside the arm's budget, each stage on its own clock
+ * so a slow one never starves the next. The data-file path ends within `ITEM_FINDER_WALL_MS`; transcription adds
+ * `ITEM_ANSWER_MS`. Nothing here throws except a provider refusal on the user's own key.
  */
 export function createItemFinder(options: ItemFinderOptions): ItemFinder {
   const modelId = (typeof options.model === "string" ? options.model : DEFAULT_RESEARCH_MODEL) as AiModelId;
@@ -279,21 +345,62 @@ export function createItemFinder(options: ItemFinderOptions): ItemFinder {
   return {
     async find(source, ctx) {
       const counts: ResearchCounts = { searches: 0, fetches: 0 };
-      const timeout = AbortSignal.timeout(ITEM_FINDER_WALL_MS);
-      const signal = ctx.signal ? AbortSignal.any([ctx.signal, timeout]) : timeout;
       let costUsd = 0;
       const none = (): ItemFinderResult => ({ list: null, counts, costUsd });
-      const noun = (source.practice && ITEM_NOUN[source.practice.format]) ?? "items";
+      const clock = (ms: number) => (ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms));
+      const noun = nounOf(source);
       const claimed = source.practice?.items ?? null;
 
-      // Two searches at once: one for the list, one for a repository or file that holds it.
+      const ask = async <T,>(schema: z.ZodType<T>, prompt: string, label: string, ms: number, check: (answer: T) => string[]): Promise<T | null> => {
+        const signal = clock(ms);
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            const { object, costUsd: cost } = await loggedGenerateObject(
+              {
+                model: modelId,
+                languageModel,
+                schema,
+                prompt,
+                label: attempt === 1 ? label : `${label} (retry)`,
+                abortSignal: signal,
+                check,
+                effort: options.effort ?? CANDIDATE_STEP_EFFORT,
+              },
+              { ...ctx.log, caller: "research" },
+            );
+            costUsd += cost;
+            return object;
+          } catch (error) {
+            if (signal.aborted) break;
+            // On the user's own key a provider refusal is theirs to hear about; a retry on the same key would be refused too.
+            if (ctx.log?.keyOwner === "user" && providerError(error)) throw error;
+            console.error(`[research] ${label} failed (attempt ${attempt})`, error);
+          }
+        }
+        return null;
+      };
+
+      // 1. Searching and reading: the source's own page while two searches run, then the best results.
+      const gather = clock(ITEM_GATHER_MS);
+      const tried = new Set<string>();
+      const readShared = async (url: string): Promise<Read | null> => {
+        ctx.emit({ type: "research.reading", url });
+        counts.fetches += 1;
+        const outcome = await ctx.fetcher.fetch(url, gather);
+        ctx.emit({ type: "research.fetch", url, ok: outcome.ok, ...(outcome.ok ? {} : { reason: outcome.reason }) });
+        return outcome.ok ? { url, finalUrl: outcome.page.finalUrl, text: outcome.page.text, full: false, file: false, truncated: false } : null;
+      };
+      const ownUrl = source.url.trim();
+      const ownKey = ownUrl.toLowerCase().startsWith("https://") ? canonicalUrl(ownUrl) : null;
+      if (ownKey) tried.add(ownKey);
+      const own = ownKey ? readShared(ownUrl) : Promise.resolve(null);
       const title = mainTitle(source.title);
       const queries = [`${title} full list of ${noun}`, `${title} ${noun} list repository data file`];
       const found = await Promise.all(
         queries.map(async (query) => {
           counts.searches += 1;
           try {
-            const results = await options.provider.search(query, { signal, maxResults: ITEM_FINDER_RESULTS });
+            const results = await options.provider.search(query, { signal: gather, maxResults: ITEM_FINDER_RESULTS });
             ctx.emit({ type: "research.search", query, results: results.length });
             return results;
           } catch {
@@ -313,92 +420,90 @@ export function createItemFinder(options: ItemFinderOptions): ItemFinder {
           results.push(r);
         }
       }
-
       const reads: Read[] = [];
-      const readKeys = new Set<string>();
-      const firstUrls = [source.url, ...results.map((r) => r.url)].map((u) => u.trim()).filter((u) => u.toLowerCase().startsWith("https://"));
-      for (const url of firstUrls) {
-        if (reads.length >= ITEM_FIRST_READS || counts.fetches >= ITEM_FIRST_TRIES || signal.aborted) break;
+      const ownRead = await own;
+      if (ownRead) reads.push(ownRead);
+      const next: string[] = [];
+      for (const r of results) {
+        if (reads.length + next.length >= ITEM_FIRST_READS) break;
+        const url = r.url.trim();
         const key = canonicalUrl(url);
-        if (!key || readKeys.has(key)) continue;
-        readKeys.add(key);
-        ctx.emit({ type: "research.reading", url });
-        counts.fetches += 1;
-        const outcome = await ctx.fetcher.fetch(url, signal);
-        ctx.emit({ type: "research.fetch", url, ok: outcome.ok, ...(outcome.ok ? {} : { reason: outcome.reason }) });
-        if (outcome.ok) reads.push({ url, finalUrl: outcome.page.finalUrl, text: outcome.page.text, full: false, file: false, truncated: false });
+        if (!url.toLowerCase().startsWith("https://") || !key || tried.has(key)) continue;
+        tried.add(key);
+        next.push(url);
       }
+      if (!gather.aborted) for (const r of await Promise.all(next.map(readShared))) if (r) reads.push(r);
       if (reads.length === 0) return none();
 
-      /** The answer's list, resolved to a read and checked, or null. */
+      // 2. Where the whole list is.
+      const locate = await ask(locateAnswerSchema, buildLocatePrompt(source, results, reads), "Research · items · where", ITEM_LOCATE_MS, (a) => [
+        ...(a.list ? [`list on ${a.list}`] : []),
+        ...a.read.map((u) => `asks to read ${u}`),
+      ]);
+      if (!locate) return none();
+
+      // 3. The full reads it asked for, side by side, on their own clock.
+      const fullUrls: string[] = [];
+      for (const raw of locate.read) {
+        const url = raw.trim();
+        const key = canonicalUrl(url);
+        if (fullUrls.length >= Math.min(ITEM_FULL_READS, ITEM_FINDER_READS - counts.fetches)) break;
+        if (!url.toLowerCase().startsWith("https://") || !key || fullUrls.some((u) => canonicalUrl(u) === key)) continue;
+        fullUrls.push(url);
+      }
+      const fullClock = clock(ITEM_FULL_READ_MS);
+      const fulls = (
+        await Promise.all(
+          fullUrls.map(async (url): Promise<Read | null> => {
+            ctx.emit({ type: "research.reading", url });
+            counts.fetches += 1;
+            try {
+              const got = await readFull(url, fullClock);
+              ctx.emit({ type: "research.fetch", url, ok: true });
+              return { url, finalUrl: got.finalUrl, text: got.text, full: true, file: got.file, truncated: got.truncated };
+            } catch (error) {
+              ctx.emit({ type: "research.fetch", url, ok: false, reason: describeEgressError(error) });
+              return null;
+            }
+          }),
+        )
+      ).filter((r): r is Read => r !== null);
+
+      // 4. A data file: the model maps its fields from a sample, code reads every record.
+      const pages: Read[] = [...reads];
+      let mapped = false;
+      for (const full of fulls) {
+        const data = full.file ? parseDataFile(full.text, full.truncated) : null;
+        if (!data) {
+          pages.push({ ...full, text: full.text.slice(0, ITEM_FULL_PAGE_CHARS), truncated: full.truncated || full.text.length > ITEM_FULL_PAGE_CHARS });
+          continue;
+        }
+        if (mapped) continue;
+        mapped = true;
+        const readText = textOf([...reads, full]);
+        const fromMapping = (mapping: FieldMapping): PracticeList | null => {
+          const drafts = applyMapping(data, mapping);
+          return drafts ? validateItemList({ url: full.url, source: "file", items: drafts }, readText) : null;
+        };
+        const mapping = await ask(fieldMappingSchema, buildMappingPrompt(source, reads, full.url, data), "Research · items · mapping", ITEM_MAP_MS, (m) =>
+          itemListFacts(fromMapping(m), claimed),
+        );
+        const list = mapping ? fromMapping(mapping) : null;
+        if (list) return { list, counts, costUsd };
+      }
+
+      // 5. Otherwise a page that lists them, transcribed.
+      if (!locate.list && pages.length === reads.length) return none();
       const resolve = (answer: ItemsAnswer): PracticeList | null => {
         if (!answer.found || !answer.url) return null;
         const want = canonicalUrl(answer.url);
-        // A full read is preferred: it is the whole file or page, and says whether it was a file.
-        const read = want ? [...reads].reverse().find((r) => canonicalUrl(r.url) === want || canonicalUrl(r.finalUrl) === want) : undefined;
+        // A full read is preferred: it is the whole page.
+        const read = want ? [...pages].reverse().find((r) => canonicalUrl(r.url) === want || canonicalUrl(r.finalUrl) === want) : undefined;
         if (!read) return null;
-        const readText = reads.map((r) => `${r.url}\n${r.finalUrl}\n${r.text}`).join("\n");
-        return validateItemList({ url: read.url, source: read.file ? "file" : "page", items: answer.items }, readText);
+        return validateItemList({ url: read.url, source: read.file ? "file" : "page", items: answer.items }, textOf(pages));
       };
-
-      const ask = async (final: boolean): Promise<ItemsAnswer | null> => {
-        const prompt = buildItemsPrompt(source, results, reads, final);
-        const clock = AbortSignal.timeout(ITEM_ANSWER_MS);
-        const callSignal = ctx.signal ? AbortSignal.any([ctx.signal, clock]) : clock;
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            const { object, costUsd: cost } = await loggedGenerateObject(
-              {
-                model: modelId,
-                languageModel,
-                schema: itemsAnswerSchema,
-                prompt,
-                label: `Research · items${final ? " (read in full)" : ""}${attempt === 1 ? "" : " (retry)"}`,
-                abortSignal: callSignal,
-                check: (answer) => [...itemListFacts(resolve(answer), claimed), ...(final || answer.found ? [] : answer.read.map((u) => `asks to read ${u}`))],
-                effort: options.effort ?? CANDIDATE_STEP_EFFORT,
-              },
-              { ...ctx.log, caller: "research" },
-            );
-            costUsd += cost;
-            return object;
-          } catch (error) {
-            if (callSignal.aborted) break;
-            // On the user's own key a provider refusal is theirs to hear about; a retry on the same key would be refused too.
-            if (ctx.log?.keyOwner === "user" && providerError(error)) throw error;
-            console.error(`[research] items step failed (attempt ${attempt})`, error);
-          }
-        }
-        return null;
-      };
-
-      const first = await ask(false);
-      if (!first) return none();
-      const list = resolve(first);
-      if (list || first.found) return { list, counts, costUsd };
-
-      // Nothing read listed them all, but the model named where a readable copy is: read it whole, then ask once more.
-      let room = ITEM_PROMPT_CHARS;
-      const before = reads.length;
-      for (const raw of first.read) {
-        if (counts.fetches >= ITEM_FINDER_READS || reads.length - before >= ITEM_FULL_READS || signal.aborted || room <= 0) break;
-        const url = raw.trim();
-        if (!url.toLowerCase().startsWith("https://") || !canonicalUrl(url)) continue;
-        ctx.emit({ type: "research.reading", url });
-        counts.fetches += 1;
-        try {
-          const got = await readFull(url, signal);
-          ctx.emit({ type: "research.fetch", url, ok: true });
-          const text = got.text.slice(0, room);
-          room -= text.length;
-          reads.push({ url, finalUrl: got.finalUrl, text, full: true, file: got.file, truncated: got.truncated || text.length < got.text.length });
-        } catch (error) {
-          ctx.emit({ type: "research.fetch", url, ok: false, reason: describeEgressError(error) });
-        }
-      }
-      if (reads.length === before) return none();
-      const second = await ask(true);
-      return { list: second ? resolve(second) : null, counts, costUsd };
+      const answer = await ask(itemsAnswerSchema, buildItemsPrompt(source, results, pages), "Research · items", ITEM_ANSWER_MS, (a) => itemListFacts(resolve(a), claimed));
+      return { list: answer ? resolve(answer) : null, counts, costUsd };
     },
   };
 }

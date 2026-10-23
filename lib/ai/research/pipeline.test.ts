@@ -219,10 +219,10 @@ describe("the item lists stage", () => {
     const finder = { find: vi.fn(async () => ({ list: LIST, counts: { searches: 1, fetches: 1 }, costUsd: 0 })) };
     const { events, outcome } = await collect(researchMaterials({ brief, arm, fetcher: fetcherOf({ a: "Counted Set", b: "Uncounted List" }), books, items: finder }));
     const counted = byTitle(outcome.materials, "Counted Set").practice!;
-    expect(counted).toMatchObject({ items: 150, totalItems: 4, list: LIST, minutes: 1500 });
+    expect(counted).toMatchObject({ items: 150, totalItems: 4, list: LIST });
     const uncounted = byTitle(outcome.materials, "Uncounted List").practice!;
-    // Four easy problems at 15 minutes each.
-    expect(uncounted).toMatchObject({ items: 4, totalItems: 4, list: LIST, minutes: 60 });
+    // The count comes from the list; doing time is the allocation's to set from the items it keeps.
+    expect(uncounted).toMatchObject({ items: 4, totalItems: 4, list: LIST, minutes: null });
     expect(events.find((e) => e.type === "research.items")).toMatchObject({ items: 4, groups: 1, url: LIST.url });
   });
 

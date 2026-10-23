@@ -1,6 +1,6 @@
 import type { LanguageModel } from "ai";
 import { isPracticeOnly } from "@/lib/materials";
-import { PRACTICE_REGISTRY, itemMinutes } from "@/lib/practice";
+import { PRACTICE_REGISTRY } from "@/lib/practice";
 import type { Material, MaterialPractice, PracticeList } from "@/lib/schemas/material";
 import type { GenerationLogContext } from "../logged";
 import type { AiModelId } from "../models";
@@ -56,12 +56,11 @@ export function likelyItemLists(materials: Material[]): Material[] {
 }
 
 /**
- * A practice source with its found list: `totalItems` is the list's length, and the count and doing time research
- * gave are kept; when it gave none, they come from the list.
+ * A practice source with its found list: `totalItems` is the list's length, and the count research gave is kept; when
+ * it gave none, it is the list's. Doing time is left as it was: the allocation sets it from the items it keeps.
  */
 export function withItemList(practice: MaterialPractice, list: PracticeList): MaterialPractice {
-  const minutes = practice.minutes ?? Math.min(60000, list.items.reduce((sum, item) => sum + itemMinutes(practice.format, item), 0));
-  return { ...practice, list, totalItems: list.items.length, items: practice.items ?? list.items.length, minutes };
+  return { ...practice, list, totalItems: list.items.length, items: practice.items ?? list.items.length };
 }
 
 /** Fewer researched materials than this and the plan carries the "thin" notice, whatever they cover. */
