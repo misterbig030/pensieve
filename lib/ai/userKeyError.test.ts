@@ -8,8 +8,8 @@ function apiError(statusCode: number, responseBody: string) {
 }
 const userModel = { model: {} as never, id: "anthropic/claude-sonnet-5.5" as const, keyOwner: "user" as const };
 const appModelR = { model: "anthropic/claude-sonnet-5.5" as const, id: "anthropic/claude-sonnet-5.5" as const, keyOwner: "app" as const };
-const onUserKey: ResolvedModels = { outline: userModel, content: userModel, chat: userModel, research: userModel, keyErrors: {} };
-const onApp: ResolvedModels = { outline: appModelR, content: appModelR, chat: appModelR, research: appModelR, keyErrors: {} };
+const onUserKey: ResolvedModels = { outline: userModel, content: userModel, chat: userModel, research: userModel, allocate: userModel, keyErrors: {} };
+const onApp: ResolvedModels = { outline: appModelR, content: appModelR, chat: appModelR, research: appModelR, allocate: appModelR, keyErrors: {} };
 
 describe("classifyProviderError", () => {
   it("reads the four kinds from the status and body, matching the credits message loosely", () => {

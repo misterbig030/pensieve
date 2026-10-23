@@ -43,6 +43,12 @@ describe("resolveWith", () => {
     for (const m of AVAILABLE_MODELS) if (providerOf(m.id) === "anthropic") expect(ANTHROPIC_API_IDS[m.id], m.id).toMatch(/^claude-/);
     expect(ANTHROPIC_API_IDS["anthropic/claude-sonnet-5.5"]).toBe("claude-sonnet-5-5");
   });
+
+  it("resolves the allocate role to Opus 5.5, on the learner's Anthropic key when they have one", () => {
+    expect(DEFAULT_MODEL_IDS.allocate).toBe("anthropic/claude-opus-5.5");
+    expect(resolveWith({}).allocate).toEqual({ model: "anthropic/claude-opus-5.5", id: "anthropic/claude-opus-5.5", keyOwner: "app" });
+    expect(resolveWith({ anthropic: "sk-ant-test" }).allocate).toMatchObject({ id: "anthropic/claude-opus-5.5", keyOwner: "user" });
+  });
 });
 
 describe("resolveModels", () => {
