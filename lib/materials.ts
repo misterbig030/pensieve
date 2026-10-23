@@ -199,8 +199,9 @@ export function itemRun(base: string, from: number, to: number): string {
 
 export interface ResolvePracticeOptions {
   /**
-   * Keep a row or reservation of a listed source that names no item (a plan saved before item lists, written back by a
-   * revision) rather than refusing it as unknown. The whole-tree checks report it as a fact.
+   * Keep a row or reservation of a listed source that names no item rather than refusing it as unknown. Revision asks
+   * for it, then keeps only the ones its unit already had (a plan saved before item lists); the whole-tree checks
+   * report those as facts.
    */
   keepUnitemized?: boolean;
 }
@@ -592,10 +593,29 @@ export interface LevelCheckInput {
    */
   split?: PlanSplit | null;
   /**
-   * Whether the rows were saved before this call (revision's whole-tree checks). The rules on item lists and on reserved
-   * sources then state facts and never breaches, so a saved row is never dropped for them.
+   * Which practice rows and reservations were saved before this call (revision's whole-tree checks): for those, the
+   * rules on item lists and on reserved sources state facts and never breaches, so a saved row is never dropped for
+   * them. Rows a call adds or changes are held to the rules as drafted ones are. Left out, nothing is saved.
    */
-  saved?: boolean;
+  saved?: (node: PlanNode, row: PracticeRef | PracticeCover) => boolean;
+}
+
+/**
+ * One practice row or reservation of one unit, as revision compares it with the saved tree: unit, row or reservation,
+ * format, source, item positions and task. Minutes, done and note are left out: the model's changes to them do not make
+ * a row new.
+ */
+export function practiceRowKey(nodeId: string, r: PracticeRef | PracticeCover): string {
+  return JSON.stringify([nodeId, "done" in r ? "row" : "cover", r.format, r.id, r.itemFrom ?? null, r.itemTo ?? null, r.task ?? null]);
+}
+
+/** The practice rows and reservations a saved tree holds, by `practiceRowKey`. */
+export function savedPracticeRows(root: PlanNode): (node: PlanNode, row: PracticeRef | PracticeCover) => boolean {
+  const keys = new Set<string>();
+  walk(root, (n) => {
+    for (const r of [...(n.practice ?? []), ...(n.practiceCovers ?? [])]) keys.add(practiceRowKey(n.id, r));
+  });
+  return (node, row) => keys.has(practiceRowKey(node.id, row));
 }
 
 /** How far must-reading may run past the plan's reading share before it is worth reporting. */
@@ -681,7 +701,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   });
   const practiceBreach = (kind: BreachKind, index: number, unit: string, row: PracticeRef, text: string) => breaches.push(rowBreach(kind, index, unit, row, text));
   // The rules on item lists and on reserved sources hold what this call drafts; over saved rows they are facts.
-  const newRule = (b: Breach) => (input.saved ? facts.push(b.text) : breaches.push(b));
+  const newRule = (b: Breach, node: PlanNode, row: PracticeRef | PracticeCover) => (input.saved?.(node, row) ? facts.push(b.text) : breaches.push(b));
 
   // Where these units sit: their parent (none at the top level), its line of ancestors, and their own descendants.
   const placed = new Set(input.nodes.map((n) => n.id));
@@ -865,18 +885,18 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
           continue;
         }
         if (parentNode && covers.length === 0 && reservedSomewhere.has(sourceKey(r))) {
-          newRule(rowBreach("practice-outside", index, unit, r, notReserved()));
+          newRule(rowBreach("practice-outside", index, unit, r, notReserved()), node, r);
           continue;
         }
         if (!listedSource(r.id) || !r.itemFrom) continue;
         const runs = covers.filter((c) => itemPositions(c).length > 0);
         if (runs.length > 0 && !inRuns(runs, r.itemFrom)) {
-          newRule(rowBreach("practice-outside", index, unit, r, notReserved()));
+          newRule(rowBreach("practice-outside", index, unit, r, notReserved()), node, r);
           continue;
         }
         const key = itemKey(r.id!, r.itemFrom);
         const holder = doneBy.get(key);
-        if (holder) newRule(rowBreach("practice-overlap", index, unit, r, `${unit} assigns ${what}, which ${holder} already assigns`));
+        if (holder) newRule(rowBreach("practice-overlap", index, unit, r, `${unit} assigns ${what}, which ${holder} already assigns`), node, r);
         else doneBy.set(key, unit);
       }
       // The drafter's resolver refuses these; a revision may still bring them.
@@ -915,7 +935,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
         const name = coverLabel(c);
         const notReserved = () => `${unit} reserves ${name}, which ${label(parentNode!)} did not reserve`;
         if (parentNode && covers.length === 0 && (reservedFormats.has(c.format) || reservedSomewhere.has(sourceKey(c)))) {
-          newRule(coverBreach("practice-outside", index, unit, c, notReserved()));
+          newRule(coverBreach("practice-outside", index, unit, c, notReserved()), node, c);
           continue;
         }
         if (!listedSource(c.id)) continue;
@@ -926,7 +946,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
         }
         const runs = covers.filter((p) => itemPositions(p).length > 0);
         if (runs.length > 0 && own.some((n) => !inRuns(runs, n))) {
-          newRule(coverBreach("practice-outside", index, unit, c, notReserved()));
+          newRule(coverBreach("practice-outside", index, unit, c, notReserved()), node, c);
           continue;
         }
         const held = new Map<string, number[]>();
@@ -937,7 +957,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
         const base = aliases.alias(c.id!) ?? c.id!;
         if (held.size > 0) {
           const whose = [...held].map(([holder, ns]) => `${holder} holds ${itemAliases(base, ns)}`).join(" and ");
-          newRule(coverBreach("practice-overlap", index, unit, c, `${unit} reserves ${name}, but ${whose}`));
+          newRule(coverBreach("practice-overlap", index, unit, c, `${unit} reserves ${name}, but ${whose}`), node, c);
         }
         for (const n of own) if (!heldBy.has(itemKey(c.id!, n))) heldBy.set(itemKey(c.id!, n), unit);
       }
@@ -1086,15 +1106,17 @@ function chaptersBefore(root: PlanNode, node: PlanNode | undefined, backbone: Ch
 
 /**
  * Every sibling group of a tree through `levelChecks`, in walk order. `nodes` is that walk order without the root, and
- * each breach's `index` points into it, so `dropBreaches(nodes, breaches)` works on the whole tree. The rows are saved
- * ones, so the rules on item lists and reserved sources state facts only (`saved`).
+ * each breach's `index` points into it, so `dropBreaches(nodes, breaches)` works on the whole tree. With `original`
+ * (revision), a practice row or reservation unchanged from it is saved and the rules on item lists and reserved sources
+ * state facts only for it, while a row added or changed breaches as a drafted one does; without it, every row is saved.
  */
 export function treeChecks(
   root: PlanNode,
   materials: CheckMaterial[],
-  opts: { granularity: Granularity; hoursPerWeek?: number; daysPerWeek: number; split?: PlanSplit | null },
+  opts: { granularity: Granularity; hoursPerWeek?: number; daysPerWeek: number; split?: PlanSplit | null; original?: PlanNode },
 ): LevelChecks & { nodes: PlanNode[] } {
-  const { granularity, ...shares } = opts;
+  const { granularity, original, ...shares } = opts;
+  const saved = original ? savedPracticeRows(original) : () => true;
   const nodes: PlanNode[] = [];
   const position = new Map<string, number>();
   walk(root, (n) => {
@@ -1110,7 +1132,7 @@ export function treeChecks(
     // Leaf-ness is the level's, not the node's: a hand-split week is still a week-sized leaf of a week plan.
     const level = group[0].level;
     const leaves = level === "day" || (level === "week" && granularity === "week");
-    const out = levelChecks({ root, nodes: group, leaves, top: n.id === root.id, materials, unknownIds: [], saved: true, ...shares });
+    const out = levelChecks({ root, nodes: group, leaves, top: n.id === root.id, materials, unknownIds: [], saved, ...shares });
     facts.push(...out.facts);
     breaches.push(...out.breaches.map((b) => ({ ...b, index: b.index < 0 ? -1 : position.get(group[b.index].id)! })));
   });

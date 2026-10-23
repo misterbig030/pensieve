@@ -5,7 +5,9 @@ import { generateObject } from "ai";
 import { aliasMaterials } from "@/lib/materials";
 import { layout, makeNode, makeRoot } from "@/lib/planTree";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
-import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
+import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
+import type { Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
+import type { PlanNode } from "@/lib/planTree";
 import type { ModelCall } from "./logged";
 import { assignRefs } from "./planPrompt";
 import { applyRevision, LockedNodeError, revisePlanTree, spanFor } from "./planRevision";
@@ -523,5 +525,84 @@ describe("applyRevision with an item list", () => {
       split,
     );
     expect(result.children![0].practice).toEqual([old, anagram]);
+  });
+});
+
+describe("revisePlanTree holds rows it adds or changes to the drafting rules, and saved ones to facts", () => {
+  beforeEach(() => {
+    mockedGenerateObject.mockReset();
+  });
+  const material = (id: string, extra: Partial<Material>): Material => ({ id, origin: "research", type: "link", kind: "course", url: `https://example.com/${id}`, title: id, author: null, year: null, why: null, backbone: false, verifiedAt: null, fetchedTitle: null, recommendedBy: [], sig: null, ...extra });
+  // M1 reading, M2 the 21-problem list (P), M3 a problem list without items (Q).
+  const materials = [material("book", { kind: "book" }), material("P", { practice: LISTED_PROBLEMS }), material("Q", { practice: { format: "problem-set", items: 40, perItemMinutes: 10, minutes: null, answers: true } })];
+  const split = { readingShare: 50, practice: "problems", reason: "", formats: [{ format: "problem-set" as const, share: 100, focus: "arrays", reason: "" }] };
+  const item = (n: number, task = PROBLEM_ITEMS[n - 1].title): PracticeRef => ({ format: "problem-set", id: "P", task, done: "solved", minutes: 15, generated: false, itemFrom: n, itemTo: n });
+  const old: PracticeRef = { format: "problem-set", id: "P", task: "Arrays 1-3", done: "solved", minutes: 45, generated: false };
+  const run = (from: number, to: number): PracticeCover => ({ format: "problem-set", id: "P", note: null, itemFrom: from, itemTo: to });
+  const day = (id: string, practice: PracticeRef[] = []) => makeNode({ id, level: "day", title: id, summary: "s", len: 1, practice });
+  /**
+   * Saved: week 1 reserves items 1–3, its days did item 1, an itemless row and item 3; week 2 reserves 3–6 and the
+   * unlisted Q, its first day repeats item 3; week 3 reserves nothing. Refs: w1 n1, d1 n2, d2 n3, w2 n4, e1 n5, e2 n6, w3 n7, f1 n8.
+   */
+  const saved = () =>
+    layout(
+      makeRoot([
+        makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 2, practiceCovers: [run(1, 3)], children: [day("d1", [item(1)]), day("d2", [old, item(3)])] }),
+        makeNode({ id: "w2", level: "week", title: "W2", summary: "s", len: 2, practiceCovers: [run(3, 6), { format: "problem-set", id: "Q", note: "Graphs" }], children: [day("e1", [item(3)]), day("e2")] }),
+        makeNode({ id: "w3", level: "week", title: "W3", summary: "s", len: 1, children: [day("f1")] }),
+      ]),
+    );
+  type Draft = { format: string; id?: string; task: string; done: string; minutes: number };
+  const row = (id: string, task: string): Draft => ({ format: "problem-set", id, task, done: "solved", minutes: 15 });
+  /** The model's answer: every unit echoed, with these practice lists on days e1, e2 and f1. */
+  const answer = (e1: Draft[], e2: Draft[], f1: Draft[], d2: Draft[] = [row("M2", "Arrays 1-3"), row("M2.3", "Two Sum")]) => ({
+    units: [
+      { ref: "n1", title: "W1", summary: "s", days: 2, children: [{ ref: "n2", title: "d1", summary: "s", days: 1 }, { ref: "n3", title: "d2", summary: "s", days: 1, practice: d2 }] },
+      { ref: "n4", title: "W2", summary: "s", days: 2, children: [{ ref: "n5", title: "e1", summary: "s", days: 1, practice: e1 }, { ref: "n6", title: "e2", summary: "s", days: 1, practice: e2 }] },
+      { ref: "n7", title: "W3", summary: "s", days: 1, children: [{ ref: "n8", title: "f1", summary: "s", days: 1, practice: f1 }] },
+    ],
+  });
+  const revise = async (object: unknown) => {
+    mockedGenerateObject.mockResolvedValueOnce({ object, usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 }, finishReason: "stop" } as unknown as Awaited<ReturnType<typeof generateObject>>);
+    const calls: ModelCall[] = [];
+    const { tree } = await revisePlanTree({ topic: "t", materials, granularity: "day", daysPerWeek: 5, split, tree: saved(), lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
+    const days = (tree.children ?? []).flatMap((w) => w.children ?? []);
+    const practiceOf = (id: string) => days.find((d: PlanNode) => d.id === id)?.practice;
+    return { facts: calls[0].facts, practiceOf };
+  };
+
+  it("drops an itemless row it adds, a repeated item and a source reserved elsewhere, and keeps saved rows with facts", async () => {
+    const { facts, practiceOf } = await revise(
+      answer([row("M2.3", "Two Sum")], [row("M2", "Queue problems"), row("M2.3", "Two Sum")], [row("M2.7", "Product of Array Except Self"), row("M3", "Graphs 1-3")]),
+    );
+    // (a) A new itemless row of a listed source is unknown: it never reaches the plan. (b) A new repeat of item 3 is dropped.
+    expect(practiceOf("e2")).toBeUndefined();
+    // (c) Week 3 reserved nothing, and both sources are reserved by other weeks: its new rows are dropped.
+    expect(practiceOf("f1")).toBeUndefined();
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        'dropped Problems M2.3 "Two Sum" from Week 2 · Day 2: practice-overlap',
+        'dropped Problems M2.7 "Product of Array Except Self" from Week 3 · Day 1: practice-outside',
+        'dropped Problems "Graphs 1-3" from Week 3 · Day 1: practice-outside',
+      ]),
+    );
+    // (d) The saved itemless row and the saved repeat stay, stated as facts only.
+    // (The model wrote 15 min for the itemless row; minutes do not make a row new.)
+    expect(practiceOf("d2")).toEqual([{ ...old, minutes: 15 }, item(3)]);
+    expect(practiceOf("e1")).toEqual([item(3)]);
+    expect(facts).toEqual(
+      expect.arrayContaining(['Week 2 · Day 1 assigns Problems M2.3 "Two Sum", which Week 1 · Day 2 already assigns', 'Week 1 · Day 2 assigns Problems "Arrays 1-3" from M2 without an item']),
+    );
+    expect(facts.filter((f) => f.startsWith("dropped") && (f.includes("Week 1") || f.includes("Week 2 · Day 1")))).toEqual([]);
+  });
+
+  it("holds a saved row whose task the model edited to the drafting rules", async () => {
+    const { facts, practiceOf } = await revise(answer([row("M2.3", "Two Sum, again")], [], []));
+    // (e) Changed, so the repeat of item 3 is a breach and is dropped.
+    expect(practiceOf("e1")).toBeUndefined();
+    expect(facts).toContain('dropped Problems M2.3 "Two Sum, again" from Week 2 · Day 1: practice-overlap');
+    // An itemless saved row the model rewrote with another task is new too, so it is unknown and goes.
+    const edited = await revise(answer([row("M2.3", "Two Sum")], [], [], [row("M2", "Arrays 1-3 and Queue"), row("M2.3", "Two Sum")]));
+    expect(edited.practiceOf("d2")).toEqual([item(3)]);
   });
 });
