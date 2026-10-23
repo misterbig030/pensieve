@@ -53,7 +53,7 @@ export interface UserKeyGuard {
 
 /** The providers whose key the request runs on; empty when everything is on the app's gateway key. */
 function userProviders(models: ResolvedModels): ModelProvider[] {
-  const roles = [models.outline, models.content, models.chat, models.research];
+  const roles = [models.outline, models.content, models.chat, models.research, models.allocate];
   return [...new Set(roles.filter((m) => m.keyOwner === "user").map((m) => providerOf(m.id)))];
 }
 

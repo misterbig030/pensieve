@@ -50,6 +50,15 @@ describe("guardUserKey", () => {
     expect(record).toHaveBeenCalledWith("u1", "anthropic", "credits");
   });
 
+  it("counts the allocate role's key too", async () => {
+    const record = vi.fn(async () => {});
+    const onAllocateKey: ResolvedModels = { ...onApp, allocate: userModel };
+    await expect(async () => {
+      for await (const _ of guardUserKey(failing(), { userId: "u1", models: onAllocateKey, record })) void _;
+    }).rejects.toBeInstanceOf(UserKeyError);
+    expect(record).toHaveBeenCalledWith("u1", "anthropic", "credits");
+  });
+
   it("leaves a failure on the app's key untouched and records nothing", async () => {
     const record = vi.fn(async () => {});
     await expect(async () => {

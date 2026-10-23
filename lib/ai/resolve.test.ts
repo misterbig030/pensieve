@@ -26,7 +26,7 @@ describe("resolveWith", () => {
 
   it("builds direct Anthropic instances, paid by the user, for every role when they hold an Anthropic key", () => {
     const set = resolveWith({ anthropic: "sk-ant-test" });
-    for (const role of ["outline", "content", "chat", "research"] as const) {
+    for (const role of ["outline", "content", "chat", "research", "allocate"] as const) {
       expect(set[role].keyOwner).toBe("user");
       expect(set[role].id).toBe(DEFAULT_MODEL_IDS[role]);
       expect(instance(set[role].model).modelId).toBe(ANTHROPIC_API_IDS[DEFAULT_MODEL_IDS[role]]);
