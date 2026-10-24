@@ -86,7 +86,11 @@ export const guardedFullReader =
   async (url, signal) => {
     const res = await guardedFetch(url, { timeoutMs: ITEM_FULL_READ_MS, ...options, signal, contentTypes: FULL_READ_TYPES, maxBytes: ITEM_FILE_BYTES });
     const text = decodeBody(res.body, res.charset);
-    if (res.contentType === "text/html") return { finalUrl: res.finalUrl, text: readableText(text).slice(0, ITEM_FULL_PAGE_CHARS), file: false, truncated: res.truncated };
+    if (res.contentType === "text/html") {
+      // A page longer than the cut is not read in full, whatever its bytes: the finder must not take part of a list for all of it.
+      const readable = readableText(text);
+      return { finalUrl: res.finalUrl, text: readable.slice(0, ITEM_FULL_PAGE_CHARS), file: false, truncated: res.truncated || readable.length > ITEM_FULL_PAGE_CHARS };
+    }
     return { finalUrl: res.finalUrl, text, file: true, truncated: res.truncated };
   };
 

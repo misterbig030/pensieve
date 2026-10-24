@@ -18,6 +18,7 @@ import {
   ITEM_MAP_MS,
   createItemFinder,
   guardedFullReader,
+  ITEM_FULL_PAGE_CHARS,
   itemListFacts,
   listGroups,
   validateItemList,
@@ -409,5 +410,14 @@ describe("the full reader", () => {
     expect(page.text).toContain("- Problem number 799");
     expect(page.text).not.toContain("var x");
     await expect(guardedFullReader({ resolver, transport: transportFor("application/pdf", "%PDF") })("https://example.com/a.pdf")).rejects.toThrow();
+    expect(page.truncated).toBe(false);
+  });
+
+  it("marks a page whose readable text runs past the page cut as cut, though its bytes fit", async () => {
+    const html = `<html><body><ul>${Array.from({ length: 4000 }, (_, i) => `<li>Problem number ${i} with a longer title</li>`).join("")}</ul></body></html>`;
+    expect(html.length).toBeLessThan(ITEM_FILE_BYTES);
+    const page = await guardedFullReader({ resolver, transport: transportFor("text/html", html) })("https://example.com/list");
+    expect(page.text).toHaveLength(ITEM_FULL_PAGE_CHARS);
+    expect(page.truncated).toBe(true);
   });
 });
