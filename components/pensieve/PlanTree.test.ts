@@ -71,22 +71,22 @@ describe("CoversRow", () => {
 describe("a collapsed day card's practice lines", () => {
   const listed: PracticeRef = { format: "problem-set", id: "nc", task: "NeetCode 150 · Arrays & Hashing, problem 1", done: "solved", minutes: 15, generated: false, itemFrom: 1, itemTo: 1 };
   const plainRow: PracticeRef = { format: "mock", id: "mock", task: "One mock round", done: "debriefed", minutes: 45, generated: false };
-  const tree = () => {
-    const d1 = makeNode({ id: "d1", level: "day", title: "Hashing", summary: "s", len: 1, practice: [listed, plainRow] });
+  const tree = (practice: PracticeRef[] = [listed, plainRow]) => {
+    const d1 = makeNode({ id: "d1", level: "day", title: "Hashing", summary: "A long summary of the day", len: 1, practice });
     return layout(makeRoot([makeNode({ id: "w1", level: "week", title: "Arrays", summary: "s", len: 1, children: [d1] })]));
   };
   const none = new Set<string>();
-  const html = () =>
+  const html = (openChips: ReadonlySet<string> = none, practice?: PracticeRef[]) =>
     renderToStaticMarkup(
       createElement(PlanTree, {
-        root: tree(),
+        root: tree(practice),
         mode: "create",
         highlight: none,
         lockBefore: 0,
         currentLeafId: null,
         pending: {},
         collapsed: none,
-        openChips: none,
+        openChips,
         busy: false,
         onToggle: () => {},
         onToggleChip: () => {},
@@ -104,5 +104,25 @@ describe("a collapsed day card's practice lines", () => {
     expect(out).toMatch(/217\. Contains Duplicate<span[^>]*>Arrays &amp; Hashing<\/span>/);
     expect(out).not.toContain("problem 1");
     expect(out).toContain("One mock round");
+  });
+
+  it("previews a day by its rows, one line each, with no summary", () => {
+    const out = html();
+    expect(out).not.toContain("A long summary of the day");
+    expect(out.match(/class="line-clamp-1"/g)).toHaveLength(2);
+    expect(out).toMatch(/aria-label="Show the day[^"]*materials in full"/);
+  });
+
+  it("opens the rows in full on the chevron, still with no summary", () => {
+    const out = html(new Set(["d1"]));
+    expect(out).not.toContain("A long summary of the day");
+    expect(out).not.toContain("line-clamp-1");
+    expect(out).toContain('aria-label="Show less"');
+  });
+
+  it("shows the summary on a day with nothing assigned, and no chevron", () => {
+    const out = html(none, []);
+    expect(out).toContain("A long summary of the day");
+    expect(out).not.toContain("Show the day");
   });
 });

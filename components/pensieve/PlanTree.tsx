@@ -139,6 +139,9 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
   const isWeek = node.level !== "day";
   const hasMeta = (node.budgetHours !== null && !hasWork) || showStatus || hasSessions || canSplit;
   const href = mode === "track" && ctx.leafHref ? ctx.leafHref(node) : undefined;
+  // A day's rows read one line each; the chevron opens them in full. A week's rows are already whole.
+  const canOpen = !isWeek && hasWork;
+  const clamp = open ? undefined : "line-clamp-1";
 
   const classes = cn(
     "flex min-w-0 flex-col gap-[5px] rounded-2xl border border-transparent px-3.5 py-3 text-left transition-[background-color,border-color,box-shadow] duration-300 animate-in fade-in slide-in-from-bottom-1",
@@ -166,18 +169,20 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
         </span>
         <span className="ml-auto flex items-center gap-1">
           {locked && <Lock className="size-3 opacity-55" strokeWidth={2.75} />}
-          <span
-            role="button"
-            tabIndex={0}
-            aria-label={open ? "Show less" : "Show full description"}
-            onClick={toggle}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") toggle(e as unknown as MouseEvent);
-            }}
-            className="relative z-10 inline-flex size-5 items-center justify-center rounded-full text-accent-700 hover:bg-accent-100"
-          >
-            <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} strokeWidth={2.75} />
-          </span>
+          {canOpen && (
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label={open ? "Show less" : "Show the day's materials in full"}
+              onClick={toggle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") toggle(e as unknown as MouseEvent);
+              }}
+              className="relative z-10 inline-flex size-5 items-center justify-center rounded-full text-accent-700 hover:bg-accent-100"
+            >
+              <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} strokeWidth={2.75} />
+            </span>
+          )}
         </span>
       </span>
       <span className="flex items-baseline gap-2">
@@ -186,9 +191,9 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
           <span className="ml-auto shrink-0 text-xs whitespace-nowrap text-muted-foreground">{node.budgetHours} h budget</span>
         )}
       </span>
-      {/* A day's subtitle is what it reads, so the week's division shows at a glance; the summary opens on the chevron.
-          A day with nothing to read shows its summary instead. */}
-      {(open || (!isWeek && !hasWork)) && <span className="min-w-0 text-[12px] leading-snug opacity-80">{node.summary}</span>}
+      {/* A unit's preview is what it reads and does: the title already names the topic, so the summary shows only on a
+          unit with nothing assigned. */}
+      {!hasWork && <span className="min-w-0 text-[12px] leading-snug opacity-80">{node.summary}</span>}
       {hasWork &&
         (isWeek ? (
           <span className="mt-1 flex flex-col gap-2">
@@ -202,7 +207,7 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
               const brief = rowBrief(r);
               const title = r.chapter ? `${r.material.title} · ${partLabel(r)}` : r.material.title;
               return (
-                <span key={r.key} className="line-clamp-2" title={brief.detail ? `${title} · ${brief.detail}` : title}>
+                <span key={r.key} className={clamp} title={brief.detail ? `${title} · ${brief.detail}` : title}>
                   <span className="text-neutral-800">{brief.head}</span>
                   {brief.detail && <> · {brief.detail}</>}
                 </span>
@@ -212,7 +217,7 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
               // A listed item shows as on the expanded rows: "217. Contains Duplicate", its group a quiet label.
               const what = p.item ? itemLabel(p.item) : p.task;
               return (
-                <span key={p.key} className="line-clamp-2" title={`${p.label} · ${what}${p.item?.group ? ` · ${p.item.group}` : ""} · ${p.minutes} min`}>
+                <span key={p.key} className={clamp} title={`${p.label} · ${what}${p.item?.group ? ` · ${p.item.group}` : ""} · ${p.minutes} min`}>
                   <span className="text-neutral-800">{p.label}</span> · {what}
                   {p.item?.group && <span className="ml-1 text-[10.5px] opacity-75">{p.item.group}</span>} · {p.minutes} min
                 </span>
