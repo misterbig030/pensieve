@@ -462,6 +462,8 @@ describe("revisePlanTree checks the whole tree", () => {
     const { tree } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, daysPerWeek: 7, tree: legacy, lockBefore: 0, changeRequest: "rename day 2", log: { onCall: (c) => void calls.push(c) } });
     expect(calls[0].facts.filter((f) => f.startsWith("dropped"))).toEqual([]);
     expect(tree.children!.map((d) => d.materials?.length)).toEqual([1, 1]);
+    // The revision runs on the outline model at the outline's effort.
+    expect(mockedGenerateObject.mock.calls[0][0]).toEqual(expect.objectContaining({ providerOptions: { anthropic: { effort: "high" } } }));
   });
 
   it("drops a duplicated resource and a bare book id after one call, with facts", async () => {

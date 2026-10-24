@@ -35,7 +35,8 @@ export type KeyOwner = (typeof KEY_OWNERS)[number];
 export const KEY_ERRORS = ["invalid", "credits", "rate_limit", "other"] as const;
 export type KeyErrorKind = (typeof KEY_ERRORS)[number];
 
-export const DEFAULT_OUTLINE_MODEL: AiModelId = "anthropic/claude-haiku-4.5";
+/** The outline drafts the weeks and the days, and revises the plan: it decides where each reservation goes. */
+export const DEFAULT_OUTLINE_MODEL: AiModelId = "anthropic/claude-opus-5.5";
 export const DEFAULT_CONTENT_MODEL: AiModelId = "anthropic/claude-sonnet-5";
 /** Chat turns are short and latency-sensitive; the revision tool uses the outline model. */
 export const DEFAULT_CHAT_MODEL: AiModelId = "anthropic/claude-haiku-4.5";
@@ -64,6 +65,8 @@ export const CANDIDATE_STEP_EFFORT: ReasoningEffort = "low";
  * dropped, the practice shares and the plan's coverage) over research's whole, unselected list.
  */
 export const ALLOCATE_EFFORT: ReasoningEffort = "high";
+/** The outline and revision calls run at this effort: placing the reservations across the weeks is a judgment call too. */
+export const OUTLINE_EFFORT: ReasoningEffort = "high";
 
 interface TokenUsage {
   inputTokens?: number;

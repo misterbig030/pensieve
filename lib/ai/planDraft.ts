@@ -33,9 +33,9 @@ import {
 import type { Material } from "@/lib/schemas/material";
 import { unitListSchema, type UnitDraft } from "@/lib/schemas/plan";
 import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
-import { buildGenerationLogRow, emitGenerationLog, type GenerationLogContext } from "./logged";
+import { buildGenerationLogRow, effortOptions, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { allocatePlan } from "./allocate";
-import { DEFAULT_ALLOCATE_MODEL, DEFAULT_OUTLINE_MODEL } from "./models";
+import { DEFAULT_ALLOCATE_MODEL, DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
 import { providerError } from "./providerError";
 import { appModel, type ResolvedModel } from "./resolve";
 import { buildUnitsPrompt, type UnitsPromptInput } from "./planPrompt";
@@ -150,6 +150,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     model: input.model.model,
     schema: unitListSchema,
     prompt: input.prompt,
+    providerOptions: effortOptions(OUTLINE_EFFORT),
     onError: ({ error }) => {
       failure = error;
     },
@@ -170,6 +171,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
   const row = buildGenerationLogRow({
     caller: "outline",
     model: input.model.id,
+    effort: OUTLINE_EFFORT,
     keyOwner: input.model.keyOwner,
     usage,
     latencyMs: Math.round(performance.now() - startedAt),

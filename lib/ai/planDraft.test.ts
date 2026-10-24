@@ -250,6 +250,16 @@ describe("streamPlanDraft and the allocation", () => {
     expect(finish?.type === "finish" && finish.costUsd).toBeCloseTo(rows[0] + rows[1], 10);
   });
 
+  it("drafts the weeks on Opus 5.5 at high effort, and records the effort", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+    const rows: { caller: string; model: string; effort: string | null }[] = [];
+    for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], log: { onLog: (row) => void rows.push(row) } })) void event;
+    const call = mockedStreamObject.mock.calls[0][0] as { model: unknown; providerOptions?: unknown };
+    expect(call.model).toBe("anthropic/claude-opus-5.5");
+    expect(call.providerOptions).toEqual({ anthropic: { effort: "high" } });
+    expect(rows.find((r) => r.caller === "outline" && r.model === "anthropic/claude-opus-5.5" && r.effort === "high")).toBeDefined();
+  });
+
   it("lets a refusal on the learner's own key propagate without drafting anything", async () => {
     const refusal = new APICallError({ message: "Your credit balance is too low", url: "https://api.anthropic.com", requestBodyValues: {}, statusCode: 400 });
     mockedGenerateObject.mockReset();

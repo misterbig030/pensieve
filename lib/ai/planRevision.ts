@@ -21,7 +21,7 @@ import type { CoverRefDraft, MaterialRefDraft, PracticeCover, PracticeCoverDraft
 import type { PlanSplit } from "@/lib/studyTime";
 import { revisedTreeSchema, type RevisedTree } from "@/lib/schemas/plan";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
-import { DEFAULT_OUTLINE_MODEL } from "./models";
+import { DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
 import { appModel, type ResolvedModel } from "./resolve";
 import { assignRefs, buildRevisionPrompt, type PlanPromptContext } from "./planPrompt";
 
@@ -195,6 +195,7 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       keyOwner: model.keyOwner,
       schema: revisedTreeSchema,
       prompt: buildRevisionPrompt({ ...input, tree, refs }),
+      effort: OUTLINE_EFFORT,
       label: `Revision · ${input.changeRequest.length > 60 ? `${input.changeRequest.slice(0, 57)}…` : input.changeRequest}`,
       check,
     },
