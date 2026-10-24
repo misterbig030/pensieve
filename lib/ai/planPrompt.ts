@@ -478,13 +478,10 @@ function reservedPositions(covers: PracticeCover[], list: PracticeList): number[
   return all ? list.items.map((_, i) => i + 1) : [...new Set(runs)].sort((a, b) => a - b);
 }
 
-/** Items of a source that units outside this one already did or reserve: none of them is the units' to take. */
-function takenPositions(input: UnitsPromptInput, id: string, reservations: boolean): Set<number> {
+/** Items of a source that units outside this one already did: none of them is the units' to take. */
+function takenPositions(input: UnitsPromptInput, id: string): Set<number> {
   const out = new Set<number>();
-  for (const n of otherUnits(input)) {
-    for (const r of n.practice ?? []) if (r.id === id && r.itemFrom) out.add(r.itemFrom);
-    if (reservations) for (const c of n.practiceCovers ?? []) if (c.id === id) for (const p of itemPositions(c)) out.add(p);
-  }
+  for (const n of otherUnits(input)) for (const r of n.practice ?? []) if (r.id === id && r.itemFrom) out.add(r.itemFrom);
   return out;
 }
 
@@ -495,7 +492,7 @@ function leafPickSources(input: UnitsPromptInput, aliases: MaterialAliases, p: P
   const write = WRITE_YOURSELF[spec.generated];
   const rule = write === null ? "Every row names one of them; never write rows of this format yourself." : `When none fits, ${write}`;
   const itemsOf = (id: string, list: PracticeList, positions: number[]) => {
-    const taken = takenPositions(input, id, false);
+    const taken = takenPositions(input, id);
     return positions.filter((n) => !taken.has(n)).map((n) => itemLine(pick.format, list, aliases.alias(id)!, n));
   };
   const reserved = reservedPractice(input, pick.format).filter((c) => c.id === null || aliases.alias(c.id) !== undefined);
@@ -591,9 +588,8 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
 
 /**
  * The practice rules for headings: each pick's sources to reserve in order, with the part in the note, or, for a source
- * with an item list, a run of its positions continuing from where other units' runs end, sized by the units' share of
- * the format's week time. Below the top level only the parent's reserved sources are offered, or those no heading
- * reserves. None when no pick has a source.
+ * with an item list, only the units that take it: the app shares out its items over them (`sizeItemRuns`). Below the
+ * top level only the parent's reserved sources are offered, or those no heading reserves. None when no pick has a source.
  */
 function headingPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): string | null {
   const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
@@ -602,16 +598,12 @@ function headingPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases)
   const cutRule = cutSourceRule(picks, input.materials);
   const anyListed = picks.some((p) => p.sources.some((id) => listOf(input, id)));
   const lines = [
-    `Practice: for each unit, list in "practiceCovers" the practice sources its ${kids}s will use, as { format, id, note }: take each format's sources in order across the units, with the part this unit takes in note ("Arrays & Hashing; Two Pointers"). A source too long for one unit runs on in the next, a different part in each.${anyListed ? " A source with an item list is reserved by positions instead, as { format, id, from, to }: a run of its items, from and to inclusive." : ""}`,
+    `Practice: for each unit, list in "practiceCovers" the practice sources its ${kids}s will use, as { format, id, note }: take each format's sources in order across the units, with the part this unit takes in note ("Arrays & Hashing; Two Pointers"). A source too long for one unit runs on in the next, a different part in each.${anyListed ? " A source with an item list is named alone, as { format, id }, with no note: the app gives each unit that names it its run of items." : ""}`,
     ...(cutRule ? [cutRule] : []),
   ];
-  const weekly = weekBudgetsOf(input).practice;
-  /** How a listed source's runs are reserved: from the first of `positions` no other unit holds, in order, sized by the week's time. */
-  const runRule = (id: string, positions: number[], format: PracticeFormat) => {
-    const taken = takenPositions(input, id, true);
-    const from = positions.find((n) => !taken.has(n)) ?? positions[0];
-    return `from item ${from}: each unit reserves the next run, starting after the item where the unit before it ends, every item in exactly one unit; size a unit's run to its weeks' ${PRACTICE_REGISTRY[format].label} time, about ${formatMinutes(weekly[format] ?? 0)} a week, at the items' minutes.`;
-  };
+  /** How a listed source is reserved: the model names the units that take it; the app sizes their runs (`sizeItemRuns`). */
+  const runRule = (format: PracticeFormat, these: boolean) =>
+    `list it on each unit that should practise it; the app shares out ${these ? "these" : "its"} items in order, each unit's run sized to its ${PRACTICE_REGISTRY[format].label} time.`;
   for (const p of picks) {
     const name = `- ${pickName(p.pick.format)}, aimed at ${p.pick.focus}`;
     const held = practiceHeld(input, aliases, p.pick.format);
@@ -620,7 +612,7 @@ function headingPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases)
       const unlisted = reserved.filter((c) => !listOf(input, c.id)).map((c) => practiceItem(c, aliases)).filter((s): s is string => s !== null);
       const listed = [...new Set(reserved.filter((c) => listOf(input, c.id)).map((c) => c.id!))].map((id) => {
         const positions = reservedPositions(reserved.filter((c) => c.id === id), listOf(input, id)!);
-        return `${positionsText(aliases.alias(id)!, positions)}, ${runRule(id, positions, p.pick.format)}`;
+        return `${positionsText(aliases.alias(id)!, positions)}: ${runRule(p.pick.format, true)}`;
       });
       const rest = unlisted.length === 0 ? "" : listed.length > 0 ? ` Also ${unlisted.join("; ")}.` : `${unlisted.join("; ")}.`;
       lines.push(`${name}: from this unit's reservation, ${listed.join(" ")}${rest}${held}`);
@@ -628,7 +620,7 @@ function headingPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases)
     }
     const offered = offeredSources(input, p);
     if (offered.length > 0) {
-      const listed = offered.filter((id) => listOf(input, id)).map((id) => `${aliases.alias(id)} by item positions, ${runRule(id, listOf(input, id)!.items.map((_, i) => i + 1), p.pick.format)}`);
+      const listed = offered.filter((id) => listOf(input, id)).map((id) => `${aliases.alias(id)} has an item list: ${runRule(p.pick.format, false)}`);
       const unlisted = offered.filter((id) => !listOf(input, id)).map((id) => aliases.alias(id));
       const rest = unlisted.length === 0 ? "" : listed.length > 0 ? ` Also ${unlisted.join(", ")}.` : `${unlisted.join(", ")}.`;
       lines.push(`${name}: ${listed.join(" ")}${rest}${held}`);

@@ -204,6 +204,11 @@ export interface ResolvePracticeOptions {
    * report those as facts.
    */
   keepUnitemized?: boolean;
+  /**
+   * A listed source's runs are sized in code afterwards (`sizeItemRuns`, a level being drafted): its reservation keeps
+   * no run, and any run the model wrote, past the list or not, is ignored.
+   */
+  sized?: boolean;
 }
 
 /**
@@ -286,8 +291,8 @@ export function resolvePracticeRefs(
 /**
  * Resolves a heading's practice reservations. One whose format is not a pick, or whose material is no practice source
  * of that format, is dropped into `unknown`. A source with an item list is reserved by a run of positions (`from`–`to`,
- * turned round when reversed, or an item alias for a run of one); a run past the list, or none, is unknown too. A source
- * without a list keeps its note and no positions.
+ * turned round when reversed, or an item alias for a run of one); a run past the list, or none, is unknown too, unless
+ * the runs are `sized` in code. A source without a list keeps its note and no positions.
  */
 export function resolvePracticeCovers(
   drafts: PracticeCoverDraft[] | undefined,
@@ -306,6 +311,10 @@ export function resolvePracticeCovers(
     }
     const cover: PracticeCover = { format, id: resolved.id, note: clip(draft.note, 300) };
     const size = aliases.items(resolved.id);
+    if (size > 0 && options.sized) {
+      refs.push(cover);
+      continue;
+    }
     if (size > 0) {
       const given = [draft.from, draft.to].filter((n): n is number => Number.isFinite(n)).map(Math.round);
       if (given.length === 0 && resolved.item !== undefined) given.push(resolved.item);
@@ -326,6 +335,130 @@ export function resolvePracticeCovers(
     refs.push(cover);
   }
   return { refs, unknown };
+}
+
+/**
+ * How many of `minutes` (items in list order) each unit takes, in unit order, so each unit's minutes follow its
+ * `weights` share: an item goes to the unit whose cumulative share its middle falls in, so a unit's run is within one
+ * item's minutes of its share and rounding never drifts. A unit never gets none while items remain for it: each takes
+ * at least one, and when there are fewer items than units the later ones get none. Weights that sum to nothing share
+ * equally.
+ */
+export function shareRuns(minutes: readonly number[], weights: readonly number[]): number[] {
+  const counts = weights.map(() => 0);
+  const k = weights.length;
+  if (k === 0) return counts;
+  const shares = weights.reduce((sum, w) => sum + w, 0) > 0 ? weights : weights.map(() => 1);
+  const whole = shares.reduce((sum, w) => sum + w, 0);
+  const total = minutes.reduce((sum, m) => sum + m, 0);
+  let acc = 0;
+  const cuts = shares.map((w) => (total * (acc += w)) / whole);
+  let unit = 0;
+  let before = 0;
+  minutes.forEach((m, i) => {
+    // Move on once this unit has an item and the item's middle is past its cut, or the later units need every item left.
+    while (unit < k - 1 && counts[unit] > 0 && (before + m / 2 > cuts[unit] || minutes.length - i <= k - 1 - unit)) unit += 1;
+    counts[unit] += 1;
+    before += m;
+  });
+  return counts;
+}
+
+export interface SizeItemRunsInput {
+  root: PlanNode;
+  /** The heading units this level placed, in order, already in `root`. */
+  nodes: PlanNode[];
+  materials: Pick<Material, "id" | "practice" | "minutes">[];
+  split?: PlanSplit | null;
+  hoursPerWeek?: number;
+  daysPerWeek: number;
+}
+
+/**
+ * Sizes the runs of each listed practice source on a level of headings this call drafted. The model only chose which
+ * units take a source (any run it wrote is ignored); code gives each of them a contiguous run, in unit order, over the
+ * source's available items: the parent's reserved run (the whole list at the top, or under a parent that reserved it
+ * without one), less the items units outside this level hold or did. Runs follow each unit's time for that format
+ * (`practiceBudgets` over its weeks), cut by `shareRuns`; a unit whose share crosses an item held elsewhere gets one
+ * reservation per stretch. When the model chose no unit for a source that is the level's own (the top level's, or the
+ * parent's reservation) and the level has the format's time, every unit with time takes it. A source the checks will
+ * refuse here (the parent reserved others of its format, or a heading elsewhere holds it) is left to them. Changes
+ * `nodes` in place and returns the facts.
+ */
+export function sizeItemRuns(input: SizeItemRunsInput): string[] {
+  const facts: string[] = [];
+  if (input.nodes.length === 0) return facts;
+  const aliases = aliasMaterials(input.materials);
+  const label = (n: PlanNode) => fullLabelOf(input.root, n);
+  const parent = parentOf(input.root, input.nodes[0].id);
+  const parentNode = parent && parent.id !== input.root.id ? parent : null;
+  // The units outside this level: everything but the root, the parent's line, and what sits under the parent.
+  const below = new Set<string>();
+  for (const n of [...(parentNode?.children ?? []), ...input.nodes]) walk(n, (d) => void below.add(d.id));
+  const skip = new Set<string>([input.root.id, ...below]);
+  for (let p = parent; p; p = parentOf(input.root, p.id)) skip.add(p.id);
+  const others: PlanNode[] = [];
+  walk(input.root, (n) => {
+    if (!skip.has(n.id)) others.push(n);
+  });
+  const reservedOutside = (theirs: (c: PracticeCover) => boolean) => {
+    let found = false;
+    walk(input.root, (n) => {
+      if (!below.has(n.id) && !n.manualSplit && (n.practiceCovers ?? []).some(theirs)) found = true;
+    });
+    return found;
+  };
+  const weight = (n: PlanNode, format: PracticeFormat) =>
+    practiceBudgets(input.split, budgetFor(weeksOf(input.root, n, input.daysPerWeek), input.hoursPerWeek) * 60, input.materials).practice[format] ?? 0;
+
+  for (const { pick, sources } of pickSources(input.split, input.materials)) {
+    const format = pick.format;
+    const name = PRACTICE_REGISTRY[format].label;
+    for (const id of sources.filter((s) => aliases.items(s) > 0)) {
+      const theirs = (c: PracticeCover) => c.format === format && c.id === id;
+      const parentCovers = (parentNode?.practiceCovers ?? []).filter(theirs);
+      // As the checks hold it: under a parent that reserved none of this source, a source of its format reserved there
+      // or this source reserved by any heading outside this level is refused, so it is theirs to report.
+      if (parentNode && parentCovers.length === 0 && ((parentNode.practiceCovers ?? []).some((c) => c.format === format) || reservedOutside(theirs))) continue;
+      const whole = Array.from({ length: aliases.items(id) }, (_, i) => i + 1);
+      const reserved = parentCovers.length === 0 || parentCovers.some((c) => itemPositions(c).length === 0) ? whole : [...new Set(parentCovers.flatMap(itemPositions))].sort((a, b) => a - b);
+      const taken = new Set<number>();
+      for (const n of others) {
+        for (const r of n.practice ?? []) if (r.id === id && r.itemFrom) taken.add(r.itemFrom);
+        for (const c of n.practiceCovers ?? []) if (c.id === id) for (const p of itemPositions(c)) taken.add(p);
+      }
+      const available = reserved.filter((n) => !taken.has(n));
+      let chosen = input.nodes.filter((n) => (n.practiceCovers ?? []).some(theirs));
+      if (chosen.length === 0) {
+        // Only a source that is the level's own (the top level's, or the parent's reservation) is chosen for the model.
+        const withTime = input.nodes.filter((n) => weight(n, format) > 0);
+        if ((parentNode && parentCovers.length === 0) || available.length === 0 || withTime.length === 0) continue;
+        chosen = withTime;
+        facts.push(`no unit chose ${aliases.alias(id)} for ${name}: it is shared out over every unit with ${name} time`);
+      }
+      const counts = shareRuns(
+        available.map((n) => itemMinutes(format, aliases.item(id, n)!)),
+        chosen.map((n) => weight(n, format)),
+      );
+      let next = 0;
+      const empty: PlanNode[] = [];
+      chosen.forEach((node, j) => {
+        const run = available.slice(next, next + counts[j]);
+        next += counts[j];
+        const covers = node.practiceCovers ?? [];
+        const note = covers.find(theirs)?.note ?? null;
+        const runs: PracticeCover[] = numberRuns(run).map(([itemFrom, itemTo]) => ({ format, id, note, itemFrom, itemTo }));
+        const at = covers.findIndex(theirs);
+        const rest = covers.filter((c) => !theirs(c));
+        const placed = at < 0 ? [...rest, ...runs] : [...rest.slice(0, at), ...runs, ...rest.slice(at)];
+        if (placed.length > 0) node.practiceCovers = placed;
+        else delete node.practiceCovers;
+        if (run.length === 0) empty.push(node);
+      });
+      if (empty.length > 0) facts.push(`${aliases.alias(id)} has ${available.length} items for ${chosen.length} units: ${empty.map(label).join(", ")} get none`);
+    }
+  }
+  return facts;
 }
 
 /** One picked format as the drafter sees it: the practice sources in the list that serve it, in list order. */

@@ -726,6 +726,30 @@ describe("item lists while drafting", () => {
     expect(calls[0].facts.filter((f) => f.startsWith("breach") || f.includes("not assigned"))).toEqual([]);
   });
 
+  it("sizes the weeks' runs of a listed source in code: the model only says which weeks take it", async () => {
+    // Three weeks, six hours, half practice: 3 h of Problems a week. The model puts M2 on weeks 1 and 2, the second with
+    // a run past the list; week 3 takes none. The list's 495 min is cut at 247.5: item 12's middle falls on it, so
+    // week 1 takes items 1–12 (260 min) and week 2 13–21 (235 min).
+    const weeks: UnitDraft[] = [
+      { title: "W1", summary: "s", practiceCovers: [{ format: "problem-set", id: "M2" }] },
+      { title: "W2", summary: "s", practiceCovers: [{ format: "problem-set", id: "M2", from: 90, to: 200 }] },
+      { title: "W3", summary: "s" },
+    ];
+    const days: UnitDraft[] = [1, 2, 3, 4, 5].map((n) => ({ title: `D${n}`, summary: "s" }));
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks)).mockReturnValueOnce(fakeStream(days));
+    const calls: ModelCall[] = [];
+    let root: PlanNode | null = null;
+    for await (const e of streamPlanDraft({ ...ctx, weeks: 3, granularity: "day", log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") root = e.root;
+    const prompt = (mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).not.toContain("from item");
+    const run = (from: number, to: number) => [{ format: "problem-set", id: "M2", note: null, itemFrom: from, itemTo: to }];
+    expect(root!.children!.map((w) => w.practiceCovers)).toEqual([run(1, 12), run(13, 21), undefined]);
+    // Nothing to correct, so no retry; the week's days are planned from items 1–12.
+    expect(mockedStreamObject).toHaveBeenCalledTimes(2);
+    expect(calls[0].facts.filter((f) => f.startsWith("breach") || f.startsWith("dropped"))).toEqual([]);
+    expect((mockedStreamObject.mock.calls[1][0] as { prompt: string }).prompt).toContain("Reserved for this unit: M2 items 1–12;");
+  });
+
   it("refuses a day's item outside its week's reservation and drops it after the retry", async () => {
     const tree = makeRoot([makeNode({ id: "w1", level: "week", title: "Arrays", summary: "s", len: 5, budgetHours: 6, practice: [row(1), row(2)] })]);
     const units: UnitDraft[] = [

@@ -556,23 +556,36 @@ describe("listed practice sources in prompts", () => {
   const days = (tree: ReturnType<typeof makeRoot>, parentId: string) =>
     buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "day", spans: [1, 1, 1, 1, 1], weeks: 3, daysPerWeek: 5, hoursPerWeek: 6, split, tree: layout(tree), parentId, unitsAreLeaves: true });
 
-  it("reserves item ranges in list order across weeks", () => {
+  it("asks headings which units take a listed source, and leaves its runs to the app", () => {
     const top = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "week", spans: [5, 5, 5], weeks: 3, daysPerWeek: 5, hoursPerWeek: 6, split, unitsAreLeaves: false });
     // The list is shown by group with positions and minutes under its source, never by title; its time is per item.
     expect(top).toContain('M2 [course · practice: Problems · 21 problems · answers · the learner\'s own] "NeetCode 150"');
     expect(top).toContain("\n  M2 items 1–9 Arrays & Hashing (3.3 h); 10–14 Two Pointers (2.1 h); 15–21 Stack (2.9 h)\n");
     expect(top).not.toContain("Group Anagrams");
-    expect(top).toContain("A source with an item list is reserved by positions instead, as { format, id, from, to }: a run of its items, from and to inclusive.");
-    // Six hours, half of it practice, all problems: 3 h a week.
+    // The model names the units that take the source; the app sizes each unit's run. No from/to is asked for.
+    expect(top).toContain("A source with an item list is named alone, as { format, id }, with no note: the app gives each unit that names it its run of items.");
     expect(top).toContain(
-      '- Problems (format "problem-set"), aimed at arrays and hashing: M2 by item positions, from item 1: each unit reserves the next run, starting after the item where the unit before it ends, every item in exactly one unit; size a unit\'s run to its weeks\' Problems time, about 3 h a week, at the items\' minutes. Also M3.',
+      '- Problems (format "problem-set"), aimed at arrays and hashing: M2 has an item list: list it on each unit that should practise it; the app shares out its items in order, each unit\'s run sized to its Problems time. Also M3.',
     );
+    expect(top).not.toMatch(/from, to|from item|size a unit's run/);
     expect(top).not.toMatch(/\d+\s*%[^\n]*Problems/);
-    // A month's weeks continue inside the month's run, from where its earlier reservations end.
+    // A month's weeks share the month's run.
     const m1 = makeNode({ id: "m1", level: "month", title: "M", summary: "s", len: 10, practiceCovers: [reserve(10, 21)] });
     const inside = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "week", spans: [5, 5], weeks: 2, daysPerWeek: 5, hoursPerWeek: 6, split, tree: layout(makeRoot([m1])), parentId: "m1", unitsAreLeaves: false });
-    expect(inside).toContain('- Problems (format "problem-set"), aimed at arrays and hashing: from this unit\'s reservation, M2 items 10–21, from item 10: each unit reserves the next run,');
+    expect(inside).toContain(
+      '- Problems (format "problem-set"), aimed at arrays and hashing: from this unit\'s reservation, M2 items 10–21: list it on each unit that should practise it; the app shares out these items in order, each unit\'s run sized to its Problems time.',
+    );
+    expect(inside).not.toMatch(/from, to|from item/);
     expect(inside).not.toContain("Also M3");
+  });
+
+  it("keeps the note rule for a source without an item list", () => {
+    const top = buildUnitsPrompt({ topic: "Interviews", materials: [MATERIALS[0], UNLISTED], granularity: "day", level: "week", spans: [5, 5, 5], weeks: 3, daysPerWeek: 5, hoursPerWeek: 6, split, unitsAreLeaves: false });
+    expect(top).toContain(
+      'Practice: for each unit, list in "practiceCovers" the practice sources its days will use, as { format, id, note }: take each format\'s sources in order across the units, with the part this unit takes in note ("Arrays & Hashing; Two Pointers"). A source too long for one unit runs on in the next, a different part in each.\n',
+    );
+    expect(top.split("\n")).toContain('- Problems (format "problem-set"), aimed at arrays and hashing: M2.');
+    expect(top).not.toContain("item list");
   });
 
   it("lists a week's reserved items to its days", () => {

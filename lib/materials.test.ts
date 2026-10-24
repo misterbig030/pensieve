@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
-import type { MaterialRef, PracticeCover, PracticeRef } from "@/lib/schemas/material";
+import type { MaterialPractice, MaterialRef, PracticeCover, PracticeRef } from "@/lib/schemas/material";
 import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
 import { AIE_HOURS, AIE_MATERIALS, AIE_SHARE, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 import {
@@ -31,7 +31,10 @@ import {
   keepPracticeCovers,
   splitHours,
   draftedSplit,
+  shareRuns,
+  sizeItemRuns,
 } from "./materials";
+import { itemMinutes, itemPositions } from "./practice";
 
 describe("parseChapters", () => {
   it.each([
@@ -1218,5 +1221,111 @@ describe("practice item lists: weeks reserve runs, days assign items", () => {
     expect(keepPracticeCovers([reserve(2, 2), reserve(1, 1)], before, aliases.practice)).toEqual([before[1], before[0]]);
     // A lone reservation written back without its run gets the run back.
     expect(keepPracticeCovers([{ format: "problem-set", id: "P", note: null }], [before[0]], aliases.practice)).toEqual([before[0]]);
+  });
+});
+
+describe("shareRuns", () => {
+  it("cuts items in order at each unit's cumulative share, by the items' minutes", () => {
+    expect(shareRuns([10, 10, 10, 10], [1, 1])).toEqual([2, 2]);
+    // 80 min cut at 40: the second item's middle (42.5) is past the cut, so it opens the second run.
+    expect(shareRuns([35, 15, 15, 15], [1, 1])).toEqual([1, 3]);
+    expect(shareRuns([10, 10, 10, 10, 10, 10], [2, 1])).toEqual([4, 2]);
+    // Weights that sum to nothing share equally.
+    expect(shareRuns([10, 10], [0, 0])).toEqual([1, 1]);
+  });
+  it("never leaves a unit empty while items remain, and gives later units none when items run out", () => {
+    // A tiny share still gets one item.
+    expect(shareRuns([10, 10, 10, 10], [1, 100, 1])).toEqual([1, 2, 1]);
+    expect(shareRuns([10, 10], [1, 1, 1])).toEqual([1, 1, 0]);
+    expect(shareRuns([], [1, 1])).toEqual([0, 0]);
+  });
+});
+
+describe("sizeItemRuns: code sizes a listed source's runs on headings", () => {
+  const DIFFICULTY = ["easy", "medium", "hard", "medium", "easy", "hard", "medium"] as const;
+  /** A list of `n` problems of mixed difficulty: 15, 25 or 35 min each. */
+  const listOf = (n: number) => {
+    const items = Array.from({ length: n }, (_, i) => ({ title: `Problem ${i + 1}`, number: String(i + 1), group: `Group ${Math.floor(i / 10) + 1}`, difficulty: DIFFICULTY[i % 7], url: null, solutionUrl: null, minutes: null }));
+    const minutes = items.reduce((sum, it) => sum + itemMinutes("problem-set", it), 0);
+    return { format: "problem-set" as const, items: n, totalItems: n, perItemMinutes: 10, minutes, answers: true, list: { items, source: "file" as const, url: "https://example.com/p.json" } };
+  };
+  const unlisted = { format: "problem-set" as const, items: 40, perItemMinutes: 10, minutes: null, answers: true };
+  // M1 a 50-problem list (P), M2 a problem list without items (Q). Five hours a week, half practice: 150 min of Problems a week.
+  const materials: { id: string; practice: MaterialPractice }[] = [{ id: "P", practice: listOf(50) }, { id: "Q", practice: unlisted }];
+  const split = { readingShare: 50, practice: "problems", reason: "", formats: [{ format: "problem-set" as const, share: 100, focus: "arrays", reason: "" }] };
+  const minutesOf = (id: string, positions: number[]) => {
+    const items = materials.find((m) => m.id === id)!.practice.list?.items ?? [];
+    return positions.reduce((sum, n) => sum + itemMinutes("problem-set", items[n - 1]), 0);
+  };
+  const ALL = minutesOf("P", Array.from({ length: 50 }, (_, i) => i + 1));
+  const HARDEST = 35;
+  /** The model's choice: the source on a unit, with whatever run it wrote. */
+  const chosen = (from?: number, to?: number): PracticeCover => ({ format: "problem-set", id: "P", note: null, ...(from ? { itemFrom: from, itemTo: to } : {}) });
+  const weeks = (n: number, covers: (i: number) => PracticeCover[] | undefined) =>
+    Array.from({ length: n }, (_, i) => makeNode({ id: `w${i + 1}`, level: "week", title: `W${i + 1}`, summary: "s", len: 5, practiceCovers: covers(i) }));
+  const size = (nodes: PlanNode[], root = layout(makeRoot(nodes)), mats: typeof materials = materials) => sizeItemRuns({ root, nodes, materials: mats, split, hoursPerWeek: 5, daysPerWeek: 5 });
+  const runsOf = (n: PlanNode, id = "P") => (n.practiceCovers ?? []).filter((c) => c.id === id);
+  const positionsOf = (n: PlanNode) => runsOf(n).flatMap(itemPositions);
+
+  it("gives the weeks the model chose contiguous runs over the whole list, sized by their Problems time, whatever runs it wrote", () => {
+    // The model chose weeks 1–6 with arbitrary runs, and week 1 also takes the unlisted Q; weeks 7–8 take nothing.
+    const nodes = weeks(8, (i) => (i < 6 ? [chosen(3 + i, 40 - i), ...(i === 0 ? [{ format: "problem-set" as const, id: "Q", note: "Graphs 1–5" }] : [])] : undefined));
+    const root = layout(makeRoot(nodes));
+    expect(size(nodes, root)).toEqual([]);
+    // Each chosen week holds one run; together they are 1–50 in order, each item once.
+    for (const n of nodes.slice(0, 6)) expect(runsOf(n)).toHaveLength(1);
+    expect(nodes.flatMap(positionsOf)).toEqual(Array.from({ length: 50 }, (_, i) => i + 1));
+    // Each run is within one item's minutes of its share of the list: a sixth, the weeks' times being equal.
+    for (const n of nodes.slice(0, 6)) expect(Math.abs(minutesOf("P", positionsOf(n)) - ALL / 6)).toBeLessThanOrEqual(HARDEST);
+    // Weeks the model did not choose get none; the unlisted source keeps its note and no run.
+    expect(nodes[6].practiceCovers).toBeUndefined();
+    expect(nodes[7].practiceCovers).toBeUndefined();
+    expect(nodes[0].practiceCovers![1]).toEqual({ format: "problem-set", id: "Q", note: "Graphs 1–5" });
+    // The checks find nothing to report.
+    expect(levelChecks({ root, nodes, leaves: false, top: true, materials, unknownIds: [], daysPerWeek: 5, hoursPerWeek: 5, split })).toEqual({ facts: [], breaches: [] });
+  });
+
+  it("gives every chosen week a run when the model chose them all", () => {
+    const nodes = weeks(8, () => [chosen()]);
+    expect(size(nodes)).toEqual([]);
+    expect(nodes.every((n) => runsOf(n).length === 1 && positionsOf(n).length > 0)).toBe(true);
+    expect(nodes.flatMap(positionsOf)).toEqual(Array.from({ length: 50 }, (_, i) => i + 1));
+    for (const n of nodes) expect(Math.abs(minutesOf("P", positionsOf(n)) - ALL / 8)).toBeLessThanOrEqual(HARDEST);
+  });
+
+  it("chooses every week with Problems time when the model chose none, and says so", () => {
+    const nodes = weeks(8, () => undefined);
+    expect(size(nodes)).toEqual(["no unit chose M1 for Problems: it is shared out over every unit with Problems time"]);
+    expect(nodes.every((n) => runsOf(n).length === 1)).toBe(true);
+    expect(nodes.flatMap(positionsOf)).toEqual(Array.from({ length: 50 }, (_, i) => i + 1));
+    // With no practice time, nothing is chosen for it.
+    const reading = { ...split, readingShare: 100, formats: [] };
+    const none = weeks(8, () => undefined);
+    expect(sizeItemRuns({ root: layout(makeRoot(none)), nodes: none, materials, split: reading, hoursPerWeek: 5, daysPerWeek: 5 })).toEqual([]);
+    expect(none.every((n) => n.practiceCovers === undefined)).toBe(true);
+  });
+
+  it("gives later weeks none when there are fewer items than chosen weeks, with a fact", () => {
+    const few = [{ id: "P", practice: listOf(4) }, materials[1]];
+    const nodes = weeks(6, () => [chosen()]);
+    expect(size(nodes, layout(makeRoot(nodes)), few)).toEqual(["M1 has 4 items for 6 units: Week 5, Week 6 get none"]);
+    expect(nodes.map(positionsOf)).toEqual([[1], [2], [3], [4], [], []]);
+    expect(nodes[4].practiceCovers).toBeUndefined();
+  });
+
+  it("shares a month's run among its weeks only, around items other units hold", () => {
+    // Month 1 reserved items 1–20 and Month 2 21–50; a week of Month 2 already did item 12 (a row from before the runs),
+    // so Month 1's weeks share 1–11 and 13–20, and none of them takes a run past Month 1's, whatever the model wrote.
+    const m2week = makeNode({ id: "x1", level: "week", title: "X", summary: "s", len: 5, budgetHours: 5, practice: [{ format: "problem-set", id: "P", task: "Problem 12", done: "solved", minutes: 25, generated: false, itemFrom: 12, itemTo: 12 }] });
+    const kids = weeks(4, () => [chosen(1, 50)]);
+    const m1 = makeNode({ id: "m1", level: "month", title: "M1", summary: "s", len: 20, practiceCovers: [{ ...chosen(1, 20) }], children: kids });
+    const m2 = makeNode({ id: "m2", level: "month", title: "M2", summary: "s", len: 30, practiceCovers: [{ ...chosen(21, 50) }], children: [m2week] });
+    const root = layout(makeRoot([m1, m2]));
+    expect(size(kids, root)).toEqual([]);
+    const positions = kids.flatMap(positionsOf);
+    expect(positions).toEqual([...Array.from({ length: 11 }, (_, i) => i + 1), ...Array.from({ length: 8 }, (_, i) => i + 13)]);
+    // A week whose share crosses the gap holds two runs, so no run names an item another unit holds.
+    expect(kids.flatMap((k) => runsOf(k)).every((c) => !itemPositions(c).includes(12))).toBe(true);
+    expect(levelChecks({ root, nodes: kids, leaves: false, top: false, materials, unknownIds: [], daysPerWeek: 5, hoursPerWeek: 5, split }).breaches).toEqual([]);
   });
 });

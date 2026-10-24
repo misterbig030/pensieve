@@ -9,6 +9,7 @@ import {
   resolvePracticeCovers,
   resolvePracticeRefs,
   sizeChapterRows,
+  sizeItemRuns,
   type Breach,
   type MaterialAliases,
 } from "@/lib/materials";
@@ -71,8 +72,9 @@ export function nodeFor(
 
 /**
  * Puts what the model wrote for references onto the node: leaves keep `materials` (their Read table) and `practice`
- * (their practice rows), headings keep `covers` and `practiceCovers` (their reservations). Returns the ids that are not
- * in the list and the practice rows the rules refuse; both are dropped.
+ * (their practice rows), headings keep `covers` and `practiceCovers` (their reservations; a listed source's without a
+ * run, which `sizeItemRuns` sizes once the level is in). Returns the ids that are not in the list and the practice rows
+ * the rules refuse; both are dropped.
  */
 export function applyUnitRefs(
   node: PlanNode,
@@ -94,7 +96,8 @@ export function applyUnitRefs(
   }
   const reading = resolveCoverRefs(unit.covers, aliases);
   if (reading.refs.length > 0) node.covers = reading.refs;
-  const practice = resolvePracticeCovers(unit.practiceCovers, aliases, split);
+  // A listed source's runs are sized in code once the level is in (`sizeItemRuns`): the model only chose the units.
+  const practice = resolvePracticeCovers(unit.practiceCovers, aliases, split, { sized: true });
   if (practice.refs.length > 0) node.practiceCovers = practice.refs;
   return { unknown: [...reading.unknown, ...practice.unknown], refused: [] };
 }
@@ -277,9 +280,17 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     // Chapter rows take their minutes from the list before the budget is judged, so the checks see real sizes.
     if (leaf) sizeChapterRows(final, ctx.materials);
     const { root, placed } = placeForChecks(input.tree, input.parentId, final);
+    // Headings: each listed source's runs are sized by the units' time before the checks, which then hold by construction.
+    const sizing = leaf ? [] : sizeItemRuns({ root, nodes: placed, materials: ctx.materials, split: ctx.split, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek });
+    if (!leaf) {
+      placed.forEach((p, i) => {
+        if (p.practiceCovers) final[i].practiceCovers = p.practiceCovers.map((c) => ({ ...c }));
+        else delete final[i].practiceCovers;
+      });
+    }
     const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, split: ctx.split });
     breaches = checks.breaches;
-    const facts = [...checks.facts, ...practiceFacts, ...breaches.map((b) => `breach: ${b.text}`)];
+    const facts = [...checks.facts, ...sizing, ...practiceFacts, ...breaches.map((b) => `breach: ${b.text}`)];
     if (attempt === 2) {
       // Rows that still breach are dropped, the drops recorded, and the surviving chapter rows resized.
       facts.push(...dropBreaches(final, breaches));

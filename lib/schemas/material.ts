@@ -262,8 +262,8 @@ export const practiceCoverDraftSchema = z.object({
   format: z.string().describe("The picked format this source serves"),
   id: z.string().describe("A practice source's id from the list"),
   note: z.string().optional().describe('The part this unit takes ("Arrays & Hashing; Two Pointers")'),
-  from: z.number().optional().describe("For a source with an item list: the first item this unit takes, by position"),
-  to: z.number().optional().describe("For a source with an item list: the last item this unit takes, by position"),
+  from: z.number().optional().describe("For a source with an item list, only where the rules ask for a run: the first item this unit takes, by position"),
+  to: z.number().optional().describe("For a source with an item list, only where the rules ask for a run: the last item this unit takes, by position"),
 });
 export type PracticeRefDraft = z.infer<typeof practiceRefDraftSchema>;
 export type PracticeCoverDraft = z.infer<typeof practiceCoverDraftSchema>;

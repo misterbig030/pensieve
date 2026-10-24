@@ -568,8 +568,19 @@ describe("revisePlanTree holds rows it adds or changes to the drafting rules, an
     const { tree } = await revisePlanTree({ topic: "t", materials, granularity: "day", daysPerWeek: 5, split, tree: saved(), lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
     const days = (tree.children ?? []).flatMap((w) => w.children ?? []);
     const practiceOf = (id: string) => days.find((d: PlanNode) => d.id === id)?.practice;
-    return { facts: calls[0].facts, practiceOf };
+    return { facts: calls[0].facts, practiceOf, tree };
   };
+
+  it("keeps saved runs as they are: revision sizes no run", async () => {
+    // Week 1 written back with the source alone, week 2 with its own run: both keep their saved runs, which are far
+    // from an even share of the list's time, and week 2's saved overlap on item 3 stays a fact, untrimmed.
+    const object = answer([], [], []);
+    object.units[0] = { ...object.units[0], practiceCovers: [{ format: "problem-set", id: "M2" }] } as (typeof object.units)[number];
+    object.units[1] = { ...object.units[1], practiceCovers: [{ format: "problem-set", id: "M2", from: 3, to: 6 }, { format: "problem-set", id: "M3", note: "Graphs" }] } as (typeof object.units)[number];
+    const { tree, facts } = await revise(object);
+    expect(tree.children!.map((w) => w.practiceCovers)).toEqual([[run(1, 3)], [run(3, 6), { format: "problem-set", id: "Q", note: "Graphs" }], undefined]);
+    expect(facts.filter((f) => f.startsWith("dropped") || f.startsWith("trimmed"))).toEqual([]);
+  });
 
   it("drops an itemless row it adds, a repeated item and a source reserved elsewhere, and keeps saved rows with facts", async () => {
     const { facts, practiceOf } = await revise(
