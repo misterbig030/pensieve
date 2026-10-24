@@ -34,6 +34,7 @@ import {
   type RefActivity,
   chapterAt,
   type ChapterList,
+  type MaterialKind,
 } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
 
@@ -581,15 +582,16 @@ export function noSourceFacts(split: PlanSplit | null | undefined, materials: Pi
 
 /** Chapter numbers a note names: "Ch. 4 §2" → [4], "ch. 5–6" → [5, 6], "chapters 3, 7 and 9" → [3, 7, 9]. */
 /**
- * A chapter list with no numbers, numbered: a list the allocation cut takes the book's own numbers from its part's
- * uses line ("ch. 1, 3, 5–6, 9"), one per chapter, else each chapter takes its position. Lists saved before the cut
- * kept their numbers lost them; a list with any number is left as it is.
+ * A chapter list with no numbers, numbered: a list the allocation cut takes the work's own numbers from its part's
+ * uses line ("ch. 1, 3, 5–6, 9"), one per chapter; a book's list without such a line takes its positions. Lists saved
+ * before the cut kept their numbers lost them. Any other list without numbers (a course's modules) keeps its titles,
+ * and a list with any number is left as it is.
  */
-export function numberedToc(toc: ChapterList | null, uses: string | null | undefined): ChapterList | null {
+export function numberedToc(toc: ChapterList | null, uses: string | null | undefined, kind: MaterialKind): ChapterList | null {
   if (!toc || toc.chapters.some((c) => c.n !== null)) return toc;
   const named = parseChapters(uses).sort((a, b) => a - b);
-  const numbers = named.length === toc.chapters.length ? named : toc.chapters.map((_, i) => i + 1);
-  return { ...toc, chapters: toc.chapters.map((c, i) => ({ ...c, n: numbers[i] })) };
+  const numbers = named.length === toc.chapters.length ? named : kind === "book" ? toc.chapters.map((_, i) => i + 1) : null;
+  return numbers ? { ...toc, chapters: toc.chapters.map((c, i) => ({ ...c, n: numbers[i] })) } : toc;
 }
 
 export function parseChapters(note: string | null | undefined): number[] {
@@ -1475,8 +1477,8 @@ export function keepCoverTiers(next: CoverRef[], before: CoverRef[] | undefined)
 /**
  * What a heading's practice reservations become when the model rewrites them. Reservations it wrote back with ids only
  * regain the `task` and `minutes` of the matching one it had before (same format and source, and the same first item for
- * a run of a listed source); values they already have are kept. One written back without its run takes the run of the
- * only reservation of that source it had. The model cannot name a generated reservation: one with no source (`id:
+ * a run of a listed source); values they already have are kept. One written back without its run takes back every run
+ * of that source it had. The model cannot name a generated reservation: one with no source (`id:
  * null`), or a recall row that cites its reading, which `resolvePracticeCovers` drops since the reading serves no
  * practice of that format (`practiceOf`). Those carry forward unchanged, after the rewritten list. A week split by hand
  * would otherwise lose its rows on any revision.
@@ -1484,16 +1486,30 @@ export function keepCoverTiers(next: CoverRef[], before: CoverRef[] | undefined)
 export function keepPracticeCovers(next: PracticeCover[], before: PracticeCover[] | undefined, practiceOf: (id: string) => PracticeFormat | null): PracticeCover[] {
   const sourced = (before ?? []).filter((r) => r.id !== null && practiceOf(r.id) === r.format);
   const generated = (before ?? []).filter((r) => r.id === null || practiceOf(r.id) !== r.format);
-  const restored = next.map((r) => {
+  const merge = (r: PracticeCover, o: PracticeCover): PracticeCover => ({
+    ...r,
+    ...(r.task === undefined && o.task !== undefined ? { task: o.task } : {}),
+    ...(r.minutes === undefined && o.minutes !== undefined ? { minutes: o.minutes } : {}),
+    ...(!r.itemFrom && o.itemFrom && o.itemTo ? { itemFrom: o.itemFrom, itemTo: o.itemTo } : {}),
+  });
+  // A listed source is written once however many runs the unit holds of it ("named alone"), so one written back
+  // without a run takes back every run of it not already claimed; a run is claimed once.
+  const claimed = new Set<PracticeCover>();
+  const restored = next.flatMap((r) => {
     const same = sourced.filter((o) => o.format === r.format && o.id === r.id);
-    const o = r.itemFrom ? same.find((x) => x.itemFrom === r.itemFrom) : same.length === 1 ? same[0] : same.find((x) => !x.itemFrom);
-    if (!o) return r;
-    return {
-      ...r,
-      ...(r.task === undefined && o.task !== undefined ? { task: o.task } : {}),
-      ...(r.minutes === undefined && o.minutes !== undefined ? { minutes: o.minutes } : {}),
-      ...(!r.itemFrom && o.itemFrom && o.itemTo ? { itemFrom: o.itemFrom, itemTo: o.itemTo } : {}),
-    };
+    if (r.itemFrom) {
+      const o = same.find((x) => x.itemFrom === r.itemFrom && !claimed.has(x));
+      if (!o) return [r];
+      claimed.add(o);
+      return [merge(r, o)];
+    }
+    const runs = same.filter((x) => x.itemFrom && x.itemTo && !claimed.has(x));
+    if (runs.length > 0) {
+      runs.forEach((x) => claimed.add(x));
+      return runs.map((x) => merge(r, x));
+    }
+    const o = same.find((x) => !x.itemFrom);
+    return [o ? merge(r, o) : r];
   });
   return [...restored, ...generated];
 }

@@ -86,7 +86,7 @@ export function sourceToMaterial(row: Source): Material {
     minutes: row.minutes,
     minutesBasis: row.minutesBasis,
     uses: row.uses,
-    toc: numberedToc(row.toc ?? null, row.uses),
+    toc: numberedToc(row.toc ?? null, row.uses, row.kind),
     practice: row.practice ?? null,
   };
 }

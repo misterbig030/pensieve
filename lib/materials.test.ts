@@ -40,17 +40,22 @@ import { itemMinutes, itemPositions } from "./practice";
 describe("numberedToc", () => {
   const unnumbered = { ...AIE_TOC, chapters: AIE_TOC.chapters.slice(0, 5).map((c) => ({ ...c, n: null })) };
   it("numbers a cut list without numbers from its part's uses line", () => {
-    expect(numberedToc(unnumbered, "ch. 1, 3, 5–6, 9")!.chapters.map((c) => c.n)).toEqual([1, 3, 5, 6, 9]);
+    expect(numberedToc(unnumbered, "ch. 1, 3, 5–6, 9", "book")!.chapters.map((c) => c.n)).toEqual([1, 3, 5, 6, 9]);
   });
-  it("numbers a list without numbers by position when the uses line does not name one number per chapter", () => {
-    expect(numberedToc(unnumbered, null)!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4, 5]);
-    expect(numberedToc(unnumbered, "ch. 1, 3")!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4, 5]);
-    expect(numberedToc(unnumbered, "the chapters on storage")!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4, 5]);
+  it("numbers a book's list without numbers by position when the uses line does not name one number per chapter", () => {
+    expect(numberedToc(unnumbered, null, "book")!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4, 5]);
+    expect(numberedToc(unnumbered, "ch. 1, 3", "book")!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4, 5]);
+    expect(numberedToc(unnumbered, "the chapters on storage", "book")!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4, 5]);
+  });
+  it("keeps the titles of another kind's list without numbers, unless its uses line numbers a cut", () => {
+    expect(numberedToc(unnumbered, null, "course")).toBe(unnumbered);
+    expect(numberedToc(unnumbered, "the modules on storage", "course")).toBe(unnumbered);
+    expect(numberedToc(unnumbered, "ch. 2, 4, 6–8", "course")!.chapters.map((c) => c.n)).toEqual([2, 4, 6, 7, 8]);
   });
   it("leaves a list that has numbers as it is, an unnumbered preface included", () => {
     const withPreface = { ...AIE_TOC, chapters: [{ ...AIE_TOC.chapters[0], n: null, title: "Preface" }, ...AIE_TOC.chapters.slice(1)] };
-    expect(numberedToc(withPreface, "ch. 1–10")).toBe(withPreface);
-    expect(numberedToc(null, "ch. 1")).toBeNull();
+    expect(numberedToc(withPreface, "ch. 1–10", "book")).toBe(withPreface);
+    expect(numberedToc(null, "ch. 1", "book")).toBeNull();
   });
 });
 
@@ -950,6 +955,19 @@ describe("keepPracticeCovers", () => {
   it("carries generated reservations forward unchanged, after the rewritten list, even when it is empty", () => {
     expect(keepPracticeCovers([], kept, practiceOf)).toEqual([kept[1]]);
     expect(keepPracticeCovers([], undefined, practiceOf)).toEqual([]);
+  });
+
+  it("gives a listed source written back without a run every run the unit held of it", () => {
+    const listed = aliasMaterials([{ id: "neet", practice: LISTED_PROBLEMS }]).practice;
+    const runs = [
+      { format: "problem-set" as const, id: "neet", note: null, itemFrom: 1, itemTo: 4 },
+      { format: "problem-set" as const, id: "neet", note: null, itemFrom: 7, itemTo: 9 },
+    ];
+    expect(keepPracticeCovers([{ format: "problem-set", id: "neet", note: null }], runs, listed)).toEqual(runs);
+    // Written back twice without runs: the first takes both, the second stays without one (and is dropped later as unknown).
+    expect(keepPracticeCovers([{ format: "problem-set", id: "neet", note: null }, { format: "problem-set", id: "neet", note: null }], runs, listed)).toEqual([...runs, { format: "problem-set", id: "neet", note: null }]);
+    // A run written back keeps its own; the other still comes back with a run-less echo.
+    expect(keepPracticeCovers([{ ...runs[1] }, { format: "problem-set", id: "neet", note: null }], runs, listed)).toEqual([runs[1], runs[0]]);
   });
 
   it("carries a generated recall reservation that cites its reading forward, since the model cannot write it back", () => {
