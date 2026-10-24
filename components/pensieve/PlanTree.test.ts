@@ -5,6 +5,7 @@ import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
 import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
 import { layout, makeNode, makeRoot } from "@/lib/planTree";
 import type { CoverRef, Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
+import { shortTitle } from "@/lib/shortTitle";
 import { CoversRow, PlanTree } from "./PlanTree";
 
 const bank: Material = { ...AIE_MATERIALS.find((m) => m.id === "evals")!, id: "nc", title: "NeetCode 150", backbone: false, practice: LISTED_PROBLEMS };
@@ -23,6 +24,12 @@ describe("CoversRow practice reservations", () => {
     expect(render(week([{ format: "problem-set", id: "nc", note: null, itemFrom: 1, itemTo: 9 }]))).toContain("NeetCode 150 · Arrays &amp; Hashing<");
     expect(render(week([{ format: "problem-set", id: "nc", note: null, itemFrom: 5, itemTo: 21 }]))).toContain("NeetCode 150 · Arrays &amp; Hashing – Stack");
   });
+  it("names a source by its short title, the full title in the chip's tooltip", () => {
+    const repo: Material = { ...bank, id: "repo", title: "GitHub - mdmzfzl/NeetCode-Solutions: My solutions in C++, Python and Rust · GitHub" };
+    const html = renderToStaticMarkup(createElement(CoversRow, { node: week([{ format: "problem-set", id: "repo", note: null, itemFrom: 1, itemTo: 9 }]), byId: new Map([["repo", repo]]) })).replace(/<!-- -->/g, "");
+    expect(html).toContain(">NeetCode Solutions · Arrays &amp; Hashing<");
+    expect(html).toContain('title="GitHub - mdmzfzl/NeetCode-Solutions: My solutions in C++, Python and Rust · GitHub · Arrays &amp; Hashing"');
+  });
   it("shows a source without a list as its note", () => {
     const html = render(week([{ format: "mock", id: "mock", note: "two rounds" }]));
     expect(html).toContain("Mock Bank · two rounds");
@@ -40,7 +47,8 @@ describe("CoversRow practice reservations", () => {
     const html = render(week([{ format: "problem-set", id: "nc", note: null, itemFrom: 1, itemTo: 9 }], covers));
     expect(html).toContain("NeetCode 150 · Arrays &amp; Hashing");
     expect(html).toContain("+ 1 more");
-    const shownReading = titles.filter((m) => html.includes(`>${m.title.replace(/&/g, "&amp;")}</span>`) || html.includes(`>${m.title.replace(/&/g, "&amp;")} ·`));
+    const chip = (m: Material) => shortTitle(m.title).replace(/&/g, "&amp;");
+    const shownReading = titles.filter((m) => html.includes(`>${chip(m)}</span>`) || html.includes(`>${chip(m)} ·`));
     expect(shownReading).toHaveLength(2);
     const hiddenTitle = html.match(/title="([^"]*)" class="rounded-full bg-background px-\[9px\] py-\[3px\]">\+ 1 more/)![1];
     const hidden = titles.filter((m) => !shownReading.includes(m));

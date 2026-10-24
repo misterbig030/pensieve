@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { BudgetBar, DoRows, ReadRows, coverPracticeRows, itemLabel, partLabel, practiceRowsFor, readRowsFor, rowBrief, sumMinutes, sumPracticeMinutes } from "@/components/pensieve/ReadTable";
 import { budgetMinutes, keptReadTable } from "@/lib/materials";
 import { formatDuration } from "@/lib/researchProgress";
+import { shortTitle } from "@/lib/shortTitle";
 import { chapterAt, type Material, type PracticeCover, type PracticeItem } from "@/lib/schemas/material";
 import {
   capitalize,
@@ -392,7 +393,7 @@ function groupSpan(items: PracticeItem[], from: number, to: number): string | nu
  * A heading's practice reservations as chip texts, one per source: for a source with a list the groups its run spans
  * ("NeetCode 150 · Arrays & Hashing – Two Pointers"), else its note. A reservation with no source in the list has no chip.
  */
-function practiceChips(covers: PracticeCover[] | undefined, byId: ReadonlyMap<string, Material>): { key: string; text: string }[] {
+function practiceChips(covers: PracticeCover[] | undefined, byId: ReadonlyMap<string, Material>): { key: string; text: string; full: string }[] {
   const bySource = new Map<string, { m: Material; covers: PracticeCover[] }>();
   for (const c of covers ?? []) {
     const m = c.id === null ? undefined : byId.get(c.id);
@@ -409,7 +410,8 @@ function practiceChips(covers: PracticeCover[] | undefined, byId: ReadonlyMap<st
       const to = Math.max(...runs.map((c) => c.itemTo!));
       part = groupSpan(items, from, to) ?? `items ${from}–${to}`;
     } else part = cs.find((c) => c.note)?.note ?? null;
-    return { key: `${key}#practice`, text: `${m.title}${part ? ` · ${part}` : ""}` };
+    const tail = part ? ` · ${part}` : "";
+    return { key: `${key}#practice`, text: `${shortTitle(m.title)}${tail}`, full: `${m.title}${tail}` };
   });
 }
 
@@ -427,13 +429,14 @@ export function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<st
     else if (r.note) group.note = r.note;
     groups.set(key, group);
   }
-  const text = (g: { m: Material; review: boolean; chapters: number[]; note: string | null }) => {
+  // The chip names the material short ("System Design Primer"); its tooltip keeps the full title.
+  const text = (g: { m: Material; review: boolean; chapters: number[]; note: string | null }, title: string) => {
     const part = g.chapters.length > 0 ? `ch. ${chapterRuns(g.chapters)}` : g.note;
-    return `${g.review ? "Review of " : ""}${g.m.title}${part ? ` · ${part}` : ""}`;
+    return `${g.review ? "Review of " : ""}${title}${part ? ` · ${part}` : ""}`;
   };
   const reading = [...groups.values()]
     .sort((a, b) => Number(b.m.backbone) - Number(a.m.backbone))
-    .map((g) => ({ key: `${g.m.id}#${g.review ? "review" : "read"}`, text: text(g), backbone: g.m.backbone }));
+    .map((g) => ({ key: `${g.m.id}#${g.review ? "review" : "read"}`, text: text(g, shortTitle(g.m.title)), full: text(g, g.m.title), backbone: g.m.backbone }));
   const practice = practiceChips(node.practiceCovers, byId).map((c) => ({ ...c, backbone: false }));
   if (reading.length + practice.length === 0) return null;
   // The week's practice always shows: at least one practice chip stays whatever the reading count, and reading gives way first.
@@ -445,12 +448,12 @@ export function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<st
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="mr-0.5 text-muted-foreground">Covers</span>
       {shown.map((c) => (
-        <span key={c.key} title={c.text} className={cn("max-w-[260px] truncate rounded-full px-[9px] py-[3px]", c.backbone ? "bg-accent-2-200 font-semibold text-accent-2-800" : "bg-background")}>
+        <span key={c.key} title={c.full} className={cn("max-w-[260px] truncate rounded-full px-[9px] py-[3px]", c.backbone ? "bg-accent-2-200 font-semibold text-accent-2-800" : "bg-background")}>
           {c.text}
         </span>
       ))}
       {hidden.length > 0 && (
-        <span title={hidden.map((c) => c.text).join("\n")} className="rounded-full bg-background px-[9px] py-[3px]">
+        <span title={hidden.map((c) => c.full).join("\n")} className="rounded-full bg-background px-[9px] py-[3px]">
           + {hidden.length} more
         </span>
       )}

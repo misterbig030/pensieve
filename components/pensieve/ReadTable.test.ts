@@ -73,7 +73,7 @@ describe("rowBrief", () => {
     );
     expect(rowBrief(chapter)).toEqual({ head: "Ch. 1", detail: "The Rise of AI Engineering; Foundation Model Use Cases" });
     expect(rowBrief(review)).toEqual({ head: "Review of ch. 2", detail: "Modeling; Post-Training" });
-    expect(rowBrief(whole)).toEqual({ head: "AI Evals: Everything You Need to Know", detail: "whole essay" });
+    expect(rowBrief(whole)).toEqual({ head: "AI Evals", detail: "whole essay" });
     expect(rowBrief({ ...chapter, chapter: { ...chapter.chapter!, n: null } })).toEqual({ head: "Introduction to Building AI Applications with Foundation Models", detail: "The Rise of AI Engineering; Foundation Model Use Cases" });
   });
 });

@@ -1,6 +1,7 @@
 import { budgetCeiling } from "@/lib/materials";
 import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { formatDuration } from "@/lib/researchProgress";
+import { shortTitle } from "@/lib/shortTitle";
 import { chapterAt, type Chapter, type Material, type MaterialRef, type MaterialTier, type PracticeCover, type PracticeItem, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
 import { cn } from "@/lib/utils";
 
@@ -113,7 +114,7 @@ export function rowBrief(row: Pick<ReadRow, "material" | "chapter" | "activity" 
   const chapter = row.chapter;
   let head: string;
   if (chapter) head = `${review ? "Review of " : ""}${chapter.n !== null ? `${review ? "ch." : "Ch."} ${chapter.n}` : chapter.title}`;
-  else head = review ? `Review of ${row.material.title}` : row.material.title;
+  else head = review ? `Review of ${shortTitle(row.material.title)}` : shortTitle(row.material.title);
   return { head, detail: row.note };
 }
 
@@ -174,10 +175,11 @@ function PracticeSource({ row, link = true }: { row: PracticeRow; link?: boolean
 }
 
 function ItemLink({ material: m, className, link = true }: { material: Material; className?: string; link?: boolean }) {
-  if (!link || m.type === "note" || m.type === "file") return <span className={className}>{m.title}</span>;
+  // The row names the material short; the tooltip keeps its full title.
+  if (!link || m.type === "note" || m.type === "file") return <span className={className} title={m.title}>{shortTitle(m.title)}</span>;
   return (
-    <a href={m.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className={cn("hover:text-accent-700 hover:underline", className)}>
-      {m.title}
+    <a href={m.url} target="_blank" rel="noreferrer" title={m.title} onClick={(e) => e.stopPropagation()} className={cn("hover:text-accent-700 hover:underline", className)}>
+      {shortTitle(m.title)}
     </a>
   );
 }
