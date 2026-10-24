@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
 import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
-import { makeNode } from "@/lib/planTree";
-import type { CoverRef, Material, PracticeCover } from "@/lib/schemas/material";
-import { CoversRow } from "./PlanTree";
+import { layout, makeNode, makeRoot } from "@/lib/planTree";
+import type { CoverRef, Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
+import { CoversRow, PlanTree } from "./PlanTree";
 
 const bank: Material = { ...AIE_MATERIALS.find((m) => m.id === "evals")!, id: "nc", title: "NeetCode 150", backbone: false, practice: LISTED_PROBLEMS };
 const plain: Material = { ...AIE_MATERIALS.find((m) => m.id === "oaievals")!, id: "mock", title: "Mock Bank", backbone: false, practice: { format: "mock", items: 10, perItemMinutes: 30, minutes: 300, answers: false } };
@@ -62,5 +62,44 @@ describe("CoversRow practice reservations", () => {
   it("shows a week that reserves only practice, and nothing for a reservation without a source", () => {
     expect(render(week([{ format: "mock", id: "mock", note: null }]))).toContain("Mock Bank");
     expect(render(week([{ format: "design-exercise", id: null, note: "x", task: "Design a limiter", minutes: 30 }]))).toBe("");
+  });
+});
+
+describe("a collapsed day card's practice lines", () => {
+  const listed: PracticeRef = { format: "problem-set", id: "nc", task: "NeetCode 150 · Arrays & Hashing, problem 1", done: "solved", minutes: 15, generated: false, itemFrom: 1, itemTo: 1 };
+  const plainRow: PracticeRef = { format: "mock", id: "mock", task: "One mock round", done: "debriefed", minutes: 45, generated: false };
+  const tree = () => {
+    const d1 = makeNode({ id: "d1", level: "day", title: "Hashing", summary: "s", len: 1, practice: [listed, plainRow] });
+    return layout(makeRoot([makeNode({ id: "w1", level: "week", title: "Arrays", summary: "s", len: 1, children: [d1] })]));
+  };
+  const none = new Set<string>();
+  const html = () =>
+    renderToStaticMarkup(
+      createElement(PlanTree, {
+        root: tree(),
+        mode: "create",
+        highlight: none,
+        lockBefore: 0,
+        currentLeafId: null,
+        pending: {},
+        collapsed: none,
+        openChips: none,
+        busy: false,
+        onToggle: () => {},
+        onToggleChip: () => {},
+        onExpand: () => {},
+        onSplit: () => {},
+        materials: [...byId.values()],
+        hoursPerWeek: 6,
+        daysPerWeek: 5,
+      }),
+    ).replace(/<!-- -->/g, "");
+
+  it("shows a listed item as number and title with its group, and other rows by their task", () => {
+    const out = html();
+    expect(out).toContain("217. Contains Duplicate");
+    expect(out).toMatch(/217\. Contains Duplicate<span[^>]*>Arrays &amp; Hashing<\/span>/);
+    expect(out).not.toContain("problem 1");
+    expect(out).toContain("One mock round");
   });
 });

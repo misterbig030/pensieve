@@ -6,7 +6,7 @@ import { ChevronDown, Lock } from "lucide-react";
 import { Menu } from "@base-ui/react/menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BudgetBar, DoRows, ReadRows, coverPracticeRows, partLabel, practiceRowsFor, readRowsFor, rowBrief, sumMinutes, sumPracticeMinutes } from "@/components/pensieve/ReadTable";
+import { BudgetBar, DoRows, ReadRows, coverPracticeRows, itemLabel, partLabel, practiceRowsFor, readRowsFor, rowBrief, sumMinutes, sumPracticeMinutes } from "@/components/pensieve/ReadTable";
 import { budgetMinutes, keptReadTable } from "@/lib/materials";
 import { formatDuration } from "@/lib/researchProgress";
 import { chapterAt, type Material, type PracticeCover, type PracticeItem } from "@/lib/schemas/material";
@@ -206,11 +206,16 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
                 </span>
               );
             })}
-            {practice.map((p) => (
-              <span key={p.key} className="line-clamp-2" title={`${p.label} · ${p.task} · ${p.minutes} min`}>
-                <span className="text-neutral-800">{p.label}</span> · {p.task} · {p.minutes} min
-              </span>
-            ))}
+            {practice.map((p) => {
+              // A listed item shows as on the expanded rows: "217. Contains Duplicate", its group a quiet label.
+              const what = p.item ? itemLabel(p.item) : p.task;
+              return (
+                <span key={p.key} className="line-clamp-2" title={`${p.label} · ${what}${p.item?.group ? ` · ${p.item.group}` : ""} · ${p.minutes} min`}>
+                  <span className="text-neutral-800">{p.label}</span> · {what}
+                  {p.item?.group && <span className="ml-1 text-[10.5px] opacity-75">{p.item.group}</span>} · {p.minutes} min
+                </span>
+              );
+            })}
             <span>{formatDuration(sumMinutes(rows).must + sumMinutes(rows).should + practiceMinutes)}</span>
           </span>
         ))}
