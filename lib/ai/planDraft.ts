@@ -42,6 +42,33 @@ import { buildUnitsPrompt, type UnitsPromptInput } from "./planPrompt";
 import type { ResearchArm } from "./research/agent";
 import { researchMaterials, type ResearchMaterialsInput } from "./research/pipeline";
 
+/**
+ * The draft's time budget, inside the route's 300 s with room for the last events. Measured on 2026-10-24 (SDE, 8
+ * weeks, Opus at high effort): research 59 s, the allocation 20 s, the weeks 36 s and their retry 31 s, the first
+ * week's days 47 s. Research runs first and takes what it takes; what is left is shared out below.
+ */
+export const DRAFT_BUDGET_MS = 285_000;
+/** The longest the allocation may run; past it, code allocates and the plan is all reading. */
+export const ALLOCATE_TIMEOUT_MS = 90_000;
+/** Kept back from the allocation for the top-level outline, which the draft cannot do without. */
+export const OUTLINE_RESERVE_MS = 90_000;
+/** The least time left to start a retry or the first unit's children; with less, the step is skipped. */
+export const STEP_MIN_MS = 60_000;
+/** Outline calls retry a failed request once at most: a second Opus attempt eats the time the next level needs. */
+const OUTLINE_MAX_RETRIES = 1;
+
+/** Milliseconds left before `deadline`; null when the draft has no deadline (tests, the eval, expanding a unit). */
+function timeLeft(deadline: number | undefined): number | null {
+  return deadline === undefined ? null : deadline - Date.now();
+}
+
+/** The request's signal, also aborting after `ms` when there is a deadline. */
+function within(signal: AbortSignal | undefined, ms: number | null): AbortSignal | undefined {
+  if (ms === null) return signal;
+  const timeout = AbortSignal.timeout(Math.max(1, ms));
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
 /** Whether units at `level` are leaves on a plan of this granularity (days always; weeks on week-granularity plans). */
 export function unitsAreLeaves(level: PlanLevel, granularity: Granularity): boolean {
   return level === "day" || (level === "week" && granularity === "week");
@@ -129,6 +156,8 @@ interface StreamUnitsInput {
   silent?: boolean;
   /** The model that drafts the units, and who pays for it. */
   model: ResolvedModel;
+  /** Stops the call: the request going away, or the draft's deadline. */
+  signal?: AbortSignal;
   log?: GenerationLogContext;
 }
 
@@ -151,6 +180,8 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     schema: unitListSchema,
     prompt: input.prompt,
     providerOptions: effortOptions(OUTLINE_EFFORT),
+    maxRetries: OUTLINE_MAX_RETRIES,
+    ...(input.signal ? { abortSignal: input.signal } : {}),
     onError: ({ error }) => {
       failure = error;
     },
@@ -203,6 +234,10 @@ interface DraftLevelInput {
     hoursPerWeek?: number;
     split?: PlanSplit | null;
     outlineModel: ResolvedModel;
+    /** The request's signal: a client that goes away stops the calls. */
+    signal?: AbortSignal;
+    /** When the draft must be done (epoch ms); absent, no budget. */
+    deadline?: number;
   };
   level: PlanLevel;
   spans: number[];
@@ -304,7 +339,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   const prompt = buildUnitsPrompt(promptInput);
   const base = { expected: n, check, model: ctx.outlineModel, log: input.log };
   let costUsd = 0;
-  for await (const event of streamUnits({ ...base, prompt, label })) {
+  for await (const event of streamUnits({ ...base, prompt, label, signal: within(ctx.signal, timeLeft(ctx.deadline)) })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
       const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split);
@@ -315,18 +350,26 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     }
   }
 
-  // One retry with the breaches quoted, its units not streamed; the first answer stays on screen until it lands.
-  if (breaches.length > 0) {
+  // One retry with the breaches quoted, its units not streamed; the first answer stays on screen until it lands. With
+  // too little of the draft's time left for it, the first answer stands, its breaching rows dropped.
+  const left = timeLeft(ctx.deadline);
+  if (breaches.length > 0 && left !== null && left < STEP_MIN_MS) {
+    console.error(`[draft] no time left to retry ${label}; breaching rows dropped`);
+    dropBreaches(final, breaches);
+    if (leaf) sizeChapterRows(final, ctx.materials);
+  } else if (breaches.length > 0) {
     attempt = 2;
     const corrections = [RETRY_HEADER(n), ...breaches.map((b) => `- ${b.text}`)].join("\n");
     try {
-      for await (const event of streamUnits({ ...base, prompt: `${prompt}\n${corrections}`, label: `${label} (retry)`, silent: true })) {
+      for await (const event of streamUnits({ ...base, prompt: `${prompt}\n${corrections}`, label: `${label} (retry)`, silent: true, signal: within(ctx.signal, left) })) {
         if (event.type === "done") {
           costUsd += event.costUsd;
         }
       }
     } catch (error) {
-      // On the user's own key a provider refusal is theirs to hear about; otherwise the first answer stands, pruned.
+      // A request that went away stops here. On the user's own key a provider refusal is theirs to hear about;
+      // otherwise (the deadline included) the first answer stands, pruned.
+      if (ctx.signal?.aborted) throw error;
       if (ctx.outlineModel.keyOwner === "user" && providerError(error)) throw error;
       console.error(`[draft] retry failed for ${label}`, error);
       dropBreaches(final, breaches);
@@ -345,8 +388,10 @@ export interface StreamPlanDraftInput extends Omit<PlanDraftRequest, "materials"
   outlineModel?: ResolvedModel;
   /** The model that allocates the plan's time after research; the app's allocate model when omitted (eval, tests). */
   allocateModel?: ResolvedModel;
-  /** A request that goes away stops the allocation. */
+  /** A request that goes away stops the allocation and the outline calls. */
   signal?: AbortSignal;
+  /** When the draft must be done (epoch ms): the steps share what is left, and drop what does not fit. */
+  deadline?: number;
   log?: GenerationLogContext;
 }
 
@@ -376,6 +421,8 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
       model: input.allocateModel ?? appModel(DEFAULT_ALLOCATE_MODEL),
       log: input.log,
       signal: input.signal,
+      // The allocation gets what the outline does not need, up to its own limit.
+      ...(input.deadline !== undefined ? { timeoutMs: Math.min(ALLOCATE_TIMEOUT_MS, timeLeft(input.deadline)! - OUTLINE_RESERVE_MS) } : {}),
     });
     split = allocated.split;
     materials = allocated.materials;
@@ -399,22 +446,34 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
     }
   }
 
+  // The first unit's children, while the draft's time allows: a unit left as a heading is planned when it is reached.
   let parent: PlanNode | undefined = root.children?.[0];
   while (parent && !unitsAreLeaves(parent.level, input.granularity)) {
+    const left = timeLeft(input.deadline);
+    if (left !== null && left < STEP_MIN_MS) break;
     const level = childLevel(parent.level)!;
     const spans = childSpans(parent, input.daysPerWeek);
     const kids: PlanNode[] = [];
-    for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: parent.id, log: input.log })) {
-      if (event.type === "node") {
-        kids.push(event.node);
-        parent.children = kids;
-        layout(root);
-        yield { type: "node", parentId: parent.id, node: event.node };
-      } else {
-        parent.children = event.nodes;
-        layout(root);
-        costUsd += event.costUsd;
+    try {
+      for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: parent.id, log: input.log })) {
+        if (event.type === "node") {
+          kids.push(event.node);
+          parent.children = kids;
+          layout(root);
+          yield { type: "node", parentId: parent.id, node: event.node };
+        } else {
+          parent.children = event.nodes;
+          layout(root);
+          costUsd += event.costUsd;
+        }
       }
+    } catch (error) {
+      // Past the deadline the unit stays a heading, its streamed children dropped; any other failure is the draft's.
+      if (input.signal?.aborted || input.deadline === undefined || Date.now() < input.deadline) throw error;
+      console.error(`[draft] out of time planning ${parent.title}; it stays a heading`, error);
+      parent.children = null;
+      layout(root);
+      break;
     }
     parent = parent.children?.[0];
   }
@@ -426,6 +485,8 @@ export interface StreamExpandNodeInput extends Omit<PlanExpandRequest, "tree"> {
   tree: PlanNode;
   /** The model that drafts the children; the app's outline model when omitted. */
   outlineModel?: ResolvedModel;
+  /** A request that goes away stops the call. */
+  signal?: AbortSignal;
   log?: GenerationLogContext;
 }
 
@@ -477,6 +538,8 @@ export interface StreamResearchedDraftInput extends PlanDraftRequest {
   /** The model that allocates the plan's time after research; the app's allocate model when omitted. */
   allocateModel?: ResolvedModel;
   signal?: AbortSignal;
+  /** When the draft must be done (epoch ms); research runs first, and the steps after it share what is left. */
+  deadline?: number;
   log?: GenerationLogContext;
   /** Tests and the eval inject these; the app uses the defaults. */
   research?: Pick<ResearchMaterialsInput, "fetcher" | "books" | "caps" | "chapters" | "items">;

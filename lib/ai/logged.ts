@@ -73,6 +73,8 @@ export interface LoggedGenerateObjectOptions<T> {
   /** More checks computed from the validated object, appended to `facts`. */
   check?: (object: T) => string[];
   abortSignal?: AbortSignal;
+  /** Retries on a failed request; the AI SDK's default (2) when omitted. */
+  maxRetries?: number;
   /** Anthropic reasoning effort for this call, sent as a provider option and recorded on the row. Omitted: the model's default. */
   effort?: ReasoningEffort;
   /** Who pays for this call when it differs from the context (a resolved model carries its own). */
@@ -140,6 +142,7 @@ export async function loggedGenerateObject<T>(
     schema: opts.schema,
     prompt: opts.prompt,
     ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
+    ...(opts.maxRetries !== undefined ? { maxRetries: opts.maxRetries } : {}),
     ...(opts.effort ? { providerOptions: effortOptions(opts.effort) } : {}),
   });
   const latencyMs = Math.round(performance.now() - startedAt);

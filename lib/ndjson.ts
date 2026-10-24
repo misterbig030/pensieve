@@ -7,13 +7,19 @@ import { KEY_ERRORS } from "@/lib/ai/models";
 
 export function ndjsonResponse<T>(events: AsyncIterable<T>, init?: ResponseInit): Response {
   const encoder = new TextEncoder();
+  const iterator = events[Symbol.asyncIterator]();
+  // A reader that goes away cancels the stream: the events stop at their next step instead of running to the end.
+  let cancelled = false;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const event of events) {
-          controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+        for (;;) {
+          const { value, done } = await iterator.next();
+          if (done || cancelled) break;
+          controller.enqueue(encoder.encode(JSON.stringify(value) + "\n"));
         }
       } catch (error) {
+        if (cancelled) return;
         const message = error instanceof Error ? error.message : "stream failed";
         // A code names a failure the client can act on (a refused user key). System errors carry codes too
         // ("ECONNRESET", a Postgres "42703"); those must not reach the client as something to act on.
@@ -21,8 +27,12 @@ export function ndjsonResponse<T>(events: AsyncIterable<T>, init?: ResponseInit)
         const code = typeof rawCode === "string" && (KEY_ERRORS as readonly string[]).includes(rawCode) ? rawCode : undefined;
         controller.enqueue(encoder.encode(JSON.stringify(code ? { type: "error", message, code } : { type: "error", message }) + "\n"));
       } finally {
-        controller.close();
+        if (!cancelled) controller.close();
       }
+    },
+    cancel() {
+      cancelled = true;
+      void iterator.return?.(undefined)?.catch(() => {});
     },
   });
   return new Response(stream, {

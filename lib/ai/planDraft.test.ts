@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Material } from "@/lib/schemas/material";
 import type { UnitDraft } from "@/lib/schemas/plan";
 
@@ -8,7 +8,7 @@ vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof impor
 import { generateObject, streamObject } from "ai";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelCall } from "./logged";
-import { nodeFor, streamExpandNode, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
+import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
 import type { ResolvedModel } from "./resolve";
 import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
 import { aliasMaterials } from "@/lib/materials";
@@ -775,5 +775,103 @@ describe("item lists while drafting", () => {
     expect(calls[1].facts).toContain('dropped Problems M2.9 "Longest Consecutive Sequence" from Week 1 · Day 2: practice-outside');
     expect(calls[1].facts).toContain("item 2 of M2 reserved by Week 1 but not assigned");
     expect(children.map((c) => c.practice)).toEqual([[row(1)], undefined]);
+  });
+});
+
+describe("the draft's time budget", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+    mockedGenerateObject.mockReset();
+    respondAllocate();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  const weekUnits = (n: number): UnitDraft[] => Array.from({ length: n }, (_, i) => ({ title: `W${i + 1}`, summary: "s" }));
+  const dayUnits = (n: number): UnitDraft[] => Array.from({ length: n }, (_, i) => ({ title: `D${i + 1}`, summary: "s" }));
+  const finishOf = (events: PlanDraftEvent[]) => {
+    const finish = events.at(-1);
+    if (finish?.type !== "finish") throw new Error("no finish");
+    return finish;
+  };
+
+  it("gives the allocation and the outline the request's signal with the deadline, and one retry at most", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weekUnits(4)));
+    const signal = new AbortController().signal;
+    for await (const e of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], signal, deadline: Date.now() + DRAFT_BUDGET_MS })) void e;
+    const allocate = mockedGenerateObject.mock.calls[0][0] as { abortSignal?: AbortSignal; maxRetries?: number };
+    expect(allocate.abortSignal).toBeInstanceOf(AbortSignal);
+    expect(allocate.abortSignal).not.toBe(signal);
+    expect(allocate.maxRetries).toBe(1);
+    const outline = mockedStreamObject.mock.calls[0][0] as { abortSignal?: AbortSignal; maxRetries?: number };
+    expect(outline.abortSignal).toBeInstanceOf(AbortSignal);
+    expect(outline.maxRetries).toBe(1);
+  });
+
+  it("lets code allocate, with no call, when the outline needs what is left", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weekUnits(4)));
+    const events: PlanDraftEvent[] = [];
+    for await (const e of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], deadline: Date.now() + OUTLINE_RESERVE_MS + 5_000 })) events.push(e);
+    expect(mockedGenerateObject).not.toHaveBeenCalled();
+    expect(events.some((e) => e.type === "split")).toBe(true);
+    expect(finishOf(events).root.children).toHaveLength(4);
+  });
+
+  it("drops a level's breaching rows instead of retrying when too little time is left", async () => {
+    const all = AIE_MATERIALS.find((m) => m.id === "aie")!.toc!.chapters.map((_, i) => ({ id: `M1.${i + 1}`, tier: "must" as const, minutes: 100 }));
+    mockedStreamObject.mockReturnValueOnce(fakeStream([{ title: "Everything", summary: "s", materials: all }]));
+    const calls: ModelCall[] = [];
+    const split = { readingShare: 40, practice: "projects", reason: "r" };
+    for await (const e of streamPlanDraft({ topic: "AI", weeks: 1, daysPerWeek: 7, granularity: "week", hoursPerWeek: 6, materials: AIE_MATERIALS, split, deadline: Date.now() + STEP_MIN_MS - 1_000, log: { onCall: (c) => void calls.push(c) } })) void e;
+    expect(calls[0].facts.some((f) => f.startsWith("breach:"))).toBe(true);
+    expect(mockedStreamObject).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the first unit a heading when too little time is left to plan its children", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weekUnits(4)));
+    const events: PlanDraftEvent[] = [];
+    for await (const e of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 5, granularity: "day", materials: [], split: SPLIT, deadline: Date.now() + STEP_MIN_MS - 1_000 })) events.push(e);
+    expect(mockedStreamObject).toHaveBeenCalledTimes(1);
+    expect(finishOf(events).root.children![0].children).toBeNull();
+  });
+
+  it("leaves the first unit a heading, its streamed children dropped, when they run past the deadline", async () => {
+    const deadline = Date.now() + STEP_MIN_MS + 30_000;
+    const clock = vi.spyOn(Date, "now");
+    const late = {
+      partialObjectStream: (async function* () {
+        yield { units: dayUnits(2) };
+        yield { units: dayUnits(3) };
+        clock.mockReturnValue(deadline + 1);
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      })(),
+      object: new Promise(() => {}),
+      usage: new Promise(() => {}),
+      finishReason: new Promise(() => {}),
+    } as unknown as ReturnType<typeof streamObject>;
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weekUnits(4))).mockReturnValueOnce(late);
+    const events: PlanDraftEvent[] = [];
+    for await (const e of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 5, granularity: "day", materials: [], split: SPLIT, deadline })) events.push(e);
+    expect(events.filter((e) => e.type === "node" && e.node.level === "day").length).toBeGreaterThan(0);
+    const finish = finishOf(events);
+    expect(finish.root.children).toHaveLength(4);
+    expect(finish.root.children![0].children).toBeNull();
+  });
+
+  it("fails the draft as before when its children fail for another reason", async () => {
+    const broken = {
+      partialObjectStream: (async function* () {
+        yield { units: dayUnits(1) };
+        throw new Error("boom");
+      })(),
+      object: new Promise(() => {}),
+      usage: new Promise(() => {}),
+      finishReason: new Promise(() => {}),
+    } as unknown as ReturnType<typeof streamObject>;
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weekUnits(4))).mockReturnValueOnce(broken);
+    const run = async () => {
+      for await (const e of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 5, granularity: "day", materials: [], split: SPLIT, deadline: Date.now() + DRAFT_BUDGET_MS })) void e;
+    };
+    await expect(run()).rejects.toThrow("boom");
   });
 });

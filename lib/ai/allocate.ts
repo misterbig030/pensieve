@@ -675,6 +675,9 @@ export function fallbackAllocation(input: AllocationInput): Allocation {
   };
 }
 
+/** The least time worth an allocation call; with less, code allocates. */
+export const MIN_ALLOCATE_MS = 15_000;
+
 /**
  * Asks the allocate model, after research, for the backbone, which part of each material the plan uses, how the
  * practice time is shared and what the plan covers, then applies it in code (`applyAllocation`). A call that fails
@@ -682,8 +685,21 @@ export function fallbackAllocation(input: AllocationInput): Allocation {
  * on the learner's own key is theirs to hear about, and a request that has gone away stops here.
  */
 export async function allocatePlan(
-  input: AllocationInput & { model: ResolvedModel; log?: GenerationLogContext; signal?: AbortSignal },
+  input: AllocationInput & {
+    model: ResolvedModel;
+    log?: GenerationLogContext;
+    signal?: AbortSignal;
+    /** The draft's time for the call; past it code allocates. Too little to be worth a call: code allocates at once. */
+    timeoutMs?: number;
+  },
 ): Promise<{ split: PlanSplit; materials: Material[]; dropped: DroppedMaterial[]; coverage: Coverage | null; costUsd: number }> {
+  if (input.timeoutMs !== undefined && input.timeoutMs < MIN_ALLOCATE_MS) {
+    const { split, materials, dropped, coverage, facts } = fallbackAllocation(input);
+    console.error("[draft] no time left to allocate; code chose the materials and the plan is all reading", facts);
+    return { split, materials, dropped, coverage, costUsd: 0 };
+  }
+  const timeout = input.timeoutMs !== undefined ? AbortSignal.timeout(input.timeoutMs) : null;
+  const abortSignal = timeout && input.signal ? AbortSignal.any([input.signal, timeout]) : (timeout ?? input.signal);
   try {
     const { object, costUsd } = await loggedGenerateObject(
       {
@@ -695,7 +711,9 @@ export async function allocatePlan(
         label: "Allocate",
         effort: ALLOCATE_EFFORT,
         check: (draft) => applyAllocation(draft, input).facts,
-        abortSignal: input.signal,
+        abortSignal,
+        // One retry at most: a second Opus attempt at high effort costs the time the outline needs.
+        maxRetries: 1,
       },
       { ...input.log, caller: "outline" },
     );

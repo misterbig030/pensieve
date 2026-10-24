@@ -57,6 +57,27 @@ describe("ndjson round trip", () => {
   });
 });
 
+describe("ndjson cancel", () => {
+  it("stops the events when the reader goes away", async () => {
+    let closed = false;
+    async function* events() {
+      try {
+        for (let i = 0; ; i++) {
+          yield { i };
+          await new Promise((r) => setTimeout(r, 5));
+        }
+      } finally {
+        closed = true;
+      }
+    }
+    const reader = ndjsonResponse(events()).body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    await new Promise((r) => setTimeout(r, 40));
+    expect(closed).toBe(true);
+  });
+});
+
 describe("ndjson error codes", () => {
   it("forwards only the codes a refused user key can carry, never a system error's code", async () => {
     async function* failing() {
