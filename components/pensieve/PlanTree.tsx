@@ -6,10 +6,11 @@ import { ChevronDown, Lock } from "lucide-react";
 import { Menu } from "@base-ui/react/menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BudgetBar, DoRows, ReadRows, coverPracticeRows, partLabel, practiceRowsFor, readRowsFor, rowBrief, sumMinutes, sumPracticeMinutes } from "@/components/pensieve/ReadTable";
+import { BudgetBar, DoRows, ReadRows, coverPracticeRows, itemLabel, partLabel, practiceRowsFor, readRowsFor, rowBrief, sumMinutes, sumPracticeMinutes } from "@/components/pensieve/ReadTable";
 import { budgetMinutes, keptReadTable } from "@/lib/materials";
 import { formatDuration } from "@/lib/researchProgress";
-import { chapterAt, type Material } from "@/lib/schemas/material";
+import { shortTitle } from "@/lib/shortTitle";
+import { chapterAt, type Material, type PracticeCover, type PracticeItem } from "@/lib/schemas/material";
 import {
   capitalize,
   childLevel,
@@ -206,11 +207,16 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
                 </span>
               );
             })}
-            {practice.map((p) => (
-              <span key={p.key} className="line-clamp-2" title={`${p.label} · ${p.task} · ${p.minutes} min`}>
-                <span className="text-neutral-800">{p.label}</span> · {p.task} · {p.minutes} min
-              </span>
-            ))}
+            {practice.map((p) => {
+              // A listed item shows as on the expanded rows: "217. Contains Duplicate", its group a quiet label.
+              const what = p.item ? itemLabel(p.item) : p.task;
+              return (
+                <span key={p.key} className="line-clamp-2" title={`${p.label} · ${what}${p.item?.group ? ` · ${p.item.group}` : ""} · ${p.minutes} min`}>
+                  <span className="text-neutral-800">{p.label}</span> · {what}
+                  {p.item?.group && <span className="ml-1 text-[10.5px] opacity-75">{p.item.group}</span>} · {p.minutes} min
+                </span>
+              );
+            })}
             <span>{formatDuration(sumMinutes(rows).must + sumMinutes(rows).should + practiceMinutes)}</span>
           </span>
         ))}
@@ -374,8 +380,43 @@ function chapterRuns(numbers: number[]): string {
   return runs.map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`)).join(", ");
 }
 
-/** A heading's reservation as chips: one per material and activity, the backbone first, "+ N more" past three. */
-function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, Material> }) {
+/** "Arrays & Hashing – Two Pointers": the groups a run of a list's items spans, first to last; null when the run names none. */
+function groupSpan(items: PracticeItem[], from: number, to: number): string | null {
+  const groups = items.slice(from - 1, to).flatMap((i) => (i.group ? [i.group] : []));
+  const first = groups[0];
+  const last = groups[groups.length - 1];
+  if (!first) return null;
+  return first === last ? first : `${first} – ${last}`;
+}
+
+/**
+ * A heading's practice reservations as chip texts, one per source: for a source with a list the groups its run spans
+ * ("NeetCode 150 · Arrays & Hashing – Two Pointers"), else its note. A reservation with no source in the list has no chip.
+ */
+function practiceChips(covers: PracticeCover[] | undefined, byId: ReadonlyMap<string, Material>): { key: string; text: string; full: string }[] {
+  const bySource = new Map<string, { m: Material; covers: PracticeCover[] }>();
+  for (const c of covers ?? []) {
+    const m = c.id === null ? undefined : byId.get(c.id);
+    if (!m) continue;
+    const key = `${c.format}#${m.id}`;
+    bySource.set(key, { m, covers: [...(bySource.get(key)?.covers ?? []), c] });
+  }
+  return [...bySource].map(([key, { m, covers: cs }]) => {
+    const items = m.practice?.list?.items;
+    const runs = cs.filter((c) => c.itemFrom && c.itemTo);
+    let part: string | null = null;
+    if (items && runs.length > 0) {
+      const from = Math.min(...runs.map((c) => c.itemFrom!));
+      const to = Math.max(...runs.map((c) => c.itemTo!));
+      part = groupSpan(items, from, to) ?? `items ${from}–${to}`;
+    } else part = cs.find((c) => c.note)?.note ?? null;
+    const tail = part ? ` · ${part}` : "";
+    return { key: `${key}#practice`, text: `${shortTitle(m.title)}${tail}`, full: `${m.title}${tail}` };
+  });
+}
+
+/** A heading's reservation as chips: one per material and activity, the backbone first, then one per practice source, "+ N more" past three. At least one practice chip always shows. */
+export function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, Material> }) {
   const groups = new Map<string, { m: Material; review: boolean; chapters: number[]; note: string | null }>();
   for (const r of node.covers ?? []) {
     const m = byId.get(r.id);
@@ -388,27 +429,34 @@ function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, M
     else if (r.note) group.note = r.note;
     groups.set(key, group);
   }
-  const refs = [...groups.values()];
-  if (refs.length === 0) return null;
-  const sorted = [...refs].sort((a, b) => Number(b.m.backbone) - Number(a.m.backbone));
-  const shown = sorted.slice(0, SHOWN_COVERS);
-  const text = (g: (typeof refs)[number]) => {
+  // The chip names the material short ("System Design Primer"); its tooltip keeps the full title.
+  const text = (g: { m: Material; review: boolean; chapters: number[]; note: string | null }, title: string) => {
     const part = g.chapters.length > 0 ? `ch. ${chapterRuns(g.chapters)}` : g.note;
-    return `${g.review ? "Review of " : ""}${g.m.title}${part ? ` · ${part}` : ""}`;
+    return `${g.review ? "Review of " : ""}${title}${part ? ` · ${part}` : ""}`;
   };
+  const reading = [...groups.values()]
+    .sort((a, b) => Number(b.m.backbone) - Number(a.m.backbone))
+    .map((g) => ({ key: `${g.m.id}#${g.review ? "review" : "read"}`, text: text(g, shortTitle(g.m.title)), full: text(g, g.m.title), backbone: g.m.backbone }));
+  const practice = practiceChips(node.practiceCovers, byId).map((c) => ({ ...c, backbone: false }));
+  if (reading.length + practice.length === 0) return null;
+  // The week's practice always shows: at least one practice chip stays whatever the reading count, and reading gives way first.
+  const practiceShown = Math.min(practice.length, Math.max(1, SHOWN_COVERS - reading.length));
+  const readingShown = Math.min(reading.length, SHOWN_COVERS - practiceShown);
+  const shown = [...reading.slice(0, readingShown), ...practice.slice(0, practiceShown)];
+  const hidden = [...reading.slice(readingShown), ...practice.slice(practiceShown)];
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="mr-0.5 text-muted-foreground">Covers</span>
-      {shown.map((g) => (
-        <span
-          key={`${g.m.id}#${g.review ? "review" : "read"}`}
-          title={text(g)}
-          className={cn("max-w-[260px] truncate rounded-full px-[9px] py-[3px]", g.m.backbone ? "bg-accent-2-200 font-semibold text-accent-2-800" : "bg-background")}
-        >
-          {text(g)}
+      {shown.map((c) => (
+        <span key={c.key} title={c.full} className={cn("max-w-[260px] truncate rounded-full px-[9px] py-[3px]", c.backbone ? "bg-accent-2-200 font-semibold text-accent-2-800" : "bg-background")}>
+          {c.text}
         </span>
       ))}
-      {sorted.length > SHOWN_COVERS && <span className="rounded-full bg-background px-[9px] py-[3px]">+ {sorted.length - SHOWN_COVERS} more</span>}
+      {hidden.length > 0 && (
+        <span title={hidden.map((c) => c.full).join("\n")} className="rounded-full bg-background px-[9px] py-[3px]">
+          + {hidden.length} more
+        </span>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { KeyErrorKind } from "@/lib/ai/models";
 import type { ModelCall } from "@/lib/ai/logged";
-import type { ResearchEvent } from "@/lib/ai/research/events";
+import type { Coverage, DroppedMaterial, ResearchEvent } from "@/lib/ai/research/events";
 import type { Granularity, PlanLevel, PlanNode } from "@/lib/planTree";
 import type { ChangedNodes } from "@/lib/planSummary";
 import type { Material } from "@/lib/schemas/material";
@@ -66,11 +66,47 @@ export interface PlanDraftRequest extends PlanContext {
 export type PlanDraftEvent =
   | ResearchEvent
   | { type: "node"; parentId: string; node: PlanNode }
-  /** Sent once the top level has validated: how the drafter divides the learner's time. */
+  /**
+   * Sent after research, before any node: the materials as the allocation cut them (the parts the plan uses; these
+   * replace the `research.done` list), the researched ones it will not use, and the plan's coverage (null when code
+   * chose the materials, which states none).
+   */
+  | { type: "allocated"; materials: Material[]; dropped: DroppedMaterial[]; coverage: Coverage | null }
+  /** Sent right after `allocated`, before any node: how the drafter divides the learner's time. */
   | { type: "split"; split: PlanSplit }
   | { type: "finish"; root: PlanNode; costUsd: number }
   | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
+
+/** The materials list the page holds while a draft streams in, and what was left off it. */
+export interface DraftMaterials {
+  materials: Material[];
+  dropped: DroppedMaterial[];
+  /** The topic's areas: research's until the allocation states the plan's. */
+  coverage: Coverage | null;
+  /** Whose `coverage` it is: what research found, or what the plan covers. */
+  coverageSource: "plan" | "research";
+}
+
+/**
+ * Folds one draft event into the materials the page holds. `research.done` sets the researched list; `allocated`
+ * replaces it with the list the plan drafts against (so node references match what would save) and adds the
+ * materials the plan won't use to research's own drops; it also replaces research's coverage with the plan's, unless
+ * the allocation stated none. Any other event leaves the state as it was.
+ */
+export function applyDraftEvent(state: DraftMaterials, event: PlanDraftEvent): DraftMaterials {
+  if (event.type === "research.done") return { materials: event.materials, dropped: event.dropped, coverage: event.coverage ?? null, coverageSource: "research" };
+  if (event.type === "allocated") {
+    const planned = event.coverage !== null;
+    return {
+      materials: event.materials,
+      dropped: [...state.dropped, ...event.dropped],
+      coverage: planned ? event.coverage : state.coverage,
+      coverageSource: planned ? "plan" : "research",
+    };
+  }
+  return state;
+}
 
 /** Request body for POST /api/plan/expand: plan the children of one node of the draft. */
 export interface PlanExpandRequest extends PlanContext {

@@ -48,8 +48,12 @@ export interface MaterialsListProps {
   /** Candidates the gate refused, shown struck through with the reason. */
   dropped?: DroppedMaterial[];
   notice?: ResearchNotice;
-  /** The topic's main areas research covered and left open. Known only right after research. */
+  /** The topic's main areas: what research found until the allocation states the plan's. Known only for a fresh draft. */
   coverage?: Coverage | null;
+  /** Whose `coverage` it is. Research's is labelled "Research found", never "Covered / Not covered". Default: research. */
+  coverageSource?: "plan" | "research";
+  /** What research found, for the thin-list notice; defaults to `coverage`. */
+  researchCoverage?: Coverage | null;
   /** The plan's study hours in all, to set the list's size against. */
   totalHours?: number;
   /** Where each material is used, for the remove confirmation. Omit with `onRemove` for a read-only list. */
@@ -57,13 +61,17 @@ export interface MaterialsListProps {
   onRemove?: (id: string) => void;
   /** Offered only before the plan is confirmed, with the "unavailable" notice. */
   onResearchAgain?: () => void;
+  /** True between research and the allocation, which alone chooses the backbone: nothing is said about one yet. */
+  awaitingBackbone?: boolean;
   /** Rows shown before "Show all", of the reading groups and of the Practice group each. */
   initialShown?: number;
 }
 
 /** The plan-level materials list: the backbone pinned first, the rest grouped by kind. */
 export function MaterialsList(props: MaterialsListProps) {
-  const { materials, dropped = [], notice, coverage, initialShown = 6 } = props;
+  const { materials, dropped = [], notice, coverage, coverageSource = "research", initialShown = 6 } = props;
+  const checked = dropped.filter((d) => d.stage !== "plan");
+  const unused = dropped.filter((d) => d.stage === "plan");
   const [showAll, setShowAll] = useState(false);
   const [removing, setRemoving] = useState<Material | null>(null);
 
@@ -79,7 +87,7 @@ export function MaterialsList(props: MaterialsListProps) {
   return (
     <div className="flex flex-col gap-3">
       {notice && (
-        <ResearchNoticeBanner notice={notice} topic={props.topic} researched={researched} sizedMinutes={sized} coverage={coverage} hasBackbone={!!backbone} onResearchAgain={props.onResearchAgain} />
+        <ResearchNoticeBanner notice={notice} topic={props.topic} researched={researched} sizedMinutes={sized} coverage={props.researchCoverage ?? coverage} hasBackbone={!!backbone} backboneKnown={!props.awaitingBackbone} onResearchAgain={props.onResearchAgain} />
       )}
 
       {materials.length > 0 && (
@@ -102,11 +110,11 @@ export function MaterialsList(props: MaterialsListProps) {
               {unsized > 0 ? `, not counting ${unsized} with no size` : ""}. Sizes are for the part the plan uses. How much of it is required is the plan&apos;s call, week by week.
             </p>
           )}
-          {coverage && (coverage.covered.length > 0 || coverage.open.length > 0) && <CoverageChips coverage={coverage} />}
+          {coverage && (coverage.covered.length > 0 || coverage.open.length > 0) && <CoverageChips coverage={coverage} source={coverageSource} />}
 
           {backbone ? (
             <BackboneCard material={backbone} onRemove={props.onRemove ? () => setRemoving(backbone) : undefined} />
-          ) : (
+          ) : props.awaitingBackbone ? null : (
             <span className="text-[13px] text-muted-foreground">No backbone: units draw on the materials below directly.</span>
           )}
 
@@ -127,23 +135,8 @@ export function MaterialsList(props: MaterialsListProps) {
             </Button>
           )}
 
-          {dropped.length > 0 && (
-            <details className="group text-[12.5px]">
-              <summary className="cursor-pointer text-muted-foreground select-none hover:text-foreground">
-                {dropped.length} more considered and left out
-              </summary>
-              <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0">
-                {dropped.map((d, i) => (
-                  <li key={`${d.title}-${i}`} className="flex min-w-0 items-baseline gap-2 text-muted-foreground">
-                    <X className="size-3 shrink-0 translate-y-0.5" strokeWidth={2.75} />
-                    <span className="min-w-0">
-                      <span className="line-through">{d.title}</span> · {d.reason}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
+          <DroppedGroup heading="Rejected by checks" items={checked} />
+          <DroppedGroup heading="Found but not used" items={unused} />
         </section>
       )}
 
@@ -181,7 +174,7 @@ const ITEM_NOUN: Partial<Record<PracticeFormat, string>> = { "problem-set": "pro
 /** "Problems · 150 problems · answers included": what the source is as practice, how much of it, and whether it checks you. */
 export function practiceTag(p: MaterialPractice): string {
   const noun = ITEM_NOUN[p.format] ?? "item";
-  return [PRACTICE_REGISTRY[p.format].label, p.items ? `${p.items} ${noun}${p.items === 1 ? "" : "s"}` : null, p.answers ? "answers included" : null].filter(Boolean).join(" · ");
+  return [PRACTICE_REGISTRY[p.format].label, p.items ? `${p.totalItems && p.totalItems > p.items ? `${p.items} of ${p.totalItems}` : p.items} ${noun}${(p.totalItems ?? p.items) === 1 ? "" : "s"}` : null, p.answers ? "answers included" : null].filter(Boolean).join(" · ");
 }
 
 /** Minutes of reading and minutes of practice over the list. A source counts toward each role it has. */
@@ -290,23 +283,63 @@ function SizeLine({ material: m }: { material: Material }) {
   );
 }
 
-/** "Problems · 150 problems · answers included · ≈ 25 h": the source's role as practice, with the time it takes to do. */
-function PracticeLine({ material: m }: { material: Material }) {
-  if (!m.practice) return null;
-  return <span className="text-xs text-muted-foreground">{[practiceTag(m.practice), m.practice.minutes ? approxDuration(m.practice.minutes) : null].filter(Boolean).join(" · ")}</span>;
+/** "9 groups · 100 of 150": a listed source's groups and, when the plan cut the list, how many of its items it keeps. Null without a list or groups. */
+export function listSummary(p: MaterialPractice): string | null {
+  const items = p.list?.items;
+  if (!items) return null;
+  const groups = new Set(items.flatMap((i) => (i.group ? [i.group] : []))).size;
+  if (groups === 0) return null;
+  const whole = p.totalItems ?? items.length;
+  return `${groups} group${groups === 1 ? "" : "s"}${whole > items.length ? ` · ${items.length} of ${whole}` : ""}`;
 }
 
-function CoverageChips({ coverage }: { coverage: Coverage }) {
+/** "Problems · 150 problems · answers included · ≈ 25 h": the source's role as practice, with the time it takes to do; a listed source's groups under it. */
+function PracticeLine({ material: m }: { material: Material }) {
+  if (!m.practice) return null;
+  const summary = listSummary(m.practice);
+  return (
+    <>
+      <span className="text-xs text-muted-foreground">{[practiceTag(m.practice), m.practice.minutes ? approxDuration(m.practice.minutes) : null].filter(Boolean).join(" · ")}</span>
+      {summary && <span className="text-xs text-muted-foreground">{summary}</span>}
+    </>
+  );
+}
+
+/** One group of what was considered and left out, with its count and each one's reason; nothing when it is empty. */
+function DroppedGroup({ heading, items }: { heading: string; items: DroppedMaterial[] }) {
+  if (items.length === 0) return null;
+  return (
+    <details className="group text-[12.5px]">
+      <summary className="cursor-pointer text-muted-foreground select-none hover:text-foreground">
+        {heading} ({items.length})
+      </summary>
+      <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0">
+        {items.map((d, i) => (
+          <li key={`${d.title}-${i}`} className="flex min-w-0 items-baseline gap-2 text-muted-foreground">
+            <X className="size-3 shrink-0 translate-y-0.5" strokeWidth={2.75} />
+            <span className="min-w-0">
+              <span className="line-through">{d.title}</span> · {d.reason}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** Research's coverage reads "Research found" (what it found, not what the plan does); the plan's reads covered / not covered. */
+function CoverageChips({ coverage, source }: { coverage: Coverage; source: "plan" | "research" }) {
   const { areas, practice } = splitCoverage(coverage.open);
+  const research = source === "research";
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      {coverage.covered.length > 0 && <span className="text-muted-foreground">Covered</span>}
+      {coverage.covered.length > 0 && <span className="text-muted-foreground">{research ? "Research found" : "Covered"}</span>}
       {coverage.covered.map((area) => (
         <span key={`c-${area}`} className="rounded-full bg-accent-2-200 px-2.5 py-1 font-semibold text-accent-2-800">
           {area}
         </span>
       ))}
-      {areas.length > 0 && <span className={cn("text-muted-foreground", coverage.covered.length > 0 && "ml-2")}>Not covered</span>}
+      {areas.length > 0 && <span className={cn("text-muted-foreground", coverage.covered.length > 0 && "ml-2")}>{research ? "Research found nothing on" : "Not covered"}</span>}
       {areas.map((area) => (
         <span key={`o-${area}`} className="rounded-full border border-dashed border-neutral-600 px-2.5 py-1 text-neutral-800">
           {area}
@@ -431,6 +464,7 @@ function ResearchNoticeBanner({
   sizedMinutes,
   coverage,
   hasBackbone,
+  backboneKnown,
   onResearchAgain,
 }: {
   notice: ResearchNotice;
@@ -439,6 +473,7 @@ function ResearchNoticeBanner({
   sizedMinutes: number;
   coverage?: Coverage | null;
   hasBackbone: boolean;
+  backboneKnown: boolean;
   onResearchAgain?: () => void;
 }) {
   if (notice === "unavailable") {
@@ -459,7 +494,7 @@ function ResearchNoticeBanner({
     <div role="status" className="flex gap-3 rounded-[20px] bg-accent-200 px-4 py-3.5 text-[13px] leading-normal text-accent-900">
       <CircleAlert className="mt-px size-[18px] shrink-0 text-accent-700" strokeWidth={2.5} />
       <span>
-        {thinText({ researched, sizedMinutes, open: splitCoverage(coverage?.open ?? []).areas, hasBackbone })} for <strong className="font-semibold">{topic}</strong>.{" "}
+        {thinText({ researched, sizedMinutes, open: splitCoverage(coverage?.open ?? []).areas, hasBackbone, backboneKnown })} for <strong className="font-semibold">{topic}</strong>.{" "}
         {researched === 0 ? "The plan uses your own sources" : "The plan uses what was found plus your own sources"} and leans on practice where there is nothing to read. Paste links in the
         conversation to have them checked the same way.
       </span>
@@ -468,11 +503,11 @@ function ResearchNoticeBanner({
 }
 
 /** "Pensieve could check only 3 materials, about 9 h, and found nothing on advanced stitches or finishing" */
-export function thinText(input: { researched: number; sizedMinutes: number; open: string[]; hasBackbone: boolean }): string {
-  const { researched, sizedMinutes, open } = input;
+export function thinText(input: { researched: number; sizedMinutes: number; open: string[]; hasBackbone: boolean; backboneKnown?: boolean }): string {
+  const { researched, sizedMinutes, open, backboneKnown = true } = input;
   const count = researched === 0 ? "Pensieve could not check any materials" : `Pensieve could check ${researched < 5 ? "only " : ""}${researched} material${researched === 1 ? "" : "s"}`;
   const size = researched > 0 && sizedMinutes > 0 ? `, ${approxDuration(sizedMinutes).replace("≈", "about")},` : "";
-  const gaps = open.length > 0 ? ` and found nothing on ${joinAnd(open.map((a) => a.toLowerCase()))}` : input.hasBackbone ? "" : " and no textbook stood out";
+  const gaps = open.length > 0 ? ` and found nothing on ${joinAnd(open.map((a) => a.toLowerCase()))}` : input.hasBackbone || !backboneKnown ? "" : " and no textbook stood out";
   return `${count}${gaps ? size : size.replace(/,$/, "")}${gaps}`;
 }
 

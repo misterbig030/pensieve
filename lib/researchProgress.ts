@@ -1,7 +1,7 @@
 import type { DroppedMaterial, ResearchEvent, ResearchNotice } from "@/lib/ai/research/events";
 import { hostOf, type Material, type MaterialKind } from "@/lib/schemas/material";
 
-export type ResearchLogKind = "source" | "searched" | "verified" | "dropped" | "failed" | "chapters";
+export type ResearchLogKind = "source" | "searched" | "verified" | "dropped" | "failed" | "chapters" | "items";
 
 export interface ResearchLogEntry {
   id: number;
@@ -91,6 +91,12 @@ export function reduceResearch(state: ResearchProgressState, event: ResearchEven
       const text =
         event.chapters > 0 ? `Chapters of “${event.title}”: ${event.chapters}, from ${from}` : `No chapter list found for “${event.title}”; its parts will be named by topic.`;
       return { ...state, log: push(state, { kind: "chapters", text }) };
+    }
+    case "research.items": {
+      const from = hostOf(event.url ?? "") ?? "a page";
+      const groups = event.groups > 0 ? ` in ${event.groups} group${event.groups === 1 ? "" : "s"}` : "";
+      const text = event.items > 0 ? `Items of “${event.title}”: ${event.items}${groups}, from ${from}` : `No item list found for “${event.title}”; it will be worked by count.`;
+      return { ...state, log: push(state, { kind: "items", text }) };
     }
     case "research.done":
       return {

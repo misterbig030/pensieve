@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PracticeItem } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 
 /**
@@ -117,6 +118,65 @@ export const PRACTICE_REGISTRY: Record<PracticeFormat, PracticeFormatSpec> = {
   },
 };
 
+/** Minutes for a problem by its difficulty label. Problem lists only: other formats' items are not sized by difficulty. */
+const DIFFICULTY_MINUTES = { easy: 15, medium: 25, hard: 35 } as const;
+
+/**
+ * Minutes of doing for one listed item: its own when the list gives them; for a problem list, by difficulty (easy 15,
+ * medium 25, hard 35); otherwise the format's `perItemMinutes`. A format sized by a block has no per-item time, so it
+ * falls back to its fixed block, and failing that to 10.
+ */
+export function itemMinutes(format: PracticeFormat, item: PracticeItem): number {
+  if (item.minutes) return item.minutes;
+  if (format === "problem-set" && item.difficulty) return DIFFICULTY_MINUTES[item.difficulty];
+  const spec = PRACTICE_REGISTRY[format];
+  return spec.perItemMinutes ?? spec.fixedMinutes ?? 10;
+}
+
+/** The positions `from` to `to`, inclusive; none when either is missing. */
+export function itemPositions(run: { itemFrom?: number | null; itemTo?: number | null }): number[] {
+  if (!run.itemFrom || !run.itemTo || run.itemTo < run.itemFrom) return [];
+  return Array.from({ length: run.itemTo - run.itemFrom + 1 }, (_, i) => run.itemFrom! + i);
+}
+
+/** Runs of consecutive numbers, sorted and deduplicated: [3, 5, 6] → [[3, 3], [5, 6]]. */
+export function numberRuns(numbers: Iterable<number>): [number, number][] {
+  const out: [number, number][] = [];
+  for (const n of [...new Set(numbers)].sort((a, b) => a - b)) {
+    const last = out.at(-1);
+    if (last && n === last[1] + 1) last[1] = n;
+    else out.push([n, n]);
+  }
+  return out;
+}
+
+/** "3, 5–6": runs of consecutive numbers joined. */
+export function formatRuns(numbers: Iterable<number>): string {
+  return numberRuns(numbers)
+    .map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`))
+    .join(", ");
+}
+
+/**
+ * A list's groups in order of first appearance, each with every position holding an item of that name (a name that
+ * comes back later in the list is one group, `[1–9, 40–42]`); items without a group share one, named null.
+ */
+export function listGroups(items: PracticeItem[]): { name: string | null; positions: number[]; items: PracticeItem[] }[] {
+  const groups = new Map<string | null, { name: string | null; positions: number[]; items: PracticeItem[] }>();
+  items.forEach((item, i) => {
+    const group = groups.get(item.group) ?? { name: item.group, positions: [], items: [] };
+    group.positions.push(i + 1);
+    group.items.push(item);
+    groups.set(item.group, group);
+  });
+  return [...groups.values()];
+}
+
+/** Whether a format comes in whole blocks of a fixed size (mock, design-exercise), budgeted over the plan, not per week. */
+export function isBlockFormat(format: PracticeFormat): boolean {
+  return PRACTICE_REGISTRY[format].fixedMinutes !== null;
+}
+
 /** One practice format the plan's split picked, with its share of the practice time and what it is aimed at. */
 export const practicePickSchema = z.object({
   format: z.enum(PRACTICE_FORMATS),
@@ -166,13 +226,16 @@ export function normalizePicks(drafts: PracticePickDraft[] | null | undefined): 
 }
 
 /**
- * A whole number shared out by percent: floors plus the spare units by largest remainder, so the parts sum exactly to
- * `total`. Ties go to the earlier share. `shares` are percents that sum to 100.
+ * A whole number shared out by share: floors plus the spare units by largest remainder, so the parts sum exactly to
+ * `total`. Ties go to the earlier share. `shares` are whole numbers, usually percents that sum to 100; any other sum
+ * shares by proportion, and shares that sum to 0 get nothing.
  */
 export function shareOut(total: number, shares: readonly number[]): number[] {
-  // Whole-number arithmetic: a part's exact value is total * share / 100.
-  const parts = shares.map((share) => Math.floor((total * share) / 100));
-  const order = shares.map((share, i) => ({ i, remainder: (total * share) % 100 })).sort((x, y) => y.remainder - x.remainder || x.i - y.i);
+  const whole = shares.reduce((sum, n) => sum + n, 0);
+  if (whole <= 0) return shares.map(() => 0);
+  // Whole-number arithmetic: a part's exact value is total * share / whole.
+  const parts = shares.map((share) => Math.floor((total * share) / whole));
+  const order = shares.map((share, i) => ({ i, remainder: (total * share) % whole })).sort((x, y) => y.remainder - x.remainder || x.i - y.i);
   const leftover = total - parts.reduce((sum, n) => sum + n, 0);
   for (const { i } of order.slice(0, leftover)) parts[i] += 1;
   return parts;

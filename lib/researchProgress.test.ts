@@ -94,3 +94,14 @@ describe("sizes in the research card and list", () => {
     expect(thinText({ researched: 8, sizedMinutes: 0, open: ["Evals"], hasBackbone: true })).toBe("Pensieve could check 8 materials and found nothing on evals");
   });
 });
+
+describe("reduceResearch: item lists", () => {
+  it("logs the items line for a found list and for none", () => {
+    const found = reduceResearch(initialResearch(0), { type: "research.items", id: "M3", title: "NeetCode 150", items: 150, groups: 18, url: "https://raw.githubusercontent.com/x/y/main/list.json" }, new Set());
+    expect(found.log.at(-1)).toMatchObject({ kind: "items", text: "Items of “NeetCode 150”: 150 in 18 groups, from raw.githubusercontent.com" });
+    const flat = reduceResearch(initialResearch(0), { type: "research.items", id: "M3", title: "Vimtutor", items: 7, groups: 0, url: "https://example.org/steps" }, new Set());
+    expect(flat.log.at(-1)!.text).toBe("Items of “Vimtutor”: 7, from example.org");
+    const none = reduceResearch(initialResearch(0), { type: "research.items", id: "M3", title: "NeetCode 150", items: 0, groups: 0 }, new Set());
+    expect(none.log.at(-1)!.text).toBe("No item list found for “NeetCode 150”; it will be worked by count.");
+  });
+});

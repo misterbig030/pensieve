@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AVAILABLE_MODELS, CANDIDATE_STEP_EFFORT, DEFAULT_CHAT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_RESEARCH_MODEL, MODEL_PROVIDERS, RESEARCH_LOOP_EFFORT, estimateCostUsd, providerOf } from "./models";
+import { AVAILABLE_MODELS, CANDIDATE_STEP_EFFORT, OUTLINE_EFFORT, DEFAULT_CHAT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_RESEARCH_MODEL, MODEL_PROVIDERS, RESEARCH_LOOP_EFFORT, estimateCostUsd, providerOf } from "./models";
 
 describe("AVAILABLE_MODELS", () => {
   it("every model id matches the provider/model gateway format", () => {
@@ -23,6 +23,11 @@ describe("AVAILABLE_MODELS", () => {
     expect(RESEARCH_LOOP_EFFORT).toBe("high");
     expect(CANDIDATE_STEP_EFFORT).toBe("low");
     expect(estimateCostUsd("anthropic/claude-sonnet-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(12, 5);
+  });
+
+  it("the outline runs on Opus 5.5 at high effort", () => {
+    expect(DEFAULT_OUTLINE_MODEL).toBe("anthropic/claude-opus-5.5");
+    expect(OUTLINE_EFFORT).toBe("high");
   });
 
   it("knows every listed model's provider, which is the id's prefix", () => {

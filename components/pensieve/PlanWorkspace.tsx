@@ -18,9 +18,11 @@ import { formatCostUsd } from "@/lib/formatCost";
 import { pushModelCalls } from "@/lib/modelCalls";
 import { readNdjson } from "@/lib/ndjson";
 import {
+  applyDraftEvent,
   nextMessageId,
   toTranscript,
   type ChatMessage,
+  type DraftMaterials,
   type PlanChatEvent,
   type PlanChatRequest,
   type PlanDraftEvent,
@@ -132,8 +134,13 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [materials, setMaterials] = useState<Material[]>(() => props.initialMaterials ?? []);
   const [dropped, setDropped] = useState<DroppedMaterial[]>([]);
   const [notice, setNotice] = useState<ResearchNotice | undefined>(undefined);
+  // True from research's list to the allocation, which alone chooses the backbone: the list says nothing of one meanwhile.
+  const [awaitingAllocation, setAwaitingAllocation] = useState(false);
   const [research, setResearch] = useState<ResearchProgressState | null>(null);
   const [coverage, setCoverage] = useState<Coverage | null>(null);
+  // What research found, kept for the thin-list notice after the plan's coverage replaces `coverage`.
+  const [researchCoverage, setResearchCoverage] = useState<Coverage | null>(null);
+  const [coverageSource, setCoverageSource] = useState<DraftMaterials["coverageSource"]>("research");
   // The learner's hours and the plan's split: both can be changed here, and both are sent with every later request.
   const [hoursPerWeek, setHoursPerWeek] = useState<number>(props.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK);
   const [daysPerWeek, setDaysPerWeek] = useState<number>(props.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK);
@@ -167,7 +174,10 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setMaterials([]);
     setDropped([]);
     setNotice(undefined);
+    setAwaitingAllocation(false);
     setCoverage(null);
+    setCoverageSource("research");
+    setResearchCoverage(null);
     setSplit(null);
     setResearch(initialResearch());
     const topLevel = topLevelFor(weeks);
@@ -179,7 +189,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     const draftRoot = makeRoot([]);
     draftRoot.len = spans.reduce((a, b) => a + b, 0);
     const slots: Record<string, PendingSlots> = { root: { count: spans.length, groups: !leafLevel(topLevel, granularity) } };
-    let researched: Material[] = [];
+    let held: DraftMaterials = { materials: [], dropped: [], coverage: null, coverageSource: "research" };
     let decided: PlanSplit | null = null;
     const publish = () => {
       setTree(cloneTree(layout(draftRoot, 1, new Set(Object.keys(slots)))));
@@ -199,13 +209,24 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           const researchEvent = event as Extract<PlanDraftEvent, { type: `research.${string}` }>;
           setResearch((r) => reduceResearch(r ?? initialResearch(), researchEvent, learnerUrls));
           if (researchEvent.type === "research.done") {
-            researched = researchEvent.materials;
-            setMaterials(researchEvent.materials);
-            setDropped(researchEvent.dropped);
+            held = applyDraftEvent(held, researchEvent);
+            setMaterials(held.materials);
+            setDropped(held.dropped);
             setNotice(researchEvent.notice);
-            setCoverage(researchEvent.coverage ?? null);
+            setAwaitingAllocation(true);
+            setCoverage(held.coverage);
+            setCoverageSource(held.coverageSource);
+            setResearchCoverage(held.coverage);
             publish();
           }
+        } else if (event.type === "allocated") {
+          // The list the draft is written against: the nodes' chapter positions refer to it, not to research's.
+          held = applyDraftEvent(held, event);
+          setAwaitingAllocation(false);
+          setMaterials(held.materials);
+          setDropped(held.dropped);
+          setCoverage(held.coverage);
+          setCoverageSource(held.coverageSource);
         } else if (event.type === "split") {
           decided = event.split;
           setSplit(event.split);
@@ -227,11 +248,12 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           publish();
         } else if (event.type === "finish") {
           finished = true;
+          setAwaitingAllocation(false);
           setTree(layout(event.root));
           setPending({});
           setCostUsd((c) => c + event.costUsd);
           setDrafting(false);
-          pushAssistant(draftedText(layout(event.root), weeks, researched, decided));
+          pushAssistant(draftedText(layout(event.root), weeks, held.materials, decided));
         } else if (event.type === "error") {
           throw Object.assign(new Error(event.message), { code: event.code });
         }
@@ -239,6 +261,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       if (!finished) throw new Error("The draft ended early. Try again.");
     } catch (err) {
       setDrafting(false);
+      setAwaitingAllocation(false);
       setPending({});
       setResearch((r) => (r ? { ...r, running: false, reading: null } : r));
       setError(err instanceof Error ? err.message : "Drafting failed. Try again.");
@@ -633,7 +656,10 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             materials={materials}
             dropped={dropped}
             notice={notice}
+            awaitingBackbone={awaitingAllocation}
             coverage={coverage}
+            coverageSource={coverageSource}
+            researchCoverage={researchCoverage}
             totalHours={totalHours(planWeeks, hoursPerWeek)}
             usesOf={(id) => assignmentsOf(tree, id).map(({ label, role }) => ({ label, role }))}
             onRemove={streaming || busy || confirming ? undefined : removeMaterial}
@@ -757,7 +783,7 @@ function countExpected(root: PlanNode, pending: Record<string, PendingSlots>): n
   return countArrived(root) + Object.values(pending).reduce((sum, s) => sum + s.count, 0);
 }
 
-/** A week split into days by hand: its Read table and practice rows become the reservation its days were planned from. */
+/** A week split into days by hand: its Read table and practice rows become the reservation its days were planned from, an item row a one-item reservation. */
 function splitWeek(week: PlanNode): void {
   week.manualSplit = true;
   week.budgetHours = null;
@@ -766,7 +792,7 @@ function splitWeek(week: PlanNode): void {
     delete week.materials;
   }
   if (week.practice) {
-    week.practiceCovers = week.practice.map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes }));
+    week.practiceCovers = week.practice.map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes, ...(r.itemFrom && r.itemTo ? { itemFrom: r.itemFrom, itemTo: r.itemTo } : {}) }));
     delete week.practice;
   }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, normalizePicks, shareOut, weekBudgets, type PracticePickDraft } from "@/lib/practice";
+import type { PracticeItem } from "@/lib/schemas/material";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, isBlockFormat, itemMinutes, normalizePicks, shareOut, weekBudgets, type PracticePickDraft } from "@/lib/practice";
 
 const draft = (format: string, share = 25, focus = "Arrays", reason = "Because."): PracticePickDraft => ({ format, share, focus, reason });
 
@@ -145,5 +146,35 @@ describe("shareOut", () => {
   it("shares a total by percent so the parts sum to the total", () => {
     expect(shareOut(10, [45, 35, 20])).toEqual([5, 3, 2]);
     expect(shareOut(0, [50, 50])).toEqual([0, 0]);
+  });
+  it("shares by proportion when the shares are a subset of the picks, and gives nothing to shares that sum to 0", () => {
+    // Problems 45 and recall 15 of 231 min: 173.25 and 57.75, the spare minute to recall's larger remainder.
+    expect(shareOut(231, [45, 15])).toEqual([173, 58]);
+    expect(shareOut(40, [0, 0])).toEqual([0, 0]);
+  });
+});
+
+describe("isBlockFormat", () => {
+  it("is the formats with a fixed size", () => {
+    expect(PRACTICE_FORMATS.filter(isBlockFormat)).toEqual(["design-exercise", "mock"]);
+  });
+});
+
+describe("itemMinutes", () => {
+  const item = (extra: Partial<PracticeItem> = {}): PracticeItem => ({ title: "Two Sum", number: "1", group: "Arrays", difficulty: null, url: null, solutionUrl: null, minutes: null, ...extra });
+  it("sizes a problem by difficulty, and by the format's own time without one", () => {
+    expect(itemMinutes("problem-set", item({ difficulty: "easy" }))).toBe(15);
+    expect(itemMinutes("problem-set", item({ difficulty: "medium" }))).toBe(25);
+    expect(itemMinutes("problem-set", item({ difficulty: "hard" }))).toBe(35);
+    expect(itemMinutes("problem-set", item())).toBe(PRACTICE_REGISTRY["problem-set"].perItemMinutes);
+    expect(itemMinutes("problem-set", item())).toBe(10);
+  });
+  it("lets the item's own minutes win", () => {
+    expect(itemMinutes("problem-set", item({ difficulty: "hard", minutes: 50 }))).toBe(50);
+    expect(itemMinutes("recall", item({ minutes: 7 }))).toBe(7);
+  });
+  it("applies the difficulty table to problem lists only", () => {
+    expect(itemMinutes("recall", item({ difficulty: "hard" }))).toBe(3);
+    expect(itemMinutes("lab", item({ difficulty: "medium" }))).toBe(5);
   });
 });

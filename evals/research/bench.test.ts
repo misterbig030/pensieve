@@ -60,20 +60,19 @@ describe("notesUrls / readTitles / hoursCap", () => {
 
 describe("checkObject", () => {
   const base = { author: null, year: null, uses: null, recommendedBy: [] as string[], why: "w" };
-  it("counts candidates, backbones, minutes, and what the notes cannot vouch for", () => {
+  it("counts candidates, books the allocation could make the backbone, minutes, and what the notes cannot vouch for", () => {
     const object: CandidateList = {
       learner: [],
       candidates: [
-        { ...base, url: "https://a.example/page", title: "A Book", kind: "book", backbone: true, minutes: 600, recommendedBy: ["https://b.example/list?x=1", "https://nowhere.example/"] },
-        { ...base, url: "https://docs.c.example/doc/", title: "C Docs Overview", kind: "docs", backbone: false, minutes: 30 },
-        { ...base, url: "https://e.example/talk", title: "A Talk, retitled", kind: "video", backbone: false, minutes: 54 },
-        { ...base, url: "https://z.example/new", title: "Z", kind: "essay", backbone: false, minutes: null },
+        { ...base, url: "https://a.example/page", title: "A Book", kind: "book", minutes: 600, recommendedBy: ["https://b.example/list?x=1", "https://nowhere.example/"] },
+        { ...base, url: "https://docs.c.example/doc/", title: "C Docs Overview", kind: "docs", minutes: 30 },
+        { ...base, url: "https://e.example/talk", title: "A Talk, retitled", kind: "video", minutes: 54 },
+        { ...base, url: "https://z.example/new", title: "Z", kind: "essay", minutes: null },
       ],
     };
     const c = checkObject(object, PROMPT);
     expect(c.candidates).toBe(4);
-    expect(c.backbones).toBe(1);
-    expect(c.backboneIsBook).toBe(true);
+    expect(c.backboneBooks).toBe(1);
     expect(c.totalMinutes).toBe(684);
     expect(c.overCap).toBe(false);
     expect(c.unsized).toBe(1);
@@ -82,17 +81,22 @@ describe("checkObject", () => {
     expect(c.retitled).toEqual(["https://e.example/talk"]);
   });
 
-  it("flags more than one backbone, a non-book backbone, and a list over the cap", () => {
+  it("counts only books with at least BACKBONE_MIN_DOMAINS recommending sites, and flags a list over the cap", () => {
     const object: CandidateList = {
       learner: [],
       candidates: [
-        { ...base, url: "https://a.example/page", title: "A", kind: "course", backbone: true, minutes: 77 * 60 },
-        { ...base, url: "https://b.example/list?x=1", title: "B", kind: "book", backbone: true, minutes: 1 },
+        // A course is never a backbone book, however many sites recommend it.
+        { ...base, url: "https://a.example/page", title: "A", kind: "course", minutes: 77 * 60, recommendedBy: ["https://b.example/list?x=1", "https://c.example/"] },
+        // One other site is not enough.
+        { ...base, url: "https://f.example/book", title: "F", kind: "book", minutes: 1, recommendedBy: ["https://b.example/list?x=1", "https://b.example/other"] },
+        // Two different sites, one of them the book's own, count as one.
+        { ...base, url: "https://g.example/book", title: "G", kind: "book", minutes: 1, recommendedBy: ["https://g.example/self", "https://b.example/list?x=1"] },
+        { ...base, url: "https://h.example/book", title: "H", kind: "book", minutes: 1, recommendedBy: ["https://b.example/list?x=1", "https://c.example/"] },
+        { ...base, url: "https://i.example/book", title: "I", kind: "book", minutes: 1, recommendedBy: ["https://b.example/list?x=1", "https://c.example/", "https://d.example/"] },
       ],
     };
     const c = checkObject(object, PROMPT);
-    expect(c.backbones).toBe(2);
-    expect(c.backboneIsBook).toBe(false);
+    expect(c.backboneBooks).toBe(2);
     expect(c.overCap).toBe(true);
   });
 });

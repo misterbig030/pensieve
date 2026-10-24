@@ -16,15 +16,14 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { config } from "dotenv";
 import type { GenerationLogRow, ModelCall } from "@/lib/ai/logged";
-import { DEFAULT_OUTLINE_MODEL } from "@/lib/ai/models";
 import { streamPlanDraft } from "@/lib/ai/planDraft";
-import { pickPractice } from "@/lib/ai/practicePick";
-import { appModel } from "@/lib/ai/resolve";
 import { createAgentArm, type ResearchArm } from "@/lib/ai/research/agent";
 import { researchMaterials, type ResearchOutcome } from "@/lib/ai/research/pipeline";
 import { searchProviderFromEnv } from "@/lib/ai/research/tools";
 import { createWorkersArm } from "@/lib/ai/research/workers";
+import type { DroppedMaterial } from "@/lib/ai/research/events";
 import type { PlanNode } from "@/lib/planTree";
+import type { Material } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 import { draftRequestOf } from "../golden/plan.v1";
 import { GOLDEN_V3, type ResearchGoldenRecord } from "./golden.v3";
@@ -73,6 +72,8 @@ interface RunRecord {
   materials: ResearchOutcome["materials"];
   dropped: ResearchOutcome["dropped"];
   plan: PlanNode | null;
+  /** The materials as the allocation cut them and what it left out, for the judges; null if the draft ended before it. */
+  allocation: { materials: Material[]; dropped: DroppedMaterial[] } | null;
   /** How the drafter divided the learner's time, for the judges (rubric dimension 5). */
   split: PlanSplit | null;
   coverage: ResearchOutcome["coverage"];
@@ -86,18 +87,20 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
   const started = performance.now();
 
   const input = draftRequestOf(record.input);
-  // The practice is picked before research, as in the app, and the draft below keeps that split.
-  const picked = await pickPractice({ ...input, model: appModel(DEFAULT_OUTLINE_MODEL), log });
-  const research = researchMaterials({ brief: { ...input, split: picked.split }, arm: armFor(arm), log });
+  const research = researchMaterials({ brief: input, arm: armFor(arm), log });
   let next = await research.next();
   while (!next.done) next = await research.next();
   const outcome = next.value;
   const researchMs = Math.round(performance.now() - started);
 
   let plan: PlanNode | null = null;
-  const split: PlanSplit = picked.split;
-  for await (const event of streamPlanDraft({ ...input, split, materials: outcome.materials, log })) {
-    if (event.type === "finish") plan = event.root;
+  // No split is given, so the draft allocates after research, as in the app.
+  let split: PlanSplit | null = null;
+  let allocation: RunRecord["allocation"] = null;
+  for await (const event of streamPlanDraft({ ...input, materials: outcome.materials, log })) {
+    if (event.type === "allocated") allocation = { materials: event.materials, dropped: event.dropped };
+    else if (event.type === "split") split = event.split;
+    else if (event.type === "finish") plan = event.root;
   }
 
   const metrics = runMetrics({
@@ -112,8 +115,9 @@ async function runOnce(record: ResearchGoldenRecord, arm: ArmName, run: number):
     extraCostUsd: arm === "C" ? (outcome.arm?.counts.searches ?? 0) * WEB_SEARCH_USD : 0,
     split,
     plan,
+    allocated: allocation?.materials ?? null,
   });
-  return { metrics, materials: outcome.materials, dropped: outcome.dropped, plan, split, coverage: outcome.coverage, facts: calls.flatMap((c) => c.facts.map((f) => `${c.label}: ${f}`)) };
+  return { metrics, materials: outcome.materials, dropped: outcome.dropped, plan, allocation, split, coverage: outcome.coverage, facts: calls.flatMap((c) => c.facts.map((f) => `${c.label}: ${f}`)) };
 }
 
 async function main() {

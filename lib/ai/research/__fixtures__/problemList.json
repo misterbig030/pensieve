@@ -1,0 +1,14 @@
+[
+  { "problem": "Concatenation of Array", "pattern": "Arrays & Hashing", "link": "concatenation-of-array/", "video": "68isPRHgcFQ", "difficulty": "Easy", "code": "1929-concatenation-of-array", "neetcode150": false, "blind75": false },
+  { "problem": "Contains Duplicate", "pattern": "Arrays & Hashing", "link": "contains-duplicate/", "video": "3OamzN90kPg", "difficulty": "Easy", "code": "0217-contains-duplicate", "neetcode150": true, "blind75": true },
+  { "problem": "Valid Anagram", "pattern": "Arrays & Hashing", "link": "valid-anagram/", "video": "9UtInBqnCgA", "difficulty": "Easy", "code": "0242-valid-anagram", "neetcode150": true, "blind75": true },
+  { "problem": "Two Sum", "pattern": "Arrays & Hashing", "link": "two-sum/", "video": "KLlXCFG5TnA", "difficulty": "Easy", "code": "0001-two-sum", "neetcode150": true, "blind75": true },
+  { "problem": "Group Anagrams", "pattern": "Arrays & Hashing", "link": "group-anagrams/", "video": "vzdNOK2oB2E", "difficulty": "Medium", "code": "0049-group-anagrams", "neetcode150": true, "blind75": true },
+  { "problem": "Replace Elements With Greatest Element On Right Side", "pattern": "Arrays & Hashing", "link": "replace-elements-with-greatest-element-on-right-side/", "video": "ZHjKhUjcsaU", "difficulty": "Easy", "code": "1299-replace-elements-with-greatest-element-on-right-side", "neetcode150": false, "blind75": false },
+  { "problem": "Valid Palindrome", "pattern": "Two Pointers", "link": "valid-palindrome/", "video": "jJXJ16kPFWg", "difficulty": "Easy", "code": "0125-valid-palindrome", "neetcode150": true, "blind75": true },
+  { "problem": "Valid Palindrome II", "pattern": "Two Pointers", "link": "valid-palindrome-ii/", "video": "JrxRYBwG6EI", "difficulty": "Easy", "code": "0680-valid-palindrome-ii", "neetcode150": false, "blind75": false },
+  { "problem": "3Sum", "pattern": "Two Pointers", "link": "3sum/", "video": "jzZsG8n2R9A", "difficulty": "Medium", "code": "0015-3sum", "neetcode150": true, "blind75": true },
+  { "problem": "Best Time to Buy And Sell Stock", "pattern": "Sliding Window", "link": "best-time-to-buy-and-sell-stock/", "video": "1pkOgXD63yU", "difficulty": "Easy", "code": "0121-best-time-to-buy-and-sell-stock", "neetcode150": true, "blind75": true },
+  { "problem": "Contains Duplicate II", "pattern": "Sliding Window", "link": "contains-duplicate-ii/", "video": "ypn0aZ0nrL4", "difficulty": "Easy", "code": "0219-contains-duplicate-ii", "neetcode150": false, "blind75": false },
+  { "problem": "Minimum Window Substring", "pattern": "Sliding Window", "link": "minimum-window-substring/", "video": "jSto0O4AJbM", "difficulty": "Hard", "code": "0076-minimum-window-substring", "neetcode150": true, "blind75": true }
+]
