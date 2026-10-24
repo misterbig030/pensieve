@@ -12,6 +12,7 @@ import {
   formatAliases,
   learnerMaterials,
   levelChecks,
+  numberedToc,
   parseChapters,
   refKey,
   remapTreeRefs,
@@ -35,6 +36,23 @@ import {
   sizeItemRuns,
 } from "./materials";
 import { itemMinutes, itemPositions } from "./practice";
+
+describe("numberedToc", () => {
+  const unnumbered = { ...AIE_TOC, chapters: AIE_TOC.chapters.slice(0, 5).map((c) => ({ ...c, n: null })) };
+  it("numbers a cut list without numbers from its part's uses line", () => {
+    expect(numberedToc(unnumbered, "ch. 1, 3, 5–6, 9")!.chapters.map((c) => c.n)).toEqual([1, 3, 5, 6, 9]);
+  });
+  it("numbers a list without numbers by position when the uses line does not name one number per chapter", () => {
+    expect(numberedToc(unnumbered, null)!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4, 5]);
+    expect(numberedToc(unnumbered, "ch. 1, 3")!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4, 5]);
+    expect(numberedToc(unnumbered, "the chapters on storage")!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4, 5]);
+  });
+  it("leaves a list that has numbers as it is, an unnumbered preface included", () => {
+    const withPreface = { ...AIE_TOC, chapters: [{ ...AIE_TOC.chapters[0], n: null, title: "Preface" }, ...AIE_TOC.chapters.slice(1)] };
+    expect(numberedToc(withPreface, "ch. 1–10")).toBe(withPreface);
+    expect(numberedToc(null, "ch. 1")).toBeNull();
+  });
+});
 
 describe("parseChapters", () => {
   it.each([

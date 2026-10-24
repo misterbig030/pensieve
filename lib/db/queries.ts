@@ -2,7 +2,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "./client";
 import { tracks, sources, planNodes, checkIns, type NewSource, type Source } from "./schema";
 import { getTrackNodeMaterials, getTrackNodePractice, insertPlanTree, rowsToTree } from "./planQueries";
-import { remapTreeRefs } from "@/lib/materials";
+import { numberedToc, remapTreeRefs } from "@/lib/materials";
 import { doneDays, type Granularity, type PlanNode } from "@/lib/planTree";
 import { clip, type Material } from "@/lib/schemas/material";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, clampHours, type PlanSplit } from "@/lib/studyTime";
@@ -86,7 +86,7 @@ export function sourceToMaterial(row: Source): Material {
     minutes: row.minutes,
     minutesBasis: row.minutesBasis,
     uses: row.uses,
-    toc: row.toc ?? null,
+    toc: numberedToc(row.toc ?? null, row.uses),
     practice: row.practice ?? null,
   };
 }

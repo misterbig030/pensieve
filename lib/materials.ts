@@ -33,6 +33,7 @@ import {
   shortId,
   type RefActivity,
   chapterAt,
+  type ChapterList,
 } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
 
@@ -579,6 +580,18 @@ export function noSourceFacts(split: PlanSplit | null | undefined, materials: Pi
 }
 
 /** Chapter numbers a note names: "Ch. 4 §2" → [4], "ch. 5–6" → [5, 6], "chapters 3, 7 and 9" → [3, 7, 9]. */
+/**
+ * A chapter list with no numbers, numbered: a list the allocation cut takes the book's own numbers from its part's
+ * uses line ("ch. 1, 3, 5–6, 9"), one per chapter, else each chapter takes its position. Lists saved before the cut
+ * kept their numbers lost them; a list with any number is left as it is.
+ */
+export function numberedToc(toc: ChapterList | null, uses: string | null | undefined): ChapterList | null {
+  if (!toc || toc.chapters.some((c) => c.n !== null)) return toc;
+  const named = parseChapters(uses).sort((a, b) => a - b);
+  const numbers = named.length === toc.chapters.length ? named : toc.chapters.map((_, i) => i + 1);
+  return { ...toc, chapters: toc.chapters.map((c, i) => ({ ...c, n: numbers[i] })) };
+}
+
 export function parseChapters(note: string | null | undefined): number[] {
   if (!note) return [];
   const out: number[] = [];
