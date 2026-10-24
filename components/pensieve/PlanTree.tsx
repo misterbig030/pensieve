@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import type { MouseEvent, ReactNode } from "react";
-import { ChevronDown, Lock } from "lucide-react";
+import { BookOpen, ChevronDown, Code, FileText, FolderGit2, GraduationCap, Lock, PenLine, Video } from "lucide-react";
+import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { Menu } from "@base-ui/react/menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -367,19 +368,6 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
   );
 }
 
-const SHOWN_COVERS = 3;
-
-/** "1–4", "5–6, 10": chapter numbers collapsed into runs. */
-function chapterRuns(numbers: number[]): string {
-  const runs: [number, number][] = [];
-  for (const n of numbers) {
-    const last = runs[runs.length - 1];
-    if (last && n === last[1] + 1) last[1] = n;
-    else runs.push([n, n]);
-  }
-  return runs.map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`)).join(", ");
-}
-
 /** "Arrays & Hashing – Two Pointers": the groups a run of a list's items spans, first to last; null when the run names none. */
 function groupSpan(items: PracticeItem[], from: number, to: number): string | null {
   const groups = items.slice(from - 1, to).flatMap((i) => (i.group ? [i.group] : []));
@@ -389,75 +377,96 @@ function groupSpan(items: PracticeItem[], from: number, to: number): string | nu
   return first === last ? first : `${first} – ${last}`;
 }
 
-/**
- * A heading's practice reservations as chip texts, one per source: for a source with a list the groups its run spans
- * ("NeetCode 150 · Arrays & Hashing – Two Pointers"), else its note. A reservation with no source in the list has no chip.
- */
-function practiceChips(covers: PracticeCover[] | undefined, byId: ReadonlyMap<string, Material>): { key: string; text: string; full: string }[] {
-  const bySource = new Map<string, { m: Material; covers: PracticeCover[] }>();
-  for (const c of covers ?? []) {
-    const m = c.id === null ? undefined : byId.get(c.id);
-    if (!m) continue;
-    const key = `${c.format}#${m.id}`;
-    bySource.set(key, { m, covers: [...(bySource.get(key)?.covers ?? []), c] });
-  }
-  return [...bySource].map(([key, { m, covers: cs }]) => {
-    const items = m.practice?.list?.items;
-    const runs = cs.filter((c) => c.itemFrom && c.itemTo);
-    let part: string | null = null;
-    if (items && runs.length > 0) {
-      const from = Math.min(...runs.map((c) => c.itemFrom!));
-      const to = Math.max(...runs.map((c) => c.itemTo!));
-      part = groupSpan(items, from, to) ?? `items ${from}–${to}`;
-    } else part = cs.find((c) => c.note)?.note ?? null;
-    const tail = part ? ` · ${part}` : "";
-    return { key: `${key}#practice`, text: `${shortTitle(m.title)}${tail}`, full: `${m.title}${tail}` };
-  });
+/** One line of a heading's Covers list: a material, what it is for here, and the part this unit takes. */
+export interface CoverLine {
+  key: string;
+  m: Material;
+  /** The practice format the line reserves; null for reading. */
+  practice: PracticeFormat | null;
+  part: string | null;
 }
 
-/** A heading's reservation as chips: one per material and activity, the backbone first, then one per practice source, "+ N more" past three. At least one practice chip always shows. */
-export function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, Material> }) {
-  const groups = new Map<string, { m: Material; review: boolean; chapters: number[]; note: string | null }>();
+/**
+ * A heading's reservation as lines, every one shown: the reading first, the backbone leading, one line per material and
+ * activity with its chapters by number and title ("ch. 3 Storage and retrieval") or its note; then one line per
+ * practice source with its format and the groups its run spans ("Problems · Arrays & Hashing – Two Pointers"), else
+ * its note. A reservation whose material is not in the list has no line.
+ */
+export function coverLines(node: Pick<PlanNode, "covers" | "practiceCovers">, byId: ReadonlyMap<string, Material>): CoverLine[] {
+  const reading = new Map<string, { m: Material; review: boolean; chapters: string[]; note: string | null }>();
   for (const r of node.covers ?? []) {
     const m = byId.get(r.id);
     if (!m) continue;
     const review = (r.activity ?? "read") === "review";
     const key = `${m.id}#${review ? "review" : "read"}`;
-    const group = groups.get(key) ?? { m, review, chapters: [], note: null };
+    const line = reading.get(key) ?? { m, review, chapters: [], note: null };
     const chapter = chapterAt(m.toc, r.chapter);
-    if (chapter) group.chapters.push(chapter.n ?? r.chapter!);
-    else if (r.note) group.note = r.note;
-    groups.set(key, group);
+    if (chapter) line.chapters.push(`ch. ${chapter.n ?? r.chapter} ${chapter.title}`);
+    else if (r.note) line.note = r.note;
+    reading.set(key, line);
   }
-  // The chip names the material short ("System Design Primer"); its tooltip keeps the full title.
-  const text = (g: { m: Material; review: boolean; chapters: number[]; note: string | null }, title: string) => {
-    const part = g.chapters.length > 0 ? `ch. ${chapterRuns(g.chapters)}` : g.note;
-    return `${g.review ? "Review of " : ""}${title}${part ? ` · ${part}` : ""}`;
-  };
-  const reading = [...groups.values()]
-    .sort((a, b) => Number(b.m.backbone) - Number(a.m.backbone))
-    .map((g) => ({ key: `${g.m.id}#${g.review ? "review" : "read"}`, text: text(g, shortTitle(g.m.title)), full: text(g, g.m.title), backbone: g.m.backbone }));
-  const practice = practiceChips(node.practiceCovers, byId).map((c) => ({ ...c, backbone: false }));
-  if (reading.length + practice.length === 0) return null;
-  // The week's practice always shows: at least one practice chip stays whatever the reading count, and reading gives way first.
-  const practiceShown = Math.min(practice.length, Math.max(1, SHOWN_COVERS - reading.length));
-  const readingShown = Math.min(reading.length, SHOWN_COVERS - practiceShown);
-  const shown = [...reading.slice(0, readingShown), ...practice.slice(0, practiceShown)];
-  const hidden = [...reading.slice(readingShown), ...practice.slice(practiceShown)];
+  const read = [...reading]
+    .sort(([, a], [, b]) => Number(b.m.backbone) - Number(a.m.backbone))
+    .map(([key, { m, review, chapters, note }]): CoverLine => {
+      const part = chapters.length > 0 ? chapters.join("; ") : note;
+      return { key, m, practice: null, part: review ? `Review${part ? ` of ${part}` : ""}` : part };
+    });
+  const bySource = new Map<string, { m: Material; format: PracticeFormat; covers: PracticeCover[] }>();
+  for (const c of node.practiceCovers ?? []) {
+    const m = c.id === null ? undefined : byId.get(c.id);
+    if (!m) continue;
+    const key = `${c.format}#${m.id}`;
+    bySource.set(key, { m, format: c.format, covers: [...(bySource.get(key)?.covers ?? []), c] });
+  }
+  const practice = [...bySource].map(([key, { m, format, covers }]): CoverLine => {
+    const items = m.practice?.list?.items;
+    const runs = covers.filter((c) => c.itemFrom && c.itemTo);
+    let part: string | null;
+    if (items && runs.length > 0) {
+      const from = Math.min(...runs.map((c) => c.itemFrom!));
+      const to = Math.max(...runs.map((c) => c.itemTo!));
+      part = groupSpan(items, from, to) ?? `items ${from}–${to}`;
+    } else part = covers.find((c) => c.note)?.note ?? null;
+    return { key: `${key}#practice`, m, practice: format, part: [PRACTICE_REGISTRY[format].label, part].filter(Boolean).join(" · ") };
+  });
+  return [...read, ...practice];
+}
+
+function CoverIcon({ line }: { line: CoverLine }) {
+  const className = "mt-px size-4 shrink-0 text-muted-foreground";
+  if (line.practice) return line.practice === "problem-set" ? <Code className={className} /> : <PenLine className={className} />;
+  switch (line.m.kind) {
+    case "book":
+      return <BookOpen className={className} />;
+    case "video":
+      return <Video className={className} />;
+    case "course":
+      return <GraduationCap className={className} />;
+    case "repo":
+      return <FolderGit2 className={className} />;
+    default:
+      return <FileText className={className} />;
+  }
+}
+
+/** A heading's reservation as a list, one row per line with an icon for its kind; the backbone reads bold. */
+export function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, Material> }) {
+  const lines = coverLines(node, byId);
+  if (lines.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="mr-0.5 text-muted-foreground">Covers</span>
-      {shown.map((c) => (
-        <span key={c.key} title={c.full} className={cn("max-w-[260px] truncate rounded-full px-[9px] py-[3px]", c.backbone ? "bg-accent-2-200 font-semibold text-accent-2-800" : "bg-background")}>
-          {c.text}
-        </span>
+    <ul className="m-0 flex list-none flex-col rounded-2xl bg-background px-3.5 py-1 text-[13px]">
+      {lines.map((line, i) => (
+        <li key={line.key} className={cn("flex min-w-0 items-start gap-2.5 py-1.5", i > 0 && "border-t border-foreground/8")}>
+          <CoverIcon line={line} />
+          <span className="min-w-0 flex-1 leading-snug">
+            <span title={line.m.title} className={line.m.backbone ? "font-semibold" : undefined}>
+              {shortTitle(line.m.title)}
+            </span>
+            {line.part && <span className="text-muted-foreground"> · {line.part}</span>}
+          </span>
+        </li>
       ))}
-      {hidden.length > 0 && (
-        <span title={hidden.map((c) => c.full).join("\n")} className="rounded-full bg-background px-[9px] py-[3px]">
-          + {hidden.length} more
-        </span>
-      )}
-    </div>
+    </ul>
   );
 }
 
