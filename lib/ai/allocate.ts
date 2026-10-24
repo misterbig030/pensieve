@@ -275,10 +275,14 @@ function readingPart(m: Material, part: AllocationPart): Material {
     const positions = [...new Set(part.chapters.filter((n) => Number.isInteger(n) && n >= 1 && n <= toc.chapters.length))].sort((a, b) => a - b);
     // No valid position: the model's chapter set says nothing usable, so the book stays whole.
     if (positions.length === 0) return m;
+    // A list with no numbers is numbered by position, which the cut would lose: each kept chapter keeps its place in
+    // the book as its number ("ch. 3", not the second kept), as `uses` names it.
+    const numbered = toc.chapters.some((c) => c.n !== null);
     // A kept chapter whose successor is cut carries its own end, so its pages never run into the cut chapter's.
     const kept: Chapter[] = positions.map((p) => {
+      const chapter = numbered ? toc.chapters[p - 1] : { ...toc.chapters[p - 1], n: p };
       const successor = toc.chapters[p];
-      return successor && !positions.includes(p + 1) ? { ...toc.chapters[p - 1], end: successor.page } : toc.chapters[p - 1];
+      return successor && !positions.includes(p + 1) ? { ...chapter, end: successor.page } : chapter;
     });
     const sized = kept.filter((c) => c.minutes !== null);
     let minutes = m.minutes ?? null;

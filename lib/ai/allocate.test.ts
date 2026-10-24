@@ -116,6 +116,20 @@ describe("applyAllocation", () => {
     expect(m1.uses).toBe("ch. 5–7, 9");
   });
 
+  it("numbers a cut list that had no numbers by the book's own positions, as the part's uses does", () => {
+    const unnumbered = { ...book, toc: { ...book.toc!, chapters: book.toc!.chapters.map((c) => ({ ...c, n: null })) } };
+    const m1 = applyAllocation(draft({ parts: [{ id: "M1", chapters: [1, 3, 5, 6, 9] }] }), { ...input, materials: [unnumbered] }).materials[0];
+    expect(m1.toc!.chapters.map((c) => c.n)).toEqual([1, 3, 5, 6, 9]);
+    expect(m1.uses).toBe("ch. 1, 3, 5–6, 9");
+    expect(materialSchema.safeParse(m1).success).toBe(true);
+  });
+
+  it("leaves an unnumbered chapter unnumbered in a list that has numbers", () => {
+    const withPreface = { ...book, toc: { ...book.toc!, chapters: book.toc!.chapters.map((c, i) => (i === 0 ? { ...c, n: null, title: "Preface" } : c)) } };
+    const m1 = applyAllocation(draft({ parts: [{ id: "M1", chapters: [1, 2, 3, 4, 5] }] }), { ...input, materials: [withPreface] }).materials[0];
+    expect(m1.toc!.chapters.map((c) => c.n)).toEqual([null, 2, 3, 4, 5]);
+  });
+
   it("dedupes and orders the kept chapters and ignores the invalid ones", () => {
     const m1 = applyAllocation(draft({ parts: [{ id: "M1", chapters: [4, 2, 2, 0, 3, 11, 1] }] }), input).materials.find((m) => m.id === "M1")!;
     expect(m1.toc!.chapters.map((c) => c.n)).toEqual([1, 2, 3, 4]);
