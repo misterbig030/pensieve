@@ -171,6 +171,9 @@ export const nodePractice = pgTable(
     note: text("note"),
     minutes: integer("minutes"),
     generated: boolean("generated").notNull().default(false),
+    /** 1-based positions in the source's item list, inclusive: a reservation's run, or a row's one item (equal). Null without a list. */
+    itemFrom: integer("item_from"),
+    itemTo: integer("item_to"),
   },
   (t) => [index("node_practice_node_idx").on(t.nodeId)],
 );

@@ -4,7 +4,8 @@ import type { PracticePick } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
 import { makeNode, makeRoot } from "@/lib/planTree";
 import type { PracticeRef } from "@/lib/schemas/material";
-import { backboneHit, chaptersSource, checkCounts, decide, decideWorkers, formatHit, median, mustIncludeRecall, openPicks, practiceSourcedShare, sizeMetrics, summarize, type ArmName, type RunMetrics } from "./metrics";
+import { GOLDEN_V3 } from "./golden.v3";
+import { backboneHit, chaptersSource, checkCounts, decide, decideWorkers, formatHit, median, mustIncludeRecall, openPicks, practiceSourcedShare, runMetrics, sizeMetrics, summarize, type ArmName, type RunMetrics } from "./metrics";
 
 function material(title: string, extra: Partial<Material> = {}): Material {
   return { id: title, origin: "research", type: "link", kind: "docs", url: "https://x", title, author: null, year: null, why: null, backbone: false, verifiedAt: null, fetchedTitle: null, recommendedBy: [], sig: null, ...extra };
@@ -175,5 +176,20 @@ describe("chaptersSource", () => {
     const runs = [run(true, "page"), run(true, null), run(false, null)];
     expect(summarize("A", runs).chaptersFound).toBe(0.5);
     expect(summarize("C", runs).chaptersFound).toBeNull();
+  });
+});
+
+describe("runMetrics", () => {
+  const record = GOLDEN_V3.find((r) => r.labels?.expectedBackbone?.title === "AI Engineering")!;
+  const toc = { source: "catalogue" as const, url: "https://openlibrary.org/books/OL1M", printPages: false, end: null, chapters: [1, 2, 3].map((n) => ({ n, title: `C${n}`, page: null, minutes: null, sections: [] })) };
+  const researched = [material("AI Engineering", { kind: "book", author: "Chip Huyen", catalogued: true, toc })];
+  const outcome = { materials: researched, dropped: [], costUsd: 0, arm: null, proposed: 1, verified: 1, coverage: null, sizedMinutes: 0 };
+  const metrics = (allocated?: Material[] | null) => runMetrics({ record, arm: "W", run: 1, outcome, calls: [], rows: [], latencyMs: 0, researchMs: 0, allocated });
+  it("scores the backbone and its chapters from the allocation's choice, not research's list", () => {
+    const chosen = researched.map((m) => ({ ...m, backbone: true }));
+    expect(metrics(chosen)).toMatchObject({ backboneHit: true, chaptersSource: "catalogue" });
+    // Research alone chooses no backbone; a draft that ended before the allocation has none.
+    expect(metrics(researched)).toMatchObject({ backboneHit: false, chaptersSource: null });
+    expect(metrics(null)).toMatchObject({ backboneHit: false, chaptersSource: null });
   });
 });

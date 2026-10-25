@@ -17,7 +17,12 @@ export const FETCH_TIMEOUT_MS = 5_000;
 export const MAX_BODY_BYTES = 2 * 1024 * 1024;
 export const ACCEPTED_ENCODINGS = "gzip, br";
 export const ACCEPTED_CONTENT_TYPES = ["text/html", "application/pdf", "text/plain"] as const;
-export type AcceptedContentType = (typeof ACCEPTED_CONTENT_TYPES)[number];
+/**
+ * What a reader of machine-readable lists may also accept: JSON and CSV data files. Only a caller that asks for them
+ * through `contentTypes` gets them; the page path keeps `ACCEPTED_CONTENT_TYPES`.
+ */
+export const DATA_CONTENT_TYPES = [...ACCEPTED_CONTENT_TYPES, "application/json", "text/csv"] as const;
+export type AcceptedContentType = (typeof DATA_CONTENT_TYPES)[number];
 
 export type EgressReason =
   | "invalid-url"
@@ -77,6 +82,8 @@ export interface GuardedFetchOptions {
   transport?: Transport;
   timeoutMs?: number;
   maxBytes?: number;
+  /** The content types to read; `ACCEPTED_CONTENT_TYPES` when omitted. Anything else is refused before the body is read. */
+  contentTypes?: readonly AcceptedContentType[];
 }
 
 export interface GuardedResponse {
@@ -302,12 +309,13 @@ function isRedirect(status: number): boolean {
 /**
  * GETs a URL under the egress rules. Redirects are followed by hand (at most three) and every hop is re-checked.
  * Five seconds for the whole chain, a 2 MB body cap counted after decompression, and only HTML, PDF and plain text
- * are read.
+ * are read unless the caller widens `contentTypes`.
  */
 export async function guardedFetch(raw: string, options: GuardedFetchOptions = {}): Promise<GuardedResponse> {
   const resolver = options.resolver ?? systemResolver;
   const transport = options.transport ?? pinnedHttpsTransport;
   const maxBytes = options.maxBytes ?? MAX_BODY_BYTES;
+  const contentTypes: readonly string[] = options.contentTypes ?? ACCEPTED_CONTENT_TYPES;
   const timeout = AbortSignal.timeout(options.timeoutMs ?? FETCH_TIMEOUT_MS);
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
 
@@ -327,7 +335,7 @@ export async function guardedFetch(raw: string, options: GuardedFetchOptions = {
         signal,
         headers: {
           "user-agent": EGRESS_USER_AGENT,
-          accept: "text/html,application/pdf,text/plain;q=0.9",
+          accept: options.contentTypes ? contentTypes.join(",") : "text/html,application/pdf,text/plain;q=0.9",
           "accept-encoding": ACCEPTED_ENCODINGS,
           "accept-language": "en;q=0.9,*;q=0.5",
         },
@@ -350,7 +358,7 @@ export async function guardedFetch(raw: string, options: GuardedFetchOptions = {
       throw new EgressError("status", `HTTP ${res.status}`);
     }
     const { type, charset } = parseContentType(res.headers["content-type"]);
-    if (!(ACCEPTED_CONTENT_TYPES as readonly string[]).includes(type)) {
+    if (!contentTypes.includes(type)) {
       res.destroy();
       throw new EgressError("content-type", `Unsupported content type ${type || "(none)"}`);
     }

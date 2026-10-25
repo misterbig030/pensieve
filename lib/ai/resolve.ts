@@ -6,7 +6,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import type { LanguageModel } from "ai";
 import { getUserApiKeys } from "@/lib/db/userApiKeys";
 import { openSecret } from "@/lib/secrets";
-import { DEFAULT_CHAT_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_RESEARCH_MODEL, providerOf, type AiModelId, type KeyOwner, type ModelProvider } from "./models";
+import { DEFAULT_ALLOCATE_MODEL, DEFAULT_CHAT_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_RESEARCH_MODEL, providerOf, type AiModelId, type KeyOwner, type ModelProvider } from "./models";
 
 export interface ResolvedModel {
   /** The gateway id string, or a direct instance built from the user's key. */
@@ -21,6 +21,7 @@ export interface ModelSet {
   content: ResolvedModel;
   chat: ResolvedModel;
   research: ResolvedModel;
+  allocate: ResolvedModel;
 }
 export type ModelRole = keyof ModelSet;
 
@@ -29,6 +30,7 @@ export const DEFAULT_MODEL_IDS: Record<ModelRole, AiModelId> = {
   content: DEFAULT_CONTENT_MODEL,
   chat: DEFAULT_CHAT_MODEL,
   research: DEFAULT_RESEARCH_MODEL,
+  allocate: DEFAULT_ALLOCATE_MODEL,
 };
 
 /** The app's own route for a model: the gateway id, paid by the app. */
@@ -75,7 +77,13 @@ export function resolveWith(
     if (!key || !direct || !apiId) return appModel(id);
     return { model: direct.create(key)(apiId), id, keyOwner: "user" };
   };
-  return { outline: resolve(defaults.outline), content: resolve(defaults.content), chat: resolve(defaults.chat), research: resolve(defaults.research) };
+  return {
+    outline: resolve(defaults.outline),
+    content: resolve(defaults.content),
+    chat: resolve(defaults.chat),
+    research: resolve(defaults.research),
+    allocate: resolve(defaults.allocate),
+  };
 }
 
 export interface ResolvedModels extends ModelSet {

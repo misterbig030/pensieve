@@ -8,8 +8,8 @@ function apiError(statusCode: number, responseBody: string) {
 }
 const userModel = { model: {} as never, id: "anthropic/claude-sonnet-5.5" as const, keyOwner: "user" as const };
 const appModelR = { model: "anthropic/claude-sonnet-5.5" as const, id: "anthropic/claude-sonnet-5.5" as const, keyOwner: "app" as const };
-const onUserKey: ResolvedModels = { outline: userModel, content: userModel, chat: userModel, research: userModel, keyErrors: {} };
-const onApp: ResolvedModels = { outline: appModelR, content: appModelR, chat: appModelR, research: appModelR, keyErrors: {} };
+const onUserKey: ResolvedModels = { outline: userModel, content: userModel, chat: userModel, research: userModel, allocate: userModel, keyErrors: {} };
+const onApp: ResolvedModels = { outline: appModelR, content: appModelR, chat: appModelR, research: appModelR, allocate: appModelR, keyErrors: {} };
 
 describe("classifyProviderError", () => {
   it("reads the four kinds from the status and body, matching the credits message loosely", () => {
@@ -47,6 +47,15 @@ describe("guardUserKey", () => {
       for await (const e of guardUserKey(failing(), { userId: "u1", models: onUserKey, record })) seen.push(e);
     }).rejects.toMatchObject({ code: "credits", provider: "anthropic", message: expect.stringContaining("credits are exhausted") });
     expect(seen).toEqual(["a"]);
+    expect(record).toHaveBeenCalledWith("u1", "anthropic", "credits");
+  });
+
+  it("counts the allocate role's key too", async () => {
+    const record = vi.fn(async () => {});
+    const onAllocateKey: ResolvedModels = { ...onApp, allocate: userModel };
+    await expect(async () => {
+      for await (const _ of guardUserKey(failing(), { userId: "u1", models: onAllocateKey, record })) void _;
+    }).rejects.toBeInstanceOf(UserKeyError);
     expect(record).toHaveBeenCalledWith("u1", "anthropic", "credits");
   });
 

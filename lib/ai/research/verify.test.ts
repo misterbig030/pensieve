@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
+import { isPracticeOnly } from "@/lib/materials";
 import type { PageInfo } from "./extract";
 import type { ResearchEvent } from "./events";
 import { signMaterial, verifyMaterialSig } from "./signature";
 import { SourceFetcher, type PageFetcher } from "./tools";
 import {
   BookLookupUnavailable,
+  MAX_CANDIDATES,
+  candidateListSchema,
   canonicalUrl,
+  capCandidates,
   createOpenLibraryLookup,
   kindProblem,
   mainTitle,
@@ -157,7 +161,7 @@ describe("signature", () => {
 });
 
 function candidate(overrides: Partial<Candidate> & { url: string; title: string }): Candidate {
-  return { kind: "docs", backbone: false, why: "why", recommendedBy: [], ...overrides };
+  return { kind: "docs", why: "why", recommendedBy: [], ...overrides };
 }
 
 function gateFixture(pages: Record<string, PageInfo | Error>, books: BookLookup = { find: async () => null }) {
@@ -178,7 +182,7 @@ describe("runGate", () => {
   const catalogue = "https://openlibrary.org/works/OL1W";
   const now = () => new Date("2026-09-28T11:00:00Z");
 
-  it("keeps verified candidates, drops mismatches with a reason, and picks a backbone", async () => {
+  it("keeps verified candidates, drops mismatches with a reason, and marks the matched book catalogued", async () => {
     const f = gateFixture(
       {
         [book]: info(book, "AI Engineering [Book]"),
@@ -190,7 +194,7 @@ describe("runGate", () => {
     );
     const result = await runGate({
       candidates: [
-        candidate({ url: book, title: "AI Engineering", kind: "book", backbone: true, author: "Chip Huyen", recommendedBy: [...recs, "https://never-seen.example/"] }),
+        candidate({ url: book, title: "AI Engineering", kind: "book", author: "Chip Huyen", recommendedBy: [...recs, "https://never-seen.example/"] }),
         candidate({ url: "https://docs.example.com/evals", title: "Evals guide" }),
         candidate({ url: "https://broken.example.com/", title: "Broken" }),
         candidate({ url: "https://wrong.example.com/", title: "Prompt engineering guide" }),
@@ -205,15 +209,15 @@ describe("runGate", () => {
       secret: SECRET,
     });
 
-    expect(result.materials.map((m) => [m.id, m.title, m.backbone])).toEqual([
-      ["M1", "AI Engineering", true],
-      ["M2", "Evals guide", false],
+    expect(result.materials.map((m) => [m.id, m.title, m.backbone, m.catalogued])).toEqual([
+      ["M1", "AI Engineering", false, true],
+      ["M2", "Evals guide", false, undefined],
     ]);
-    const backbone = result.materials[0];
-    expect(backbone.year).toBe(2024);
-    expect(backbone.recommendedBy).toEqual(recs);
-    expect(backbone.fetchedTitle).toBe("AI Engineering [Book]");
-    expect(verifyMaterialSig(backbone, backbone.sig, SECRET)).toBe(true);
+    const matched = result.materials[0];
+    expect(matched.year).toBe(2024);
+    expect(matched.recommendedBy).toEqual(recs);
+    expect(matched.fetchedTitle).toBe("AI Engineering [Book]");
+    expect(verifyMaterialSig(matched, matched.sig, SECRET)).toBe(true);
     expect(result.dropped.map((d) => d.title)).toEqual(["Insecure", "Broken", "Prompt engineering guide"]);
     expect(result.dropped[2].reason).toMatch(/title doesn't match/);
     expect(result.verified).toBe(2);
@@ -222,19 +226,149 @@ describe("runGate", () => {
     expect(types.filter((t) => t === "research.dropped")).toHaveLength(3);
   });
 
-  it("gives no backbone when the book is recommended by only one other site", async () => {
-    const f = gateFixture({ [book]: info(book, "AI Engineering") }, bookLookup);
+  it("marks matched books catalogued and chooses no backbone, keeping the arm's order", async () => {
+    const other = "https://www.oreilly.com/library/view/other-book/9781098000000";
+    const down = "https://www.oreilly.com/library/view/down-book/9781098000001";
+    const three = [...recs, "https://www.reddit.com/r/books/comments/1"];
+    const lookup: BookLookup = {
+      find: async (title) => {
+        if (title === "Down Book") throw new BookLookupUnavailable("503");
+        return title === "AI Engineering" ? { key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 } : { key: "/works/OL2W", title: "Other Book", authors: ["O. Author"], year: 2020 };
+      },
+    };
+    const f = gateFixture({ [book]: info(book, "AI Engineering"), [other]: info(other, "Other Book"), [down]: info(down, "Down Book") }, lookup);
     const result = await runGate({
-      candidates: [candidate({ url: book, title: "AI Engineering", kind: "book", backbone: true, recommendedBy: [recs[0]] })],
+      candidates: [
+        candidate({ url: book, title: "AI Engineering", kind: "book", author: "Chip Huyen", recommendedBy: recs }),
+        candidate({ url: other, title: "Other Book", kind: "book", author: "O. Author", recommendedBy: three }),
+        candidate({ url: down, title: "Down Book", kind: "book", author: "D. Author", recommendedBy: three }),
+      ],
       learner: [],
       learnerNotes: [],
       fetcher: f.fetcher,
       books: f.books,
-      seenUrls: new Set(recs),
+      seenUrls: new Set(three),
       emit: f.emit,
       secret: SECRET,
     });
-    expect(result.materials[0].backbone).toBe(false);
+    // The book with the most recommending sites is no longer moved first or flagged: the allocation chooses.
+    expect(result.materials.map((m) => [m.id, m.title, m.backbone, m.catalogued])).toEqual([
+      ["M1", "AI Engineering", false, true],
+      ["M2", "Other Book", false, true],
+      ["M3", "Down Book", false, undefined],
+    ]);
+    const verified = f.events.filter((e) => e.type === "research.verified");
+    expect(verified.every((e) => e.type === "research.verified" && !e.backbone)).toBe(true);
+  });
+
+  it("falls back to the page title only when the author agrees, taking the catalogue's title", async () => {
+    const url = "https://bytebytego.com/courses/coding-patterns";
+    const shown = "System Design · Coding · Behavioral | ByteByteGo";
+    const run = async (claim: Partial<Candidate>, catalogueAuthor: string) => {
+      const find = vi.fn<BookLookup["find"]>(async (title) =>
+        title === shown ? { key: "/works/OL9W", title: "Coding Interview Patterns: Nail Your Next Coding Interview", authors: [catalogueAuthor], year: 2024 } : null,
+      );
+      const f = gateFixture({ [url]: info(url, shown) }, { find });
+      const result = await runGate({
+        candidates: [candidate({ url, kind: "book", title: "Coding Interview Patterns", pageTitle: shown, author: "Alex Xu", recommendedBy: recs, ...claim })],
+        learner: [],
+        learnerNotes: [],
+        fetcher: f.fetcher,
+        books: f.books,
+        seenUrls: new Set(recs),
+        emit: f.emit,
+        secret: SECRET,
+        now,
+      });
+      return { result, find };
+    };
+
+    const agrees = await run({}, "Alex Xu");
+    expect(agrees.find.mock.calls.map(([title, author]) => [title, author])).toEqual([
+      ["Coding Interview Patterns", "Alex Xu"],
+      [shown, "Alex Xu"],
+    ]);
+    expect(agrees.result.dropped).toEqual([]);
+    // The page carries neither title, so the catalogue entry is the link, and the matched work names the material.
+    expect(agrees.result.materials).toHaveLength(1);
+    expect(agrees.result.materials[0]).toMatchObject({
+      title: "Coding Interview Patterns: Nail Your Next Coding Interview",
+      url: "https://openlibrary.org/works/OL9W",
+      catalogued: true,
+      backbone: false,
+      year: 2024,
+    });
+
+    const disagrees = await run({}, "Someone Else");
+    expect(disagrees.result.materials).toHaveLength(0);
+    expect(disagrees.result.dropped.map((d) => d.reason)).toEqual(["no matching book on Open Library"]);
+
+    // With no author to agree, a page title is not enough.
+    const anonymous = await run({ author: null }, "Alex Xu");
+    expect(anonymous.result.materials).toHaveLength(0);
+    expect(anonymous.result.dropped.map((d) => d.reason)).toEqual(["no matching book on Open Library"]);
+
+    // A page title that is the claimed title is not asked for twice.
+    const same = await run({ pageTitle: "Coding Interview Patterns" }, "Alex Xu");
+    expect(same.find).toHaveBeenCalledTimes(1);
+    expect(same.result.materials).toHaveLength(0);
+  });
+
+  it("carries each candidate's foundBy onto its material, and the learner's own are found by the learner", async () => {
+    const essay = "https://blog.example.com/evals";
+    const guide = "https://docs.example.com/guide";
+    const plain = "https://docs.example.com/plain";
+    const mine = "https://learner.example.com/post";
+    const f = gateFixture({
+      [essay]: info(essay, "Evals guide"),
+      [guide]: info(guide, "The guide"),
+      "https://docs.example.com/g": info(guide, "The guide"),
+      [plain]: info(plain, "Plain page"),
+      [mine]: info(mine, "My post"),
+    });
+    const result = await runGate({
+      candidates: [
+        candidate({ url: essay, title: "Evals guide", kind: "essay", foundBy: ["practice"] }),
+        candidate({ url: guide, title: "The guide", foundBy: ["canonical"] }),
+        candidate({ url: "https://docs.example.com/g", title: "The guide", foundBy: ["current", "canonical"] }),
+        candidate({ url: plain, title: "Plain page" }),
+        candidate({ url: mine, title: "My post", foundBy: ["canonical"] }),
+      ],
+      learner: [{ url: mine, type: "link" }],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+    });
+    expect(result.materials.map((m) => [m.title, m.foundBy])).toEqual([
+      ["My post", ["learner"]],
+      ["Evals guide", ["practice"]],
+      // Two candidates for one page: the directions that found either.
+      ["The guide", ["canonical", "current"]],
+      ["Plain page", undefined],
+    ]);
+  });
+
+  it("keeps at most 25 candidates", () => {
+    const many = Array.from({ length: 30 }, (_, i) => candidate({ url: `https://docs.example.com/p${i}`, title: `P${i}` }));
+    expect(MAX_CANDIDATES).toBe(25);
+    expect(capCandidates(many).map((c) => c.title)).toEqual(many.slice(0, 25).map((c) => c.title));
+    expect(capCandidates(many.slice(0, 3))).toHaveLength(3);
+  });
+
+  it("takes a book's published title, its page's title and who found it, and no backbone flag", () => {
+    const parsed = candidateListSchema.parse({
+      learner: [],
+      candidates: [
+        { url: book, title: "System Design Interview – An Insider's Guide", pageTitle: "System Design Interview | ByteByteGo", kind: "book", author: "Alex Xu", why: "w", recommendedBy: [], foundBy: ["backbone", "practice"], backbone: true },
+        { url: "https://docs.example.com/a", title: "Guide", pageTitle: null, kind: "docs", why: "w", recommendedBy: [] },
+      ],
+    });
+    expect(parsed.candidates[0]).toMatchObject({ pageTitle: "System Design Interview | ByteByteGo", foundBy: ["backbone", "practice"] });
+    expect(parsed.candidates[0]).not.toHaveProperty("backbone");
+    expect(parsed.candidates[1].pageTitle).toBeNull();
   });
 
   it("drops a book with no Open Library match, and keeps it unmatched when Open Library is down", async () => {
@@ -249,6 +383,8 @@ describe("runGate", () => {
     const b = await runGate({ candidates: cands, learner: [], learnerNotes: [], fetcher: down.fetcher, books: down.books, seenUrls: new Set(recs), emit: down.emit, secret: SECRET });
     expect(b.materials).toHaveLength(1);
     expect(b.materials[0]).toMatchObject({ year: null, backbone: false });
+    // Unmatched, so never one the allocation may make the backbone.
+    expect(b.materials[0].catalogued).toBeUndefined();
   });
 
   it("keeps a book Open Library matches when its own page cannot be used, and links to the catalogue entry", async () => {
@@ -256,7 +392,7 @@ describe("runGate", () => {
     const f = gateFixture({ [book]: new Error("403"), [author]: info(author, "Books") }, bookLookup);
     const result = await runGate({
       candidates: [
-        candidate({ url: book, title: "AI Engineering: Building Applications with Foundation Models", kind: "book", backbone: true, author: "Chip Huyen", recommendedBy: recs }),
+        candidate({ url: book, title: "AI Engineering: Building Applications with Foundation Models", kind: "book", author: "Chip Huyen", recommendedBy: recs }),
         candidate({ url: author, title: "AI Engineering", kind: "book", author: "Chip Huyen", recommendedBy: [recs[0]] }),
         candidate({ url: "none", title: "AI Engineering", kind: "book", author: "Chip Huyen" }),
       ],
@@ -279,7 +415,8 @@ describe("runGate", () => {
       kind: "book",
       type: "link",
       year: 2024,
-      backbone: true,
+      backbone: false,
+      catalogued: true,
       fetchedTitle: "AI Engineering",
       verifiedAt: "2026-09-28T11:00:00.000Z",
       recommendedBy: recs,
@@ -673,6 +810,22 @@ describe("practice through the gate", () => {
     const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", practice: { format: "problem-set", items: 6, perItemMinutes: null, answers: true } })] });
     expect(result.materials[0].minutes).toBeNull();
     expect(result.materials[0].practice?.minutes).toBe(60);
+  });
+
+  it("leaves a practice-only source unsized instead of taking its runtime", async () => {
+    // A course video that is the practice source: its 39 hours of runtime are not a reading size.
+    const f = gateFixture({ [url]: info(url, "Exercises", { durationMinutes: 2340 }) });
+    const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", kind: "video", minutes: null, practice: { format: "problem-set", items: 150, perItemMinutes: null, answers: true } })] });
+    expect(result.materials[0].minutes).toBeNull();
+    expect(result.materials[0].minutesBasis).toBeNull();
+    expect(result.materials[0].practice?.minutes).toBe(1500);
+    expect(isPracticeOnly(result.materials[0])).toBe(true);
+  });
+
+  it("still sizes a reading candidate from its page", async () => {
+    const f = gateFixture({ [url]: info(url, "Exercises", { durationMinutes: 59 }) });
+    const result = await gate(f, { candidates: [candidate({ url, title: "Exercises", kind: "video", minutes: 45 })] });
+    expect(result.materials[0]).toMatchObject({ minutes: 59, minutesBasis: "measured" });
   });
 
   it("drops a practice-only candidate whose format needs answers and has none", async () => {

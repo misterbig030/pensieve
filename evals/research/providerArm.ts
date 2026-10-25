@@ -6,14 +6,13 @@ import {
   briefLines,
   buildFinalPrompt,
   buildResearchInstructions,
-  picksOf,
   type ArmInput,
   type ArmResult,
   type ResearchArm,
   type StopReason,
 } from "@/lib/ai/research/agent";
 import { RESEARCH_CAPS, ResearchNotes, type ResearchCaps, type SearchResult } from "@/lib/ai/research/tools";
-import { candidateListSchema, normalizeCoverage, type Candidate, type CandidateList, type LearnerNote } from "@/lib/ai/research/verify";
+import { candidateListSchema, capCandidates, normalizeCoverage, type Candidate, type CandidateList, type LearnerNote } from "@/lib/ai/research/verify";
 
 /**
  * Arm C, eval only: the same Claude model with Anthropic's server-side `web_search` and `web_fetch` tools, prompted
@@ -74,7 +73,7 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
     let fetches = 0;
     let costUsd = 0;
 
-    const instructions = buildResearchInstructions(caps, TOOL_NAMES, "tool", undefined, picksOf(brief));
+    const instructions = buildResearchInstructions(caps, TOOL_NAMES, "tool");
     const prompt = briefLines(brief).join("\n");
     const agent = new ToolLoopAgent({
       model,
@@ -206,7 +205,7 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
             { ...log, caller: "research" },
           );
           costUsd += cost;
-          list = object;
+          list = { ...object, candidates: capCandidates(object.candidates) };
           break;
         } catch (error) {
           if (signal?.aborted) break;

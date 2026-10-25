@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 import type { ResearchBrief } from "@/lib/ai/research/agent";
-import { candidateListSchema } from "@/lib/ai/research/verify";
+import { BACKBONE_MIN_DOMAINS, candidateListSchema, recommendingDomains } from "@/lib/ai/research/verify";
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 export const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
@@ -106,8 +106,8 @@ export type CandidateList = z.infer<typeof candidateListSchema>;
 
 export interface ObjectChecks {
   candidates: number;
-  backbones: number;
-  backboneIsBook: boolean;
+  /** Books with at least `BACKBONE_MIN_DOMAINS` recommending sites: the ones the allocation could choose as the backbone. */
+  backboneBooks: number;
   totalMinutes: number;
   unsized: number;
   overCap: boolean;
@@ -124,7 +124,7 @@ export function checkObject(object: CandidateList, prompt: string): ObjectChecks
   const urls = notesUrls(prompt);
   const titles = readTitles(prompt);
   const cap = hoursCap(prompt);
-  const backbones = object.candidates.filter((c) => c.backbone);
+  const backboneBooks = object.candidates.filter((c) => c.kind === "book" && recommendingDomains(c.url, c.recommendedBy).length >= BACKBONE_MIN_DOMAINS);
   const totalMinutes = object.candidates.reduce((sum, c) => sum + (c.minutes ?? 0), 0);
   const urlsOutsideNotes: string[] = [];
   const retitled: string[] = [];
@@ -141,8 +141,7 @@ export function checkObject(object: CandidateList, prompt: string): ObjectChecks
   }
   return {
     candidates: object.candidates.length,
-    backbones: backbones.length,
-    backboneIsBook: backbones.length > 0 && backbones.every((b) => b.kind === "book"),
+    backboneBooks: backboneBooks.length,
     totalMinutes,
     unsized: object.candidates.filter((c) => c.minutes == null).length,
     overCap: cap !== null && totalMinutes > cap * 60,
@@ -182,7 +181,7 @@ export function formatRow(r: BenchRun): string {
   const s = (n: number | null, w: number) => String(n ?? "—").padStart(w);
   const c = r.checks;
   const quality = c
-    ? `${String(c.candidates).padStart(2)} cand  bb ${c.backbones}${c.backbones > 0 && !c.backboneIsBook ? "!" : " "}  ${String(Math.round(c.totalMinutes / 60)).padStart(3)} h${c.overCap ? "!" : " "}  ${c.urlsOutsideNotes.length} new-url  ${c.recommendersOutsideNotes} bad-rec  ${c.retitled.length} retitled`
+    ? `${String(c.candidates).padStart(2)} cand  bb-books ${c.backboneBooks}  ${String(Math.round(c.totalMinutes / 60)).padStart(3)} h${c.overCap ? "!" : " "}  ${c.urlsOutsideNotes.length} new-url  ${c.recommendersOutsideNotes} bad-rec  ${c.retitled.length} retitled`
     : `failed: ${r.error ?? "?"}`;
   return [
     r.model.replace("anthropic/claude-", "").padEnd(11),

@@ -26,7 +26,7 @@ describe("resolveWith", () => {
 
   it("builds direct Anthropic instances, paid by the user, for every role when they hold an Anthropic key", () => {
     const set = resolveWith({ anthropic: "sk-ant-test" });
-    for (const role of ["outline", "content", "chat", "research"] as const) {
+    for (const role of ["outline", "content", "chat", "research", "allocate"] as const) {
       expect(set[role].keyOwner).toBe("user");
       expect(set[role].id).toBe(DEFAULT_MODEL_IDS[role]);
       expect(instance(set[role].model).modelId).toBe(ANTHROPIC_API_IDS[DEFAULT_MODEL_IDS[role]]);
@@ -42,6 +42,12 @@ describe("resolveWith", () => {
   it("maps every Anthropic model in the list to an API id", () => {
     for (const m of AVAILABLE_MODELS) if (providerOf(m.id) === "anthropic") expect(ANTHROPIC_API_IDS[m.id], m.id).toMatch(/^claude-/);
     expect(ANTHROPIC_API_IDS["anthropic/claude-sonnet-5.5"]).toBe("claude-sonnet-5-5");
+  });
+
+  it("resolves the allocate role to Opus 5.5, on the learner's Anthropic key when they have one", () => {
+    expect(DEFAULT_MODEL_IDS.allocate).toBe("anthropic/claude-opus-5.5");
+    expect(resolveWith({}).allocate).toEqual({ model: "anthropic/claude-opus-5.5", id: "anthropic/claude-opus-5.5", keyOwner: "app" });
+    expect(resolveWith({ anthropic: "sk-ant-test" }).allocate).toMatchObject({ id: "anthropic/claude-opus-5.5", keyOwner: "user" });
   });
 });
 

@@ -17,13 +17,26 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import { aliasMaterials, dropBreaches, keepCoverTiers, keepPracticeCovers, resolveCoverRefs, resolveMaterialRefs, resolvePracticeCovers, resolvePracticeRefs, treeChecks, type MaterialAliases } from "@/lib/materials";
-import type { CoverRefDraft, MaterialRefDraft, PracticeCoverDraft, PracticeRefDraft } from "@/lib/schemas/material";
+import type { CoverRefDraft, MaterialRefDraft, PracticeCover, PracticeCoverDraft, PracticeRef, PracticeRefDraft } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 import { revisedTreeSchema, type RevisedTree } from "@/lib/schemas/plan";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
-import { DEFAULT_OUTLINE_MODEL } from "./models";
+import { DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
 import { appModel, type ResolvedModel } from "./resolve";
 import { assignRefs, buildRevisionPrompt, type PlanPromptContext } from "./planPrompt";
+
+/** Resolved with itemless rows kept, so `keptItemless` can tell the unit's saved ones from new ones. */
+const SAVED = { keepUnitemized: true } as const;
+
+/**
+ * A row of a listed source without an item, or a reservation of one without a run, stays only when the unit already
+ * had it (a plan saved before item lists): same format, source and task. One the model added or changed is unknown and
+ * goes, as it would while drafting.
+ */
+function keptItemless<T extends PracticeRef | PracticeCover>(next: T[], before: T[] | undefined, aliases: MaterialAliases): T[] {
+  const itemless = (r: PracticeRef | PracticeCover) => r.id !== null && aliases.items(r.id) > 0 && !r.itemFrom && !("generated" in r && r.generated);
+  return next.filter((r) => !itemless(r) || (before ?? []).some((o) => itemless(o) && o.format === r.format && o.id === r.id && (o.task ?? null) === (r.task ?? null)));
+}
 
 export class LockedNodeError extends Error {
   constructor(label: string) {
@@ -84,10 +97,12 @@ export function applyRevision(
     const covers = aliases && unit.covers !== undefined ? keepCoverTiers(resolveCoverRefs(unit.covers, aliases).refs, kept?.covers) : kept?.covers;
     const materials = aliases && unit.materials !== undefined ? resolveMaterialRefs(unit.materials, aliases).refs : kept?.materials;
     const practiceCovers =
-      aliases && unit.practiceCovers !== undefined ? keepPracticeCovers(resolvePracticeCovers(unit.practiceCovers, aliases, split).refs, kept?.practiceCovers, aliases.practice) : kept?.practiceCovers;
+      aliases && unit.practiceCovers !== undefined
+        ? keptItemless(keepPracticeCovers(resolvePracticeCovers(unit.practiceCovers, aliases, split, SAVED).refs, kept?.practiceCovers, aliases.practice), kept?.practiceCovers, aliases)
+        : kept?.practiceCovers;
     const practice =
       aliases && unit.practice !== undefined
-        ? resolvePracticeRefs(unit.practice, aliases, split, (materials ?? []).map((r) => r.id)).refs
+        ? keptItemless(resolvePracticeRefs(unit.practice, aliases, split, (materials ?? []).map((r) => r.id), SAVED).refs, kept?.practice, aliases)
         : kept?.practice;
     return makeNode({
       id: kept?.id,
@@ -168,7 +183,8 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       return [];
     }
     if (!aliases) return [];
-    const checks = treeChecks(revised, input.materials, { granularity: input.granularity, hoursPerWeek: input.hoursPerWeek, daysPerWeek: input.daysPerWeek, split: input.split });
+    // Practice rows unchanged from the saved tree keep the item and reserved-source rules as facts; new or changed ones breach.
+    const checks = treeChecks(revised, input.materials, { granularity: input.granularity, hoursPerWeek: input.hoursPerWeek, daysPerWeek: input.daysPerWeek, split: input.split, original: tree });
     const dropped = dropBreaches(checks.nodes, checks.breaches);
     return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...dropped];
   };
@@ -179,6 +195,7 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       keyOwner: model.keyOwner,
       schema: revisedTreeSchema,
       prompt: buildRevisionPrompt({ ...input, tree, refs }),
+      effort: OUTLINE_EFFORT,
       label: `Revision · ${input.changeRequest.length > 60 ? `${input.changeRequest.slice(0, 57)}…` : input.changeRequest}`,
       check,
     },

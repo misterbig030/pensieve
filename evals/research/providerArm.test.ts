@@ -16,7 +16,7 @@ const finish: LanguageModelV4StreamPart = { type: "finish", finishReason: { unif
 
 const LIST: CandidateList = {
   learner: [],
-  candidates: [{ url: "https://docs.example.com/a", title: "Guide A", kind: "docs", backbone: false, why: "w", recommendedBy: ["https://lists.example.org/best"] }],
+  candidates: [{ url: "https://docs.example.com/a", title: "Guide A", kind: "docs", why: "w", recommendedBy: ["https://lists.example.org/best"] }],
 };
 
 const SEARCH: LanguageModelV4StreamPart[] = [
@@ -83,6 +83,9 @@ describe("arm C", () => {
     expect(calls[0].label).toBe("Research C · step 1");
     expect(calls[0].system).toContain("each tool stops on its own once its budget is used");
     expect(calls[0].system).not.toContain("calls past a cap are refused");
+    // The work order always asks for practice, of the kinds the topic calls for.
+    expect(calls[0].system).toContain("6. Practice");
+    expect(calls[0].system).toContain("the kinds of practice this topic calls for");
     expect(calls[0].response).toContain("Found guide A.");
     expect(calls[0].facts).toEqual(["1 searches", "1 reads"]);
   });

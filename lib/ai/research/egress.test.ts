@@ -1,6 +1,7 @@
 import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 import {
+  DATA_CONTENT_TYPES,
   EgressError,
   checkUrl,
   guardedFetch,
@@ -303,6 +304,19 @@ describe("guardedFetch", () => {
     expect((await guardedFetch("https://example.com/a.pdf", { resolver, transport: pdf.transport })).contentType).toBe("application/pdf");
     const txt = transportFor({ "https://example.com/a.txt": { headers: { "content-type": "text/plain" } } });
     expect((await guardedFetch("https://example.com/a.txt", { resolver, transport: txt.transport })).contentType).toBe("text/plain");
+  });
+
+  it("refuses JSON and CSV by default and reads them only when the caller widens the types", async () => {
+    const resolver = resolverFor({ "example.com": [PUBLIC] });
+    const json = () => transportFor({ "https://example.com/a.json": { headers: { "content-type": "application/json; charset=utf-8" }, body: body("[1,2]") } });
+    expect(await reason(guardedFetch("https://example.com/a.json", { resolver, transport: json().transport }))).toBe("content-type");
+    const wide = json();
+    const res = await guardedFetch("https://example.com/a.json", { resolver, transport: wide.transport, contentTypes: DATA_CONTENT_TYPES });
+    expect(res.contentType).toBe("application/json");
+    expect(new TextDecoder().decode(res.body)).toBe("[1,2]");
+    expect(wide.requests[0].headers.accept).toContain("application/json");
+    const csv = transportFor({ "https://example.com/a.csv": { headers: { "content-type": "text/csv" } } });
+    expect((await guardedFetch("https://example.com/a.csv", { resolver, transport: csv.transport, contentTypes: DATA_CONTENT_TYPES })).contentType).toBe("text/csv");
   });
 
   it("reports non-2xx statuses", async () => {

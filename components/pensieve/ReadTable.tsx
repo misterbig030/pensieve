@@ -1,7 +1,8 @@
 import { budgetCeiling } from "@/lib/materials";
 import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { formatDuration } from "@/lib/researchProgress";
-import { chapterAt, type Chapter, type Material, type MaterialRef, type MaterialTier, type PracticeCover, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
+import { shortTitle } from "@/lib/shortTitle";
+import { chapterAt, type Chapter, type Material, type MaterialRef, type MaterialTier, type PracticeCover, type PracticeItem, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
 import { cn } from "@/lib/utils";
 
 export interface ReadRow {
@@ -29,6 +30,8 @@ export interface PracticeRow {
   /** The source the row is from, or the reading a generated recall row was made from; null for a generated row. */
   material: Material | null;
   generated: boolean;
+  /** The item of the source's list this row is, when it names one; null for any other practice row. */
+  item: PracticeItem | null;
   /** Unique within a node. */
   key: string;
 }
@@ -57,8 +60,19 @@ export function practiceRowsFor(refs: PracticeRef[] | undefined, byId: ReadonlyM
   return (refs ?? []).flatMap((r, i) => {
     const material = r.id === null ? null : (byId.get(r.id) ?? null);
     if (r.id !== null && !material) return [];
-    return [{ format: r.format, label: PRACTICE_REGISTRY[r.format].label, task: r.task, done: r.done, minutes: r.minutes, material, generated: r.generated, key: `${r.format}#${r.id ?? "generated"}#${i}` }];
+    return [{ format: r.format, label: PRACTICE_REGISTRY[r.format].label, task: r.task, done: r.done, minutes: r.minutes, material, generated: r.generated, item: itemOf(r, material), key: `${r.format}#${r.id ?? "generated"}#${i}` }];
   });
+}
+
+/** The listed item a row is: one item by position in its source's list; null for a run, a row without a position, or past the list. */
+function itemOf(r: Pick<PracticeRef, "itemFrom" | "itemTo">, material: Material | null): PracticeItem | null {
+  if (!r.itemFrom || (r.itemTo ?? r.itemFrom) !== r.itemFrom) return null;
+  return material?.practice?.list?.items[r.itemFrom - 1] ?? null;
+}
+
+/** "49. Group Anagrams", or the title alone for an item with no number. */
+export function itemLabel(item: Pick<PracticeItem, "number" | "title">): string {
+  return item.number ? `${item.number}. ${item.title}` : item.title;
 }
 
 /** A split week's kept practice reservations as Do rows. Only reservations that carry a task and minutes show; they have no done line. */
@@ -100,7 +114,7 @@ export function rowBrief(row: Pick<ReadRow, "material" | "chapter" | "activity" 
   const chapter = row.chapter;
   let head: string;
   if (chapter) head = `${review ? "Review of " : ""}${chapter.n !== null ? `${review ? "ch." : "Ch."} ${chapter.n}` : chapter.title}`;
-  else head = review ? `Review of ${row.material.title}` : row.material.title;
+  else head = review ? `Review of ${shortTitle(row.material.title)}` : shortTitle(row.material.title);
   return { head, detail: row.note };
 }
 
@@ -121,6 +135,34 @@ export function FormatPill({ label }: { label: string }) {
   return <span className="inline-flex justify-self-start rounded-full bg-accent-2-200 px-2 py-px text-[10.5px] font-semibold text-accent-2-800">{label}</span>;
 }
 
+const EXTERNAL = { target: "_blank", rel: "noopener noreferrer" } as const;
+
+/**
+ * What a Do row asks for: its task, or for a row that is one item of a source's list the item as "49. Group Anagrams"
+ * (linked to the item's page), a small solution link, and its group as a quiet label. `link` is off inside a link.
+ */
+function PracticeTask({ row, link = true }: { row: PracticeRow; link?: boolean }) {
+  const item = row.item;
+  if (!item) return <>{row.task}</>;
+  return (
+    <>
+      {item.url && link ? (
+        <a href={item.url} {...EXTERNAL} onClick={(e) => e.stopPropagation()} className="hover:text-accent-700 hover:underline">
+          {itemLabel(item)}
+        </a>
+      ) : (
+        itemLabel(item)
+      )}
+      {item.solutionUrl && link && (
+        <a href={item.solutionUrl} {...EXTERNAL} onClick={(e) => e.stopPropagation()} className="ml-1.5 text-[11px] font-normal text-muted-foreground underline underline-offset-2 hover:text-accent-700">
+          solution
+        </a>
+      )}
+      {item.group && <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{item.group}</span>}
+    </>
+  );
+}
+
 /** Where a Do row comes from: its source, the reading a generated recall row was made from, or a Generated tag. */
 function PracticeSource({ row, link = true }: { row: PracticeRow; link?: boolean }) {
   if (!row.material) return <span>Generated</span>;
@@ -133,10 +175,11 @@ function PracticeSource({ row, link = true }: { row: PracticeRow; link?: boolean
 }
 
 function ItemLink({ material: m, className, link = true }: { material: Material; className?: string; link?: boolean }) {
-  if (!link || m.type === "note" || m.type === "file") return <span className={className}>{m.title}</span>;
+  // The row names the material short; the tooltip keeps its full title.
+  if (!link || m.type === "note" || m.type === "file") return <span className={className} title={m.title}>{shortTitle(m.title)}</span>;
   return (
-    <a href={m.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className={cn("hover:text-accent-700 hover:underline", className)}>
-      {m.title}
+    <a href={m.url} target="_blank" rel="noreferrer" title={m.title} onClick={(e) => e.stopPropagation()} className={cn("hover:text-accent-700 hover:underline", className)}>
+      {shortTitle(m.title)}
     </a>
   );
 }
@@ -237,8 +280,8 @@ export function DoRows({ rows, link = true }: { rows: PracticeRow[]; link?: bool
         <div key={r.key} className="contents">
           <FormatPill label={r.label} />
           <span className="flex min-w-0 flex-col">
-            <span className="truncate font-semibold" title={r.task}>
-              {r.task}
+            <span className="truncate font-semibold" title={r.item ? itemLabel(r.item) : r.task}>
+              <PracticeTask row={r} link={link} />
             </span>
             <span className="truncate text-[11.5px] text-muted-foreground" title={r.done || undefined}>
               <PracticeSource row={r} link={link} />
@@ -317,7 +360,9 @@ export function ReadTable({ rows, practice = [], budgetMinutes }: { rows: ReadRo
                 </td>
                 <td className="px-2 py-3">
                   <div className="flex flex-col gap-0.5">
-                    <span className="font-semibold">{r.task}</span>
+                    <span className="font-semibold">
+                      <PracticeTask row={r} />
+                    </span>
                     <span className="text-xs text-muted-foreground">
                       <PracticeSource row={r} />
                       {r.done && ` · ${r.done}`}

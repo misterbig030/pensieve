@@ -2,8 +2,8 @@ import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { isAdminUserId } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
-import { streamResearchedPlanDraft } from "@/lib/ai/planDraft";
-import { defaultArm, defaultChapterFinder } from "@/lib/ai/research/pipeline";
+import { DRAFT_BUDGET_MS, streamResearchedPlanDraft } from "@/lib/ai/planDraft";
+import { defaultArm, defaultChapterFinder, defaultItemFinder } from "@/lib/ai/research/pipeline";
 import { insertGenerationLog } from "@/lib/db/generationLog";
 import { resolveModels } from "@/lib/ai/resolve";
 import { guardUserKey } from "@/lib/ai/userKeyError";
@@ -13,7 +13,9 @@ import { sourceInputSchema } from "@/lib/schemas/source";
 import { MAX_WEEKS } from "@/lib/planTree";
 import { DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema } from "@/lib/studyTime";
 
-// Research (a minute or two at most) runs before drafting in the same request.
+// One request runs it all in series: research (the workers, then the candidates step), the gate's page and catalogue
+// checks, the chapter finders, the allocation (Opus at high effort), then the outline. Several minutes in all; the
+// draft keeps inside `DRAFT_BUDGET_MS`, dropping what does not fit rather than running past this limit.
 export const maxDuration = 300;
 
 const bodySchema = z.object({
@@ -36,6 +38,7 @@ export async function POST(request: Request) {
   const body = parsed.data;
   const debug = body.debug === true && isAdminUserId(userId);
   const models = await resolveModels(userId);
+  const deadline = Date.now() + DRAFT_BUDGET_MS;
 
   return ndjsonResponse(
     withCallEvents(debug, { userId, onLog: insertGenerationLog, keyOwner: models.research.keyOwner }, (log) =>
@@ -49,10 +52,15 @@ export async function POST(request: Request) {
           materials: body.materials,
           hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
           arm: defaultArm(process.env, { model: models.research.model }),
-          research: { chapters: defaultChapterFinder(process.env, { model: models.research.model }) ?? undefined },
+          research: {
+            chapters: defaultChapterFinder(process.env, { model: models.research.model }) ?? undefined,
+            items: defaultItemFinder(process.env, { model: models.research.model }) ?? undefined,
+          },
           outlineModel: models.outline,
+          allocateModel: models.allocate,
           // A client that disconnects stops research: the signal reaches search and fetch.
           signal: request.signal,
+          deadline,
           log,
         }),
         { userId, models },

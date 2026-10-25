@@ -57,6 +57,7 @@ export async function POST(request: Request) {
           reason: body.reason,
           splitDays: body.splitDays,
           outlineModel: models.outline,
+          signal: request.signal,
           log,
         }),
         { userId, models },

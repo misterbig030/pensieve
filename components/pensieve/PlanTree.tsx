@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import type { MouseEvent, ReactNode } from "react";
-import { ChevronDown, Lock } from "lucide-react";
+import { BookOpen, ChevronDown, Code, FileText, FolderGit2, GraduationCap, Lock, PenLine, Video } from "lucide-react";
+import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { Menu } from "@base-ui/react/menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BudgetBar, DoRows, ReadRows, coverPracticeRows, partLabel, practiceRowsFor, readRowsFor, rowBrief, sumMinutes, sumPracticeMinutes } from "@/components/pensieve/ReadTable";
+import { BudgetBar, DoRows, ReadRows, coverPracticeRows, itemLabel, partLabel, practiceRowsFor, readRowsFor, rowBrief, sumMinutes, sumPracticeMinutes } from "@/components/pensieve/ReadTable";
 import { budgetMinutes, keptReadTable } from "@/lib/materials";
 import { formatDuration } from "@/lib/researchProgress";
-import { chapterAt, type Material } from "@/lib/schemas/material";
+import { shortTitle } from "@/lib/shortTitle";
+import { chapterAt, type Material, type PracticeCover, type PracticeItem } from "@/lib/schemas/material";
 import {
   capitalize,
   childLevel,
@@ -137,6 +139,9 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
   const isWeek = node.level !== "day";
   const hasMeta = (node.budgetHours !== null && !hasWork) || showStatus || hasSessions || canSplit;
   const href = mode === "track" && ctx.leafHref ? ctx.leafHref(node) : undefined;
+  // A day's rows read one line each; the chevron opens them in full. A week's rows are already whole.
+  const canOpen = !isWeek && hasWork;
+  const clamp = open ? undefined : "line-clamp-1";
 
   const classes = cn(
     "flex min-w-0 flex-col gap-[5px] rounded-2xl border border-transparent px-3.5 py-3 text-left transition-[background-color,border-color,box-shadow] duration-300 animate-in fade-in slide-in-from-bottom-1",
@@ -164,18 +169,20 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
         </span>
         <span className="ml-auto flex items-center gap-1">
           {locked && <Lock className="size-3 opacity-55" strokeWidth={2.75} />}
-          <span
-            role="button"
-            tabIndex={0}
-            aria-label={open ? "Show less" : "Show full description"}
-            onClick={toggle}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") toggle(e as unknown as MouseEvent);
-            }}
-            className="relative z-10 inline-flex size-5 items-center justify-center rounded-full text-accent-700 hover:bg-accent-100"
-          >
-            <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} strokeWidth={2.75} />
-          </span>
+          {canOpen && (
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label={open ? "Show less" : "Show the day's materials in full"}
+              onClick={toggle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") toggle(e as unknown as MouseEvent);
+              }}
+              className="relative z-10 inline-flex size-5 items-center justify-center rounded-full text-accent-700 hover:bg-accent-100"
+            >
+              <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} strokeWidth={2.75} />
+            </span>
+          )}
         </span>
       </span>
       <span className="flex items-baseline gap-2">
@@ -184,9 +191,9 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
           <span className="ml-auto shrink-0 text-xs whitespace-nowrap text-muted-foreground">{node.budgetHours} h budget</span>
         )}
       </span>
-      {/* A day's subtitle is what it reads, so the week's division shows at a glance; the summary opens on the chevron.
-          A day with nothing to read shows its summary instead. */}
-      {(open || (!isWeek && !hasWork)) && <span className="min-w-0 text-[12px] leading-snug opacity-80">{node.summary}</span>}
+      {/* A unit's preview is what it reads and does: the title already names the topic, so the summary shows only on a
+          unit with nothing assigned. */}
+      {!hasWork && <span className="min-w-0 text-[12px] leading-snug opacity-80">{node.summary}</span>}
       {hasWork &&
         (isWeek ? (
           <span className="mt-1 flex flex-col gap-2">
@@ -200,17 +207,22 @@ function LeafChip({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ct
               const brief = rowBrief(r);
               const title = r.chapter ? `${r.material.title} · ${partLabel(r)}` : r.material.title;
               return (
-                <span key={r.key} className="line-clamp-2" title={brief.detail ? `${title} · ${brief.detail}` : title}>
+                <span key={r.key} className={clamp} title={brief.detail ? `${title} · ${brief.detail}` : title}>
                   <span className="text-neutral-800">{brief.head}</span>
                   {brief.detail && <> · {brief.detail}</>}
                 </span>
               );
             })}
-            {practice.map((p) => (
-              <span key={p.key} className="line-clamp-2" title={`${p.label} · ${p.task} · ${p.minutes} min`}>
-                <span className="text-neutral-800">{p.label}</span> · {p.task} · {p.minutes} min
-              </span>
-            ))}
+            {practice.map((p) => {
+              // A listed item shows as on the expanded rows: "217. Contains Duplicate", its group a quiet label.
+              const what = p.item ? itemLabel(p.item) : p.task;
+              return (
+                <span key={p.key} className={clamp} title={`${p.label} · ${what}${p.item?.group ? ` · ${p.item.group}` : ""} · ${p.minutes} min`}>
+                  <span className="text-neutral-800">{p.label}</span> · {what}
+                  {p.item?.group && <span className="ml-1 text-[10.5px] opacity-75">{p.item.group}</span>} · {p.minutes} min
+                </span>
+              );
+            })}
             <span>{formatDuration(sumMinutes(rows).must + sumMinutes(rows).should + practiceMinutes)}</span>
           </span>
         ))}
@@ -361,55 +373,105 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
   );
 }
 
-const SHOWN_COVERS = 3;
-
-/** "1–4", "5–6, 10": chapter numbers collapsed into runs. */
-function chapterRuns(numbers: number[]): string {
-  const runs: [number, number][] = [];
-  for (const n of numbers) {
-    const last = runs[runs.length - 1];
-    if (last && n === last[1] + 1) last[1] = n;
-    else runs.push([n, n]);
-  }
-  return runs.map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`)).join(", ");
+/** "Arrays & Hashing – Two Pointers": the groups a run of a list's items spans, first to last; null when the run names none. */
+function groupSpan(items: PracticeItem[], from: number, to: number): string | null {
+  const groups = items.slice(from - 1, to).flatMap((i) => (i.group ? [i.group] : []));
+  const first = groups[0];
+  const last = groups[groups.length - 1];
+  if (!first) return null;
+  return first === last ? first : `${first} – ${last}`;
 }
 
-/** A heading's reservation as chips: one per material and activity, the backbone first, "+ N more" past three. */
-function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, Material> }) {
-  const groups = new Map<string, { m: Material; review: boolean; chapters: number[]; note: string | null }>();
+/** One line of a heading's Covers list: a material, what it is for here, and the part this unit takes. */
+export interface CoverLine {
+  key: string;
+  m: Material;
+  /** The practice format the line reserves; null for reading. */
+  practice: PracticeFormat | null;
+  part: string | null;
+}
+
+/**
+ * A heading's reservation as lines, every one shown: the reading first, the backbone leading, one line per material and
+ * activity with its chapters by number and title ("ch. 3 Storage and retrieval") or its note; then one line per
+ * practice source with its format and the groups its run spans ("Problems · Arrays & Hashing – Two Pointers"), else
+ * its note. A reservation whose material is not in the list has no line.
+ */
+export function coverLines(node: Pick<PlanNode, "covers" | "practiceCovers">, byId: ReadonlyMap<string, Material>): CoverLine[] {
+  const reading = new Map<string, { m: Material; review: boolean; chapters: string[]; note: string | null }>();
   for (const r of node.covers ?? []) {
     const m = byId.get(r.id);
     if (!m) continue;
     const review = (r.activity ?? "read") === "review";
     const key = `${m.id}#${review ? "review" : "read"}`;
-    const group = groups.get(key) ?? { m, review, chapters: [], note: null };
+    const line = reading.get(key) ?? { m, review, chapters: [], note: null };
     const chapter = chapterAt(m.toc, r.chapter);
-    if (chapter) group.chapters.push(chapter.n ?? r.chapter!);
-    else if (r.note) group.note = r.note;
-    groups.set(key, group);
+    if (chapter) line.chapters.push(`ch. ${chapter.n ?? r.chapter} ${chapter.title}`);
+    else if (r.note) line.note = r.note;
+    reading.set(key, line);
   }
-  const refs = [...groups.values()];
-  if (refs.length === 0) return null;
-  const sorted = [...refs].sort((a, b) => Number(b.m.backbone) - Number(a.m.backbone));
-  const shown = sorted.slice(0, SHOWN_COVERS);
-  const text = (g: (typeof refs)[number]) => {
-    const part = g.chapters.length > 0 ? `ch. ${chapterRuns(g.chapters)}` : g.note;
-    return `${g.review ? "Review of " : ""}${g.m.title}${part ? ` · ${part}` : ""}`;
-  };
+  const read = [...reading]
+    .sort(([, a], [, b]) => Number(b.m.backbone) - Number(a.m.backbone))
+    .map(([key, { m, review, chapters, note }]): CoverLine => {
+      const part = chapters.length > 0 ? chapters.join("; ") : note;
+      return { key, m, practice: null, part: review ? `Review${part ? ` of ${part}` : ""}` : part };
+    });
+  const bySource = new Map<string, { m: Material; format: PracticeFormat; covers: PracticeCover[] }>();
+  for (const c of node.practiceCovers ?? []) {
+    const m = c.id === null ? undefined : byId.get(c.id);
+    if (!m) continue;
+    const key = `${c.format}#${m.id}`;
+    bySource.set(key, { m, format: c.format, covers: [...(bySource.get(key)?.covers ?? []), c] });
+  }
+  const practice = [...bySource].map(([key, { m, format, covers }]): CoverLine => {
+    const items = m.practice?.list?.items;
+    const runs = covers.filter((c) => c.itemFrom && c.itemTo);
+    let part: string | null;
+    if (items && runs.length > 0) {
+      const from = Math.min(...runs.map((c) => c.itemFrom!));
+      const to = Math.max(...runs.map((c) => c.itemTo!));
+      part = groupSpan(items, from, to) ?? `items ${from}–${to}`;
+    } else part = covers.find((c) => c.note)?.note ?? null;
+    return { key: `${key}#practice`, m, practice: format, part: [PRACTICE_REGISTRY[format].label, part].filter(Boolean).join(" · ") };
+  });
+  return [...read, ...practice];
+}
+
+function CoverIcon({ line }: { line: CoverLine }) {
+  const className = "mt-px size-4 shrink-0 text-muted-foreground";
+  if (line.practice) return line.practice === "problem-set" ? <Code className={className} /> : <PenLine className={className} />;
+  switch (line.m.kind) {
+    case "book":
+      return <BookOpen className={className} />;
+    case "video":
+      return <Video className={className} />;
+    case "course":
+      return <GraduationCap className={className} />;
+    case "repo":
+      return <FolderGit2 className={className} />;
+    default:
+      return <FileText className={className} />;
+  }
+}
+
+/** A heading's reservation as a list, one row per line with an icon for its kind; the backbone reads bold. */
+export function CoversRow({ node, byId }: { node: PlanNode; byId: ReadonlyMap<string, Material> }) {
+  const lines = coverLines(node, byId);
+  if (lines.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="mr-0.5 text-muted-foreground">Covers</span>
-      {shown.map((g) => (
-        <span
-          key={`${g.m.id}#${g.review ? "review" : "read"}`}
-          title={text(g)}
-          className={cn("max-w-[260px] truncate rounded-full px-[9px] py-[3px]", g.m.backbone ? "bg-accent-2-200 font-semibold text-accent-2-800" : "bg-background")}
-        >
-          {text(g)}
-        </span>
+    <ul className="m-0 flex list-none flex-col rounded-2xl bg-background px-3.5 py-1 text-[13px]">
+      {lines.map((line, i) => (
+        <li key={line.key} className={cn("flex min-w-0 items-start gap-2.5 py-1.5", i > 0 && "border-t border-foreground/8")}>
+          <CoverIcon line={line} />
+          <span className="min-w-0 flex-1 leading-snug">
+            <span title={line.m.title} className={line.m.backbone ? "font-semibold" : undefined}>
+              {shortTitle(line.m.title)}
+            </span>
+            {line.part && <span className="text-muted-foreground"> · {line.part}</span>}
+          </span>
+        </li>
       ))}
-      {sorted.length > SHOWN_COVERS && <span className="rounded-full bg-background px-[9px] py-[3px]">+ {sorted.length - SHOWN_COVERS} more</span>}
-    </div>
+    </ul>
   );
 }
 
