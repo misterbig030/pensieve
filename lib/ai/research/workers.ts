@@ -51,7 +51,7 @@ export interface WorkerPlan {
  * Divides a band's caps between the workers. The shares sum to the band's searches and reads; the band's step cap is
  * not used, each worker has its own. With three searches or fewer there are two workers. Caps that are not a band
  * are clamped so no worker gets an empty share, and may then exceed the caps given. With `practiceKinds` above zero
- * a practice worker is added; see `addPracticeWorker`.
+ * a practice worker is added past the band's totals; see `addPracticeWorker`.
  */
 export function splitCaps(caps: ResearchCaps, practiceKinds: number): WorkerPlan[] {
   const plans = bandPlans(caps);
@@ -85,26 +85,14 @@ function bandPlans(caps: ResearchCaps): WorkerPlan[] {
 }
 
 /**
- * Adds the practice worker: three steps, a quarter of the band's searches (at least one) and of its reads (at least
- * two). Its share comes out of canonical first, then current; backbone gives only what those cannot. No worker goes
- * below one search and one read, so the band's totals hold wherever the band has the room. On top of the quarter it
- * gets a search for each kind of practice and a read more than that, so one kind cannot spend another's search and a
- * page drawn by script can still be followed to a readable copy; those go past the band's totals.
+ * Adds the practice worker on top of the band: three steps, a quarter of the band's searches (at least one) and of its
+ * reads (at least two), and at least a search for each kind of practice and a read more than that, so one kind cannot
+ * spend another's search and a page drawn by script can still be followed to a readable copy. No other worker gives
+ * up any of its share: taken from canonical, it left the docs, courses and papers one search and one read.
  */
 function addPracticeWorker(plans: WorkerPlan[], caps: ResearchCaps, kinds: number): WorkerPlan[] {
-  const donors = ["canonical", "current", "backbone"].flatMap((d) => plans.filter((p) => p.direction === d));
-  const take = (key: "searches" | "fetches", want: number) => {
-    let got = 0;
-    for (const donor of donors) {
-      const give = Math.min(want - got, donor.caps[key] - 1);
-      if (give <= 0) continue;
-      donor.caps[key] -= give;
-      got += give;
-    }
-    return Math.max(1, got);
-  };
-  const searches = Math.max(kinds, take("searches", Math.max(1, Math.floor(caps.searches / 4))));
-  const fetches = Math.max(kinds + 1, take("fetches", Math.max(2, Math.floor(caps.fetches / 4))));
+  const searches = Math.max(kinds, 1, Math.floor(caps.searches / 4));
+  const fetches = Math.max(kinds + 1, 2, Math.floor(caps.fetches / 4));
   return [...plans, { direction: "practice", caps: { steps: 3, searches, fetches, wallMs: plans[0].caps.wallMs }, withCurrent: false }];
 }
 

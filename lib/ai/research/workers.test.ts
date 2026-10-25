@@ -169,30 +169,30 @@ describe("splitCaps", () => {
 describe("splitCaps with practice", () => {
   const shape = (hours: number) => splitCaps(capsFor(hours), 1).map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps]);
 
-  it("adds a three-step practice worker and, for one kind of practice, keeps the band's searches and reads", () => {
+  it("adds a three-step practice worker on top of the band, leaving every other worker its own share", () => {
     for (const hours of [6, 30, 72, 360]) {
       const caps = capsFor(hours);
-      const plans = splitCaps(caps, 1);
-      expect(plans.at(-1)?.direction).toBe("practice");
-      expect(plans.at(-1)?.caps.steps).toBe(3);
-      expect(plans.reduce((n, p) => n + p.caps.searches, 0)).toBe(caps.searches);
-      expect(plans.reduce((n, p) => n + p.caps.fetches, 0)).toBe(caps.fetches);
-      expect(plans.every((p) => p.caps.searches >= 1 && p.caps.fetches >= 1)).toBe(true);
-      expect(plans.every((p) => p.caps.wallMs === Math.round(caps.wallMs * DEADLINE_SHARE))).toBe(true);
+      for (const kinds of [1, PRACTICE_RESEARCH_KINDS]) {
+        const plans = splitCaps(caps, kinds);
+        expect(plans.at(-1)?.direction).toBe("practice");
+        expect(plans.at(-1)?.caps.steps).toBe(3);
+        expect(plans.slice(0, -1)).toEqual(splitCaps(caps, 0));
+        expect(plans.every((p) => p.caps.wallMs === Math.round(caps.wallMs * DEADLINE_SHARE))).toBe(true);
+      }
     }
   });
 
-  it("gives the practice worker a quarter of the band, taken from canonical first and then current", () => {
-    expect(shape(72)).toEqual([["backbone", 3, 5, 4], ["canonical", 1, 1, 2], ["current", 1, 3, 2], ["practice", 1, 3, 3]]);
-    expect(shape(360)).toEqual([["backbone", 4, 6, 4], ["canonical", 1, 1, 2], ["current", 1, 5, 2], ["practice", 2, 4, 3]]);
+  it("gives the practice worker a quarter of the band's searches and reads, past the band's totals", () => {
+    expect(shape(72)).toEqual([["backbone", 3, 5, 4], ["canonical", 2, 4, 2], ["current", 1, 3, 2], ["practice", 1, 3, 3]]);
+    expect(shape(360)).toEqual([["backbone", 4, 6, 4], ["canonical", 2, 5, 2], ["current", 2, 5, 2], ["practice", 2, 4, 3]]);
   });
 
-  it("gives the practice worker a search for each kind of practice and a read more, past the band where it must", () => {
+  it("gives the practice worker a search for each kind of practice and a read more", () => {
     // An SDE interview loop at 48 hours: problems, design, mock and recall used to share one search.
     const plans = splitCaps(capsFor(48), 4);
     expect(plans.map((p) => [p.direction, p.caps.searches, p.caps.fetches, p.caps.steps])).toEqual([
       ["backbone", 3, 5, 4],
-      ["canonical", 1, 1, 2],
+      ["canonical", 2, 4, 2],
       ["current", 1, 3, 2],
       ["practice", 4, 5, 3],
     ]);
@@ -200,10 +200,10 @@ describe("splitCaps with practice", () => {
     expect(splitCaps(capsFor(360), 2).map((p) => [p.direction, p.caps.searches, p.caps.fetches])).toEqual(splitCaps(capsFor(360), 1).map((p) => [p.direction, p.caps.searches, p.caps.fetches]));
   });
 
-  it("takes the practice worker's share from canonical at the smallest band, where only two workers run", () => {
+  it("leaves canonical its reads at the smallest band, where only two workers run", () => {
     const plans = splitCaps(capsFor(6), 1);
     expect(plans.map((p) => p.direction)).toEqual(["backbone", "canonical", "practice"]);
-    expect(plans.find((p) => p.direction === "canonical")).toMatchObject({ withCurrent: true, caps: { fetches: 1 } });
+    expect(plans.find((p) => p.direction === "canonical")).toMatchObject({ withCurrent: true, caps: { searches: 1, fetches: 3 } });
     expect(plans.find((p) => p.direction === "practice")?.caps).toMatchObject({ searches: 1, fetches: 2 });
   });
 
@@ -284,19 +284,19 @@ describe("arm W through the pipeline", () => {
     const searches = events.filter((e) => e.type === "research.search");
     expect(new Set(searches.map((e) => e.worker))).toEqual(new Set(["backbone", "canonical", "current"]));
     expect(new Set(events.filter((e) => e.type === "research.search" || e.type === "research.fetch").map((e) => e.worker))).not.toContain("practice");
-    // The practice worker takes canonical's second read: a worker past its share is refused.
-    expect(events.filter((e) => e.type === "research.fetch" && e.worker === "canonical")).toHaveLength(1);
+    // The practice worker takes nothing from canonical's share: both its reads go through.
+    expect(events.filter((e) => e.type === "research.fetch" && e.worker === "canonical")).toHaveLength(2);
     // Every worker was told what the learner's source is.
     const firstSteps = calls.filter((c) => directionOf(c) && !c.prompt.some((m) => m.role === "assistant"));
     expect(firstSteps.map(directionOf).sort()).toEqual(["backbone", "canonical", "current", "practice"]);
     for (const c of firstSteps) expect(userText(c)).toContain('title "My notes page"');
     // The cache: learner page once, the three pages the workers read once each, the gate reads nothing again.
     expect(fetchPage).toHaveBeenCalledTimes(4);
-    expect(outcome.arm?.counts).toEqual({ steps: 8, searches: 3, fetches: 3 });
+    expect(outcome.arm?.counts).toEqual({ steps: 8, searches: 3, fetches: 4 });
     expect(outcome.arm?.stoppedBy).toBe("model");
     expect(outcome.arm?.workers?.map((w) => [w.direction, w.steps, w.searches, w.fetches, w.stoppedBy])).toEqual([
       ["backbone", 3, 1, 1, "model"],
-      ["canonical", 2, 1, 1, "steps"],
+      ["canonical", 2, 1, 2, "steps"],
       ["current", 2, 1, 0, "steps"],
       ["practice", 1, 0, 0, "model"],
     ]);
@@ -399,12 +399,12 @@ describe("arm W through the pipeline", () => {
     );
     const provider = fakeProvider();
     const { fetcher, fetchPage } = fetcherFor();
-    // No learner links, so the counts are the workers' alone; 4 weeks is the 40-hour band: shares 3, 1 and 1, then the practice worker takes one search from backbone.
+    // No learner links, so the counts are the workers' alone; 4 weeks is the 40-hour band: shares 3, 1 and 1, and the practice worker's on top.
     const { outcome } = await collect(researchMaterials({ brief: { ...brief, weeks: 4, sources: [] }, arm: createWorkersArm({ provider, model }), fetcher, books }));
-    // backbone 2 of 5 asked, canonical 1 of 2 asked, current 1, practice (which this script leaves idle) 0.
-    expect(provider.search).toHaveBeenCalledTimes(4);
-    expect(provider.search.mock.calls.map((c) => c[0] as string).filter((q) => q.startsWith("b"))).toHaveLength(2);
-    expect(outcome.arm?.counts.searches).toBe(4);
+    // backbone 3 of 5 asked, canonical 1 of 2 asked, current 1, practice (which this script leaves idle) 0.
+    expect(provider.search).toHaveBeenCalledTimes(5);
+    expect(provider.search.mock.calls.map((c) => c[0] as string).filter((q) => q.startsWith("b"))).toHaveLength(3);
+    expect(outcome.arm?.counts.searches).toBe(5);
     // Two workers read the same page: two budget units, one fetch.
     expect(outcome.arm?.counts.fetches).toBe(2);
     expect(fetchPage.mock.calls.filter((c) => c[0] === "https://docs.example.com/a")).toHaveLength(1);
@@ -464,7 +464,7 @@ describe("arm W through the pipeline", () => {
     errors.mockRestore();
     expect(outcome.arm?.stoppedBy).toBe("model");
     expect(outcome.arm?.workers?.find((w) => w.direction === "current")).toMatchObject({ stoppedBy: "search-error", steps: 1, searches: 1 });
-    expect(outcome.arm?.counts).toEqual({ steps: 7, searches: 3, fetches: 3 });
+    expect(outcome.arm?.counts).toEqual({ steps: 7, searches: 3, fetches: 4 });
     expect(outcome.arm?.searchesOk).toBe(3);
     expect(candidatePrompt(calls)).toContain("Core Textbook");
     expect(candidatePrompt(calls)).toContain('Search: "llm engineering 2026"');
