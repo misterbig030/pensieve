@@ -54,6 +54,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
+import { installLeaveGuard } from "@/lib/leaveGuard";
 import type { Material } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, isAllReading, practiceLabelOf, rebudget, totalHours, weeksLabel, type PlanSplit } from "@/lib/studyTime";
@@ -160,6 +161,13 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   useEffect(() => {
     daysRef.current = daysPerWeek;
   }, [daysPerWeek]);
+
+  // A new plan lives only in this page until it is confirmed: ask before leaving once drafting has started.
+  const unsaved = mode === "create" && !confirming && (drafting || (tree.children?.length ?? 0) > 0);
+  useEffect(() => {
+    if (!unsaved) return;
+    return installLeaveGuard(window, document, () => window.confirm("Leave this page? The plan isn't saved yet, so it will be lost."));
+  }, [unsaved]);
 
   const pushAssistant = useCallback((text: string) => {
     setMessages((ms) => [...ms, { id: nextMessageId(), kind: "answer", text, streaming: false }]);
