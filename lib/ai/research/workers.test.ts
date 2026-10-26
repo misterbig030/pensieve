@@ -338,6 +338,30 @@ describe("arm W through the pipeline", () => {
     expect(prompt).toContain("Practice sources:");
   });
 
+  it("leaves out a page the book researcher alone read for its recommendations, keeping it as the book's recommender", async () => {
+    const ranking = "https://blog.bookranks.com/top-10";
+    const pages = { ...PAGES, [ranking]: page(ranking, "Top 10 LLM Books") };
+    const list: CandidateList = {
+      learner: LIST.learner,
+      candidates: [
+        { ...LIST.candidates[0], recommendedBy: [...LIST.candidates[0].recommendedBy, ranking] },
+        ...LIST.candidates.slice(1),
+        { url: ranking, title: "Top 10 LLM Books", kind: "essay", why: "Ranks the books", recommendedBy: [] },
+      ],
+    };
+    const backbone: Step[] = [SCRIPTS.backbone[0], { calls: [{ tool: "fetchSource", input: { url: ranking } }] }, SCRIPTS.backbone[2]];
+    const { model } = directedModel({ ...SCRIPTS, backbone }, [list]);
+    const { fetcher } = fetcherFor(pages);
+    const rows: ModelCall[] = [];
+    const { outcome } = await collect(researchMaterials({ brief, arm: createWorkersArm({ provider: fakeProvider(), model }), fetcher, books, log: { onCall: (c) => void rows.push(c) } }));
+    expect(outcome.materials.map((m) => m.url)).not.toContain(ranking);
+    expect(outcome.materials.find((m) => m.title === "Core Textbook")?.recommendedBy).toContain(ranking);
+    expect(outcome.materials.map((m) => m.title)).toEqual(expect.arrayContaining(["Guide A", "Guide B"]));
+    const facts = rows.find((r) => r.label === "Research · candidates")?.facts ?? [];
+    expect(facts).toContain(`recommends books, not a material: ${ranking}`);
+    expect(facts.some((f) => f.startsWith("read but not listed"))).toBe(false);
+  });
+
   it("derives each candidate's foundBy from the directions whose notes carry its URL, and lists what the list left out", async () => {
     const drills = "https://drills.example.com/problems";
     const spare = "https://drills.example.com/spare";

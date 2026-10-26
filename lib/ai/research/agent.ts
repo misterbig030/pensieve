@@ -184,7 +184,7 @@ export function buildFinalPrompt(brief: ResearchBrief, notes: string, options: {
       `- url: the material's own page, preferably one from the notes. title: for anything but a book, exactly as that page gives it; a candidate whose page is titled something else is thrown away.`,
       `- a book is checked against a library catalogue instead, by title and author: give its title as published (not its web page's title) and always its author. pageTitle: the title the book's web page shows, when the notes give one; null for anything else. Its url is the publisher's or the author's page for that one book, read or not, and never a shop listing (Amazon or another retailer).`,
       `- kind: book, course, video, docs, essay, paper, repo, tool or note.`,
-      `- recommendedBy: URLs from the notes of pages that recommend it; empty when none.`,
+      `- recommendedBy: URLs from the notes of pages that recommend it; empty when none. A page that only recommends books (a "best books" list or a reading list) is not a material: put it in those books' recommendedBy and leave it out of the list.`,
       `- why: one line on why this material and what it covers that the others don't.`,
       `- year and author when the notes give them.`,
       `- list each material at its whole size (uses null, minutes the whole work): which part the plan uses is decided after research.`,
@@ -398,6 +398,15 @@ export function readButNotListed(reads: ArmRead[], candidates: { url: string; re
 }
 
 /**
+ * A page the book researcher alone carries, listed as anything but a book, is one it read for its recommendations (a
+ * "best books" list), not a material: the books' `recommendedBy` holds it. A page another direction found too, or a
+ * list with no directions, is left to the list.
+ */
+export function isBookListPage(candidate: Pick<Candidate, "kind" | "foundBy">): boolean {
+  return candidate.kind !== "book" && candidate.foundBy?.length === 1 && candidate.foundBy[0] === "backbone";
+}
+
+/**
  * Which directions found a candidate: those whose notes carry its address, in a search result or a read, in the
  * order of `FOUND_BY`. The learner's own links count as found by "learner". A candidate no notes carry keeps the
  * model's own `foundBy`, a fallback only.
@@ -435,7 +444,8 @@ export interface CandidateStepInput {
 /**
  * The structured step that turns the notes into a record of every credible source. Retried once on a schema failure;
  * after that research continues with the learner's sources only (an empty list), never an error. A list longer than
- * `MAX_CANDIDATES` is cut after the call, and `foundBy` is filled in from the notes.
+ * `MAX_CANDIDATES` is cut after the call, `foundBy` is filled in from the notes, and a page of book recommendations
+ * listed as a material is left out (see `isBookListPage`).
  */
 export async function runCandidateStep(input: CandidateStepInput): Promise<{ list: CandidateStepList; costUsd: number }> {
   const modelId = (typeof input.model === "string" ? input.model : DEFAULT_RESEARCH_MODEL) as AiModelId;
@@ -459,12 +469,17 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
           check: (object) => [
             ...(object.candidates.length > MAX_CANDIDATES ? [`list cut to ${MAX_CANDIDATES} of ${object.candidates.length}`] : []),
             ...readButNotListed(readsOf(found), capCandidates(object.candidates), [...object.learner, ...learnerUrls.map((url) => ({ url }))]),
+            ...capCandidates(object.candidates)
+              .map((c) => deriveFoundBy(c, found, learnerUrls))
+              .filter(isBookListPage)
+              .map((c) => `recommends books, not a material: ${c.url}`),
           ],
         },
         { ...input.log, caller: "research" },
       );
       costUsd += cost;
-      list = { ...object, candidates: capCandidates(object.candidates).map((c) => deriveFoundBy(c, found, learnerUrls)) };
+      const candidates = capCandidates(object.candidates).map((c) => deriveFoundBy(c, found, learnerUrls));
+      list = { ...object, candidates: candidates.filter((c) => !isBookListPage(c)) };
       break;
     } catch (error) {
       if (input.signal?.aborted) break;

@@ -5,7 +5,7 @@ import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
-import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, practiceLines, readButNotListed } from "./agent";
+import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, isBookListPage, practiceLines, readButNotListed } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
 import { isThin, researchMaterials, streamWhile, verifiedReading } from "./pipeline";
@@ -427,6 +427,23 @@ describe("practice in the research prompts", () => {
     await collect(researchMaterials({ brief, arm: createAgentArm({ provider: fakeProvider(), model }), fetcher, books }));
     const system = calls.map((c) => c.prompt.find((m) => m.role === "system")?.content).find((c) => typeof c === "string" && c.includes("You gather"));
     expect(system).toContain("6. Practice");
+  });
+});
+
+describe("pages that recommend books", () => {
+  it("tells the candidates step a page that only recommends books goes in the books' recommendedBy, not the list", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 8, hoursPerWeek: 6, sources: [] }, "notes");
+    expect(prompt).toContain(`A page that only recommends books (a "best books" list or a reading list) is not a material: put it in those books' recommendedBy and leave it out of the list.`);
+  });
+
+  it("calls a non-book found by the book researcher alone a page of recommendations", () => {
+    expect(isBookListPage({ kind: "essay", foundBy: ["backbone"] })).toBe(true);
+    expect(isBookListPage({ kind: "docs", foundBy: ["backbone"] })).toBe(true);
+    // The book itself, a page another direction found too, and a list with no directions are materials.
+    expect(isBookListPage({ kind: "book", foundBy: ["backbone"] })).toBe(false);
+    expect(isBookListPage({ kind: "essay", foundBy: ["backbone", "canonical"] })).toBe(false);
+    expect(isBookListPage({ kind: "essay", foundBy: ["canonical"] })).toBe(false);
+    expect(isBookListPage({ kind: "essay" })).toBe(false);
   });
 });
 
