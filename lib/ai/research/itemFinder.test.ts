@@ -21,6 +21,8 @@ import {
   ITEM_FULL_PAGE_CHARS,
   itemListFacts,
   listGroups,
+  normalText,
+  readItemListAt,
   validateItemList,
   type FullReader,
   type ItemDraft,
@@ -377,6 +379,83 @@ describe("the item-list finder", () => {
     expect(ITEM_FINDER_WALL_MS).toBeLessThanOrEqual(45_000);
   });
 
+});
+
+describe("reading the item list at a given address", () => {
+  const ctx = () => {
+    const events: ResearchEvent[] = [];
+    return { events, ctx: { fetcher: fetcherFor({}).fetcher, emit: (e: ResearchEvent) => void events.push(e) } };
+  };
+
+  it("maps a data file read in full: the whole fixture, from code, with no search and no other page", async () => {
+    const model = answers(MAPPING);
+    const read = fileRead(FIXTURE);
+    const { events, ctx: c } = ctx();
+    const result = await readItemListAt(source, RAW_URL, c, { model, read });
+
+    expect(read.mock.calls.map((call) => call[0])).toEqual([RAW_URL]);
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(result.counts).toEqual({ searches: 0, fetches: 1 });
+    expect(result.costUsd).toBeGreaterThanOrEqual(0);
+    expect(result.list).toMatchObject({ source: "file", url: RAW_URL });
+    expect(result.list!.items).toHaveLength(ENTRIES.length);
+    expect(promptOf(model, 0)).toContain("Fields: problem, pattern, link, video, difficulty, code, neetcode150, blind75");
+    expect(events.map((e) => e.type)).toEqual(["research.reading", "research.fetch"]);
+  });
+
+  it("transcribes a page that is not a data file, that page the only read", async () => {
+    const text = "The list: Two Sum. Valid Anagram. Group Anagrams.";
+    const model = answers({ found: true, url: REPO_URL, items: [draft("Two Sum"), draft("Valid Anagram"), draft("Group Anagrams")] });
+    const read = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text, file: false, truncated: false }));
+    const result = await readItemListAt(source, REPO_URL, ctx().ctx, { model, read });
+
+    expect(result.list).toMatchObject({ source: "page", url: REPO_URL });
+    expect(result.list!.items.map((i) => i.title)).toEqual(["Two Sum", "Valid Anagram", "Group Anagrams"]);
+    expect(model.doGenerateCalls).toHaveLength(1);
+    const prompt = promptOf(model, 0);
+    expect(prompt.match(/--- https/g)).toHaveLength(1);
+    expect(prompt).toContain(`--- ${REPO_URL} ---`);
+  });
+
+  it("returns no list when the address does not open, without calling the model", async () => {
+    const model = answers(MAPPING);
+    const read = vi.fn<FullReader>(async () => {
+      throw new Error("404");
+    });
+    const { events, ctx: c } = ctx();
+    const result = await readItemListAt(source, RAW_URL, c, { model, read });
+    expect(result).toEqual({ list: null, counts: { searches: 0, fetches: 1 }, costUsd: 0 });
+    expect(model.doGenerateCalls).toHaveLength(0);
+    expect(events.at(-1)).toMatchObject({ type: "research.fetch", url: RAW_URL, ok: false });
+  });
+
+  it("works by count when the file is not mapped, without transcribing a data file", async () => {
+    const model = answers({ ...MAPPING, path: "nowhere" });
+    const result = await readItemListAt(source, RAW_URL, ctx().ctx, { model, read: fileRead(FIXTURE) });
+    expect(result.list).toBeNull();
+    expect(model.doGenerateCalls).toHaveLength(1);
+  });
+
+  it("transcribes a page already read without reading it again, the other pages beside it as context", async () => {
+    const listing = "The list: Two Sum. Valid Anagram. Group Anagrams.";
+    const model = answers({ found: true, url: REPO_URL, items: [draft("Two Sum"), draft("Valid Anagram"), draft("Group Anagrams")] });
+    const read = vi.fn<FullReader>();
+    const given = [
+      { url: SOURCE_URL, finalUrl: SOURCE_URL, text: "NeetCode" },
+      { url: REPO_URL, finalUrl: REPO_URL, text: listing },
+    ];
+    const result = await readItemListAt(source, `${REPO_URL}/`, ctx().ctx, { model, read, pages: given });
+    expect(read).not.toHaveBeenCalled();
+    expect(result.counts).toEqual({ searches: 0, fetches: 0 });
+    expect(result.list).toMatchObject({ source: "page", url: REPO_URL });
+    const prompt = promptOf(model, 0);
+    expect(prompt).toContain(`--- ${SOURCE_URL} ---`);
+    expect(prompt.match(new RegExp(`--- ${REPO_URL} ---`, "g"))).toHaveLength(1);
+  });
+
+  it("keeps the normal-text form exported", () => {
+    expect(normalText("  Two-Sum, II! ")).toBe("two sum ii");
+  });
 });
 
 describe("the full reader", () => {

@@ -169,7 +169,7 @@ function minutesOf(n: number | null | undefined): number | null {
 }
 
 /** Text reduced to its letters and digits, lower-cased, single-spaced: so a title matches its place in a page or file. */
-function normalText(text: string): string {
+export function normalText(text: string): string {
   return text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
@@ -323,7 +323,150 @@ export function buildItemsPrompt(source: Material, results: SearchResult[], read
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// The finder
+// Reading the item list at an address
+
+export interface ItemReadContext {
+  fetcher: SourceFetcher;
+  emit: (event: ResearchEvent) => void;
+  signal?: AbortSignal;
+  log?: GenerationLogContext;
+}
+
+export interface ItemReadOptions {
+  /** The research model; the app's default when omitted. */
+  model?: AiModelId | LanguageModel;
+  /** `CANDIDATE_STEP_EFFORT` when omitted: this is extraction, not judgement. */
+  effort?: ReasoningEffort;
+  /** Reads a file or page whole; the guarded reader when omitted. Tests pass a fake. */
+  read?: FullReader;
+  /**
+   * Pages the caller has already read. They sit in the prompts as context (where link patterns show), and a `url`
+   * that is one of them is taken from here, not read again.
+   */
+  pages?: { url: string; finalUrl: string; text: string }[];
+}
+
+export interface ItemReadResult {
+  list: PracticeList | null;
+  counts: ResearchCounts;
+  costUsd: number;
+}
+
+/** Every read's address and the text it gave: what a title or a link's host must appear in. */
+function textOf(reads: Read[]): string {
+  return reads.map((r) => `${r.url}\n${r.finalUrl}\n${r.text}`).join("\n");
+}
+
+/**
+ * A model call with one retry, on a clock of `ms` milliseconds. Null when both attempts fail or the clock runs out; a
+ * provider refusal on the user's own key is thrown, since a retry on the same key would be refused too.
+ */
+function modelAsker(
+  model: { modelId: AiModelId; languageModel: LanguageModel | undefined; effort: ReasoningEffort | undefined },
+  ctx: { signal?: AbortSignal; log?: GenerationLogContext },
+  addCost: (costUsd: number) => void,
+) {
+  return async <T,>(schema: z.ZodType<T>, prompt: string, label: string, ms: number, check: (answer: T) => string[]): Promise<T | null> => {
+    const signal = ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const { object, costUsd } = await loggedGenerateObject(
+          {
+            model: model.modelId,
+            languageModel: model.languageModel,
+            schema,
+            prompt,
+            label: attempt === 1 ? label : `${label} (retry)`,
+            abortSignal: signal,
+            check,
+            effort: model.effort ?? CANDIDATE_STEP_EFFORT,
+          },
+          { ...ctx.log, caller: "research" },
+        );
+        addCost(costUsd);
+        return object;
+      } catch (error) {
+        if (signal.aborted) break;
+        if (ctx.log?.keyOwner === "user" && providerError(error)) throw error;
+        console.error(`[research] ${label} failed (attempt ${attempt})`, error);
+      }
+    }
+    return null;
+  };
+}
+
+/**
+ * Reads `url` in full (a page already given in `options.pages` is not read again), then: a data file goes to the
+ * mapping call, code applies the mapping to every record; a page goes to the transcription call. Each model call is on
+ * its own clock (`ITEM_MAP_MS`, `ITEM_ANSWER_MS`), the read on `ITEM_FULL_READ_MS`, so a slow stage never starves the
+ * next. A data file that cannot be mapped is not transcribed: the source is left to count. Nothing here throws except a
+ * provider refusal on the user's own key.
+ */
+export async function readItemListAt(source: Material, url: string, ctx: ItemReadContext, options: ItemReadOptions = {}): Promise<ItemReadResult> {
+  const modelId = (typeof options.model === "string" ? options.model : DEFAULT_RESEARCH_MODEL) as AiModelId;
+  const languageModel = options.model === undefined || typeof options.model === "string" ? undefined : options.model;
+  const readFull = options.read ?? guardedFullReader();
+  const counts: ResearchCounts = { searches: 0, fetches: 0 };
+  let costUsd = 0;
+  const none = (): ItemReadResult => ({ list: null, counts, costUsd });
+  const clock = (ms: number) => (ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms));
+  const claimed = source.practice?.items ?? null;
+
+  const ask = modelAsker({ modelId, languageModel, effort: options.effort }, ctx, (cost) => (costUsd += cost));
+
+  const context: Read[] = (options.pages ?? []).map((p) => ({ ...p, full: false, file: false, truncated: false }));
+  const want = canonicalUrl(url);
+  if (!url.trim().toLowerCase().startsWith("https://") || !want) return none();
+  const target = url.trim();
+
+  // 1. The address, read in full (or taken from the pages already read).
+  const given = context.find((r) => canonicalUrl(r.url) === want || canonicalUrl(r.finalUrl) === want);
+  let full: Read | undefined = given;
+  if (!full) {
+    ctx.emit({ type: "research.reading", url: target });
+    counts.fetches += 1;
+    try {
+      const got = await readFull(target, clock(ITEM_FULL_READ_MS));
+      ctx.emit({ type: "research.fetch", url: target, ok: true });
+      full = { url: target, finalUrl: got.finalUrl, text: got.text, full: true, file: got.file, truncated: got.truncated };
+    } catch (error) {
+      ctx.emit({ type: "research.fetch", url: target, ok: false, reason: describeEgressError(error) });
+      return none();
+    }
+  }
+  const reads = context.filter((r) => r !== given);
+
+  // 2. A data file: the model maps its fields from a sample, code reads every record.
+  const data = full.file && !given ? parseDataFile(full.text, full.truncated) : null;
+  if (data) {
+    const readText = textOf([...reads, full]);
+    const fromMapping = (mapping: FieldMapping): PracticeList | null => {
+      const drafts = applyMapping(data, mapping);
+      return drafts ? validateItemList({ url: full.url, source: "file", items: drafts }, readText) : null;
+    };
+    const mapping = await ask(fieldMappingSchema, buildMappingPrompt(source, reads, full.url, data), "Research · items · mapping", ITEM_MAP_MS, (m) =>
+      itemListFacts(fromMapping(m), claimed),
+    );
+    return { list: mapping ? fromMapping(mapping) : null, counts, costUsd };
+  }
+
+  // 3. Otherwise a page that lists them, transcribed.
+  const page: Read = full.file ? full : { ...full, text: full.text.slice(0, ITEM_FULL_PAGE_CHARS), truncated: full.truncated || full.text.length > ITEM_FULL_PAGE_CHARS };
+  const pages: Read[] = [...reads, page];
+  const resolve = (answer: ItemsAnswer): PracticeList | null => {
+    if (!answer.found || !answer.url) return null;
+    const asked = canonicalUrl(answer.url);
+    // Only a page that was read can be the list's page.
+    const read = asked ? pages.find((r) => canonicalUrl(r.url) === asked || canonicalUrl(r.finalUrl) === asked) : undefined;
+    if (!read) return null;
+    return validateItemList({ url: read.url, source: read.file ? "file" : "page", items: answer.items }, textOf(pages));
+  };
+  const answer = await ask(itemsAnswerSchema, buildItemsPrompt(source, [], pages), "Research · items", ITEM_ANSWER_MS, (a) => itemListFacts(resolve(a), claimed));
+  return { list: answer ? resolve(answer) : null, counts, costUsd };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The item finder, until the structure finder replaces it (it is removed with its last caller)
 
 export interface ItemFinderContext {
   fetcher: SourceFetcher;
@@ -352,20 +495,14 @@ export interface ItemFinderOptions {
   read?: FullReader;
 }
 
-/** Every read's address and the text it gave: what a title or a link's host must appear in. */
-function textOf(reads: Read[]): string {
-  return reads.map((r) => `${r.url}\n${r.finalUrl}\n${r.text}`).join("\n");
-}
-
 /**
- * Search → read → where → (full read → mapping) or transcription, outside the arm's budget, each stage on its own clock
- * so a slow one never starves the next. The data-file path ends within `ITEM_FINDER_WALL_MS`; transcription adds
- * `ITEM_ANSWER_MS`. Nothing here throws except a provider refusal on the user's own key.
+ * Search → read → where, then `readItemListAt` on the address the where call chose (its list page, else the first
+ * address it asked to read in full). Outside the arm's budget, each stage on its own clock. Nothing here throws except
+ * a provider refusal on the user's own key.
  */
 export function createItemFinder(options: ItemFinderOptions): ItemFinder {
   const modelId = (typeof options.model === "string" ? options.model : DEFAULT_RESEARCH_MODEL) as AiModelId;
   const languageModel = options.model === undefined || typeof options.model === "string" ? undefined : options.model;
-  const readFull = options.read ?? guardedFullReader();
   return {
     async find(source, ctx) {
       const counts: ResearchCounts = { searches: 0, fetches: 0 };
@@ -373,36 +510,7 @@ export function createItemFinder(options: ItemFinderOptions): ItemFinder {
       const none = (): ItemFinderResult => ({ list: null, counts, costUsd });
       const clock = (ms: number) => (ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms));
       const noun = nounOf(source);
-      const claimed = source.practice?.items ?? null;
-
-      const ask = async <T,>(schema: z.ZodType<T>, prompt: string, label: string, ms: number, check: (answer: T) => string[]): Promise<T | null> => {
-        const signal = clock(ms);
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            const { object, costUsd: cost } = await loggedGenerateObject(
-              {
-                model: modelId,
-                languageModel,
-                schema,
-                prompt,
-                label: attempt === 1 ? label : `${label} (retry)`,
-                abortSignal: signal,
-                check,
-                effort: options.effort ?? CANDIDATE_STEP_EFFORT,
-              },
-              { ...ctx.log, caller: "research" },
-            );
-            costUsd += cost;
-            return object;
-          } catch (error) {
-            if (signal.aborted) break;
-            // On the user's own key a provider refusal is theirs to hear about; a retry on the same key would be refused too.
-            if (ctx.log?.keyOwner === "user" && providerError(error)) throw error;
-            console.error(`[research] ${label} failed (attempt ${attempt})`, error);
-          }
-        }
-        return null;
-      };
+      const ask = modelAsker({ modelId, languageModel, effort: options.effort }, ctx, (cost) => (costUsd += cost));
 
       // 1. Searching and reading: the source's own page while two searches run, then the best results.
       const gather = clock(ITEM_GATHER_MS);
@@ -465,69 +573,19 @@ export function createItemFinder(options: ItemFinderOptions): ItemFinder {
         ...a.read.map((u) => `asks to read ${u}`),
       ]);
       if (!locate) return none();
+      const url = (locate.list ?? locate.read[0] ?? "").trim();
+      if (!url) return none();
 
-      // 3. The full reads it asked for, side by side, on their own clock.
-      const fullUrls: string[] = [];
-      for (const raw of locate.read) {
-        const url = raw.trim();
-        const key = canonicalUrl(url);
-        if (fullUrls.length >= Math.min(ITEM_FULL_READS, ITEM_FINDER_READS - counts.fetches)) break;
-        if (!url.toLowerCase().startsWith("https://") || !key || fullUrls.some((u) => canonicalUrl(u) === key)) continue;
-        fullUrls.push(url);
-      }
-      const fullClock = clock(ITEM_FULL_READ_MS);
-      const fulls = (
-        await Promise.all(
-          fullUrls.map(async (url): Promise<Read | null> => {
-            ctx.emit({ type: "research.reading", url });
-            counts.fetches += 1;
-            try {
-              const got = await readFull(url, fullClock);
-              ctx.emit({ type: "research.fetch", url, ok: true });
-              return { url, finalUrl: got.finalUrl, text: got.text, full: true, file: got.file, truncated: got.truncated };
-            } catch (error) {
-              ctx.emit({ type: "research.fetch", url, ok: false, reason: describeEgressError(error) });
-              return null;
-            }
-          }),
-        )
-      ).filter((r): r is Read => r !== null);
-
-      // 4. A data file: the model maps its fields from a sample, code reads every record.
-      const pages: Read[] = [...reads];
-      let mapped = false;
-      for (const full of fulls) {
-        const data = full.file ? parseDataFile(full.text, full.truncated) : null;
-        if (!data) {
-          pages.push({ ...full, text: full.text.slice(0, ITEM_FULL_PAGE_CHARS), truncated: full.truncated || full.text.length > ITEM_FULL_PAGE_CHARS });
-          continue;
-        }
-        if (mapped) continue;
-        mapped = true;
-        const readText = textOf([...reads, full]);
-        const fromMapping = (mapping: FieldMapping): PracticeList | null => {
-          const drafts = applyMapping(data, mapping);
-          return drafts ? validateItemList({ url: full.url, source: "file", items: drafts }, readText) : null;
-        };
-        const mapping = await ask(fieldMappingSchema, buildMappingPrompt(source, reads, full.url, data), "Research · items · mapping", ITEM_MAP_MS, (m) =>
-          itemListFacts(fromMapping(m), claimed),
-        );
-        const list = mapping ? fromMapping(mapping) : null;
-        if (list) return { list, counts, costUsd };
-      }
-
-      // 5. Otherwise a page that lists them, transcribed.
-      if (!locate.list && pages.length === reads.length) return none();
-      const resolve = (answer: ItemsAnswer): PracticeList | null => {
-        if (!answer.found || !answer.url) return null;
-        const want = canonicalUrl(answer.url);
-        // A full read is preferred: it is the whole page.
-        const read = want ? [...pages].reverse().find((r) => canonicalUrl(r.url) === want || canonicalUrl(r.finalUrl) === want) : undefined;
-        if (!read) return null;
-        return validateItemList({ url: read.url, source: read.file ? "file" : "page", items: answer.items }, textOf(pages));
-      };
-      const answer = await ask(itemsAnswerSchema, buildItemsPrompt(source, results, pages), "Research · items", ITEM_ANSWER_MS, (a) => itemListFacts(resolve(a), claimed));
-      return { list: answer ? resolve(answer) : null, counts, costUsd };
+      // 3. Reading it.
+      const read = await readItemListAt(source, url, ctx, {
+        model: options.model,
+        effort: options.effort,
+        read: options.read,
+        pages: reads.map(({ url, finalUrl, text }) => ({ url, finalUrl, text })),
+      });
+      counts.fetches += read.counts.fetches;
+      costUsd += read.costUsd;
+      return { list: read.list, counts, costUsd };
     },
   };
 }
