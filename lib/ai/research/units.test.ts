@@ -62,6 +62,20 @@ const SECTIONS = Array.from({ length: 22 }, (_, i) => `Section ${i + 1}`);
 const sectionsPage = seen(REPO, readme("a/b", h2s(SECTIONS, 100)));
 const sectionUnits = () => SECTIONS.map((t) => unit(t, `${REPO}#${slug(t)}`));
 
+/** A course README linking four week folders, and the folders: week 3's link says only "notebook". */
+function hubPages(): SeenPage[] {
+  const hub = seen(
+    REPO,
+    readme("a/b", `<h2 id="user-content-weeks">Weeks</h2><ul>
+      <li><a href="/a/b/tree/main/week01">Week 1: Intro</a></li>
+      <li><a href="/a/b/tree/main/week02">Week 2: Audio features and spectrograms</a></li>
+      <li><a href="/a/b/tree/main/week03">notebook</a></li>
+      <li><a href="/a/b/tree/main/week04">Week 4: Vocoders</a></li></ul>`),
+  );
+  const week = (n: number, heading: string) => seen(`${REPO}/tree/main/week0${n}`, readme(`week0${n}`, `<h1>${heading}</h1><p>${filler(100)}</p>`));
+  return [hub, week(1, "Intro"), week(2, "Audio"), week(3, "Week 3: Transformers"), week(4, "Vocoders")];
+}
+
 describe("checkUnits", () => {
   it("rule 1: a whole answer, or one with no units, keeps the material whole", () => {
     const whole = { toc: null, minutes: null, basis: null, list: null, refused: null, facts: ["whole"] };
@@ -114,6 +128,23 @@ describe("checkUnits", () => {
     }
   });
 
+  it("rule 4: a heading unit whose title adds words to its heading is saved under the heading's own title", () => {
+    const units = primerUnits().map((u) => (u.title === "Load balancer" ? { ...u, title: "Load balancer: Kubernetes ingress" } : u));
+    const v = check({ answer: answer(units), pages: [primerPage], material: { url: PRIMER } });
+    expect(v.refused).toBeNull();
+    expect(v.toc!.chapters.map((c) => c.title)).toEqual(primerH2.map((h) => h.title));
+    expect(v.toc!.chapters.find((c) => c.url === `${PRIMER}#load-balancer`)!.title).toBe("Load balancer");
+  });
+
+  it("rule 3: a relative at is read against the source's address", () => {
+    const fragments = check({ answer: answer(SECTIONS.map((t) => unit(t, `#${slug(t)}`))), pages: [sectionsPage] });
+    expect(fragments.refused).toBeNull();
+    expect(fragments.toc!.chapters[0].url).toBe(`${REPO}#section-1`);
+    const paths = check({ answer: answer([1, 2, 3].map((n) => unit(n === 3 ? "Week 3: Transformers" : n === 2 ? "Week 2: Audio features" : "Week 1: Intro", `/a/b/tree/main/week0${n}`))), pages: hubPages() });
+    expect(paths.refused).toBeNull();
+    expect(paths.toc!.chapters.map((c) => c.url)).toEqual([1, 2, 3].map((n) => `${REPO}/tree/main/week0${n}`));
+  });
+
   it("rule 3: a unit on a page no tool returned, or at an anchor the page lacks, is dropped as unseen", () => {
     const units = [...sectionUnits().slice(0, 20), unit("Section 21", `${REPO}/blob/main/notes.md`), unit("Section 22", `${REPO}#section-99`)];
     const v = check({ answer: answer(units), pages: [sectionsPage] });
@@ -130,16 +161,7 @@ describe("checkUnits", () => {
   });
 
   it("rule 4: a heading unit's title must match its heading, a linked unit's a link to its page or the page's own title", () => {
-    const hub = seen(
-      REPO,
-      readme("a/b", `<h2 id="user-content-weeks">Weeks</h2><ul>
-        <li><a href="/a/b/tree/main/week01">Week 1: Intro</a></li>
-        <li><a href="/a/b/tree/main/week02">Week 2: Audio features and spectrograms</a></li>
-        <li><a href="/a/b/tree/main/week03">notebook</a></li>
-        <li><a href="/a/b/tree/main/week04">Week 4: Vocoders</a></li></ul>`),
-    );
-    const week = (n: number, heading: string) => seen(`${REPO}/tree/main/week0${n}`, readme(`week0${n}`, `<h1>${heading}</h1><p>${filler(100)}</p>`));
-    const pages = [hub, week(1, "Intro"), week(2, "Audio"), week(3, "Week 3: Transformers"), week(4, "Vocoders")];
+    const pages = hubPages();
     const good = [
       unit("Week 1: Intro", `${REPO}/tree/main/week01`), // the link's text
       unit("Week 2: Audio features", `${REPO}/tree/main/week02`), // contained in the link's text
@@ -148,6 +170,9 @@ describe("checkUnits", () => {
     expect(check({ answer: answer(good), pages }).toc!.chapters.map((c) => c.title)).toEqual(["Week 1: Intro", "Week 2: Audio features", "Week 3: Transformers"]);
     const made = [...good, unit("Week 9: Diffusion", `${REPO}/tree/main/week04`)];
     expect(check({ answer: answer(made), pages }).refused).toBe("units refused: 1 of 4 titles not on the page");
+    // The link's text "notebook" sits inside this title, but the rest of the title is nowhere on the page.
+    const padded = [...good, unit("Week 9: Diffusion notebook", `${REPO}/tree/main/week03`)];
+    expect(check({ answer: answer(padded), pages }).refused).toBe("units refused: 1 of 4 titles not on the page");
     const wrongHeading = sectionUnits().map((u, i) => (i < 3 ? { ...u, title: `Kubernetes ${i}` } : u));
     expect(check({ answer: answer(wrongHeading), pages: [sectionsPage] }).refused).toBe("units refused: 3 of 22 titles not on the page");
   });
@@ -269,6 +294,17 @@ describe("checkUnits", () => {
     expect(v.facts).toContain("1 of 11 titles not on the page");
   });
 
+  it("rule 10: a book whose chapters each point at their own fetched page keeps its contents page as the toc's url", () => {
+    const BOOK = "https://example.com/book";
+    const titles = ["The Shape of Data", "Counting Things", "Drawing Lines"];
+    const contents = seen(BOOK, `<html><head><title>A Book</title></head><body><main><h1>Contents</h1><ol>${titles.map((t, i) => `<li><a href="/book/ch${i + 1}">${t}</a></li>`).join("")}</ol></main></body></html>`);
+    const chapters = titles.map((t, i) => bare(`${BOOK}/ch${i + 1}`, { title: t, text: `${t}\n${filler(50)}` }));
+    const v = check({ answer: answer(titles.map((t, i) => unit(t, `${BOOK}/ch${i + 1}`))), pages: [contents, ...chapters], material: { url: BOOK, kind: "book", minutes: 300 } });
+    expect(v.refused).toBeNull();
+    expect(v.toc!.url).toBe(BOOK);
+    expect(v.toc!.chapters.map((c) => [c.title, c.url, c.minutes])).toEqual(titles.map((t, i) => [t, `${BOOK}/ch${i + 1}`, 100]));
+  });
+
   it("rule 11: the toc carries sections, the unit's url when it is not the toc's, and a clipped group", () => {
     const page = seen(
       REPO,
@@ -317,7 +353,7 @@ describe("checkUnits", () => {
     expect(v.toc!.chapters[0].url).toBe(`${PRIMER}#motivation`);
   });
 
-  it("rule 13: the items tool's list is used when listUrl names it", () => {
+  it("rule 13: the items tool's list is used when listUrl names it, and only for a role with practice", () => {
     const listUrl = "https://example.com/problems";
     const problems = ["Two Sum", "Valid Anagram", "Group Anagrams", "Top K Frequent Elements"];
     const page = bare(listUrl, { title: "Problems", text: problems.join("\n") });
@@ -335,6 +371,10 @@ describe("checkUnits", () => {
     });
     expect(withUnits.toc!.chapters).toHaveLength(22);
     expect(withUnits.list!.items.map((i) => i.title)).toEqual(problems);
+    const readRole = check({ answer: answer(sectionUnits(), { listUrl }), pages: [sectionsPage, page], role: "read", material: { practice: PRACTICE }, lists: [list] });
+    expect(readRole.toc!.chapters).toHaveLength(22);
+    expect(readRole.list).toBeNull();
+    expect(check({ answer: answer([], { whole: true, listUrl }), pages: [page], role: "read", lists: [list] }).list).toBeNull();
   });
 
   it("rule 1: a whole practice-role answer still returns the items tool's list its listUrl names", () => {

@@ -75,6 +75,8 @@ interface Placed {
   unit: Unit;
   /** Position in the answer, to keep the model's order where the page gives none. */
   index: number;
+  /** The title it is saved under: the model's, or its heading's own when the model's adds words to it. */
+  title: string;
   page: SeenPage;
   /** Index into the page's outline headings, for a heading unit; null for a linked unit. */
   heading: number | null;
@@ -91,10 +93,12 @@ export function checkUnits(input: {
   lists: PracticeList[];
 }): UnitsVerdict {
   const { material, role, answer, pages, lists } = input;
+  const kinds = ROLE_KINDS[role];
+  const practiceRole = kinds.includes("practice");
   // Rule 1: whole or empty means no reading units and no size change; a list from the `items` tool still counts.
   if (answer.whole || answer.units.length === 0) {
     const facts = ["whole"];
-    const list = practiceList(answer.listUrl, lists, false, [], material.url, pages, facts);
+    const list = practiceList(answer.listUrl, lists, practiceRole, [], material.url, pages, facts);
     return { toc: null, minutes: null, basis: null, list, refused: null, facts };
   }
 
@@ -103,9 +107,8 @@ export function checkUnits(input: {
   const book = material.kind === "book";
   const source = pageAt(pages, material.url);
 
-  // Rule 2: units by role.
-  const kinds = ROLE_KINDS[role];
-  const units = answer.units.filter((u) => kinds.includes(u.kind));
+  // Rule 2: units by role. A relative `at` is read against the source's address.
+  const units = answer.units.filter((u) => kinds.includes(u.kind)).map((u) => ({ ...u, at: absoluteAt(u.at, material.url) }));
   const discarded = answer.units.length - units.length;
   if (discarded > 0) facts.push(`${discarded} ${role === "read" ? "practice" : "reading"} units discarded: the source is ${role} only`);
 
@@ -116,8 +119,9 @@ export function checkUnits(input: {
   let untitled = 0;
   units.forEach((unit, index) => {
     const target = locate(unit, pages, source);
-    if (target && titleSeen(unit.title, target.page, target.heading, pages, book)) {
-      placed.push({ unit, index, ...target, ...sizeOf(unit, target.page, target.heading) });
+    const title = target ? seenTitle(unit.title, target.page, target.heading, pages, book) : null;
+    if (target && title) {
+      placed.push({ unit, index, title, ...target, ...sizeOf(unit, target.page, target.heading) });
       return;
     }
     if (target) untitled++;
@@ -168,7 +172,7 @@ export function checkUnits(input: {
       end: null,
       chapters: reading.map((p): Chapter => ({
         n: null,
-        title: clip(p.unit.title, MAX_HEADING)!,
+        title: clip(p.title, MAX_HEADING)!,
         page: null,
         minutes: book ? null : p.minutes,
         sections: p.heading !== null ? sectionsOf(p.page.outline!.headings, p.heading) : [],
@@ -194,7 +198,7 @@ export function checkUnits(input: {
   }
 
   // Rule 13: practice. It never refuses the reading toc; it only makes no list.
-  const list = practiceList(answer.listUrl, lists, kinds.includes("practice") && !!material.practice, practiceSeen ? practice : [], material.url, pages, facts);
+  const list = practiceList(answer.listUrl, lists, practiceRole, material.practice && practiceSeen ? practice : [], material.url, pages, facts);
   return { toc, minutes, basis, list, refused: null, facts };
 }
 
@@ -238,32 +242,51 @@ function locate(unit: Unit, pages: SeenPage[], source: SeenPage | null): { page:
   return { page, heading: heading === -1 ? null : heading };
 }
 
+/** `at` as an absolute address: a fragment or path the model wrote is read against the source's URL. */
+function absoluteAt(at: string, base: string): string {
+  const trimmed = at.trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed;
+  try {
+    return new URL(trimmed, base).href;
+  } catch {
+    return trimmed;
+  }
+}
+
 /** True when `needle` sits in `hay` as whole words. */
 function within(needle: string, hay: string): boolean {
   return needle !== "" && ` ${hay} `.includes(` ${needle} `);
 }
 
-function matches(a: string, b: string | null | undefined): boolean {
-  const other = normalText(b ?? "");
-  return within(a, other) || within(other, a);
+/** True when the normalised title sits inside what the page says. */
+function inside(title: string, said: string | null | undefined): boolean {
+  return within(title, normalText(said ?? ""));
 }
 
 /**
- * Rule 4. A heading unit's title matches its heading; a linked unit's matches a link to its page on any seen page, or
- * the page's own title or first heading. A book's only has to appear among its page's headings, link text and text.
+ * Rule 4: the title the unit is saved under, or null when it is not on the page. Every word saved must be the page's:
+ * - a heading unit's title sits inside its heading (kept as the model wrote it), or its heading sits inside the
+ *   title (saved as the heading's own title, so no word the page lacks survives);
+ * - a linked unit's title sits inside the text of a link to its page on any seen page, or the page's own title or
+ *   first heading;
+ * - a book's title sits among its page's headings, link text and text.
  */
-function titleSeen(rawTitle: string, page: SeenPage, heading: number | null, pages: SeenPage[], book: boolean): boolean {
+function seenTitle(rawTitle: string, page: SeenPage, heading: number | null, pages: SeenPage[], book: boolean): string | null {
   const title = normalText(rawTitle);
-  if (!title) return false;
+  if (!title) return null;
   const outline = page.outline;
   if (book) {
-    const hay = normalText([...(outline?.headings.map((h) => h.title) ?? []), ...(outline?.links.map((l) => l.text) ?? []), page.text].join("\n"));
-    return within(title, hay);
+    const hay = [...(outline?.headings.map((h) => h.title) ?? []), ...(outline?.links.map((l) => l.text) ?? []), page.text].join("\n");
+    return inside(title, hay) ? rawTitle : null;
   }
-  if (heading !== null) return matches(title, outline!.headings[heading].title);
+  if (heading !== null) {
+    const own = outline!.headings[heading].title;
+    if (inside(title, own)) return rawTitle;
+    return within(normalText(own), title) ? own : null;
+  }
   const keys = pageKeys(page);
-  const linked = pages.some((p) => p.outline?.links.some((l) => keys.has(canonicalUrl(l.url) ?? "") && matches(title, l.text)));
-  return linked || matches(title, page.title) || matches(title, outline?.headings[0]?.title);
+  const linked = pages.some((p) => p.outline?.links.some((l) => keys.has(canonicalUrl(l.url) ?? "") && inside(title, l.text)));
+  return linked || inside(title, page.title) || inside(title, outline?.headings[0]?.title) ? rawTitle : null;
 }
 
 function pageKeys(page: SeenPage): Set<string> {
@@ -309,7 +332,7 @@ function withoutRepeats(placed: Placed[], pages: SeenPage[], book: boolean): Pla
   const dropped = new Set<Placed>();
   const places = new Set<string>();
   for (const p of placed) {
-    const place = p.heading !== null ? `#${p.heading}` : book ? ` ${normalText(p.unit.title)}` : "";
+    const place = p.heading !== null ? `#${p.heading}` : book ? ` ${normalText(p.title)}` : "";
     const key = `${p.unit.kind} ${pages.indexOf(p.page)}${place}`;
     if (places.has(key)) dropped.add(p);
     else places.add(key);
@@ -333,13 +356,18 @@ function withoutRepeats(placed: Placed[], pages: SeenPage[], book: boolean): Pla
   return placed.filter((p) => !dropped.has(p));
 }
 
-/** A book's contents page: the page most of its units point to (the first of a tie), else its own page. */
+/**
+ * A book's contents page: its own page when a tool returned it, unless another page holds more than one of its
+ * chapters and more than its own page does (chapters each on a page of their own leave the book's page in place).
+ * Without its own page, the page most chapters point to (the first of a tie).
+ */
 function contentsPage(kept: Placed[], source: SeenPage | null): SeenPage | null {
   const counts = new Map<SeenPage, number>();
   for (const p of kept) if (p.unit.kind === "read") counts.set(p.page, (counts.get(p.page) ?? 0) + 1);
   let best: SeenPage | null = null;
   for (const [page, n] of counts) if (best === null || n > counts.get(best)!) best = page;
-  return best ?? source;
+  if (!source) return best;
+  return best && best !== source && counts.get(best)! > 1 && counts.get(best)! > (counts.get(source) ?? 0) ? best : source;
 }
 
 /**
@@ -420,18 +448,20 @@ function seenText(pages: SeenPage[]): string {
 }
 
 /**
- * Rule 13. The `items` tool's list when `listUrl` names one; otherwise, for a source with a practice role, its practice
- * units as items. Either way it goes through `validateItemList` against what the tools returned.
+ * Rule 13, for a role with practice only. The `items` tool's list when `listUrl` names one; otherwise the practice
+ * units given (none when the material has no practice or too many were unseen) as items. Either way it goes through
+ * `validateItemList` against what the tools returned.
  */
 function practiceList(
   listUrl: string | null,
   lists: PracticeList[],
-  hasPractice: boolean,
+  practiceRole: boolean,
   practice: Placed[],
   sourceUrl: string,
   pages: SeenPage[],
   facts: string[],
 ): PracticeList | null {
+  if (!practiceRole) return null;
   const key = listUrl ? canonicalUrl(listUrl) : null;
   const named = key ? lists.find((l) => canonicalUrl(l.url) === key) : undefined;
   if (named) {
@@ -439,9 +469,9 @@ function practiceList(
     facts.push(list ? `practice list from ${named.url}: ${list.items.length} items` : "practice list refused by the item check");
     return list;
   }
-  if (!hasPractice || practice.length === 0) return null;
+  if (practice.length === 0) return null;
   const items: ItemDraft[] = practice.map((p) => ({
-    title: p.unit.title,
+    title: p.title,
     number: null,
     group: p.unit.group,
     difficulty: null,
