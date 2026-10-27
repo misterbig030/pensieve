@@ -4,6 +4,7 @@ import { FOUND_BY, MATERIAL_KINDS, clip, hostOf, shortId, type ChapterList, type
 import { PRACTICE_REGISTRY, type PracticeFormatSpec } from "@/lib/practice";
 import type { Coverage, DroppedMaterial, ResearchEvent } from "./events";
 import { signMaterial, signingSecret } from "./signature";
+import type { PageInfo } from "./extract";
 import type { FetchOutcome, SourceFetcher } from "./tools";
 import { parseOpenLibraryToc, withChapterSizes, type OpenLibraryTocEntry } from "./chapters";
 
@@ -367,6 +368,8 @@ export const WORDS_PER_MINUTE = 230;
 export const MINUTES_PER_PAGE = 2.5;
 /** A page shorter than this is a landing page or an abstract, not the essay itself. */
 export const MIN_MEASURED_WORDS = 600;
+/** A page that links to at least this many other pages of its own site is a hub, not the work itself. */
+export const HUB_MIN_LINKS = 6;
 const MAX_MINUTES = 60_000;
 
 function validMinutes(minutes: number | null | undefined): number | null {
@@ -385,19 +388,31 @@ export interface SizeInput {
   durationMinutes?: number | null;
   /** A matched book's page count from the catalogue. */
   bookPages?: number | null;
+  /** True when the material's own page mostly links to the rest of its site, so its length is not the work's. */
+  hub?: boolean;
 }
 
 /**
- * How long a material takes, and whether code measured it. A video's runtime, a book's page count and an essay's
- * own length are counted; everything else (courses, docs sites, repos, a part of a larger work) is the model's
- * estimate. An estimate for part of a measured work never exceeds the whole.
+ * What the material's own page measures, whatever the material's size came to: a video's runtime, a book's catalogue
+ * pages, else the page's words at reading speed. Null when the page measures nothing.
+ */
+export function pageMinutesOf(page: Pick<PageInfo, "words" | "durationMinutes">, kind: MaterialKind, bookPages?: number | null): number | null {
+  if (kind === "video") return validMinutes(page.durationMinutes);
+  if (kind === "book" && bookPages) return validMinutes(bookPages * MINUTES_PER_PAGE);
+  return (page.words ?? 0) > 0 ? validMinutes((page.words ?? 0) / WORDS_PER_MINUTE) : null;
+}
+
+/**
+ * How long a material takes, and whether code measured it. A video's runtime, a book's page count and the own length
+ * of an essay or paper, or of a repo whose README is the work, are counted; everything else (courses, docs sites,
+ * hub repos, a part of a larger work) is the model's estimate. An estimate for part of a measured work never exceeds the whole.
  */
 export function sizeMaterial(input: SizeInput): { minutes: number | null; basis: MinutesBasis | null } {
   const claimed = validMinutes(input.claimedMinutes);
   let whole: number | null = null;
   if (input.kind === "video") whole = validMinutes(input.durationMinutes);
   else if (input.kind === "book" && input.bookPages) whole = validMinutes(input.bookPages * MINUTES_PER_PAGE);
-  else if (input.kind === "essay" && (input.words ?? 0) >= MIN_MEASURED_WORDS) whole = validMinutes((input.words ?? 0) / WORDS_PER_MINUTE);
+  else if ((input.kind === "essay" || input.kind === "paper" || (input.kind === "repo" && !input.hub)) && (input.words ?? 0) >= MIN_MEASURED_WORDS) whole = validMinutes((input.words ?? 0) / WORDS_PER_MINUTE);
 
   if (whole !== null && !input.uses) return { minutes: whole, basis: "measured" };
   if (whole !== null) return { minutes: claimed ? Math.min(claimed, whole) : whole, basis: "estimated" };
@@ -581,7 +596,8 @@ export async function runGate(input: GateInput): Promise<GateResult> {
       fetchedTitle,
       recommendedBy: [],
       sig: verifiedAt ? signMaterial({ url, fetchedTitle, verifiedAt }, secret) : null,
-      ...sizeFields({ kind, uses: null, claimedMinutes: note?.minutes, words: fetched?.page.words, durationMinutes: fetched?.page.durationMinutes }),
+      ...sizeFields({ kind, uses: null, claimedMinutes: note?.minutes, words: fetched?.page.words, durationMinutes: fetched?.page.durationMinutes, hub: isHub(fetched?.page) }),
+      ...pageFields(fetched?.page, kind),
       uses: null,
       toc: null,
       ...(practice ? { practice } : {}),
@@ -680,7 +696,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     const size =
       c.practice && c.minutes == null
         ? { minutes: null, minutesBasis: null, uses }
-        : { ...sizeFields({ kind: c.kind, uses, claimedMinutes: c.minutes, words: ownPage?.words, durationMinutes: ownPage?.durationMinutes, bookPages }), uses };
+        : { ...sizeFields({ kind: c.kind, uses, claimedMinutes: c.minutes, words: ownPage?.words, durationMinutes: ownPage?.durationMinutes, bookPages, hub: isHub(ownPage) }), uses };
 
     const practice = c.practice ? normalizePractice(c.practice) : null;
 
@@ -721,6 +737,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
       fetchedTitle,
       sig: signMaterial({ url: finalUrl, fetchedTitle, verifiedAt }, secret),
       ...size,
+      ...pageFields(ownPage, c.kind, bookPages),
       toc: toc ? withChapterSizes(toc, size.minutes) : null,
       ...(practice ? { practice } : {}),
       ...(bookMatched ? { catalogued: true } : {}),
@@ -740,6 +757,16 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     if (m.toc) input.emit({ type: "research.chapters", id: m.id, title: m.title, chapters: m.toc.chapters.length, source: m.toc.source, url: m.toc.url });
   }
   return { materials, dropped, verified: accepted.length, proposed: valid.length };
+}
+
+/** True when a page mostly links to the rest of its site (see `HUB_MIN_LINKS`). */
+function isHub(page: PageInfo | null | undefined): boolean {
+  return (page?.siteLinks ?? 0) >= HUB_MIN_LINKS;
+}
+
+/** The draft-only fields of a material whose own page was read; none when it was not (the catalogue entry, a failed read). */
+function pageFields(page: PageInfo | null | undefined, kind: MaterialKind, bookPages?: number | null): { pageMinutes?: number | null; hub?: boolean } {
+  return page ? { pageMinutes: pageMinutesOf(page, kind, bookPages), hub: isHub(page) } : {};
 }
 
 function sizeFields(input: SizeInput): { minutes: number | null; minutesBasis: MinutesBasis | null } {

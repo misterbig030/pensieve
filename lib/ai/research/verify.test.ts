@@ -15,6 +15,7 @@ import {
   mainTitle,
   normalizeCoverage,
   normalizePractice,
+  pageMinutesOf,
   pickBookMatch,
   recommendingDomains,
   registrableDomain,
@@ -570,6 +571,56 @@ describe("sizeMaterial", () => {
     expect(sizeMaterial({ kind: "book", uses: "ch. 1, 7–9", claimedMinutes: 300, bookPages: 400 })).toEqual({ minutes: 300, basis: "estimated" });
     expect(sizeMaterial({ kind: "book", uses: "ch. 1", claimedMinutes: 5000, bookPages: 400 })).toEqual({ minutes: 1000, basis: "estimated" });
     expect(sizeMaterial({ kind: "book", uses: "ch. 1", claimedMinutes: null, bookPages: 400 })).toEqual({ minutes: 1000, basis: "estimated" });
+  });
+});
+
+describe("measuring every page", () => {
+  it("measures a README that is the work", () => {
+    expect(sizeMaterial({ kind: "repo", uses: null, claimedMinutes: 480, words: 11469 })).toEqual({ minutes: 50, basis: "measured" });
+  });
+  it("keeps the estimate for a hub repo", () => {
+    expect(sizeMaterial({ kind: "repo", uses: null, claimedMinutes: 600, words: 900, hub: true })).toEqual({ minutes: 600, basis: "estimated" });
+  });
+  it("measures a paper like an essay", () => {
+    expect(sizeMaterial({ kind: "paper", uses: null, claimedMinutes: 30, words: 6900 }).basis).toBe("measured");
+  });
+  it("keeps a course's estimate whatever its landing page measures", () => {
+    expect(sizeMaterial({ kind: "course", uses: null, claimedMinutes: 1200, words: 2300 })).toEqual({ minutes: 1200, basis: "estimated" });
+  });
+  it("sizes every page", () => {
+    expect(pageMinutesOf({ words: 2300 }, "course")).toBe(10);
+    expect(pageMinutesOf({ durationMinutes: 42 }, "video")).toBe(42);
+    expect(pageMinutesOf({ words: 0 }, "docs")).toBeNull();
+  });
+  it("sizes a book by its catalogue pages, else by its page", () => {
+    expect(pageMinutesOf({ words: 2300 }, "book", 400)).toBe(1000);
+    expect(pageMinutesOf({ words: 2300 }, "book")).toBe(10);
+  });
+
+  it("gives each kept page its length and whether it is a hub, and measures a repo that is the work", async () => {
+    const repo = "https://github.com/acme/handbook";
+    const course = "https://course.example.com/llm";
+    const f = gateFixture({
+      [repo]: info(repo, "acme/handbook", { words: 11469, siteLinks: 2 }),
+      [course]: info(course, "LLM Course", { words: 2300, siteLinks: 9 }),
+    });
+    const result = await runGate({
+      candidates: [
+        candidate({ url: repo, title: "acme/handbook", kind: "repo", minutes: 480 }),
+        candidate({ url: course, title: "LLM Course", kind: "course", minutes: 1200 }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+    });
+    expect(result.materials.map((m) => [m.title, m.minutes, m.minutesBasis, m.hub, m.pageMinutes])).toEqual([
+      ["acme/handbook", 50, "measured", false, 50],
+      ["LLM Course", 1200, "estimated", true, 10],
+    ]);
   });
 });
 

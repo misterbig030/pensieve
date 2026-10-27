@@ -33,6 +33,16 @@ describe("chapterListSchema", () => {
   });
 });
 
+describe("a chapter's own address and group", () => {
+  it("parses with them and without them", () => {
+    const withBoth = { ...chapter(1), url: "https://e.x/ch1", group: "Part I" };
+    expect(chapterListSchema.parse({ ...list, chapters: [withBoth, chapter(2), chapter(3)] }).chapters[0]).toMatchObject({ url: "https://e.x/ch1", group: "Part I" });
+    expect(chapterListSchema.safeParse({ ...list, chapters: [{ ...chapter(1), url: null, group: null }, chapter(2), chapter(3)] }).success).toBe(true);
+    expect(chapterListSchema.safeParse(list).success).toBe(true);
+    expect(chapterListSchema.safeParse({ ...list, chapters: [{ ...chapter(1), group: "x".repeat(MAX_HEADING + 1) }, chapter(2), chapter(3)] }).success).toBe(false);
+  });
+});
+
 describe("research's transient fields on a material", () => {
   const base = { id: "M1", origin: "research", type: "link", kind: "book", url: "https://e.x/", title: "T", author: null, year: null, why: null, backbone: false, verifiedAt: null, fetchedTitle: null, recommendedBy: [], sig: null };
   it("keeps catalogued and foundBy when given and needs neither", () => {
@@ -40,6 +50,12 @@ describe("research's transient fields on a material", () => {
     const bare = materialSchema.parse(base);
     expect(bare).not.toHaveProperty("catalogued");
     expect(bare).not.toHaveProperty("foundBy");
+  });
+  it("keeps the draft-only page length, hub mark and note when given and needs none", () => {
+    expect(materialSchema.parse({ ...base, pageMinutes: 90, hub: true, note: "a hub" })).toMatchObject({ pageMinutes: 90, hub: true, note: "a hub" });
+    expect(materialSchema.safeParse({ ...base, pageMinutes: null, note: null }).success).toBe(true);
+    const bare = materialSchema.parse(base);
+    for (const key of ["pageMinutes", "hub", "note"]) expect(bare).not.toHaveProperty(key);
   });
   it("rejects a direction research does not have", () => {
     expect(materialSchema.safeParse({ ...base, foundBy: ["somewhere"] }).success).toBe(false);

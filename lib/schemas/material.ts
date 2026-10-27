@@ -47,6 +47,10 @@ export const chapterSchema = z.object({
    * right after it; null when that start is unknown. Absent on uncut lists: the span ends at the next listed chapter.
    */
   end: z.number().int().min(0).nullable().optional(),
+  /** Where this unit is, when it is not the list's own `url` (a chapter or section that has a page of its own). */
+  url: z.string().trim().min(1).max(2000).nullable().optional(),
+  /** The part, module or section of the work this unit sits under, as the work names it. */
+  group: z.string().trim().min(1).max(MAX_HEADING).nullable().optional(),
 });
 export type Chapter = z.infer<typeof chapterSchema>;
 
@@ -166,6 +170,15 @@ export const materialSchema = z.object({
    */
   catalogued: z.boolean().optional(),
   foundBy: z.array(z.enum(FOUND_BY)).max(FOUND_BY.length).optional(),
+  /**
+   * Draft-only, never stored (no column), like `catalogued`: the minutes the material's own page measures
+   * (its runtime, or its words at reading speed), whatever the material's `minutes` came to; null when it measures none.
+   */
+  pageMinutes: z.number().int().min(1).max(60000).nullable().optional(),
+  /** Draft-only, never stored: true when the material's own page mostly links to the rest of its site, so its length is not the work's. */
+  hub: z.boolean().optional(),
+  /** Draft-only, never stored: a note on the material for the allocation, such as how its units were found. */
+  note: z.string().max(300).nullable().optional(),
 });
 export type Material = z.infer<typeof materialSchema>;
 /** Up to 50 of the learner's own plus what research adds (at most 25 are asked for). */
