@@ -257,7 +257,7 @@ export const materialRefDraftSchema = z.object({
 });
 export const coverRefDraftSchema = z.object({
   id: z.string().min(1).describe("A resource id from the list, e.g. M3 or M1.3"),
-  note: z.string().optional().describe('The part only for a resource without chapters ("lectures 3–4"); leave it out otherwise'),
+  note: z.string().optional().describe('The part, only for a resource without units ("lectures 3–4"); leave it out otherwise.'),
 });
 export type MaterialRefDraft = z.infer<typeof materialRefDraftSchema>;
 export type CoverRefDraft = z.infer<typeof coverRefDraftSchema>;

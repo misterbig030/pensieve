@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot, type NewNodeInput } from "@/lib/planTree";
 import { aliasMaterials } from "@/lib/materials";
 import { AIE_MATERIALS, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
+import { coverRefDraftSchema } from "@/lib/schemas/material";
 import type { ChapterList, Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
 import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
 import { assignRefs, buildPlanChatSystemPrompt, buildRevisionPrompt, buildUnitsPrompt, practiceTag, renderChapters, renderMaterials, renderRefs, renderTree } from "./planPrompt";
@@ -139,7 +140,8 @@ describe("materials in prompts", () => {
     expect(prompt).toContain("No tier and no minutes yet");
     expect(prompt).toContain("M1 is the backbone textbook, but its chapters are not listed: reserve it in order across the units");
     expect(prompt).toContain("Never write a chapter number or a chapter title you were not given.");
-    expect(prompt).toContain("Each resource is read in at most one unit at this level.");
+    expect(prompt).toContain("Any other resource is reserved in at most one unit at this level, unless its budget is more than one unit's reading time: then reserve it in consecutive units, naming the part in each note.");
+    expect(prompt).not.toContain("reserved by its units");
   });
 
   it("gives leaves their budget, the parent's reservation, and the must rules", () => {
@@ -228,7 +230,8 @@ describe("chapters in prompts", () => {
   });
   it("switches the backbone rules on the list, at both levels", () => {
     const heading = buildUnitsPrompt({ topic: "X", materials: withToc, granularity: "week", level: "month", spans: [28, 28], weeks: 8, daysPerWeek: 7, unitsAreLeaves: false });
-    expect(heading).toContain("M1's chapters are resources of their own (M1.1, M1.2, …): reserve them in order across the units, each chapter in exactly one unit, and never refer to M1 itself.");
+    expect(heading).toContain("A resource with units (Mn.1, Mn.2, …) is reserved by its units, never as a whole.");
+    expect(heading).toContain("The backbone's units run in order through the plan.");
     expect(heading).toContain('M1.1 ch. 1 "Alpha"');
     const leaf = buildUnitsPrompt({ topic: "X", materials: withToc, granularity: "week", level: "week", spans: [7, 7], weeks: 2, daysPerWeek: 7, unitsAreLeaves: true });
     expect(leaf).toContain("A chapter longer than one unit's reading time spans consecutive units");
@@ -339,7 +342,7 @@ describe("chapters as resources in prompts", () => {
   const A = aliasMaterials(AIE_MATERIALS);
   it("renders chapter lines with aliases and the not-a-resource sentence", () => {
     const text = renderMaterials(AIE_MATERIALS, undefined, { sections: true });
-    expect(text).toContain('"AI Engineering: Building Applications with Foundation Models" — Chip Huyen, 2024 <https://example.com/aie> · about 18.4 h. Refer to its chapters by id; M1 itself is not a resource.');
+    expect(text).toContain('"AI Engineering: Building Applications with Foundation Models" — Chip Huyen, 2024 <https://example.com/aie> · budget about 18.4 h. Refer to its chapters by id; M1 itself is not a resource.');
     expect(text).toContain('  M1.2 ch. 2 "Understanding Foundation Models" · about 2.3 h — Training Data; Modeling; Post-Training; Sampling');
     expect(text).toContain('  M1.10 ch. 10 "AI Engineering Architecture and User Feedback" · about 1.6 h');
     expect(renderMaterials([AIE_MATERIALS[1]])).not.toContain("not a resource");
@@ -382,8 +385,8 @@ describe("chapters as resources in prompts", () => {
   });
   it("the top level is told everything is free", () => {
     const prompt = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", level: "month", spans: [30, 30, 30], weeks: 13, daysPerWeek: 7, unitsAreLeaves: false });
-    expect(prompt).toContain("Every resource is free. Reserve each in at most one month; the book's chapters in order.");
-    expect(prompt).toContain("Each resource is read in at most one unit at this level. M1's chapters are resources of their own (M1.1, M1.2, …): reserve them in order across the units, each chapter in exactly one unit, and never refer to M1 itself.");
+    expect(prompt).toContain("Every resource is free. Reserve each as the rules above say; the book's chapters in order.");
+    expect(prompt).toContain("A resource with units (Mn.1, Mn.2, …) is reserved by its units, never as a whole. Choose the units that serve its purpose and add up to about its budget, and reserve them in order across consecutive units at this level, each unit in exactly one.\nThe backbone's units run in order through the plan.\nAny other resource is reserved in at most one unit at this level, unless its budget is more than one unit's reading time: then reserve it in consecutive units, naming the part in each note.");
     expect(prompt).toContain('list in "covers" the resources its weeks will read, as { id, note }.');
     expect(prompt).not.toMatch(/review|activity/i);
   });
@@ -654,5 +657,93 @@ describe("a source with units and items in prompts", () => {
   it("leaves an items-only source's groups line as it was", () => {
     expect(renderMaterials([itemsOnly])).toContain("\n  M1 items 1–9 Arrays & Hashing");
     expect(renderMaterials([itemsOnly])).not.toContain("M1.i");
+  });
+});
+
+describe("units toward a budget in the outline prompt", () => {
+  const unit = (i: number, group: string) => ({ n: null, title: i === 1 ? "Performance vs scalability" : `Topic ${i}`, page: null, minutes: 2, sections: [], group, url: `https://primer.example.org/${i}` });
+  const primer: Material = {
+    id: "primer",
+    origin: "research",
+    type: "link",
+    kind: "docs",
+    url: "https://primer.example.org",
+    title: "System design primer",
+    author: null,
+    year: null,
+    why: "A free overview.",
+    backbone: false,
+    verifiedAt: null,
+    fetchedTitle: null,
+    recommendedBy: [],
+    sig: null,
+    minutes: 50,
+    minutesBasis: "measured",
+    uses: "building blocks",
+    toc: {
+      source: "page",
+      url: "https://primer.example.org",
+      printPages: false,
+      end: null,
+      chapters: Array.from({ length: 30 }, (_, i) => unit(i + 1, i < 12 ? "building blocks" : "case studies")),
+    },
+  };
+  const talk: Material = { ...MATERIALS[1], id: "talk" };
+  const top = (materials: Material[]) => buildUnitsPrompt({ topic: "System design", materials, granularity: "week", level: "month", spans: [28, 28], weeks: 8, daysPerWeek: 7, unitsAreLeaves: false });
+
+  it("gives a material with units its budget and purpose, its groups and its units", () => {
+    const text = renderMaterials([primer]);
+    expect(text).toContain("budget about 50 min for building blocks");
+    expect(text).toContain('  M1.1 "Performance vs scalability" · about 2 min');
+    expect(text).toContain("  building blocks:\n  M1.1");
+    expect(text).toContain("  case studies:\n  M1.13");
+    expect(text.match(/^ {2}building blocks:$/gm)).toHaveLength(1);
+    expect(text).toContain("Refer to its units by id; M1 itself is not a resource.");
+    expect(text).toContain("  (units from primer.example.org)");
+  });
+  it("a book keeps its chapters wording", () => {
+    const book: Material = { ...primer, kind: "book" };
+    const text = renderMaterials([book]);
+    expect(text).toContain("Refer to its chapters by id; M1 itself is not a resource.");
+    expect(text).toContain("  (chapters from primer.example.org)");
+  });
+  it("a material without units keeps today's size text", () => {
+    expect(renderMaterials([{ ...talk, minutes: 90, uses: "the first half", minutesBasis: "estimated" }])).toContain(" · the first half, about 1.5 h (estimated)");
+  });
+  it("writes no group line for units without groups", () => {
+    const flat: Material = { ...primer, toc: { ...primer.toc!, chapters: primer.toc!.chapters.map((c) => ({ ...c, group: null })) } };
+    expect(renderMaterials([flat])).not.toMatch(/^ {2}\S.*:$/m);
+  });
+  it("tells a top-level outline to reserve a material's units toward its budget, without steering numbers", () => {
+    const prompt = top([talk, primer]);
+    expect(prompt).toContain('M2.1 "Performance vs scalability"');
+    expect(prompt).toContain("  building blocks:");
+    expect(prompt).toContain("budget about 50 min for building blocks");
+    expect(prompt).toContain("reserved by its units, never as a whole");
+    expect(prompt).toContain("Choose the units that serve its purpose and add up to about its budget");
+    expect(prompt).toContain("Every resource is free. Reserve each as the rules above say.");
+    expect(prompt).not.toContain("The backbone's units run in order");
+    expect(prompt).not.toMatch(/20%|15 min/);
+  });
+  it("a plan with no units has no unit rule", () => {
+    const prompt = top([MATERIALS[0], talk]);
+    expect(prompt).not.toContain("reserved by its units");
+    expect(prompt).not.toContain("run in order through the plan");
+    expect(prompt).toContain("Any other resource is reserved in at most one unit at this level");
+  });
+  it("a backbone with units runs in order through the plan", () => {
+    const prompt = top([{ ...AIE_MATERIALS[0] }, talk]);
+    expect(prompt).toContain("The backbone's units run in order through the plan.");
+  });
+  it("leaf prompts do not change for a material with units", () => {
+    const leaf = buildUnitsPrompt({ topic: "t", materials: [primer, talk], granularity: "week", level: "week", spans: [7, 7], weeks: 2, daysPerWeek: 7, unitsAreLeaves: true });
+    expect(leaf).toContain("Read each in one week, or in consecutive weeks when it is longer than one week's reading time");
+    expect(leaf).not.toContain("reserved by its units");
+  });
+});
+
+describe("the covers note", () => {
+  it("is for a resource without units", () => {
+    expect(coverRefDraftSchema.shape.note.description).toBe('The part, only for a resource without units ("lectures 3–4"); leave it out otherwise.');
   });
 });
