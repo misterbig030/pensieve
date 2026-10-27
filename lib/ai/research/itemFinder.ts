@@ -350,6 +350,16 @@ export interface ItemReadResult {
   list: PracticeList | null;
   counts: ResearchCounts;
   costUsd: number;
+  /**
+   * The reads the list was checked against: the full read (as the model saw it) and the given pages beside it. Empty
+   * when nothing was read. A caller that checks the list again checks it against these.
+   */
+  pages: { url: string; finalUrl: string; text: string }[];
+}
+
+/** A read as a caller sees it: its addresses and its text. */
+function pageOf(r: Read): { url: string; finalUrl: string; text: string } {
+  return { url: r.url, finalUrl: r.finalUrl, text: r.text };
 }
 
 /** Every read's address and the text it gave: what a title or a link's host must appear in. */
@@ -408,7 +418,7 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
   const readFull = options.read ?? guardedFullReader();
   const counts: ResearchCounts = { searches: 0, fetches: 0 };
   let costUsd = 0;
-  const none = (): ItemReadResult => ({ list: null, counts, costUsd });
+  const none = (): ItemReadResult => ({ list: null, counts, costUsd, pages: [] });
   const clock = (ms: number) => (ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms));
   const claimed = source.practice?.items ?? null;
 
@@ -447,7 +457,7 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
     const mapping = await ask(fieldMappingSchema, buildMappingPrompt(source, reads, full.url, data), "Research · items · mapping", ITEM_MAP_MS, (m) =>
       itemListFacts(fromMapping(m), claimed),
     );
-    return { list: mapping ? fromMapping(mapping) : null, counts, costUsd };
+    return { list: mapping ? fromMapping(mapping) : null, counts, costUsd, pages: [...reads, full].map(pageOf) };
   }
 
   // 3. Otherwise a page that lists them, transcribed.
@@ -463,7 +473,7 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
     return validateItemList({ url: read.url, source: read.file ? "file" : "page", items: answer.items }, textOf(pages));
   };
   const answer = await ask(itemsAnswerSchema, buildItemsPrompt(source, [], pages), "Research · items", ITEM_ANSWER_MS, (a) => itemListFacts(resolve(a), claimed));
-  return { list: answer ? resolve(answer) : null, counts, costUsd };
+  return { list: answer ? resolve(answer) : null, counts, costUsd, pages: pages.map(pageOf) };
 }
 
 // ---------------------------------------------------------------------------------------------------------------

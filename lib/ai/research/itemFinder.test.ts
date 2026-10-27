@@ -399,6 +399,7 @@ describe("reading the item list at a given address", () => {
     expect(result.costUsd).toBeGreaterThanOrEqual(0);
     expect(result.list).toMatchObject({ source: "file", url: RAW_URL });
     expect(result.list!.items).toHaveLength(ENTRIES.length);
+    expect(result.pages).toEqual([{ url: RAW_URL, finalUrl: RAW_URL, text: FIXTURE }]);
     expect(promptOf(model, 0)).toContain("Fields: problem, pattern, link, video, difficulty, code, neetcode150, blind75");
     expect(events.map((e) => e.type)).toEqual(["research.reading", "research.fetch"]);
   });
@@ -411,6 +412,7 @@ describe("reading the item list at a given address", () => {
 
     expect(result.list).toMatchObject({ source: "page", url: REPO_URL });
     expect(result.list!.items.map((i) => i.title)).toEqual(["Two Sum", "Valid Anagram", "Group Anagrams"]);
+    expect(result.pages).toEqual([{ url: REPO_URL, finalUrl: REPO_URL, text }]);
     expect(model.doGenerateCalls).toHaveLength(1);
     const prompt = promptOf(model, 0);
     expect(prompt.match(/--- https/g)).toHaveLength(1);
@@ -429,6 +431,10 @@ describe("reading the item list at a given address", () => {
     expect(prompt).toContain("Two Sum. Valid Anagram");
     expect(prompt).not.toContain("TAILMARKER");
     expect(prompt).toContain("cut at the size limit");
+    // The read it returns is what the list was checked against: the text cut as the model saw it.
+    expect(result.pages).toHaveLength(1);
+    expect(result.pages[0].text).toHaveLength(ITEM_FULL_PAGE_CHARS);
+    expect(result.pages[0].text).not.toContain("TAILMARKER");
     expect(prompt.length).toBeLessThan(ITEM_FULL_PAGE_CHARS + 5_000);
   });
 
@@ -439,7 +445,7 @@ describe("reading the item list at a given address", () => {
     });
     const { events, ctx: c } = ctx();
     const result = await readItemListAt(source, RAW_URL, c, { model, read });
-    expect(result).toEqual({ list: null, counts: { searches: 0, fetches: 1 }, costUsd: 0 });
+    expect(result).toEqual({ list: null, counts: { searches: 0, fetches: 1 }, costUsd: 0, pages: [] });
     expect(model.doGenerateCalls).toHaveLength(0);
     expect(events.at(-1)).toMatchObject({ type: "research.fetch", url: RAW_URL, ok: false });
   });
@@ -463,6 +469,7 @@ describe("reading the item list at a given address", () => {
     expect(read).not.toHaveBeenCalled();
     expect(result.counts).toEqual({ searches: 0, fetches: 0 });
     expect(result.list).toMatchObject({ source: "page", url: REPO_URL });
+    expect(result.pages).toEqual(given);
     const prompt = promptOf(model, 0);
     expect(prompt).toContain(`--- ${SOURCE_URL} ---`);
     expect(prompt.match(new RegExp(`--- ${REPO_URL} ---`, "g"))).toHaveLength(1);
