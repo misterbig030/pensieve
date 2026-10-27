@@ -451,7 +451,8 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
   }
 
   // 3. Otherwise a page that lists them, transcribed.
-  const page: Read = full.file ? full : { ...full, text: full.text.slice(0, ITEM_FULL_PAGE_CHARS), truncated: full.truncated || full.text.length > ITEM_FULL_PAGE_CHARS };
+  // Whatever is not mapped as data (a page, or a plain-text file) is cut to the page size before the model sees it.
+  const page: Read = { ...full, text: full.text.slice(0, ITEM_FULL_PAGE_CHARS), truncated: full.truncated || full.text.length > ITEM_FULL_PAGE_CHARS };
   const pages: Read[] = [...reads, page];
   const resolve = (answer: ItemsAnswer): PracticeList | null => {
     if (!answer.found || !answer.url) return null;

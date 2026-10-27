@@ -417,6 +417,21 @@ describe("reading the item list at a given address", () => {
     expect(prompt).toContain(`--- ${REPO_URL} ---`);
   });
 
+  it("caps a plain-text file that is not data at the page size before transcribing it", async () => {
+    const head = "Two Sum. Valid Anagram. Group Anagrams. ";
+    const text = head + "x".repeat(ITEM_FULL_PAGE_CHARS) + " TAILMARKER";
+    expect(text.length).toBeGreaterThan(ITEM_FULL_PAGE_CHARS);
+    const model = answers({ found: true, url: RAW_URL, items: [draft("Two Sum"), draft("Valid Anagram"), draft("Group Anagrams")] });
+    const read = fileRead(text);
+    const result = await readItemListAt(source, RAW_URL, ctx().ctx, { model, read });
+    expect(result.list).toMatchObject({ source: "file", url: RAW_URL });
+    const prompt = promptOf(model, 0);
+    expect(prompt).toContain("Two Sum. Valid Anagram");
+    expect(prompt).not.toContain("TAILMARKER");
+    expect(prompt).toContain("cut at the size limit");
+    expect(prompt.length).toBeLessThan(ITEM_FULL_PAGE_CHARS + 5_000);
+  });
+
   it("returns no list when the address does not open, without calling the model", async () => {
     const model = answers(MAPPING);
     const read = vi.fn<FullReader>(async () => {
