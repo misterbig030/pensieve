@@ -21,9 +21,12 @@ export const MAX_STRUCTURE_FINDERS = 6;
 /** Words in a source's title or description that say it is a list of things to do. */
 const LIST_LIKE_RE = /\b(lists?|problems|questions|exercises|flashcards|cards|challenges|puzzles|katas?|steps|levels|lessons)\b/i;
 
-/** The role a finder looks for: practice only (no reading time), reading only (no practice), or both. */
+/**
+ * The role a finder looks for: practice only (no reading time, or a chapter list already, which its reading units would
+ * never replace), reading only (no practice), or both.
+ */
 export function structureRole(m: Material): StructureRole {
-  if (isPracticeOnly(m)) return "practice";
+  if (isPracticeOnly(m) || (m.toc && m.practice)) return "practice";
   return m.practice ? "both" : "read";
 }
 

@@ -166,7 +166,9 @@ describe("applyAllocation", () => {
 
   it("has a cap only from a measured size or measured units", () => {
     expect(budgetCap(essay)).toBe(15);
-    expect(budgetCap(book)).toBe(600); // ten chapters of an hour
+    // A book's chapters are shares of its own size: they cap only when that size was measured.
+    expect(budgetCap(book)).toBeNull(); // estimated, with ten catalogue chapters of an hour
+    expect(budgetCap({ ...book, minutesBasis: "measured" })).toBe(600);
     expect(budgetCap(material({ id: "M9", title: "x", minutes: 90, minutesBasis: "estimated" }))).toBeNull();
     expect(budgetCap(material({ id: "M9", title: "x" }))).toBeNull();
     const partlySized = { ...book, toc: { ...book.toc!, chapters: book.toc!.chapters.map((c, i) => (i === 0 ? { ...c, minutes: null } : c)) } };
@@ -346,6 +348,16 @@ describe("buildAllocationPrompt", () => {
     const q = buildAllocationPrompt({ ...input, materials: [sized] });
     expect(q).toContain("page 12 min (measured), 6 h (measured)");
     expect(q).not.toContain("estimate about");
+  });
+
+  it("shows only the size of a material with units, not its page beside it", () => {
+    const units = { ...primerToc, chapters: [1, 2, 3].map((i) => unit(`Week ${i}`, null, 16)) };
+    const hub = material({ id: "M1", title: "A hub", kind: "docs", hub: true, pageMinutes: 49, minutes: 48, minutesBasis: "measured", toc: units });
+    const p = buildAllocationPrompt({ ...input, materials: [hub] });
+    expect(p).toContain('M1 [docs] "A hub" · reading 48 min (measured)\n');
+    expect(p).not.toContain("page 49 min");
+    const estimated = material({ id: "M1", title: "A hub", kind: "docs", hub: true, pageMinutes: 12, minutes: 360, minutesBasis: "estimated", toc: units });
+    expect(buildAllocationPrompt({ ...input, materials: [estimated] })).toContain('M1 [docs] "A hub" · reading about 6 h (estimated)\n');
   });
 
   it("asks for a budget and a purpose, and says the outline chooses the units", () => {

@@ -444,6 +444,12 @@ describe("budget-miss", () => {
     expect(check([[], []], primer([null, null, null])).breaches).toEqual([]);
     expect(misses(check([[1, 2], [3, 4]], primer(), false))).toEqual([]);
   });
+  it("is not checked when any unit is unsized: an unsized unit would count 0 and the miss could not be cured", () => {
+    // Every unit reserved: the sized ones count 40 min against a budget of 60 that the unsized unit makes up.
+    const hub = primer([3, 5, 2, 10, null, 8, 4, 8], 60);
+    expect(misses(check([[1, 2, 3], [4, 5], [6, 7, 8]], hub))).toEqual([]);
+    expect(misses(check([[1], [2]], hub))).toEqual([]);
+  });
   it("is not droppable: no row can be removed to cure it", () => {
     expect(DROPPABLE.has("budget-miss")).toBe(false);
     const out = check([[1, 2], [3, 4]]);

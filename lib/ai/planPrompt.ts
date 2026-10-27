@@ -749,6 +749,10 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     ...availabilityLines(input, aliases),
     rules,
   ];
+  // The top level is held to each budget whether its units are headings or leaves; under a parent, the reservation was.
+  if (!input.parentId && input.materials.some((m) => m.toc)) {
+    lines.push(`A resource with units (Mn.1, Mn.2, …) is read by its units, never as a whole. Choose the units that serve its purpose and add up to about its budget.`);
+  }
   const size = input.materials.some((m) => m.minutes) ? "Each resource's size is in the list. " : "";
   lines.push(
     `${size}A chapter longer than one unit's reading time spans consecutive units: list it in each with the part in the note; across those units its minutes add up to its size. A resource is read once: do not assign what another unit reads${listed ? `, and never refer to ${B} itself` : ""}.`,

@@ -397,6 +397,23 @@ describe("chapters as resources in prompts", () => {
     expect(prompt).toContain("A unit with nothing left to read in its reservation reads nothing: that time is for projects. Never assign a resource a unit before it already read.");
     expect(prompt).not.toMatch(/review|activity/i);
   });
+  it("a top-level leaf is told to read a resource with units by its units, to about its budget; a leaf under a parent is not", () => {
+    const rule = "A resource with units (Mn.1, Mn.2, …) is read by its units, never as a whole. Choose the units that serve its purpose and add up to about its budget.";
+    const top = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "week", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "week", spans: [7, 7], weeks: 2, daysPerWeek: 7, unitsAreLeaves: true });
+    expect(top).toContain(rule);
+    const oneWeek = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "day", spans: Array(7).fill(1), weeks: 1, daysPerWeek: 7, unitsAreLeaves: true });
+    expect(oneWeek).toContain(rule);
+    // Without units the rule has nothing to say.
+    expect(buildUnitsPrompt({ topic: "t", materials: [{ ...AIE_MATERIALS[0], toc: null }], granularity: "week", level: "week", spans: [7], weeks: 1, daysPerWeek: 7, unitsAreLeaves: true })).not.toContain("add up to about its budget");
+    // Days under a week read the week's reservation: the week already met the budgets.
+    const root = aiePlan();
+    const w1 = root.children![0].children![0];
+    w1.covers = w1.materials!.map((m) => ({ id: m.id, chapter: m.chapter, note: null }));
+    delete w1.materials;
+    layout(root);
+    const under = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "day", spans: Array(7).fill(1), weeks: 13, daysPerWeek: 7, tree: root, parentId: "w1", unitsAreLeaves: true });
+    expect(under).not.toContain("add up to about its budget");
+  });
   it("an unlisted backbone keeps the topic-only rule at both levels", () => {
     const m = [{ ...AIE_MATERIALS[0], toc: null }];
     expect(buildUnitsPrompt({ topic: "t", materials: m, granularity: "week", level: "month", spans: [30], weeks: 4, daysPerWeek: 7, unitsAreLeaves: false })).toContain("Never write a chapter number or a chapter title you were not given.");

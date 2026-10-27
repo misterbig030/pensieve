@@ -92,6 +92,16 @@ describe("siteLinkCount", () => {
     expect(siteLinkCount(parseOutline(hub, url), url)).toBeGreaterThanOrEqual(6);
   });
 
+  it("does not count images: the primer's 59 file links hold 36 images, and the hub keeps its folders", () => {
+    const url = "https://github.com/donnemartin/system-design-primer";
+    expect(siteLinkCount(parseOutline(primer, url), url)).toBe(23);
+    const hubUrl = "https://github.com/severilov/DL-Audio-AIMasters-Course";
+    expect(siteLinkCount(parseOutline(hub, hubUrl), hubUrl)).toBeGreaterThanOrEqual(6);
+    const site = "https://example.com/docs/";
+    const assets = ["a.png", "b.JPG", "c.jpeg", "d.gif", "e.svg", "f.webp", "favicon.ico", "g.bmp"].map((f) => `<a href="/img/${f}">x</a>`).join("");
+    expect(siteLinkCount(parseOutline(`<body>${assets}<a href="/docs/slides.pdf">slides</a><a href="/docs/intro">intro</a></body>`, site), site)).toBe(2);
+  });
+
   it("does not count GitHub's own chrome as site links", () => {
     expect(siteLinkCount(parseOutline(githubShell, "https://github.com/a/b"), "https://github.com/a/b")).toBe(0);
   });

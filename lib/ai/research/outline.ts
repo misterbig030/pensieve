@@ -175,9 +175,13 @@ function dedupe(links: OutlineLink[]): OutlineLink[] {
   });
 }
 
+/** Paths that end in an image: a picture is not a page to read, however many a README shows. A PDF is a page. */
+const IMAGE_PATH = /\.(?:png|jpe?g|gif|svg|webp|ico|bmp)$/i;
+
 /**
  * How many distinct other pages of the page's own site it links to. For a GitHub repo that is the repo's own files and
- * folders (blob and tree links, not its issues, actions or release pages); elsewhere it is any page on the same registrable domain.
+ * folders (blob and tree links, not its issues, actions or release pages); elsewhere it is any page on the same
+ * registrable domain. Links to images are not pages and are not counted.
  */
 export function siteLinkCount(outline: PageOutline, finalUrl: string): number {
   const self = canonicalUrl(finalUrl);
@@ -186,7 +190,7 @@ export function siteLinkCount(outline: PageOutline, finalUrl: string): number {
   const targets = new Set<string>();
   for (const link of outline.links) {
     const target = canonicalUrl(link.url);
-    if (!target || target === self) continue;
+    if (!target || target === self || IMAGE_PATH.test(new URL(target).pathname)) continue;
     if (repo) {
       const t = new URL(target);
       if (t.hostname === "github.com" && (t.pathname.toLowerCase().startsWith(`/${repo}/blob/`) || t.pathname.toLowerCase().startsWith(`/${repo}/tree/`))) targets.add(target);

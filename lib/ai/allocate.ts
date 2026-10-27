@@ -138,12 +138,12 @@ function materialLines(m: Material): string[] {
 /**
  * A material's size with its basis: `reading 50 min (measured)`, `reading about 10 h (estimated)`. A hub, or any size that
  * is not measured, shows the fetched page's own size beside it when that differs: `page 12 min (measured), estimate
- * about 6 h`.
+ * about 6 h`. A material with units shows its size alone: its units say what the page holds.
  */
 function sizeOf(m: Material): string {
   if (!m.minutes) return m.practice ? "no reading time" : "reading size unknown";
   const measured = m.minutesBasis === "measured";
-  if ((m.hub || !measured) && finite(m.pageMinutes) && m.pageMinutes !== m.minutes) {
+  if (!m.toc && (m.hub || !measured) && finite(m.pageMinutes) && m.pageMinutes !== m.minutes) {
     return `page ${formatMinutes(m.pageMinutes)} (measured), ${measured ? `${formatMinutes(m.minutes)} (measured)` : `estimate about ${formatMinutes(m.minutes)}`}`;
   }
   return `reading ${measured ? "" : "about "}${formatMinutes(m.minutes)}${m.minutesBasis ? ` (${m.minutesBasis})` : ""}`;
@@ -293,9 +293,11 @@ const MAX_MINUTES = 60000;
 /**
  * The most reading minutes a budget may hold: the material's size when that was measured, else the sum of its units'
  * minutes when every unit has some. An estimate is no cap, since estimates are what went wrong; null when nothing caps.
+ * A book's chapter minutes are shares of the book's own size, so they cap only when that size was measured.
  */
 export function budgetCap(m: Material): number | null {
   if (m.minutesBasis === "measured" && m.minutes) return m.minutes;
+  if (m.kind === "book") return null;
   const units = m.toc?.chapters ?? [];
   if (units.length > 0 && units.every((c) => c.minutes !== null)) return units.reduce((sum, c) => sum + c.minutes!, 0);
   return null;

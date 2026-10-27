@@ -692,8 +692,8 @@ function formatChapters(chapters: number[]): string {
  * `practice-overlap`: an item another unit already did, or one two units of a level take; a run two headings reserve.
  * `practice-generated`: a row the model wrote where the registry forbids it (a format never written, or recall not from
  * the unit's own reading).
- * `budget-miss`: at the top level, a material with units whose reserved units add up to more or less than its budget,
- * past `budgetMissSlack`.
+ * `budget-miss`: at the top level, a material whose units all have minutes and whose reserved units add up to more or
+ * less than its budget, past `budgetMissSlack`.
  */
 export type BreachKind =
   | "outside"
@@ -1249,12 +1249,13 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     }
   }
 
-  // The top level reserves each sized material with units toward its budget: its units' minutes at headings, its rows'
-  // at leaves. No row can be dropped to cure a miss, so after the retry it stays a fact.
+  // The top level reserves each material whose units are all sized toward its budget: its units' minutes at headings,
+  // its rows' at leaves. An unsized unit would count nothing, so a list with one is not held to its budget. No row can
+  // be dropped to cure a miss, so after the retry it stays a fact.
   if (input.top) {
     for (const m of input.materials) {
       const budget = m.minutes;
-      if (!listed(m.id) || budget === null || budget === undefined || !m.toc!.chapters.some((c) => c.minutes !== null)) continue;
+      if (!listed(m.id) || budget === null || budget === undefined || !m.toc!.chapters.every((c) => c.minutes !== null)) continue;
       const reads = input.nodes.flatMap((n) => refsOf(n).filter((r) => isRead(r) && r.id === m.id));
       const reserved = Math.round(reads.reduce((sum, r) => sum + (input.leaves && typeof r.minutes === "number" ? r.minutes : knownMinutes(r)), 0));
       if (Math.abs(reserved - budget) <= budgetMissSlack(budget)) continue;

@@ -42,7 +42,7 @@ function check(opts: {
   answer: StructureAnswer;
   pages: SeenPage[];
   role?: StructureRole;
-  material?: Partial<{ url: string; kind: "repo" | "book" | "course"; minutes: number | null; practice: MaterialPractice | null }>;
+  material?: Partial<{ url: string; kind: "repo" | "book" | "course"; minutes: number | null; minutesBasis: "measured" | "estimated" | null; practice: MaterialPractice | null }>;
   lists?: PracticeList[];
 }) {
   return checkUnits({
@@ -151,6 +151,18 @@ describe("checkUnits", () => {
     expect(v.refused).toBeNull();
     expect(v.toc!.chapters.map((c) => c.title)).toEqual(SECTIONS.slice(0, 20));
     expect(v.facts).toContain("2 of 22 units point to no fetched page or heading");
+  });
+
+  it("rule 3: a non-book unit at the source page itself, beside its headings, is dropped as unseen, not sized as the whole page", () => {
+    const sized = check({ answer: answer(sectionUnits()), pages: [sectionsPage] });
+    const units = [...sectionUnits(), unit("a/b", REPO, { minutes: 30 }), unit("a/b", "", { minutes: 30 })];
+    const v = check({ answer: answer(units), pages: [sectionsPage] });
+    expect(v.refused).toBeNull();
+    expect(v.toc!.chapters.map((c) => c.title)).toEqual(SECTIONS);
+    expect(v.minutes).toBe(sized.minutes);
+    expect(v.facts).toContain("2 of 24 units point to no fetched page or heading");
+    // A unit at the source page that names one of its headings is still that heading.
+    expect(check({ answer: answer([...sectionUnits().slice(1), unit("Section 1", REPO)]), pages: [sectionsPage] }).toc!.chapters.map((c) => c.title)).toEqual(SECTIONS);
   });
 
   it("rule 3: a unit may point at the page's final URL after a redirect", () => {
@@ -285,7 +297,7 @@ describe("checkUnits", () => {
     const toc = seen(SLP, fixture("book-toc"));
     const titles = ["Introduction", "Words and Tokens", "N-gram Language Models", "Logistic Regression and Text Classification", "Embeddings", "Neural Networks", "Transformers and Pretraining", "Post-training", "Masked Language Models", "Interpretability"];
     const units = [...titles.map((t) => unit(t, SLP, { minutes: 300 })), unit("Quantum Chromodynamics", SLP)];
-    const v = check({ answer: answer(units), pages: [toc], material: { url: SLP, kind: "book", minutes: 1200 } });
+    const v = check({ answer: answer(units), pages: [toc], material: { url: SLP, kind: "book", minutes: 1200, minutesBasis: "measured" } });
     expect(v.refused).toBeNull();
     expect(v.toc!.url).toBe(SLP);
     expect(v.toc!.chapters.map((c) => [c.title, c.minutes, c.url])).toEqual(titles.map((t) => [t, 120, null]));
@@ -294,12 +306,22 @@ describe("checkUnits", () => {
     expect(v.facts).toContain("1 of 11 titles not on the page");
   });
 
+  it("rule 10: an uncatalogued book's estimated size is never shared out as chapter minutes", () => {
+    const BOOK = "https://example.com/book";
+    const titles = ["The Shape of Data", "Counting Things", "Drawing Lines"];
+    const contents = seen(BOOK, `<html><head><title>A Book</title></head><body><main><h1>Contents</h1><ol>${titles.map((t) => `<li>${t}</li>`).join("")}</ol></main></body></html>`);
+    const v = check({ answer: answer(titles.map((t) => unit(t, BOOK, { minutes: 200 }))), pages: [contents], material: { url: BOOK, kind: "book", minutes: 600, minutesBasis: "estimated" } });
+    expect(v.refused).toBeNull();
+    expect(v.toc!.chapters.map((c) => [c.title, c.minutes])).toEqual(titles.map((t) => [t, null]));
+    expect(v.minutes).toBeNull();
+  });
+
   it("rule 10: a book whose chapters each point at their own fetched page keeps its contents page as the toc's url", () => {
     const BOOK = "https://example.com/book";
     const titles = ["The Shape of Data", "Counting Things", "Drawing Lines"];
     const contents = seen(BOOK, `<html><head><title>A Book</title></head><body><main><h1>Contents</h1><ol>${titles.map((t, i) => `<li><a href="/book/ch${i + 1}">${t}</a></li>`).join("")}</ol></main></body></html>`);
     const chapters = titles.map((t, i) => bare(`${BOOK}/ch${i + 1}`, { title: t, text: `${t}\n${filler(50)}` }));
-    const v = check({ answer: answer(titles.map((t, i) => unit(t, `${BOOK}/ch${i + 1}`))), pages: [contents, ...chapters], material: { url: BOOK, kind: "book", minutes: 300 } });
+    const v = check({ answer: answer(titles.map((t, i) => unit(t, `${BOOK}/ch${i + 1}`))), pages: [contents, ...chapters], material: { url: BOOK, kind: "book", minutes: 300, minutesBasis: "measured" } });
     expect(v.refused).toBeNull();
     expect(v.toc!.url).toBe(BOOK);
     expect(v.toc!.chapters.map((c) => [c.title, c.url, c.minutes])).toEqual(titles.map((t, i) => [t, `${BOOK}/ch${i + 1}`, 100]));

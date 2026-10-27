@@ -137,6 +137,9 @@ describe("structureRole", () => {
     expect(structureRole(mat({ minutes: 120 }))).toBe("read");
     expect(structureRole(mat({ minutes: null }))).toBe("read");
   });
+  it("is practice for reading with practice that already has its chapters: the finder's reading units would be dropped", () => {
+    expect(structureRole(mat({ kind: "book", minutes: 600, toc: { ...TOC, source: "catalogue" }, practice: practice() }))).toBe("practice");
+  });
 });
 
 describe("the structure stage", () => {
@@ -260,15 +263,16 @@ describe("the structure stage", () => {
   });
 
   it("never replaces a chapter list the material already has, and still merges its list and note", async () => {
-    // A catalogued book that is also a counted problem set: picked for its item list, though it has its chapters.
+    // A catalogued book to read that is also a counted problem set: picked for its item list, though it has its chapters.
     const dual: ResearchArm = async (input) => {
       const out = await arm(input);
-      return { ...out, candidates: out.candidates.map((c) => (c.title === "Core Textbook" ? { ...c, practice: { format: "problem-set" as const, items: 189, answers: true } } : c)) };
+      return { ...out, candidates: out.candidates.map((c) => (c.title === "Core Textbook" ? { ...c, minutes: 600, practice: { format: "problem-set" as const, items: 189, answers: true } } : c)) };
     };
     const gate = (await collect(researchMaterials({ brief: { topic: "T", weeks: 4, sources: [] }, arm: dual, fetcher: fetcher(), books }))).outcome.materials;
     const finder = finderOf(async (m) => (m.title === "Core Textbook" ? result({ toc: TOC, minutes: 150, basis: "measured", list: LIST, note: "Chapters with exercises.", units: 3 }) : result()));
     const { events, outcome } = await collect(researchMaterials({ brief: { topic: "T", weeks: 4, sources: [] }, arm: dual, fetcher: fetcher(), books, structure: finder }));
-    expect(finder.find.mock.calls.map(([m]) => m.title)).toContain("Core Textbook");
+    // Its chapters are kept, so its finder looks for practice only.
+    expect(finder.find.mock.calls.filter(([m]) => m.title === "Core Textbook").map(([, role]) => role)).toEqual(["practice"]);
     const before = byTitle(gate, "Core Textbook");
     const book = byTitle(outcome.materials, "Core Textbook");
     expect(before.toc).toMatchObject({ source: "catalogue" });

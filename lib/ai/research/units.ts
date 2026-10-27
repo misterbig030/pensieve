@@ -118,7 +118,7 @@ export function checkUnits(input: {
   let unfetched = 0;
   let untitled = 0;
   units.forEach((unit, index) => {
-    const target = locate(unit, pages, source);
+    const target = locate(unit, pages, source, book);
     const title = target ? seenTitle(unit.title, target.page, target.heading, pages, book) : null;
     if (target && title) {
       placed.push({ unit, index, title, ...target, ...sizeOf(unit, target.page, target.heading) });
@@ -180,7 +180,9 @@ export function checkUnits(input: {
         group: clip(p.unit.group, MAX_HEADING),
       })),
     };
-    const parsed = chapterListSchema.safeParse(book ? withChapterSizes(draft, material.minutes ?? null) : draft);
+    // A book's chapters share out its size only when that size was measured: an estimate is no size to share.
+    const bookMinutes = material.minutesBasis === "measured" ? (material.minutes ?? null) : null;
+    const parsed = chapterListSchema.safeParse(book ? withChapterSizes(draft, bookMinutes) : draft);
     if (!parsed.success) return refuse("units refused: the units do not make a chapter list");
     toc = parsed.data;
   }
@@ -225,9 +227,11 @@ function anchorKey(raw: string): string {
 
 /**
  * The page a unit's `at` points to, and its heading: the one its fragment names, or, on the source page, the one
- * that carries its title. Null when no tool returned the page, or the fragment names no heading on it.
+ * that carries its title. Null when no tool returned the page, or the fragment names no heading on it, or (not for a
+ * book) it points at the source page with headings but names none of them: that unit is the whole page again, beside
+ * its sections.
  */
-function locate(unit: Unit, pages: SeenPage[], source: SeenPage | null): { page: SeenPage; heading: number | null } | null {
+function locate(unit: Unit, pages: SeenPage[], source: SeenPage | null, book: boolean): { page: SeenPage; heading: number | null } | null {
   const hash = unit.at.indexOf("#");
   const fragment = hash === -1 ? "" : anchorKey(unit.at.slice(hash + 1));
   const page = pageAt(pages, hash === -1 ? unit.at : unit.at.slice(0, hash));
@@ -239,6 +243,7 @@ function locate(unit: Unit, pages: SeenPage[], source: SeenPage | null): { page:
   }
   const title = normalText(unit.title);
   const heading = page === source && title ? headings.findIndex((h) => normalText(h.title) === title) : -1;
+  if (heading === -1 && page === source && !book && headings.length > 0) return null;
   return { page, heading: heading === -1 ? null : heading };
 }
 
