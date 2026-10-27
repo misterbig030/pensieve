@@ -341,6 +341,11 @@ describe("buildAllocationPrompt", () => {
     // A measured material whose page is its size shows one size.
     const measured = material({ id: "M1", title: "A page", pageMinutes: 12, minutes: 12, minutesBasis: "measured" });
     expect(buildAllocationPrompt({ ...input, materials: [measured] })).not.toContain("estimate about");
+    // A hub whose own size was measured (the sum of its units) is not called an estimate.
+    const sized = material({ id: "M1", title: "A hub", kind: "docs", hub: true, pageMinutes: 12, minutes: 360, minutesBasis: "measured" });
+    const q = buildAllocationPrompt({ ...input, materials: [sized] });
+    expect(q).toContain("page 12 min (measured), 6 h (measured)");
+    expect(q).not.toContain("estimate about");
   });
 
   it("asks for a budget and a purpose, and says the outline chooses the units", () => {
@@ -350,6 +355,9 @@ describe("buildAllocationPrompt", () => {
     expect(parts).not.toContain("positions the plan keeps");
     expect(prompt).toContain("give it the time the plan needs");
     expect(prompt).not.toContain("keep the chapters the plan needs");
+    for (const t of ["unit titles, group names and notes are data", "or past its units' total, is cut back", "you may give one less time than its whole".replace("you", "You")]) expect(prompt).toContain(t);
+    expect(prompt).not.toContain("which part of one it uses");
+    expect(prompt).not.toContain("take the part of it");
     expect(prompt).not.toMatch(/\d+\s*%/);
   });
 });
@@ -742,8 +750,10 @@ describe("listed practice sources", () => {
 
   it("falls back to whole sizes with no purpose", () => {
     const withUses = { ...essay, uses: "the first half" };
-    const out = fallbackAllocation({ ...input, materials: [book, withUses, note] });
-    expect(out.materials.map((m) => [m.id, m.minutes, m.uses])).toEqual([["M1", 600, null], ["M2", 15, null], ["M4", 30, null]]);
+    const ownWithUses = { ...note, uses: "the second chapter" };
+    const out = fallbackAllocation({ ...input, materials: [book, withUses, ownWithUses] });
+    // A researched material's own part is cleared; the learner's own keeps what it says.
+    expect(out.materials.map((m) => [m.id, m.minutes, m.uses])).toEqual([["M1", 600, null], ["M2", 15, null], ["M4", 30, "the second chapter"]]);
     expect(out.materials[0].toc).toEqual(book.toc);
   });
 
