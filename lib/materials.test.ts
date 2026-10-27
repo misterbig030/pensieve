@@ -34,6 +34,8 @@ import {
   draftedSplit,
   shareRuns,
   sizeItemRuns,
+  itemAliases,
+  itemRun,
 } from "./materials";
 import { itemMinutes, itemPositions } from "./practice";
 
@@ -1363,5 +1365,49 @@ describe("sizeItemRuns: code sizes a listed source's runs on headings", () => {
     // A week whose share crosses the gap holds two runs, so no run names an item another unit holds.
     expect(kids.flatMap((k) => runsOf(k)).every((c) => !itemPositions(c).includes(12))).toBe(true);
     expect(levelChecks({ root, nodes: kids, leaves: false, top: false, materials, unknownIds: [], daysPerWeek: 5, hoursPerWeek: 5, split }).breaches).toEqual([]);
+  });
+});
+
+describe("item aliases on a source with both units and items", () => {
+  const tocOf = (n: number) => ({ source: "catalogue" as const, url: "u", printPages: false, end: null, chapters: Array.from({ length: n }, (_, i) => ({ n: i + 1, title: `C${i + 1}`, page: null, minutes: null, sections: [] })) });
+  const listed = (n: number) => ({
+    format: "problem-set" as const,
+    items: n,
+    perItemMinutes: 10,
+    minutes: null,
+    answers: true,
+    list: { items: Array.from({ length: n }, (_, i) => ({ title: `P${i + 1}`, number: String(i + 1), group: "Arrays", difficulty: null, url: null, solutionUrl: null, minutes: null })), source: "file" as const, url: "https://example.com/list.json" },
+  });
+  const both = { id: "b", toc: tocOf(3), practice: listed(5) };
+  const itemsOnly = { id: "p", toc: null, practice: listed(5) };
+  const a = aliasMaterials([both, itemsOnly]);
+
+  it("names an item with an i where the source has a chapter list, and without where it has none", () => {
+    expect(a.alias("b", { item: 4 })).toBe("M1.i4");
+    expect(a.alias("b", 2)).toBe("M1.2");
+    expect(a.alias("p", { item: 4 })).toBe("M2.4");
+  });
+  it("resolves M1.i4 only to an item and M1.2 to a chapter, never to an item", () => {
+    expect(a.resolve("M1.i4")).toEqual({ id: "b", chapter: null, item: 4 });
+    expect(a.resolve("M1.2")).toEqual({ id: "b", chapter: 2 });
+    expect(a.resolve("M1.4")).toBeUndefined(); // past the chapters; items need the i
+    expect(a.resolve("M1.i6")).toBeUndefined();
+    expect(a.resolve("M1.i0")).toBeUndefined();
+    expect(a.resolve("[m1.I5]")).toEqual({ id: "b", chapter: null, item: 5 });
+  });
+  it("keeps items-only sources as they were, and lets them take the i too", () => {
+    expect(a.resolve("M2.4")).toEqual({ id: "p", chapter: null, item: 4 });
+    expect(a.resolve("M2.i4")).toEqual({ id: "p", chapter: null, item: 4 });
+  });
+  it("does not turn M1.i4 into a chapter or a reading ref", () => {
+    expect(resolveMaterialRefs([{ id: "M1.i4", tier: "must", minutes: 30 }], a).unknown).toEqual(["M1.i4"]);
+  });
+  it("writes runs and positions through the aliases", () => {
+    expect(itemAliases(a, "b", [2, 3, 5])).toBe("M1.i2–M1.i3, M1.i5");
+    expect(itemAliases(a, "p", [2, 3, 5])).toBe("M2.2–M2.3, M2.5");
+    expect(itemRun(a, "p", 1, 9)).toBe("M2 items 1–9");
+    expect(itemRun(a, "p", 7, 7)).toBe("M2.7");
+    expect(itemRun(a, "b", 7, 7)).toBe("M1.i7");
+    expect(itemRun(a, "b", 1, 9)).toBe("M1 items 1–9");
   });
 });

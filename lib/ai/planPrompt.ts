@@ -2,6 +2,7 @@ import {
   aliasMaterials,
   draftedSplit,
   formatAliases,
+  itemAliases,
   itemRun,
   pickSources,
   placedMinutes,
@@ -93,7 +94,7 @@ type PracticeLike = { id: string | null; task?: string; minutes?: number; note?:
 function practiceItem(r: PracticeLike, aliases: MaterialAliases): string | null {
   const base = r.id === null ? null : aliases.alias(r.id);
   if (base === undefined) return null;
-  const alias = base !== null && r.itemFrom && r.itemTo ? itemRun(base, r.itemFrom, r.itemTo) : base;
+  const alias = base !== null && r.id !== null && r.itemFrom && r.itemTo ? itemRun(aliases, r.id, r.itemFrom, r.itemTo) : base;
   const generated = r.id === null || r.generated;
   const who = [alias, generated ? "generated" : null].filter(Boolean).join(" ");
   return `${who}${r.minutes ? ` ${r.minutes} min` : ""}${r.task ? `: ${r.task}` : ""}${refNote(r.note ?? null)}`;
@@ -244,7 +245,7 @@ export function renderMaterials(materials: Material[], aliases: MaterialAliases 
       const alias = aliases.alias(m.id);
       const resource = m.toc ? `${m.why ? "" : "."} Refer to its chapters by id; ${alias} itself is not a resource.` : "";
       const line = `${alias} [${tags}] "${m.title}"${byline ? ` — ${byline}` : ""}${where}${sizeNote(m)}${m.why ? `. ${m.why}` : ""}${resource}`;
-      const list = m.practice?.list ? [renderItemGroups(m.practice.format, m.practice.list, alias!)] : [];
+      const list = m.practice?.list ? [renderItemGroups(m.practice.format, m.practice.list, aliases, m)] : [];
       return m.toc ? [line, ...renderChapters(m.toc, { sections: !!options.sections && m.backbone, alias }), ...list] : [line, ...list];
     })
     .join("\n");
@@ -252,21 +253,25 @@ export function renderMaterials(materials: Material[], aliases: MaterialAliases 
 
 /**
  * A listed practice source's groups on one line under it, by position, never by title: `  M4 items 1–9 Arrays & Hashing
- * (3.3 h); 10–14 Two Pointers (2.1 h)`. A group is every item of that name, so one that comes back shows each run.
+ * (3.3 h); 10–14 Two Pointers (2.1 h)`. A group is every item of that name, so one that comes back shows each run. A source
+ * that also has chapters says what its items are called: `  M4 items, as M4.i1–M4.i21: 1–9 Arrays & Hashing (3.3 h); …`.
  */
-function renderItemGroups(format: PracticeFormat, list: PracticeList, alias: string): string {
+function renderItemGroups(format: PracticeFormat, list: PracticeList, aliases: MaterialAliases, m: Pick<Material, "id" | "toc">): string {
+  const alias = aliases.alias(m.id)!;
   const groups = listGroups(list.items).map(({ name, positions, items }) => {
     const minutes = items.reduce((sum, item) => sum + itemMinutes(format, item), 0);
     return `${formatRuns(positions)} ${name ?? "no group"} (${formatMinutes(minutes)})`;
   });
-  return `  ${alias} items ${groups.join("; ")}`;
+  // A source with chapters names its items apart from them (`M4.i1`), so the line says how.
+  const named = m.toc ? `, as ${itemAliases(aliases, m.id, list.items.map((_, i) => i + 1))}:` : "";
+  return `  ${alias} items${named} ${groups.join("; ")}`;
 }
 
 /** `M4.12 49. Group Anagrams · Arrays & Hashing · medium · 25 min`: one listed item as a leaf takes it. */
-function itemLine(format: PracticeFormat, list: PracticeList, alias: string, position: number): string {
+function itemLine(format: PracticeFormat, list: PracticeList, aliases: MaterialAliases, id: string, position: number): string {
   const item = list.items[position - 1];
   const title = `${item.number ? `${item.number}. ` : ""}${item.title}`;
-  return `  ${alias}.${position} ${[title, item.group, item.difficulty, `${itemMinutes(format, item)} min`].filter(Boolean).join(" · ")}`;
+  return `  ${aliases.alias(id, { item: position })} ${[title, item.group, item.difficulty, `${itemMinutes(format, item)} min`].filter(Boolean).join(" · ")}`;
 }
 
 function contextLines(ctx: PlanPromptContext, options: RenderMaterialsOptions = {}): string[] {
@@ -416,8 +421,8 @@ function otherUnits(input: UnitsPromptInput): PlanNode[] {
 }
 
 /** "M4.3", "M4 items 1–3, 7": positions of a listed source. */
-function positionsText(alias: string, positions: number[]): string {
-  return positions.length === 1 ? `${alias}.${positions[0]}` : `${alias} items ${formatRuns(positions)}`;
+function positionsText(aliases: MaterialAliases, id: string, positions: number[]): string {
+  return positions.length === 1 ? aliases.alias(id, { item: positions[0] })! : `${aliases.alias(id)} items ${formatRuns(positions)}`;
 }
 
 /**
@@ -434,8 +439,7 @@ function practiceHeld(input: UnitsPromptInput, aliases: MaterialAliases, format:
       else items.push(practiceItem(r, aliases));
     }
     for (const [id, positions] of done) {
-      const alias = aliases.alias(id);
-      if (alias) items.push(positionsText(alias, positions));
+      if (aliases.alias(id)) items.push(positionsText(aliases, id, positions));
     }
     const named = items.filter((s): s is string => s !== null);
     if (named.length > 0) held.push(`${named.join("; ")} in ${fullLabelOf(input.tree!, n)}`);
@@ -493,7 +497,7 @@ function leafPickSources(input: UnitsPromptInput, aliases: MaterialAliases, p: P
   const rule = write === null ? "Every row names one of them; never write rows of this format yourself." : `When none fits, ${write}`;
   const itemsOf = (id: string, list: PracticeList, positions: number[]) => {
     const taken = takenPositions(input, id);
-    return positions.filter((n) => !taken.has(n)).map((n) => itemLine(pick.format, list, aliases.alias(id)!, n));
+    return positions.filter((n) => !taken.has(n)).map((n) => itemLine(pick.format, list, aliases, id, n));
   };
   const reserved = reservedPractice(input, pick.format).filter((c) => c.id === null || aliases.alias(c.id) !== undefined);
   if (reserved.length > 0) {
@@ -507,7 +511,7 @@ function leafPickSources(input: UnitsPromptInput, aliases: MaterialAliases, p: P
     for (const id of listedIds) {
       const list = listOf(input, id)!;
       const positions = reservedPositions(reserved.filter((c) => c.id === id), list);
-      parts.push(positionsText(aliases.alias(id)!, positions));
+      parts.push(positionsText(aliases, id, positions));
       items.push(...itemsOf(id, list, positions));
     }
     const listed = listedIds.length > 0 ? "; the items not yet done are below, one row each" : "";
@@ -612,7 +616,7 @@ function headingPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases)
       const unlisted = reserved.filter((c) => !listOf(input, c.id)).map((c) => practiceItem(c, aliases)).filter((s): s is string => s !== null);
       const listed = [...new Set(reserved.filter((c) => listOf(input, c.id)).map((c) => c.id!))].map((id) => {
         const positions = reservedPositions(reserved.filter((c) => c.id === id), listOf(input, id)!);
-        return `${positionsText(aliases.alias(id)!, positions)}: ${runRule(p.pick.format, true)}`;
+        return `${positionsText(aliases, id, positions)}: ${runRule(p.pick.format, true)}`;
       });
       const rest = unlisted.length === 0 ? "" : listed.length > 0 ? ` Also ${unlisted.join("; ")}.` : `${unlisted.join("; ")}.`;
       lines.push(`${name}: from this unit's reservation, ${listed.join(" ")}${rest}${held}`);

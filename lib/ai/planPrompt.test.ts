@@ -639,3 +639,20 @@ describe("listed practice sources in prompts", () => {
     expect(revision).toContain("A source with an item list is reserved by a run, { format, id, from, to }, and done one item per row, id the item's own (M2.1).");
   });
 });
+
+describe("a source with units and items in prompts", () => {
+  const toc: ChapterList = { source: "catalogue", url: "u", printPages: false, end: null, chapters: [1, 2].map((n) => ({ n, title: `C${n}`, page: null, minutes: null, sections: [] })) };
+  const both: Material = { ...MATERIALS[1], id: "B", kind: "course", title: "Algorithms course", toc, practice: LISTED_PROBLEMS };
+  const itemsOnly: Material = { ...both, id: "P", toc: null };
+
+  it("shows the items as M1.i… and the chapters as M1.1…", () => {
+    const text = renderMaterials([both]);
+    expect(text).toContain('  M1.1 ch. 1 "C1"');
+    expect(text).toContain("M1.i1–M1.i21");
+    expect(text).not.toMatch(/M1\.\d+–M1\.\d+/);
+  });
+  it("leaves an items-only source's groups line as it was", () => {
+    expect(renderMaterials([itemsOnly])).toContain("\n  M1 items 1–9 Arrays & Hashing");
+    expect(renderMaterials([itemsOnly])).not.toContain("M1.i");
+  });
+});

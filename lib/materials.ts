@@ -41,18 +41,19 @@ import type { SourceInput } from "@/lib/schemas/source";
 /**
  * Prompts always call materials `M1…Mn` in list order, whatever their real ids are (short ids while drafting, uuids
  * once saved), so the model never has to echo a uuid. A book with a chapter list also gets one alias per chapter,
- * `M1.3` for the third chapter in its list. These map between the two.
+ * `M1.3` for the third chapter in its list; a practice source with an item list gets one per item, `M4.12`, or `M4.i12`
+ * when the source also has chapters (so `M4.3` is never both). These map between the two.
  */
 export interface ResolvedAlias {
   id: string;
   /** 1-based position in the material's chapter list; null for the whole resource. */
   chapter: number | null;
-  /** 1-based position in a practice source's item list; set only by an item alias (`M4.12`), absent otherwise. */
+  /** 1-based position in a practice source's item list; set only by an item alias (`M4.12`, `M4.i12`), absent otherwise. */
   item?: number;
 }
 
 export interface MaterialAliases {
-  /** `M1`, `M1.3` for a chapter (a number), `M4.12` for an item (`{ item: 12 }`). */
+  /** `M1`, `M1.3` for a chapter (a number), `M4.12` for an item (`{ item: 12 }`), `M4.i12` for an item of a source that also has chapters. */
   alias(id: string, part?: number | null | { item: number }): string | undefined;
   resolve(alias: string): ResolvedAlias | undefined;
   /** How many chapters the material's list has; 0 without a list. */
@@ -65,7 +66,7 @@ export interface MaterialAliases {
   item(id: string, position: number): PracticeItem | undefined;
 }
 
-const ALIAS_RE = /^\[?\s*(m\d+)(?:\.(\d+))?\s*\]?$/i;
+const ALIAS_RE = /^\[?\s*(m\d+)(?:\.(i)?(\d+))?\s*\]?$/i;
 
 export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practice">[]): MaterialAliases {
   const toAlias = new Map<string, string>();
@@ -87,18 +88,23 @@ export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practic
     alias: (id, part) => {
       const base = toAlias.get(id);
       if (base === undefined) return undefined;
-      const n = typeof part === "object" && part !== null ? part.item : part;
-      return n ? `${base}.${n}` : base;
+      const item = typeof part === "object" && part !== null;
+      const n = item ? part.item : part;
+      if (!item && !n) return base;
+      // A source with chapters has `M4.3` for its third chapter, so its items take an i.
+      return item && (counts.get(id) ?? 0) > 0 ? `${base}.i${n}` : `${base}.${n}`;
     },
     resolve: (alias) => {
       const m = alias.match(ALIAS_RE);
       if (!m) return undefined;
       const id = fromAlias.get(m[1].toLowerCase());
       if (!id) return undefined;
-      if (m[2] === undefined) return { id, chapter: null };
-      // A suffix names a chapter of a book with a chapter list, or an item of a practice source with an item list.
-      const n = Number(m[2]);
-      if (n >= 1 && n <= (counts.get(id) ?? 0)) return { id, chapter: n };
+      if (m[3] === undefined) return { id, chapter: null };
+      // A suffix names a chapter of a book with a chapter list, or an item of a practice source with an item list. With
+      // both lists, a bare number is a chapter and an item needs the i; with an item list only, either form is an item.
+      const n = Number(m[3]);
+      const chapters = counts.get(id) ?? 0;
+      if (m[2] === undefined && chapters > 0) return n >= 1 && n <= chapters ? { id, chapter: n } : undefined;
       if (n >= 1 && n <= (itemCounts.get(id) ?? 0)) return { id, chapter: null, item: n };
       return undefined;
     },
@@ -187,16 +193,21 @@ function rowName(format: string, task: string, item?: string): string {
   return `${label}${item ? ` ${item}` : ""} "${t.length > 60 ? `${t.slice(0, 59)}…` : t}"`;
 }
 
-/** "M2.4", "M2.15–M2.16, M2.20": positions of one list under its alias. */
-export function itemAliases(base: string, positions: Iterable<number>): string {
+/** One item's alias; a source the aliases do not know is named by its own id, as everywhere else. */
+function itemName(aliases: MaterialAliases, id: string, position: number): string {
+  return aliases.alias(id, { item: position }) ?? `${id}.${position}`;
+}
+
+/** "M2.4", "M2.15–M2.16, M2.20", "M2.i4" on a source with chapters: positions of one list under its alias. */
+export function itemAliases(aliases: MaterialAliases, id: string, positions: Iterable<number>): string {
   return numberRuns(positions)
-    .map(([a, b]) => (a === b ? `${base}.${a}` : `${base}.${a}–${base}.${b}`))
+    .map(([a, b]) => (a === b ? itemName(aliases, id, a) : `${itemName(aliases, id, a)}–${itemName(aliases, id, b)}`))
     .join(", ");
 }
 
 /** "M2 items 1–9", "M2.7" for a run of one: a reservation's run as prompts and facts name it. */
-export function itemRun(base: string, from: number, to: number): string {
-  return from === to ? `${base}.${from}` : `${base} items ${from}–${to}`;
+export function itemRun(aliases: MaterialAliases, id: string, from: number, to: number): string {
+  return from === to ? itemName(aliases, id, from) : `${aliases.alias(id) ?? id} items ${from}–${to}`;
 }
 
 export interface ResolvePracticeOptions {
@@ -327,8 +338,7 @@ export function resolvePracticeCovers(
       }
       const [from, to] = [Math.min(...given), Math.max(...given)];
       if (from < 1 || to > size) {
-        const base = aliases.alias(resolved.id)!;
-        unknown.push(`${base}.${from}–${base}.${to}`);
+        unknown.push(`${itemName(aliases, resolved.id, from)}–${itemName(aliases, resolved.id, to)}`);
         continue;
       }
       cover.itemFrom = from;
@@ -850,8 +860,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const rowLabel = (row: PracticeRef) => rowName(row.format, row.task, row.id !== null && row.itemFrom ? aliases.alias(row.id, { item: row.itemFrom }) : undefined);
   /** "Problems M2 items 1–9" for a run, "Problems M3" for a source without one. Sourced reservations only. */
   const coverLabel = (c: PracticeCover) => {
-    const base = aliases.alias(c.id!) ?? c.id!;
-    return `${PRACTICE_REGISTRY[c.format].label} ${c.itemFrom && c.itemTo ? itemRun(base, c.itemFrom, c.itemTo) : base}`;
+    return `${PRACTICE_REGISTRY[c.format].label} ${c.itemFrom && c.itemTo ? itemRun(aliases, c.id!, c.itemFrom, c.itemTo) : (aliases.alias(c.id!) ?? c.id!)}`;
   };
   const rowBreach = (kind: BreachKind, index: number, unit: string, row: PracticeRef, text: string): Breach => ({
     kind,
@@ -1175,9 +1184,8 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
         // only that, so one edge off by one does not empty this unit or the next. Nothing free, and the run goes.
         const free = own.filter((n) => !outside.includes(n) && !holderOf(n));
         const keep = numberRuns(free).reduce<[number, number] | null>((best, r) => (!best || r[1] - r[0] > best[1] - best[0] ? r : best), null);
-        const base = aliases.alias(c.id!) ?? c.id!;
         const text =
-          outside.length > 0 ? notReserved() : `${unit} reserves ${name}, but ${[...held].map(([holder, ns]) => `${holder} holds ${itemAliases(base, ns)}`).join(" and ")}`;
+          outside.length > 0 ? notReserved() : `${unit} reserves ${name}, but ${[...held].map(([holder, ns]) => `${holder} holds ${itemAliases(aliases, c.id!, ns)}`).join(" and ")}`;
         const b = coverBreach(outside.length > 0 ? "practice-outside" : "practice-overlap", index, unit, c, text);
         if (keep) b.practiceCovers![0].keep = { itemFrom: keep[0], itemTo: keep[1] };
         newRule(b, node, c);
@@ -1275,7 +1283,7 @@ function itemListFacts(input: LevelCheckInput, aliases: MaterialAliases, parentN
       for (const [k, { id, positions }] of bySource(runsOf(node))) {
         const [lo, hi] = [Math.min(...positions), Math.max(...positions)];
         const far = furthest.get(k) ?? 0;
-        if (lo < far) facts.push(`${itemRun(base(id), lo, hi)} after item ${far} (${label(node)})`);
+        if (lo < far) facts.push(`${itemRun(aliases, id, lo, hi)} after item ${far} (${label(node)})`);
         furthest.set(k, Math.max(far, hi));
       }
     }
