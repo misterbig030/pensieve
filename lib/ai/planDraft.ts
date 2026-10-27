@@ -542,7 +542,7 @@ export interface StreamResearchedDraftInput extends PlanDraftRequest {
   deadline?: number;
   log?: GenerationLogContext;
   /** Tests and the eval inject these; the app uses the defaults. */
-  research?: Pick<ResearchMaterialsInput, "fetcher" | "books" | "caps" | "chapters" | "items">;
+  research?: Pick<ResearchMaterialsInput, "fetcher" | "books" | "caps" | "structure">;
 }
 
 /**
@@ -555,6 +555,7 @@ export async function* streamResearchedPlanDraft(input: StreamResearchedDraftInp
     brief: { topic: input.topic, instructions: input.instructions, weeks: input.weeks, daysPerWeek: input.daysPerWeek, hoursPerWeek: input.hoursPerWeek, sources: input.materials },
     arm: input.arm,
     signal: input.signal,
+    deadline: input.deadline,
     log: input.log,
     ...input.research,
   });

@@ -21,33 +21,20 @@ import { applyMapping, fieldMappingSchema, parseDataFile, sampleDataFile, type D
 import { describeEgressError, guardedFetch, type AcceptedContentType, type GuardedFetchOptions } from "./egress";
 import type { ResearchCounts, ResearchEvent } from "./events";
 import { decodeBody, readableText } from "./extract";
-import type { SearchProvider, SearchResult, SourceFetcher } from "./tools";
-import { canonicalUrl, mainTitle } from "./verify";
+import type { SearchResult, SourceFetcher } from "./tools";
+import { canonicalUrl } from "./verify";
 
 /**
- * A practice source's real items. Two searches and the source's own page and the best result, read through the shared
- * fetcher; then a short call that says where the full list is: a page already read, or up to two addresses to read in
- * full (a data file in the source's repository, a static page). A data file (JSON or CSV) is never copied out by the
- * model: it sees a sample of the records and returns a field mapping, and code applies it to every record in file order.
- * A page is transcribed by the model. Either way the list must trace to something read, its titles must appear in what
- * was read, and its links survive only to hosts that appear in what was read.
+ * A practice source's real items, read at an address the structure finder chose (its `items` tool). A data file (JSON
+ * or CSV) is never copied out by the model: it sees a sample of the records and returns a field mapping, and code
+ * applies it to every record in file order. A page is transcribed by the model. Either way the list must trace to
+ * something read, its titles must appear in what was read, and its links survive only to hosts that appear in what was
+ * read.
  */
 
-export const ITEM_FINDER_RESULTS = 5;
-/** Pages read through the shared fetcher before the first call (the source's own page first). */
-export const ITEM_FIRST_READS = 2;
-/** Files or pages the model may have read in full. */
-export const ITEM_FULL_READS = 2;
-/** Every read tried in all, the full reads included. */
-export const ITEM_FINDER_READS = 4;
-
 /** Clocks, one per stage, so a slow stage never starves the next. */
-export const ITEM_GATHER_MS = 15_000;
-export const ITEM_LOCATE_MS = 10_000;
 export const ITEM_FULL_READ_MS = 10_000;
 export const ITEM_MAP_MS = 10_000;
-/** The data-file path's worst case: searching and reading, the where call, the full reads, the mapping call. */
-export const ITEM_FINDER_WALL_MS = ITEM_GATHER_MS + ITEM_LOCATE_MS + ITEM_FULL_READ_MS + ITEM_MAP_MS;
 /**
  * The clock on transcribing a page, the path for lists with no data file: listing 150 problems is several thousand
  * output tokens. A call that runs out leaves the source worked by count.
@@ -115,11 +102,6 @@ export const itemsAnswerSchema = z.object({
 });
 export type ItemsAnswer = z.infer<typeof itemsAnswerSchema>;
 
-export const locateAnswerSchema = z.object({
-  list: z.string().nullable().describe("A page above that shows every item, uncut; null when none does"),
-  read: z.array(z.string()).describe("Up to two https URLs to read in full that should list every item; empty when none"),
-});
-export type LocateAnswer = z.infer<typeof locateAnswerSchema>;
 
 /** A link kept only when it is https and its host appears in what the finder read. */
 function seenLink(link: string | null | undefined, readText: string): string | null {
@@ -275,19 +257,6 @@ function sourceLines(source: Material, results: SearchResult[], reads: Read[]): 
     lines.push("", `--- ${r.url} --- (${how}${r.truncated ? ", cut at the size limit" : ""})`, r.text);
   }
   return lines;
-}
-
-/** The first call: where is the whole list? A page already read, or addresses to read in full. */
-export function buildLocatePrompt(source: Material, results: SearchResult[], reads: Read[]): string {
-  const noun = nounOf(source);
-  return [
-    ...sourceLines(source, results, reads),
-    "",
-    `Say where the full list of this source's ${noun} can be read.`,
-    `If one page above shows every item, set "list" to its address.`,
-    `If what you read shows where a readable copy is, or a page above that lists them was cut short, name up to two https URLs in "read" to read in full. Prefer a machine-readable data file in the source's repository (JSON or CSV; for a file in a code repository, its raw file URL, not the page that displays it), then a static page that lists every item.`,
-    `Name only addresses that appear above or follow directly from them (a file a repository page names). If neither, leave "list" null and "read" empty.`,
-  ].join("\n");
 }
 
 /** The mapping call: the pages read (where link patterns show), and a sample of the data file's records. */
@@ -474,129 +443,4 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
   };
   const answer = await ask(itemsAnswerSchema, buildItemsPrompt(source, [], pages), "Research · items", ITEM_ANSWER_MS, (a) => itemListFacts(resolve(a), claimed));
   return { list: answer ? resolve(answer) : null, counts, costUsd, pages: pages.map(pageOf) };
-}
-
-// ---------------------------------------------------------------------------------------------------------------
-// The item finder, until the structure finder replaces it (it is removed with its last caller)
-
-export interface ItemFinderContext {
-  fetcher: SourceFetcher;
-  emit: (event: ResearchEvent) => void;
-  signal?: AbortSignal;
-  log?: GenerationLogContext;
-}
-
-export interface ItemFinderResult {
-  list: PracticeList | null;
-  counts: ResearchCounts;
-  costUsd: number;
-}
-
-export interface ItemFinder {
-  find(source: Material, ctx: ItemFinderContext): Promise<ItemFinderResult>;
-}
-
-export interface ItemFinderOptions {
-  provider: SearchProvider;
-  /** The research model; the app's default when omitted. */
-  model?: AiModelId | LanguageModel;
-  /** `CANDIDATE_STEP_EFFORT` when omitted: this is extraction, not judgement. */
-  effort?: ReasoningEffort;
-  /** Reads a file or page whole; the guarded reader when omitted. Tests pass a fake. */
-  read?: FullReader;
-}
-
-/**
- * Search → read → where, then `readItemListAt` on the address the where call chose (its list page, else the first
- * address it asked to read in full). Outside the arm's budget, each stage on its own clock. Nothing here throws except
- * a provider refusal on the user's own key.
- */
-export function createItemFinder(options: ItemFinderOptions): ItemFinder {
-  const modelId = (typeof options.model === "string" ? options.model : DEFAULT_RESEARCH_MODEL) as AiModelId;
-  const languageModel = options.model === undefined || typeof options.model === "string" ? undefined : options.model;
-  return {
-    async find(source, ctx) {
-      const counts: ResearchCounts = { searches: 0, fetches: 0 };
-      let costUsd = 0;
-      const none = (): ItemFinderResult => ({ list: null, counts, costUsd });
-      const clock = (ms: number) => (ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms));
-      const noun = nounOf(source);
-      const ask = modelAsker({ modelId, languageModel, effort: options.effort }, ctx, (cost) => (costUsd += cost));
-
-      // 1. Searching and reading: the source's own page while two searches run, then the best results.
-      const gather = clock(ITEM_GATHER_MS);
-      const tried = new Set<string>();
-      const readShared = async (url: string): Promise<Read | null> => {
-        ctx.emit({ type: "research.reading", url });
-        counts.fetches += 1;
-        const outcome = await ctx.fetcher.fetch(url, gather);
-        ctx.emit({ type: "research.fetch", url, ok: outcome.ok, ...(outcome.ok ? {} : { reason: outcome.reason }) });
-        return outcome.ok ? { url, finalUrl: outcome.page.finalUrl, text: outcome.page.text, full: false, file: false, truncated: false } : null;
-      };
-      const ownUrl = source.url.trim();
-      const ownKey = ownUrl.toLowerCase().startsWith("https://") ? canonicalUrl(ownUrl) : null;
-      if (ownKey) tried.add(ownKey);
-      const own = ownKey ? readShared(ownUrl) : Promise.resolve(null);
-      const title = mainTitle(source.title);
-      const queries = [`${title} full list of ${noun}`, `${title} ${noun} list repository data file`];
-      const found = await Promise.all(
-        queries.map(async (query) => {
-          counts.searches += 1;
-          try {
-            const results = await options.provider.search(query, { signal: gather, maxResults: ITEM_FINDER_RESULTS });
-            ctx.emit({ type: "research.search", query, results: results.length });
-            return results;
-          } catch {
-            return [];
-          }
-        }),
-      );
-      // The two result lists interleaved, each address once.
-      const results: SearchResult[] = [];
-      const listed = new Set<string>();
-      for (let i = 0; i < ITEM_FINDER_RESULTS; i++) {
-        for (const list of found) {
-          const r = list[i];
-          const key = r ? canonicalUrl(r.url) : null;
-          if (!r || !key || listed.has(key)) continue;
-          listed.add(key);
-          results.push(r);
-        }
-      }
-      const reads: Read[] = [];
-      const ownRead = await own;
-      if (ownRead) reads.push(ownRead);
-      const next: string[] = [];
-      for (const r of results) {
-        if (reads.length + next.length >= ITEM_FIRST_READS) break;
-        const url = r.url.trim();
-        const key = canonicalUrl(url);
-        if (!url.toLowerCase().startsWith("https://") || !key || tried.has(key)) continue;
-        tried.add(key);
-        next.push(url);
-      }
-      if (!gather.aborted) for (const r of await Promise.all(next.map(readShared))) if (r) reads.push(r);
-      if (reads.length === 0) return none();
-
-      // 2. Where the whole list is.
-      const locate = await ask(locateAnswerSchema, buildLocatePrompt(source, results, reads), "Research · items · where", ITEM_LOCATE_MS, (a) => [
-        ...(a.list ? [`list on ${a.list}`] : []),
-        ...a.read.map((u) => `asks to read ${u}`),
-      ]);
-      if (!locate) return none();
-      const url = (locate.list ?? locate.read[0] ?? "").trim();
-      if (!url) return none();
-
-      // 3. Reading it.
-      const read = await readItemListAt(source, url, ctx, {
-        model: options.model,
-        effort: options.effort,
-        read: options.read,
-        pages: reads.map(({ url, finalUrl, text }) => ({ url, finalUrl, text })),
-      });
-      counts.fetches += read.counts.fetches;
-      costUsd += read.costUsd;
-      return { list: read.list, counts, costUsd };
-    },
-  };
 }

@@ -8,6 +8,8 @@ vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof impor
 import { generateObject, streamObject } from "ai";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelCall } from "./logged";
+import { STRUCTURE_ALLOCATE_MIN_MS, STRUCTURE_RESERVE_MS, type StructureFinder } from "./research/structureFinder";
+import { SourceFetcher } from "./research/tools";
 import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
 import type { ResolvedModel } from "./resolve";
 import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
@@ -489,6 +491,33 @@ describe("streamResearchedPlanDraft", () => {
     const allocateModel: ResolvedModel = { model: direct as never, id: "anthropic/claude-opus-5.5", keyOwner: "app" };
     for await (const _ of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline, allocateModel, signal: controller.signal })) void _;
     expect(mockedGenerateObject.mock.calls[0][0]).toMatchObject({ model: direct, abortSignal: controller.signal });
+  });
+
+  it("gives research the draft's deadline and the structure finder", async () => {
+    // The learner's own long page: a structure finder runs for it when there is time.
+    const primer = "https://primer.example.com/";
+    const fetcher = new SourceFetcher(async (url) => ({ finalUrl: url, title: "Primer", ogTitle: null, h1: null, author: null, published: null, text: "About design", words: 30_000 }));
+    const finder = { find: vi.fn<StructureFinder["find"]>(async () => ({ toc: null, minutes: null, basis: null, list: null, refused: null, facts: [], note: null, units: 0, counts: { searches: 0, fetches: 0 }, costUsd: 0 })) };
+    const draft = async (deadline: number) => {
+      mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
+      const events: PlanDraftEvent[] = [];
+      const materials = [{ type: "link" as const, url: primer }];
+      for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials, granularity: "week", arm: null, research: { fetcher, books: offline.books, structure: finder }, deadline })) {
+        events.push(event);
+      }
+      return events;
+    };
+    const late = await draft(Date.now() + 150_000);
+    expect(finder.find).not.toHaveBeenCalled();
+    expect(late.some((e) => e.type === "research.structure")).toBe(false);
+    const early = await draft(Date.now() + DRAFT_BUDGET_MS);
+    expect(finder.find).toHaveBeenCalledTimes(1);
+    expect(finder.find.mock.calls[0][0]).toMatchObject({ origin: "learner", title: "Primer" });
+    expect(early.some((e) => e.type === "research.structure")).toBe(true);
+  });
+
+  it("leaves the allocation and the outline their time after the structure stage", () => {
+    expect(STRUCTURE_RESERVE_MS).toBe(STRUCTURE_ALLOCATE_MIN_MS + OUTLINE_RESERVE_MS);
   });
 
   it("stops at an aborted request instead of drafting", async () => {

@@ -1,61 +1,102 @@
 import type { LanguageModel } from "ai";
 import { isPracticeOnly } from "@/lib/materials";
 import { PRACTICE_REGISTRY } from "@/lib/practice";
-import type { Material, MaterialPractice, PracticeList } from "@/lib/schemas/material";
+import { clip, type Material, type MaterialPractice, type PracticeList } from "@/lib/schemas/material";
 import type { GenerationLogContext } from "../logged";
 import type { AiModelId } from "../models";
 import { providerError } from "../providerError";
 import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type ResearchBrief } from "./agent";
-import { createChapterFinder, type ChapterFinder, type ChapterFinderResult } from "./chapterFinder";
 import { isPracticeOpen, type Coverage, type DroppedMaterial, type ResearchEvent, type ResearchNotice } from "./events";
-import { createItemFinder, listGroups, type ItemFinder, type ItemFinderResult } from "./itemFinder";
+import { STRUCTURE_RESERVE_MS, STRUCTURE_WALL_MS, createStructureFinder, type StructureFinder, type StructureResult } from "./structureFinder";
 import { SourceFetcher, capsFor, searchProviderFromEnv, type ResearchCaps } from "./tools";
-import { BACKBONE_MIN_DOMAINS, createOpenLibraryLookup, recommendingDomains, runGate, sizedMinutes, type BookLookup } from "./verify";
+import type { StructureRole } from "./units";
+import { createOpenLibraryLookup, recommendingDomains, runGate, sizedMinutes, type BookLookup } from "./verify";
 import { createWorkersArm } from "./workers";
 
-/** The most books the web chapter finder runs for before the allocation. */
-export const MAX_CHAPTER_SEARCHES = 2;
-
-/**
- * The books the allocation could reasonably make the backbone and that have no chapter list yet: catalogued, and
- * recommended by at least `BACKBONE_MIN_DOMAINS` other sites. At most `MAX_CHAPTER_SEARCHES`, most recommended first;
- * a tie keeps the list's order.
- */
-export function likelyBackbones(materials: Material[]): Material[] {
-  return materials
-    .filter((m) => m.kind === "book" && m.catalogued && !m.toc)
-    .map((m) => ({ m, domains: recommendingDomains(m.url, m.recommendedBy).length }))
-    .filter((x) => x.domains >= BACKBONE_MIN_DOMAINS)
-    .sort((a, b) => b.domains - a.domains)
-    .slice(0, MAX_CHAPTER_SEARCHES)
-    .map((x) => x.m);
-}
-
-/** The most practice sources the item-list finder runs for before the allocation. */
-export const MAX_ITEM_SEARCHES = 3;
+/** Reading that is not a book is looked through when it takes at least this long (its page or its estimate). */
+export const STRUCTURE_MIN_MINUTES = 90;
+/** The most sources the structure finder runs for before the allocation. */
+export const MAX_STRUCTURE_FINDERS = 6;
 
 /** Words in a source's title or description that say it is a list of things to do. */
 const LIST_LIKE_RE = /\b(lists?|problems|questions|exercises|flashcards|cards|challenges|puzzles|katas?|steps|levels|lessons)\b/i;
 
-/** A chapter list: a source with one keeps its numbered suffixes for chapters (`M1.3`), so it never gets an item list. */
-const hasChapters = (m: Pick<Material, "toc">) => (m.toc?.chapters.length ?? 0) > 0;
+/** The role a finder looks for: practice only (no reading time), reading only (no practice), or both. */
+export function structureRole(m: Material): StructureRole {
+  if (isPracticeOnly(m)) return "practice";
+  return m.practice ? "both" : "read";
+}
 
 /**
- * The practice sources worth finding an item list for: verified, of a format counted by item (problems, recall, labs),
- * with no list yet and no chapter list, and with a count research gave or a description that reads like a list. At
- * most `MAX_ITEM_SEARCHES`, the most practice time first; a tie keeps the list's order.
+ * A practice source worth finding an item list for: verified, of a format counted by item (problems, recall, labs),
+ * with no list yet, and with a count research gave or a description that reads like a list.
  */
-export function likelyItemLists(materials: Material[]): Material[] {
-  return materials
-    .map((m, i) => ({ m, i }))
-    .filter(({ m }) => {
-      const p = m.practice;
-      if (!p || p.list || hasChapters(m) || !m.verifiedAt || PRACTICE_REGISTRY[p.format].perItemMinutes === null) return false;
-      return (p.items ?? 0) > 0 || LIST_LIKE_RE.test(`${m.title} ${m.why ?? ""} ${m.uses ?? ""}`);
-    })
-    .sort((a, b) => (b.m.practice!.minutes ?? 0) - (a.m.practice!.minutes ?? 0) || a.i - b.i)
-    .slice(0, MAX_ITEM_SEARCHES)
+function needsItemList(m: Material): boolean {
+  const p = m.practice;
+  if (!p || p.list || !m.verifiedAt || PRACTICE_REGISTRY[p.format].perItemMinutes === null) return false;
+  return (p.items ?? 0) > 0 || LIST_LIKE_RE.test(`${m.title} ${m.why ?? ""} ${m.uses ?? ""}`);
+}
+
+/** How long a material reads, as far as research can tell: the larger of its own page and its estimate. */
+const sizeOf = (m: Material) => Math.max(m.pageMinutes ?? 0, m.minutes ?? 0);
+
+/**
+ * The sources a structure finder runs for, in priority order, at most MAX_STRUCTURE_FINDERS. A source qualifies when
+ * it has an https address, is not a note or a file, and is a book with no chapter list, a practice source that needs
+ * its item list, or other reading that is a hub or at least `STRUCTURE_MIN_MINUTES` long. The learner's own come first,
+ * then books by how many sites recommend them, practice by its time, and the rest by size; a tie keeps the list's order.
+ */
+export function likelyStructures(materials: Material[]): Material[] {
+  const ranked: { m: Material; tier: number; weight: number; i: number }[] = [];
+  materials.forEach((m, i) => {
+    if (!m.url.trim().toLowerCase().startsWith("https://") || m.type === "note" || m.type === "file") return;
+    const book = m.kind === "book" && !m.toc;
+    const practice = needsItemList(m);
+    const reading = m.kind !== "book" && (m.hub === true || sizeOf(m) >= STRUCTURE_MIN_MINUTES);
+    if (!book && !practice && !reading) return;
+    if (m.origin === "learner") ranked.push({ m, tier: 0, weight: 0, i });
+    else if (book) ranked.push({ m, tier: 1, weight: recommendingDomains(m.url, m.recommendedBy).length, i });
+    else if (practice) ranked.push({ m, tier: 2, weight: m.practice!.minutes ?? 0, i });
+    else ranked.push({ m, tier: 3, weight: sizeOf(m), i });
+  });
+  return ranked
+    .sort((a, b) => a.tier - b.tier || b.weight - a.weight || a.i - b.i)
+    .slice(0, MAX_STRUCTURE_FINDERS)
     .map(({ m }) => m);
+}
+
+/**
+ * A material with what its structure finder found: its chapter list, its size, the finder's note (cut to the schema's
+ * bound) and a practice source's item list. A finder that failed (null) or whose units were refused changes nothing.
+ */
+function withStructure(m: Material, result: StructureResult | null): Material {
+  if (!result || result.refused) return m;
+  const note = clip(result.note, 300);
+  return {
+    ...m,
+    ...(result.toc ? { toc: result.toc } : {}),
+    ...(result.minutes !== null ? { minutes: result.minutes, minutesBasis: result.basis } : {}),
+    ...(note ? { note } : {}),
+    ...(result.list && m.practice ? { practice: withItemList(m.practice, result.list) } : {}),
+  };
+}
+
+/**
+ * A signal that aborts after `ms`, on `setTimeout` (unlike `AbortSignal.timeout`, so test clocks drive it); `clear`
+ * stops the timer once it is no longer needed.
+ */
+function timeoutSignal(ms: number): { signal: AbortSignal; clear: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException("The structure stage ran out of time", "TimeoutError")), ms);
+  return { signal: controller.signal, clear: () => clearTimeout(timer) };
+}
+
+/** Settles with null once `signal` aborts (at once if it already has), so a race against it gives up waiting. */
+function abandonedAt(signal: AbortSignal): Promise<null> {
+  return new Promise((resolve) => {
+    if (signal.aborted) resolve(null);
+    else signal.addEventListener("abort", () => resolve(null), { once: true });
+  });
 }
 
 /**
@@ -147,10 +188,10 @@ export interface ResearchMaterialsInput {
   signal?: AbortSignal;
   log?: GenerationLogContext;
   caps?: ResearchCaps;
-  /** Finds a likely backbone's chapters on a web page when the catalogue had none. Omitted, the stage is skipped. */
-  chapters?: ChapterFinder;
-  /** Finds a practice source's real items. Omitted, the stage is skipped and sources are worked by count. */
-  items?: ItemFinder;
+  /** Finds a source's units (chapters, sections, linked files) and a practice source's items. Omitted, the stage is skipped. */
+  structure?: StructureFinder;
+  /** The draft's deadline (epoch ms): the structure stage ends STRUCTURE_RESERVE_MS before it. */
+  deadline?: number;
 }
 
 /**
@@ -167,27 +208,21 @@ export function defaultArm(
   return env.RESEARCH_ARM?.trim().toLowerCase() === "workers" ? createWorkersArm(common) : createAgentArm(common);
 }
 
-/** The chapter finder the app ships, on the same search provider as the arm. Null when `TAVILY_API_KEY` is unset. */
-export function defaultChapterFinder(
+/**
+ * The structure finder the app ships, on the same search provider as the arm. Never null: without `TAVILY_API_KEY` it
+ * has no search tool, and its other tools only fetch.
+ */
+export function defaultStructureFinder(
   env: Record<string, string | undefined> = process.env,
   options: { model?: AiModelId | LanguageModel } = {},
-): ChapterFinder | null {
-  const provider = searchProviderFromEnv(env);
-  return provider ? createChapterFinder({ provider, model: options.model }) : null;
-}
-
-/** The item-list finder the app ships, on the same search provider as the arm. Null when `TAVILY_API_KEY` is unset. */
-export function defaultItemFinder(
-  env: Record<string, string | undefined> = process.env,
-  options: { model?: AiModelId | LanguageModel } = {},
-): ItemFinder | null {
-  const provider = searchProviderFromEnv(env);
-  return provider ? createItemFinder({ provider, model: options.model }) : null;
+): StructureFinder {
+  return createStructureFinder({ provider: searchProviderFromEnv(env), model: options.model });
 }
 
 /**
- * brief → arm → gate → materials list. Nothing here fails the draft: an arm that throws, a search API that is down,
- * or a candidate step that never validates all end in a shorter list with a notice, never an error.
+ * brief → arm → gate → structure → materials list. Nothing here fails the draft: an arm that throws, a search API that
+ * is down, or a candidate step that never validates all end in a shorter list with a notice, and a structure finder
+ * that fails leaves its source whole; never an error (except a provider refusal on the user's own key).
  */
 export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGenerator<ResearchEvent, ResearchOutcome> {
   const caps = input.caps ?? capsFor(briefHours(input.brief));
@@ -224,76 +259,64 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
     }),
   );
 
-  // Before the allocation, two lookups run side by side. The likely backbones' chapters: the gate took them from the
-  // catalogue when it could; otherwise one search and a few reads look for a page that lists them, so the allocation can
-  // still cut by chapter whichever it chooses. And the practice sources' real items: a few searches and reads look for
-  // a readable copy of each list, so the plan can name the problems rather than a count.
+  // Before the allocation, the structure stage: a finder per source that has parts to find (a book's chapters, a long
+  // guide's sections, a hub's linked files, a practice source's items) looks through it with tools that fetch and
+  // measure, and code checks what it returns. The stage ends STRUCTURE_RESERVE_MS before the draft's deadline, so the
+  // allocation and the outline keep their time; with less than a finder's wall clock left before that, it is skipped.
   let materials = gate.materials;
   let costUsd = arm?.costUsd ?? 0;
   const counts = { searches: arm?.counts.searches ?? 0, fetches: arm?.counts.fetches ?? 0 };
-  const chapterFinder = input.chapters;
-  const itemFinder = input.items;
-  const likely = chapterFinder ? likelyBackbones(materials) : [];
-  const listed = itemFinder ? likelyItemLists(materials) : [];
-  if (likely.length > 0 || listed.length > 0) {
-    const [tocResults, itemResults] = yield* streamWhile<ResearchEvent, [(ChapterFinderResult | null)[], (ItemFinderResult | null)[]]>((emit) =>
-      Promise.all([
+  const finder = input.structure;
+  const stageMs = input.deadline === undefined ? null : input.deadline - STRUCTURE_RESERVE_MS - Date.now();
+  const targets = finder && (stageMs === null || stageMs >= STRUCTURE_WALL_MS) ? likelyStructures(materials) : [];
+  if (finder && targets.length > 0) {
+    const stage = stageMs === null ? null : timeoutSignal(stageMs);
+    const signals = [input.signal, stage?.signal].filter((s): s is AbortSignal => s !== undefined);
+    const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
+    let results: (StructureResult | null)[];
+    try {
+      results = yield* streamWhile<ResearchEvent, (StructureResult | null)[]>((emit) =>
         Promise.all(
-          likely.map(async (book) => {
-            let result: ChapterFinderResult | null = null;
-            try {
-              result = await chapterFinder!.find(book, { fetcher, emit, signal: input.signal, log: input.log });
-            } catch (error) {
-              if (input.log?.keyOwner === "user" && providerError(error)) throw error;
-              console.error(`[research] chapter finder failed for "${book.title}"`, error);
-            }
-            const toc = result?.toc ?? null;
-            emit({ type: "research.chapters", id: book.id, title: book.title, chapters: toc?.chapters.length ?? 0, source: toc?.source ?? null, ...(toc ? { url: toc.url } : {}) });
+          targets.map(async (m) => {
+            const find = async (): Promise<StructureResult | null> => {
+              try {
+                return await finder.find(m, structureRole(m), { fetcher, emit, signal, log: input.log });
+              } catch (error) {
+                if (input.log?.keyOwner === "user" && providerError(error)) throw error;
+                console.error(`[research] structure finder failed for "${m.title}"`, error);
+                return null;
+              }
+            };
+            // A finder still running when the stage ends is left behind: its source stays whole.
+            const result = await (stage ? Promise.race([find(), abandonedAt(stage.signal)]) : find());
+            // What the source keeps: nothing when the finder failed or its units were refused (see `withStructure`).
+            const kept = result && !result.refused ? result : null;
+            const url = kept?.toc?.url ?? kept?.list?.url;
+            emit({
+              type: "research.structure",
+              id: m.id,
+              title: m.title,
+              units: kept?.units ?? 0,
+              items: kept?.list?.items.length ?? 0,
+              ...(result?.refused ? { refused: result.refused } : {}),
+              ...(url ? { url } : {}),
+            });
             return result;
           }),
         ),
-        Promise.all(
-          listed.map(async (source) => {
-            let result: ItemFinderResult | null = null;
-            try {
-              result = await itemFinder!.find(source, { fetcher, emit, signal: input.signal, log: input.log });
-            } catch (error) {
-              if (input.log?.keyOwner === "user" && providerError(error)) throw error;
-              console.error(`[research] item finder failed for "${source.title}"`, error);
-            }
-            const list = result?.list ?? null;
-            emit({ type: "research.items", id: source.id, title: source.title, items: list?.items.length ?? 0, groups: list ? listGroups(list).length : 0, ...(list ? { url: list.url } : {}) });
-            return result;
-          }),
-        ),
-      ]),
-    );
-    const merge = (result: { counts: { searches: number; fetches: number }; costUsd: number }) => {
+      );
+    } finally {
+      stage?.clear();
+    }
+    const found = new Map<string, StructureResult>();
+    results.forEach((result, i) => {
+      if (!result) return;
       counts.searches += result.counts.searches;
       counts.fetches += result.counts.fetches;
       costUsd += result.costUsd;
-    };
-    const tocs = new Map<string, NonNullable<ChapterFinderResult["toc"]>>();
-    tocResults.forEach((result, i) => {
-      if (!result) return;
-      merge(result);
-      if (result.toc) tocs.set(likely[i].id, result.toc);
+      found.set(targets[i].id, result);
     });
-    const lists = new Map<string, PracticeList>();
-    itemResults.forEach((result, i) => {
-      if (!result) return;
-      merge(result);
-      if (result.list) lists.set(listed[i].id, result.list);
-    });
-    if (tocs.size > 0 || lists.size > 0) {
-      materials = materials.map((m) => {
-        const toc = tocs.get(m.id);
-        // The chapter finder ran beside the item finder: a source that has chapters now stays unlisted.
-        const list = toc || hasChapters(m) ? undefined : lists.get(m.id);
-        if (!toc && !(list && m.practice)) return m;
-        return { ...m, ...(toc ? { toc } : {}), ...(list && m.practice ? { practice: withItemList(m.practice, list) } : {}) };
-      });
-    }
+    if (found.size > 0) materials = materials.map((m) => withStructure(m, found.get(m.id) ?? null));
   }
 
   const unavailable = !arm || arm.stoppedBy === "cancelled" || arm.stoppedBy === "clock-idle" || (arm.stoppedBy === "search-error" && arm.searchesOk === 0);

@@ -36,10 +36,13 @@ export type ResearchEvent =
   | { type: "research.fetch"; url: string; ok: boolean; reason?: string; worker?: WorkerDirection }
   | { type: "research.verified"; id: string; title: string; kind: MaterialKind; backbone: boolean; minutes?: number | null; basis?: MinutesBasis | null }
   | { type: "research.dropped"; title: string; url?: string; reason: string }
-  /** A book's chapter list was found (or, for a likely backbone the web finder looked for, not found: `chapters: 0, source: null`). */
+  /** The gate took a book's chapter list from the catalogue. */
   | { type: "research.chapters"; id: string; title: string; chapters: number; source: "catalogue" | "page" | null; url?: string }
-  /** A practice source's item list was found (or not: `items: 0`, no url); `groups` counts its distinct group names. */
-  | { type: "research.items"; id: string; title: string; items: number; groups: number; url?: string }
+  /**
+   * A structure finder ended for one source: `units` reading units and `items` practice items kept (both 0 when it
+   * found none, failed or ran out of time), `refused` why its units were refused, `url` where its units or list are.
+   */
+  | { type: "research.structure"; id: string; title: string; units: number; items: number; refused?: string; url?: string }
   | {
       type: "research.done";
       materials: Material[];
