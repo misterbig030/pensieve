@@ -66,16 +66,19 @@ export function likelyStructures(materials: Material[]): Material[] {
 }
 
 /**
- * A material with what its structure finder found: its chapter list, its size, the finder's note (cut to the schema's
- * bound) and a practice source's item list. A finder that failed (null) or whose units were refused changes nothing.
+ * A material with what its structure finder found: its chapter list and the size that comes with it, the finder's note
+ * (cut to the schema's bound) and a practice source's item list. A chapter list the material already has (the
+ * catalogue's, or one the gate gave the learner's book) is never replaced, nor the size that goes with it: a book picked
+ * for its item list keeps its chapters. A finder that failed (null) or whose units were refused changes nothing.
  */
 function withStructure(m: Material, result: StructureResult | null): Material {
   if (!result || result.refused) return m;
   const note = clip(result.note, 300);
+  const units = !m.toc;
   return {
     ...m,
-    ...(result.toc ? { toc: result.toc } : {}),
-    ...(result.minutes !== null ? { minutes: result.minutes, minutesBasis: result.basis } : {}),
+    ...(units && result.toc ? { toc: result.toc } : {}),
+    ...(units && result.minutes !== null ? { minutes: result.minutes, minutesBasis: result.basis } : {}),
     ...(note ? { note } : {}),
     ...(result.list && m.practice ? { practice: withItemList(m.practice, result.list) } : {}),
   };
@@ -289,14 +292,16 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
             };
             // A finder still running when the stage ends is left behind: its source stays whole.
             const result = await (stage ? Promise.race([find(), abandonedAt(stage.signal)]) : find());
-            // What the source keeps: nothing when the finder failed or its units were refused (see `withStructure`).
+            // What the source keeps (see `withStructure`): nothing when the finder failed or its units were refused, and
+            // no new units when it already had a chapter list.
             const kept = result && !result.refused ? result : null;
-            const url = kept?.toc?.url ?? kept?.list?.url;
+            const toc = m.toc ? null : kept?.toc;
+            const url = toc?.url ?? kept?.list?.url;
             emit({
               type: "research.structure",
               id: m.id,
               title: m.title,
-              units: kept?.units ?? 0,
+              units: toc ? (kept?.units ?? 0) : 0,
               items: kept?.list?.items.length ?? 0,
               ...(result?.refused ? { refused: result.refused } : {}),
               ...(url ? { url } : {}),

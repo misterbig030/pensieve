@@ -21,7 +21,7 @@ import { applyMapping, fieldMappingSchema, parseDataFile, sampleDataFile, type D
 import { describeEgressError, guardedFetch, type AcceptedContentType, type GuardedFetchOptions } from "./egress";
 import type { ResearchCounts, ResearchEvent } from "./events";
 import { decodeBody, readableText } from "./extract";
-import type { SearchResult, SourceFetcher } from "./tools";
+import type { SourceFetcher } from "./tools";
 import { canonicalUrl } from "./verify";
 
 /**
@@ -33,13 +33,13 @@ import { canonicalUrl } from "./verify";
  */
 
 /** Clocks, one per stage, so a slow stage never starves the next. */
-export const ITEM_FULL_READ_MS = 10_000;
-export const ITEM_MAP_MS = 10_000;
+const ITEM_FULL_READ_MS = 10_000;
+const ITEM_MAP_MS = 10_000;
 /**
  * The clock on transcribing a page, the path for lists with no data file: listing 150 problems is several thousand
  * output tokens. A call that runs out leaves the source worked by count.
  */
-export const ITEM_ANSWER_MS = 90_000;
+const ITEM_ANSWER_MS = 90_000;
 /** A data file is read whole up to this many bytes: a 450-entry problem file is well under it. */
 export const ITEM_FILE_BYTES = 400 * 1024;
 /** A page (or a file that is not data) read in full is cut to this much text: a 500-item list fits. */
@@ -95,12 +95,12 @@ export const itemDraftSchema = z.object({
 });
 export type ItemDraft = z.infer<typeof itemDraftSchema>;
 
-export const itemsAnswerSchema = z.object({
+const itemsAnswerSchema = z.object({
   found: z.boolean().describe("True only when a page above lists this source's items"),
   url: z.string().nullable().describe("The one page the list came from"),
   items: z.array(itemDraftSchema).describe("The items in the source's own order; empty when not found"),
 });
-export type ItemsAnswer = z.infer<typeof itemsAnswerSchema>;
+type ItemsAnswer = z.infer<typeof itemsAnswerSchema>;
 
 
 /** A link kept only when it is https and its host appears in what the finder read. */
@@ -237,7 +237,7 @@ function nounOf(source: Material): string {
 }
 
 /** The source, what research said of it, and what was read: the head of every prompt. */
-function sourceLines(source: Material, results: SearchResult[], reads: Read[]): string[] {
+function sourceLines(source: Material, reads: Read[]): string[] {
   const practice = source.practice;
   const noun = nounOf(source);
   const lines = [
@@ -248,10 +248,6 @@ function sourceLines(source: Material, results: SearchResult[], reads: Read[]): 
       practice?.items ? `It was said to hold about ${practice.items} ${noun}.` : null,
     ].filter((l): l is string => l !== null),
   ];
-  if (results.length > 0) {
-    lines.push("", "Search results:");
-    for (const r of results) lines.push(`- ${r.title} <${r.url}>: ${r.snippet.slice(0, 240)}`);
-  }
   for (const r of reads) {
     const how = r.full ? (r.file ? "a file, read in full" : "a page, read in full") : "a page, cut short";
     lines.push("", `--- ${r.url} --- (${how}${r.truncated ? ", cut at the size limit" : ""})`, r.text);
@@ -260,10 +256,10 @@ function sourceLines(source: Material, results: SearchResult[], reads: Read[]): 
 }
 
 /** The mapping call: the pages read (where link patterns show), and a sample of the data file's records. */
-export function buildMappingPrompt(source: Material, reads: Read[], fileUrl: string, file: DataFile): string {
+function buildMappingPrompt(source: Material, reads: Read[], fileUrl: string, file: DataFile): string {
   const noun = nounOf(source);
   return [
-    ...sourceLines(source, [], reads),
+    ...sourceLines(source, reads),
     "",
     `--- ${fileUrl} --- (a ${file.kind === "json" ? "JSON" : "CSV"} file, read in full; its records are sampled below)`,
     sampleDataFile(file),
@@ -278,10 +274,10 @@ export function buildMappingPrompt(source: Material, reads: Read[], fileUrl: str
 }
 
 /** The transcription call, for a list on a page with no data file. */
-export function buildItemsPrompt(source: Material, results: SearchResult[], reads: Read[]): string {
+function buildItemsPrompt(source: Material, reads: Read[]): string {
   const noun = nounOf(source);
   return [
-    ...sourceLines(source, results, reads),
+    ...sourceLines(source, reads),
     "",
     `List the source's ${noun} in the source's own order, from the one page above that lists them all.`,
     `If the source is a named part of a larger list (for example "the 150" marked in a list of 450), return only the items in that part, in the list's order.`,
@@ -441,6 +437,6 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
     if (!read) return null;
     return validateItemList({ url: read.url, source: read.file ? "file" : "page", items: answer.items }, textOf(pages));
   };
-  const answer = await ask(itemsAnswerSchema, buildItemsPrompt(source, [], pages), "Research · items", ITEM_ANSWER_MS, (a) => itemListFacts(resolve(a), claimed));
+  const answer = await ask(itemsAnswerSchema, buildItemsPrompt(source, pages), "Research · items", ITEM_ANSWER_MS, (a) => itemListFacts(resolve(a), claimed));
   return { list: answer ? resolve(answer) : null, counts, costUsd, pages: pages.map(pageOf) };
 }

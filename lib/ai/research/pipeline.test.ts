@@ -259,6 +259,24 @@ describe("the structure stage", () => {
     expect(most).toBe(3);
   });
 
+  it("never replaces a chapter list the material already has, and still merges its list and note", async () => {
+    // A catalogued book that is also a counted problem set: picked for its item list, though it has its chapters.
+    const dual: ResearchArm = async (input) => {
+      const out = await arm(input);
+      return { ...out, candidates: out.candidates.map((c) => (c.title === "Core Textbook" ? { ...c, practice: { format: "problem-set" as const, items: 189, answers: true } } : c)) };
+    };
+    const gate = (await collect(researchMaterials({ brief: { topic: "T", weeks: 4, sources: [] }, arm: dual, fetcher: fetcher(), books }))).outcome.materials;
+    const finder = finderOf(async (m) => (m.title === "Core Textbook" ? result({ toc: TOC, minutes: 150, basis: "measured", list: LIST, note: "Chapters with exercises.", units: 3 }) : result()));
+    const { events, outcome } = await collect(researchMaterials({ brief: { topic: "T", weeks: 4, sources: [] }, arm: dual, fetcher: fetcher(), books, structure: finder }));
+    expect(finder.find.mock.calls.map(([m]) => m.title)).toContain("Core Textbook");
+    const before = byTitle(gate, "Core Textbook");
+    const book = byTitle(outcome.materials, "Core Textbook");
+    expect(before.toc).toMatchObject({ source: "catalogue" });
+    expect(book).toEqual({ ...before, practice: { ...before.practice!, list: LIST, totalItems: 4 }, note: "Chapters with exercises." });
+    // The feed says what it keeps: the list, not the chapters it found.
+    expect(structureEvents(events).find((e) => e.title === "Core Textbook")).toEqual({ type: "research.structure", id: book.id, title: "Core Textbook", units: 0, items: 4, url: LIST.url });
+  });
+
   it("rethrows a provider refusal on the user's own key", async () => {
     const refusal = finderOf(async () => {
       throw new APICallError({ message: "credit balance is too low", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 400, responseBody: "Your credit balance is too low", isRetryable: false });
