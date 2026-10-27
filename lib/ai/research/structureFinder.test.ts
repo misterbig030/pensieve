@@ -13,12 +13,14 @@ import type { ResearchEvent } from "./events";
 import { extractHtml, type PageInfo } from "./extract";
 import type { FullReader } from "./itemFinder";
 import {
+  ANSWER_NOW,
   MEASURE_BATCH,
   PausableClock,
   STRUCTURE_ALLOCATE_MIN_MS,
   STRUCTURE_RESERVE_MS,
   STRUCTURE_SEARCHES,
   STRUCTURE_STEPS,
+  STRUCTURE_WALL_MS,
   buildStructurePrompt,
   createStructureFinder,
 } from "./structureFinder";
@@ -148,18 +150,59 @@ describe("the structure finder", () => {
     expect(logged[1].facts).toContain("units kept: 30");
   });
 
-  it("returns the verdict of nothing when the model never answers, the last step forced to answer", async () => {
-    const { model, calls } = scripted([[{ tool: "outline", input: { url: PRIMER } }]]);
-    const { ctx, calls: logged } = context();
-    const result = await createStructureFinder({ provider: null, model }).find(material(), "read", ctx);
+  it("returns the verdict of nothing when the model never answers, and logs the forced last step it ignored", async () => {
+    // Outlines the same page on every step, and writes text on the step forced to answer.
+    const calls: LanguageModelV4CallOptions[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        calls.push(options);
+        return stepResult(options.toolChoice?.type === "tool" ? { text: "The primer is one long README." } : [{ tool: "outline", input: { url: PRIMER } }]);
+      },
+    });
+    const rows: unknown[] = [];
+    const { ctx, calls: logged, fetchPage } = context();
+    const result = await createStructureFinder({ provider: null, model }).find(material(), "read", { ...ctx, log: { ...ctx.log, onLog: (r) => void rows.push(r) } });
 
     expect(calls).toHaveLength(STRUCTURE_STEPS);
     expect(calls.at(-1)!.toolChoice).toEqual({ type: "tool", toolName: "answer" });
     for (const c of calls.slice(0, -1)) expect(c.toolChoice).not.toEqual({ type: "tool", toolName: "answer" });
+    // The instruction to answer is in the last step's prompt, not only in its tool choice.
+    expect(JSON.stringify(calls.at(-1)!.prompt)).toContain(ANSWER_NOW.slice(0, 40));
+    for (const c of calls.slice(0, -1)) expect(JSON.stringify(c.prompt)).not.toContain(ANSWER_NOW.slice(0, 40));
     expect(result).toMatchObject({ toc: null, minutes: null, basis: null, list: null, refused: null, note: null, units: 0, facts: ["no answer"] });
-    // The SDK refuses the step that ignored the forced choice, so the steps before it are the ones logged.
-    expect(logged).toHaveLength(STRUCTURE_STEPS - 1);
-    expect(logged.at(-1)!.facts).toContain("no answer");
+    // Five outlines of one page are one read.
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+    expect(result.counts.fetches).toBe(1);
+    // Every paid step is logged and costed, the ignored forced step too.
+    expect(rows).toHaveLength(STRUCTURE_STEPS);
+    expect(logged).toHaveLength(STRUCTURE_STEPS);
+    expect(logged.at(-1)!.label).toBe(`Research · structure · system-design-primer · step ${STRUCTURE_STEPS}`);
+    expect(logged.at(-1)!.response).toContain("The primer is one long README.");
+    expect(logged.at(-1)!.facts).toEqual(["forced answer ignored", "no answer"]);
+  });
+
+  it("ends with nothing, without throwing, when the outer signal aborts mid-loop", async () => {
+    const outer = new AbortController();
+    let n = 0;
+    const model = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        if (++n === 1) return stepResult([{ tool: "outline", input: { url: PRIMER } }]);
+        outer.abort();
+        await new Promise((_, reject) => {
+          if (options.abortSignal?.aborted) reject(options.abortSignal.reason);
+          options.abortSignal?.addEventListener("abort", () => reject(options.abortSignal!.reason));
+        });
+        throw new Error("unreachable");
+      },
+    });
+    const errors = vi.spyOn(console, "error");
+    const { ctx, calls: logged } = context();
+    const result = await createStructureFinder({ provider: null, model }).find(material(), "read", { ...ctx, signal: outer.signal });
+    expect(result).toMatchObject({ toc: null, list: null, refused: null, units: 0, facts: ["no answer"] });
+    expect(logged).toHaveLength(1);
+    expect(logged[0].facts).toEqual([`outline ${PRIMER}`, "no answer"]);
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 
   it("offers search only with a provider, and items only to a role with practice", async () => {
@@ -233,6 +276,30 @@ describe("the structure finder", () => {
     expect(result.list!.url).toBe(listUrl);
     expect(result.counts.fetches).toBe(1);
     expect(JSON.stringify(calls[1].prompt)).toMatch(/\\?"items\\?":3/);
+  });
+
+  it("keeps an item list whose read takes longer than the finder's wall clock: the clock stands still meanwhile", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const listUrl = "https://example.com/problems";
+      const text = "The list: Two Sum. Valid Anagram. Group Anagrams.";
+      const read = vi.fn<FullReader>(async (url) => {
+        vi.advanceTimersByTime(STRUCTURE_WALL_MS + 5_000);
+        return { finalUrl: url, text, file: false, truncated: false };
+      });
+      const drafts = ["Two Sum", "Valid Anagram", "Group Anagrams"].map((title) => ({ title, number: null, group: null, difficulty: null, url: null, solutionUrl: null, minutes: null }));
+      const { model } = scripted(
+        [[{ tool: "items", input: { url: listUrl } }], [{ tool: "answer", input: answerOf({ whole: true, listUrl }) }]],
+        [{ found: true, url: listUrl, items: drafts }],
+      );
+      const practice = { format: "problem-set" as const, items: 3, perItemMinutes: 20, minutes: 60, answers: true };
+      const result = await createStructureFinder({ provider: null, model, read }).find(material({ practice, minutes: null }), "practice", context().ctx);
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(result.facts).not.toContain("no answer");
+      expect(result.list!.items.map((i) => i.title)).toEqual(["Two Sum", "Valid Anagram", "Group Anagrams"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("goes on without units when the loop's model call fails on the app's key", async () => {
