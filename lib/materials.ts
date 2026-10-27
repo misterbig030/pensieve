@@ -692,6 +692,8 @@ function formatChapters(chapters: number[]): string {
  * `practice-overlap`: an item another unit already did, or one two units of a level take; a run two headings reserve.
  * `practice-generated`: a row the model wrote where the registry forbids it (a format never written, or recall not from
  * the unit's own reading).
+ * `budget-miss`: at the top level, a material with units whose reserved units add up to more or less than its budget,
+ * past `budgetMissSlack`.
  */
 export type BreachKind =
   | "outside"
@@ -702,7 +704,8 @@ export type BreachKind =
   | "unread-reservation"
   | "practice-outside"
   | "practice-overlap"
-  | "practice-generated";
+  | "practice-generated"
+  | "budget-miss";
 
 /** The breaches a drop can cure: the row goes, the unit keeps the rest. Over-budget and unread reservations stay facts. */
 export const DROPPABLE: ReadonlySet<BreachKind> = new Set<BreachKind>(["outside", "overlap", "whole-book", "review-before-read", "practice-outside", "practice-overlap", "practice-generated"]);
@@ -806,12 +809,20 @@ export const SHARE_TOLERANCE = 1.25;
 /** Minutes a leaf's total or part may run past its tolerance too, so a short budget is not held to the minute. */
 export const BUDGET_SLACK = 10;
 
+/** How far a material's reserved units may fall from its budget: the larger of 20% and 15 minutes. Code only, never a prompt. */
+export const BUDGET_MISS_SHARE = 0.2;
+export const BUDGET_MISS_MINUTES = 15;
+
+export function budgetMissSlack(budget: number): number {
+  return Math.max(budget * BUDGET_MISS_SHARE, BUDGET_MISS_MINUTES);
+}
+
 /** The most a leaf's budget of `minutes`, or one part of it, holds before the checks call it over. */
 export function budgetCeiling(minutes: number): number {
   return minutes * SHARE_TOLERANCE + BUDGET_SLACK;
 }
 
-type RefLike = { id: string; chapter?: number | null; activity?: RefActivity; note?: string | null };
+type RefLike = { id: string; chapter?: number | null; activity?: RefActivity; note?: string | null; minutes?: number | null };
 
 const isRead = (r: RefLike) => (r.activity ?? "read") === "read";
 const toResolved = (r: RefLike): ResolvedAlias => ({ id: r.id, chapter: r.chapter ?? null });
@@ -839,19 +850,42 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const byTopic = (r: RefLike) => !r.chapter && !listed(r.id) && byId.get(r.id)?.kind === "book";
   // A row saved before chapters were data: the whole book, with the chapters in its note. It stands as written.
   const legacy = (r: RefLike) => !r.chapter && listed(r.id) && parseChapters(r.note).length > 0;
-  /** The minutes a reservation is known to take: a chapter's size, a legacy note's chapters, a sized whole resource. */
+  // As drafted: a pick with no source is reading here too, as the leaves' budgets have it (`practiceBudgets`), and an
+  // all-reading pick is all of the time whatever share it shows.
+  const drafted = input.split ? draftedSplit(input.split, input.materials) : null;
+  const share = drafted && isAllReading(drafted) ? 1 : (readingShareOf(drafted) ?? MUST_SHARE);
+  /** A heading's reading budget in minutes: its weeks of the learner's time, at the plan's reading share. */
+  const readingBudget = (node: PlanNode) => budgetFor(weeksOf(input.root, node, input.daysPerWeek), input.hoursPerWeek) * 60 * share;
+  // Headings: a source without units, longer than one unit's reading, may span consecutive units of this level, each
+  // reserving a part of it. These are its holders, by position; any other repeat is an overlap.
+  const spans = new Map<string, number[]>();
+  if (!input.leaves) {
+    const holders = new Map<string, { id: string; at: number[] }>();
+    input.nodes.forEach((n, i) => {
+      for (const r of refsOf(n).filter(isRead)) {
+        if (r.chapter || listed(r.id) || byTopic(r)) continue;
+        const entry = holders.get(refKey(r)) ?? { id: r.id, at: [] };
+        if (entry.at.at(-1) !== i) entry.at.push(i);
+        holders.set(refKey(r), entry);
+      }
+    });
+    for (const [key, { id, at }] of holders) {
+      const minutes = byId.get(id)?.minutes ?? null;
+      const consecutive = at.every((i, k) => i === at[0] + k);
+      if (at.length > 1 && minutes !== null && consecutive && minutes > readingBudget(input.nodes[at[0]])) spans.set(key, at);
+    }
+  }
+  /** The minutes a reservation is known to take: a chapter's size, a legacy note's chapters, a sized whole resource or its share of a span. */
   const knownMinutes = (r: RefLike): number => {
     const m = byId.get(r.id);
     if (r.chapter) return chapterAt(m?.toc, r.chapter)?.minutes ?? 0;
     if (byTopic(r)) return 0;
     if (legacy(r)) return parseChapters(r.note).reduce((sum, n) => sum + (m?.toc?.chapters.find((c) => c.n === n)?.minutes ?? 0), 0);
     if (listed(r.id)) return 0;
+    const span = spans.get(refKey(r));
+    if (span) return Math.round((m?.minutes ?? 0) / span.length);
     return m?.minutes ?? 0;
   };
-  // As drafted: a pick with no source is reading here too, as the leaves' budgets have it (`practiceBudgets`), and an
-  // all-reading pick is all of the time whatever share it shows.
-  const drafted = input.split ? draftedSplit(input.split, input.materials) : null;
-  const share = drafted && isAllReading(drafted) ? 1 : (readingShareOf(drafted) ?? MUST_SHARE);
   const leafBudget = (node: PlanNode) => budgetMinutes(node, input.hoursPerWeek, daysInWeekOf(input.root, node, input.daysPerWeek));
   const verb = input.leaves ? "reads" : "reserves";
   const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
@@ -911,11 +945,12 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     if (n.id === input.root.id || skip.has(n.id)) return;
     for (const r of refsOf(n).filter(isRead)) if (!byTopic(r) && !inReservation(r) && !taken.has(refKey(r))) taken.set(refKey(r), label(n));
   });
-  // Siblings: a heading holds a resource exclusively; consecutive leaves may share one that is too long for one of them.
+  // Siblings: a heading holds a resource exclusively, unless it spans (`spans`); consecutive leaves may share one that
+  // is too long for one of them.
   const siblingLast = new Map<string, number>();
   const sizeOf = (r: RefLike): number | null => (r.chapter ? (chapterAt(byId.get(r.id)?.toc, r.chapter)?.minutes ?? null) : (byId.get(r.id)?.minutes ?? null));
   const mayShare = (node: PlanNode, r: RefLike, index: number): boolean => {
-    if (!input.leaves) return false;
+    if (!input.leaves) return spans.has(refKey(r));
     const last = siblingLast.get(refKey(r));
     if (last === undefined || last !== index - 1) return false;
     const size = sizeOf(r);
@@ -1079,7 +1114,9 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     const refs = refsOf(node);
     const reads = refs.filter(isRead);
     const whole = reads.filter((r) => !r.chapter && listed(r.id) && !legacy(r));
-    if (whole.length > 0) breach("whole-book", index, unit, whole, `${unit} refers to ${names(whole)} as a whole; use its chapters`);
+    // A book is read by chapters; any other material with units, by its units.
+    const parts = whole.every((r) => byId.get(r.id)?.kind === "book") ? "chapters" : "units";
+    if (whole.length > 0) breach("whole-book", index, unit, whole, `${unit} refers to ${names(whole)} as a whole; use its ${parts}`);
     const chaptered = reads.filter((r) => !whole.includes(r));
     if (hasReservation) {
       const outside = chaptered.filter((r) => !reservedKeys.has(refKey(r)) && !reservedWhole.has(r.id));
@@ -1148,7 +1185,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       if (node.level !== "day") weekRule([node], index, unit, budget);
     } else {
       const known = reads.reduce((sum, r) => sum + knownMinutes(r), 0);
-      const budget = budgetFor(weeksOf(input.root, node, input.daysPerWeek), input.hoursPerWeek) * 60 * share;
+      const budget = readingBudget(node);
       if (known > budget * SHARE_TOLERANCE) {
         breach("over-budget", index, unit, [], `${unit} reserves about ${known} min of reading against a budget of about ${Math.round(budget)} min`);
       }
@@ -1209,6 +1246,24 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     if (unread.length > 0) {
       const unit = label(parentNode);
       breach("unread-reservation", -1, unit, unread, `${unit} reserved ${names(unread)}, which no ${input.nodes[0].level} reads`);
+    }
+  }
+
+  // The top level reserves each sized material with units toward its budget: its units' minutes at headings, its rows'
+  // at leaves. No row can be dropped to cure a miss, so after the retry it stays a fact.
+  if (input.top) {
+    for (const m of input.materials) {
+      const budget = m.minutes;
+      if (!listed(m.id) || budget === null || budget === undefined || !m.toc!.chapters.some((c) => c.minutes !== null)) continue;
+      const reads = input.nodes.flatMap((n) => refsOf(n).filter((r) => isRead(r) && r.id === m.id));
+      const reserved = Math.round(reads.reduce((sum, r) => sum + (input.leaves && typeof r.minutes === "number" ? r.minutes : knownMinutes(r)), 0));
+      if (Math.abs(reserved - budget) <= budgetMissSlack(budget)) continue;
+      const alias = aliases.alias(m.id) ?? m.id;
+      const text =
+        reads.length === 0
+          ? `${alias} has a budget of about ${budget} min but none of its units is reserved`
+          : `${alias}'s units reserved add up to about ${reserved} min against its budget of about ${budget} min`;
+      breach("budget-miss", -1, "The plan", [], text);
     }
   }
 

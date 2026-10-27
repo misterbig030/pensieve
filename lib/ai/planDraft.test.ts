@@ -584,6 +584,22 @@ describe("breaches while drafting", () => {
     expect(calls[1].facts).toContain("breach: Week 1's must-reading is 247 min against a budget of about 144 min");
     expect(calls[1].facts.some((f) => f.startsWith("dropped"))).toBe(false);
   });
+  it("a budget the outline misses is quoted in the retry, and after a second miss it stays a fact", async () => {
+    const units = [10, 10, 10, 10, 10].map((minutes, i) => ({ n: i + 1, title: `U${i + 1}`, page: null, minutes, sections: [] }));
+    const primer = material("primer", { minutes: 50, toc: { source: "catalogue", url: "u", printPages: false, end: null, chapters: units } });
+    // Each week reads one 10-minute unit of the primer's 50-minute budget.
+    const weeks = ["W1", "W2"].map((title, i) => ({ title, summary: "s", materials: [{ id: `M1.${i + 1}`, tier: "must" as const, minutes: 10 }] }));
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks)).mockReturnValueOnce(fakeStream(weeks));
+    const calls: ModelCall[] = [];
+    let finished = false;
+    for await (const e of streamPlanDraft({ ...ctx, materials: [primer], weeks: 2, granularity: "week", log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") finished = true;
+    const miss = "M1's units reserved add up to about 20 min against its budget of about 50 min";
+    expect(mockedStreamObject).toHaveBeenCalledTimes(2);
+    expect((mockedStreamObject.mock.calls[1][0] as { prompt: string }).prompt).toContain(`- ${miss}`);
+    expect(calls[1].facts).toContain(`breach: ${miss}`);
+    expect(calls[1].facts.some((f) => f.startsWith("dropped"))).toBe(false);
+    expect(finished).toBe(true);
+  });
   it("splits a week into the number of days picked, each a share of that week", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(dayUnits([1, 1, 2])));
     const calls: ModelCall[] = [];

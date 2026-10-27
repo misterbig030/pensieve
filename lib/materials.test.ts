@@ -8,6 +8,7 @@ import {
   assignmentsOf,
   chapterGaps,
   chapterRegressions,
+  DROPPABLE,
   dropBreaches,
   formatAliases,
   learnerMaterials,
@@ -397,12 +398,101 @@ describe("levelChecks", () => {
     weeksOf(root)[1].materials!.push(read(1, 107));
     const out = treeChecks(root, AIE_MATERIALS, { granularity: "week", ...share });
     expect(out.breaches.map((b) => b.text)).toEqual([
+      // The months leave ch. 7–9 out: 787 of the backbone's 1105 min.
+      "M1's units reserved add up to about 787 min against its budget of about 1105 min",
       "Week 1's must-reading is 247 min against a budget of about 144 min",
       "Week 2 reads M1.1, which Week 1 holds",
       "Week 2's must-reading is 326 min against a budget of about 144 min",
     ]);
     expect(out.facts).toContain("backbone ch. 7, 8, 9 not reserved");
-    expect(out.nodes[out.breaches[1].index].id).toBe("w2");
+    expect(out.breaches[0].index).toBe(-1);
+    expect(out.nodes[out.breaches[2].index].id).toBe("w2");
+  });
+});
+
+describe("budget-miss", () => {
+  const tocOf = (minutes: (number | null)[]) => ({ source: "catalogue" as const, url: "u", printPages: false, end: null, chapters: minutes.map((m, i) => ({ n: i + 1, title: `U${i + 1}`, page: null, minutes: m, sections: [] })) });
+  const UNITS = [3, 5, 2, 10, 8, 8, 4, 8]; // 48 min in all
+  const primer = (units: (number | null)[] = UNITS, budget: number | null = 50) => ({ id: "P", kind: "docs" as const, minutes: budget, toc: tocOf(units) });
+  /** Top-level weeks, each reserving the listed units of `material` (M2, after an essay). */
+  const weeks = (byWeek: number[][], id = "P") => byWeek.map((units, i) => makeNode({ id: `w${i + 1}`, level: "week", title: `W${i + 1}`, summary: "s", len: 7, covers: units.map((chapter) => ({ id, note: null, chapter })) }));
+  const check = (byWeek: number[][], material: { id: string; kind?: "docs" | "repo"; minutes: number | null; toc: ReturnType<typeof tocOf> } = primer(), top = true) => {
+    const nodes = weeks(byWeek, material.id);
+    const root = layout(makeRoot(nodes));
+    return { nodes, ...levelChecks({ root, nodes, leaves: false, top, materials: [{ id: "E", minutes: 30 }, material], unknownIds: [], daysPerWeek: 7 }) };
+  };
+  const misses = (out: { breaches: { kind: string; text: string }[] }) => out.breaches.filter((b) => b.kind === "budget-miss").map((b) => b.text);
+
+  it("units reserved across weeks that add up to about the budget are no miss", () => {
+    expect(check([[1, 2, 3], [4, 5], [6, 7, 8]]).breaches).toEqual([]);
+  });
+  it("units falling short of the budget by more than its slack are one miss for the plan", () => {
+    const out = check([[1, 2], [3, 4]]);
+    expect(out.breaches.filter((b) => b.kind === "budget-miss")).toEqual([
+      { kind: "budget-miss", index: -1, unit: "The plan", refs: [], names: "", text: "M2's units reserved add up to about 20 min against its budget of about 50 min" },
+    ]);
+  });
+  it("the slack is the larger of 20% of the budget and 15 minutes", () => {
+    expect(misses(check([[1, 2, 3], [4, 5, 6]]))).toEqual([]); // 36 of 50: off by 14
+    expect(misses(check([[1], [2], [3]], primer([100, 100, 45], 300)))).toEqual([]); // off by 55, slack 60
+    expect(misses(check([[1], [2], [3]], primer([100, 100, 39], 300)))).toEqual(["M2's units reserved add up to about 239 min against its budget of about 300 min"]);
+  });
+  it("a budget with none of its units reserved is a miss", () => {
+    expect(misses(check([[], []]))).toEqual(["M2 has a budget of about 50 min but none of its units is reserved"]);
+  });
+  it("is not checked for units without sizes, or below the top level", () => {
+    expect(check([[], []], primer([null, null, null])).breaches).toEqual([]);
+    expect(misses(check([[1, 2], [3, 4]], primer(), false))).toEqual([]);
+  });
+  it("is not droppable: no row can be removed to cure it", () => {
+    expect(DROPPABLE.has("budget-miss")).toBe(false);
+    const out = check([[1, 2], [3, 4]]);
+    expect(dropBreaches(out.nodes, out.breaches)).toEqual([]);
+    expect(out.nodes.map((n) => n.covers!.map((c) => c.chapter))).toEqual([[1, 2], [3, 4]]);
+  });
+  it("a material with units of any kind reserved as a whole is a whole-book breach naming its units", () => {
+    const repo = { id: "R", kind: "repo" as const, minutes: null, toc: tocOf([20, 20]) };
+    const nodes = [makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 7, covers: [{ id: "R", note: null }] })];
+    const root = layout(makeRoot(nodes));
+    const out = levelChecks({ root, nodes, leaves: false, top: true, materials: [{ id: "E", minutes: 30 }, repo], unknownIds: [], daysPerWeek: 7 });
+    expect(out.breaches.map((b) => [b.kind, b.text])).toEqual([["whole-book", "Week 1 refers to M2 as a whole; use its units"]]);
+  });
+});
+
+describe("unitless span", () => {
+  // Six hours a week at a 25% reading share: about 90 min of reading a week.
+  const split = { readingShare: 25, practice: "projects", reason: "" };
+  const materials = [
+    { id: "C", kind: "course" as const, minutes: 180 },
+    { id: "S", kind: "essay" as const, minutes: 40 },
+    { id: "X", kind: "essay" as const, minutes: 30 },
+  ];
+  const weeks = (byWeek: string[][]) => byWeek.map((ids, i) => makeNode({ id: `w${i + 1}`, level: "week", title: `W${i + 1}`, summary: "s", len: 7, covers: ids.map((id) => ({ id, note: `part ${i + 1}` })) }));
+  const check = (byWeek: string[][]) => {
+    const nodes = weeks(byWeek);
+    const root = layout(makeRoot(nodes));
+    return levelChecks({ root, nodes, leaves: false, top: true, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 7, split });
+  };
+  const texts = (out: { breaches: { kind: string; text: string }[] }, kind: string) => out.breaches.filter((b) => b.kind === kind).map((b) => b.text);
+
+  it("a source longer than a week's reading may span consecutive weeks, each counting its share", () => {
+    expect(check([["C"], ["C"], []]).breaches).toEqual([]);
+    // 90 of the course's 180 min in each week: an essay more passes the week's 90 × 1.25.
+    expect(texts(check([["C", "X"], ["C"], []]), "over-budget")).toEqual(["Week 1 reserves about 120 min of reading against a budget of about 90 min"]);
+    expect(texts(check([["C"], ["C", "X"], []]), "over-budget")).toEqual(["Week 2 reserves about 120 min of reading against a budget of about 90 min"]);
+  });
+  it("a repeat that skips a week is an overlap on the later holder", () => {
+    expect(texts(check([["C"], [], ["C"]]), "overlap")).toEqual(["Week 3 reserves M1, which Week 1 holds"]);
+  });
+  it("a source within one week's reading may not span", () => {
+    expect(texts(check([["S"], ["S"], []]), "overlap")).toEqual(["Week 2 reserves M2, which Week 1 holds"]);
+  });
+  it("a span is still an overlap with a unit outside this level that holds the source", () => {
+    const m1 = makeNode({ id: "m1", level: "month", title: "M1", summary: "s", len: 14, children: weeks([["C"], ["C"]]) });
+    const m2 = makeNode({ id: "m2", level: "month", title: "M2", summary: "s", len: 28, covers: [{ id: "C", note: null }] });
+    const root = layout(makeRoot([m1, m2]));
+    const out = levelChecks({ root, nodes: m1.children!, leaves: false, top: false, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 7, split });
+    expect(texts(out, "overlap")).toEqual(["Week 1 reserves M1, which Month 2 holds", "Week 2 reserves M1, which Month 2 holds"]);
   });
 });
 
