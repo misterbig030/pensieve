@@ -134,11 +134,11 @@ describe("streamPlanDraft and the allocation", () => {
   });
 
   const weeks = (n: number): UnitDraft[] => Array.from({ length: n }, (_, i) => ({ title: `W${i + 1}`, summary: "s" }));
-  const keepThree = { ...ALLOCATION, parts: [{ id: "M1", uses: null, minutes: null, chapters: [1, 2, 3], items: null, drop: false, dropReason: null }] };
+  const budgeted = { ...ALLOCATION, parts: [{ id: "M1", purpose: null, minutes: 300, items: null, drop: false, dropReason: null }] };
 
   it("emits the plan's coverage with the allocated materials, and null when the allocation fails", async () => {
     const coverage = { covered: ["Branching"], open: ["Rebasing"] };
-    respondAllocate({ ...keepThree, coverage });
+    respondAllocate({ ...budgeted, coverage });
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const first: PlanDraftEvent[] = [];
     for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", hoursPerWeek: 10, materials: [bookOfSix()] })) first.push(event);
@@ -155,7 +155,7 @@ describe("streamPlanDraft and the allocation", () => {
   });
 
   it("allocates after research, then sends the allocated materials and the split before any node", async () => {
-    respondAllocate(keepThree);
+    respondAllocate(budgeted);
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
     const calls: ModelCall[] = [];
     const events: PlanDraftEvent[] = [];
@@ -170,9 +170,10 @@ describe("streamPlanDraft and the allocation", () => {
     if (allocated.type !== "allocated") throw new Error("no allocated event");
     expect(allocated.dropped).toEqual([]);
     expect(allocated.materials).toHaveLength(1);
-    expect(allocated.materials[0].toc?.chapters).toHaveLength(3);
+    // The budget sizes the material, and its chapter list stays whole for the outline to choose from.
+    expect(allocated.materials[0].toc?.chapters).toHaveLength(6);
     expect(allocated.materials[0].minutes).toBe(300);
-    // The reading share follows the kept chapters: 300 of the 2400 minutes.
+    // The reading share follows the budget: 300 of the 2400 minutes.
     expect(events[1]).toEqual({
       type: "split",
       split: { readingShare: 13, practice: "building projects", reason: "A craft topic.", formats: [{ format: "project", share: 100, focus: "a small tool", reason: "Learning by building." }] },
@@ -183,51 +184,14 @@ describe("streamPlanDraft and the allocation", () => {
     expect(calls.map((c) => c.label)).toEqual([ALLOCATE_LABEL, "Top level · 4 weeks"]);
     expect(calls[1].prompt).not.toContain('as "split"');
     expect(calls[1].prompt).toContain("How this plan spends that time: about 13% reading or watching the materials, the rest on project.");
-    const outline = (mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt;
-    expect(outline).toContain("ch. 1–3");
-    expect(outline).not.toContain("ch. 4");
-  });
-
-  it("drafts the top level and a week's days against the cut chapter list, by its positions", async () => {
-    const book = material("M1", {
-      kind: "book",
-      backbone: true,
-      minutes: 600,
-      minutesBasis: "estimated",
-      toc: { source: "catalogue", url: "https://openlibrary.org/books/OL1M", printPages: false, end: null, chapters: Array.from({ length: 10 }, (_, i) => ({ n: i + 1, title: `Chapter ${i + 1}`, page: null, minutes: 60, sections: [] })) },
-    });
-    respondAllocate({ ...ALLOCATION, parts: [{ id: "M1", uses: null, minutes: null, chapters: [5, 6, 7, 8, 9], items: null, drop: false, dropReason: null }] });
-    // The cut list's positions 1–5 are ch. 5–9: each week reserves one, and week 1's days read its chapter.
-    mockedStreamObject
-      .mockReturnValueOnce(fakeStream([1, 2, 3, 4, 5].map((p) => ({ title: `W${p}`, summary: "s", covers: [{ id: `M1.${p}` }] }))))
-      .mockReturnValueOnce(
-        fakeStream(Array.from({ length: 5 }, (_, i) => ({ title: `Day ${i + 1}`, summary: "d", materials: i < 2 ? [{ id: "M1.1", tier: "must" as const, minutes: 30 }] : [] }))),
-      );
-    const calls: ModelCall[] = [];
-    const events: PlanDraftEvent[] = [];
-    for await (const event of streamPlanDraft({ topic: "Git", weeks: 5, daysPerWeek: 5, granularity: "day", hoursPerWeek: 5, materials: [book], log: { onCall: (c) => void calls.push(c) } })) events.push(event);
-
-    const finish = events.at(-1);
-    if (finish?.type !== "finish") throw new Error("no finish");
-    expect(calls.map((c) => c.label)).toEqual([ALLOCATE_LABEL, "Top level · 5 weeks", expect.stringContaining("Week 1")]);
-    const [top, days] = [calls[1], calls[2]];
-    expect(top.facts!.filter((f) => f.startsWith("backbone"))).toEqual([]);
-    expect(days.facts!.filter((f) => f.startsWith("backbone"))).toEqual([]);
-    expect(finish.root.children!.map((w) => w.covers![0].chapter)).toEqual([1, 2, 3, 4, 5]);
-    expect(finish.root.children![0].children!.slice(0, 2).map((d) => d.materials![0].chapter)).toEqual([1, 1]);
-    // The days' prompt names week 1's reservation by the cut list: ch. 5, not the book's first chapter.
-    const daysPrompt = (mockedStreamObject.mock.calls[1][0] as { prompt: string }).prompt;
-    expect(daysPrompt).toContain("M1.1");
-    expect(daysPrompt).toContain('ch. 5 "Chapter 5"');
-    expect(daysPrompt).not.toContain('"Chapter 1"');
   });
 
   it("sends the materials the allocation dropped, and drafts without them", async () => {
     respondAllocate({
       ...ALLOCATION,
       parts: [
-        { id: "M1", uses: null, minutes: null, chapters: null, items: null, drop: false, dropReason: null },
-        { id: "M2", uses: null, minutes: null, chapters: null, items: null, drop: true, dropReason: "the book covers it" },
+        { id: "M1", purpose: null, minutes: null, items: null, drop: false, dropReason: null },
+        { id: "M2", purpose: null, minutes: null, items: null, drop: true, dropReason: "the book covers it" },
       ],
     });
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
@@ -283,7 +247,7 @@ describe("streamPlanDraft and the allocation", () => {
     const materials = [material("M1")];
     const events: PlanDraftEvent[] = [];
     for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 7, granularity: "week", materials })) events.push(event);
-    expect(events[0]).toEqual({ type: "allocated", materials, dropped: [], coverage: null });
+    expect(events[0]).toEqual({ type: "allocated", materials: materials.map((m) => ({ ...m, uses: null })), dropped: [], coverage: null });
     expect(events[1]).toEqual({ type: "split", split: { readingShare: 100, practice: "reading", reason: "", formats: [] } });
     expect(events.at(-1)?.type).toBe("finish");
     error.mockRestore();
