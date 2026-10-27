@@ -96,6 +96,15 @@ describe("siteLinkCount", () => {
     expect(siteLinkCount(parseOutline(githubShell, "https://github.com/a/b"), "https://github.com/a/b")).toBe(0);
   });
 
+  it("does not count a README's badge and project-page links as its own files", () => {
+    const url = "https://github.com/a/b";
+    const badges = ["actions/workflows/ci.yml", "releases", "issues", "pulls", "wiki", "stargazers", "actions", "graphs/contributors"]
+      .map((p) => `<a href="https://github.com/a/b/${p}">x</a>`)
+      .join("");
+    const o = parseOutline(`<article class="markdown-body"><p>${badges}<a href="/a/b/blob/main/x.md">doc</a></p></article>`, url);
+    expect(siteLinkCount(o, url)).toBe(1);
+  });
+
   it("counts same-site pages once, not the page itself, not other sites", () => {
     const url = "https://example.com/book/";
     const o = parseOutline(
@@ -122,6 +131,10 @@ describe("extraction", () => {
     const p = extractHtml(primer, "https://github.com/donnemartin/system-design-primer");
     expect(p.outline?.words).toBe(p.words);
     expect(p.siteLinks).toBeGreaterThanOrEqual(0);
+  });
+
+  it("collapses non-breaking spaces in the readable text", () => {
+    expect(extractHtml("<p>a&nbsp;&nbsp;b</p>", "https://example.com/").text).toBe("a b");
   });
 
   it("measures a non-GitHub page's outline against the same words", () => {

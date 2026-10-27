@@ -142,7 +142,7 @@ export function markupToText(markup: string): string {
     .replace(/<[^>]+>/g, " ");
   return decodeEntities(body)
     .split("\n")
-    .map((line) => line.replace(/[ \t\f\v ]+/g, " ").trim())
+    .map((line) => line.replace(/[ \t\f\v\u00a0]+/g, " ").trim())
     .filter(Boolean)
     .join("\n");
 }

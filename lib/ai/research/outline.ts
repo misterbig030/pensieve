@@ -177,7 +177,7 @@ function dedupe(links: OutlineLink[]): OutlineLink[] {
 
 /**
  * How many distinct other pages of the page's own site it links to. For a GitHub repo that is the repo's own files and
- * folders; elsewhere it is any page on the same registrable domain.
+ * folders (blob and tree links, not its issues, actions or release pages); elsewhere it is any page on the same registrable domain.
  */
 export function siteLinkCount(outline: PageOutline, finalUrl: string): number {
   const self = canonicalUrl(finalUrl);
@@ -189,7 +189,7 @@ export function siteLinkCount(outline: PageOutline, finalUrl: string): number {
     if (!target || target === self) continue;
     if (repo) {
       const t = new URL(target);
-      if (t.hostname === "github.com" && t.pathname.toLowerCase().startsWith(`/${repo}/`)) targets.add(target);
+      if (t.hostname === "github.com" && (t.pathname.toLowerCase().startsWith(`/${repo}/blob/`) || t.pathname.toLowerCase().startsWith(`/${repo}/tree/`))) targets.add(target);
     } else if (domain && registrableDomain(hostnameOf(target)) === domain) {
       targets.add(target);
     }
