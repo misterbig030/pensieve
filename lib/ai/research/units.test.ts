@@ -337,6 +337,37 @@ describe("checkUnits", () => {
     expect(withUnits.list!.items.map((i) => i.title)).toEqual(problems);
   });
 
+  it("rule 1: a whole practice-role answer still returns the items tool's list its listUrl names", () => {
+    const listUrl = "https://neetcode.io/practice";
+    const problems = ["Two Sum", "Valid Anagram", "Group Anagrams", "Top K Frequent Elements"];
+    const page = bare(listUrl, { title: "NeetCode 150", text: problems.join("\n") });
+    const list: PracticeList = {
+      source: "page",
+      url: listUrl,
+      items: problems.map((title) => ({ title, number: null, group: null, difficulty: null, url: null, solutionUrl: null, minutes: null })),
+    };
+    const v = check({ answer: answer([], { whole: true, listUrl }), pages: [page], role: "practice", material: { url: listUrl, practice: PRACTICE }, lists: [list] });
+    expect(v.toc).toBeNull();
+    expect(v.refused).toBeNull();
+    expect([v.minutes, v.basis]).toEqual([null, null]);
+    expect(v.list).toEqual(list);
+    expect(v.facts[0]).toBe("whole");
+  });
+
+  it("rule 5: mostly invented practice titles keep the reading toc and make no practice-units list", () => {
+    const units = [
+      ...sectionUnits(),
+      unit("Section 1", `${REPO}#section-1`, { kind: "practice" }),
+      ...[1, 2, 3].map((i) => unit(`Invented lab ${i}`, `${REPO}#section-${i + 1}`, { kind: "practice" })),
+    ];
+    const v = check({ answer: answer(units), pages: [sectionsPage], role: "both", material: { practice: PRACTICE } });
+    expect(v.refused).toBeNull();
+    expect(v.toc!.chapters).toHaveLength(22);
+    expect([v.minutes, v.basis]).toEqual([22, "measured"]);
+    expect(v.list).toBeNull();
+    expect(v.facts).toContain("practice units refused: 3 of 4 titles not on the page");
+  });
+
   it("rule 13: practice units that fail the item check never refuse the reading toc", () => {
     const units = [...sectionUnits().slice(0, 20), unit("Section 21", `${REPO}#section-21`, { kind: "practice" }), unit("Section 22", `${REPO}#section-22`, { kind: "practice" })];
     const v = check({ answer: answer(units), pages: [sectionsPage], role: "both", material: { practice: PRACTICE } });

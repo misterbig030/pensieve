@@ -91,8 +91,12 @@ export function checkUnits(input: {
   lists: PracticeList[];
 }): UnitsVerdict {
   const { material, role, answer, pages, lists } = input;
-  // Rule 1: whole or empty.
-  if (answer.whole || answer.units.length === 0) return { toc: null, minutes: null, basis: null, list: null, refused: null, facts: ["whole"] };
+  // Rule 1: whole or empty means no reading units and no size change; a list from the `items` tool still counts.
+  if (answer.whole || answer.units.length === 0) {
+    const facts = ["whole"];
+    const list = practiceList(answer.listUrl, lists, false, [], material.url, pages, facts);
+    return { toc: null, minutes: null, basis: null, list, refused: null, facts };
+  }
 
   const facts: string[] = [];
   const refuse = (reason: string): UnitsVerdict => ({ toc: null, minutes: null, basis: null, list: null, refused: reason, facts });
@@ -107,20 +111,29 @@ export function checkUnits(input: {
 
   // Rules 3 and 4: units point to fetched pages, and their titles are on them.
   const placed: Placed[] = [];
+  const unseen: Record<UnitKind, number> = { read: 0, practice: 0 };
   let unfetched = 0;
   let untitled = 0;
   units.forEach((unit, index) => {
     const target = locate(unit, pages, source);
-    if (!target) unfetched++;
-    else if (!titleSeen(unit.title, target.page, target.heading, pages, book)) untitled++;
-    else placed.push({ unit, index, ...target, ...sizeOf(unit, target.page, target.heading) });
+    if (target && titleSeen(unit.title, target.page, target.heading, pages, book)) {
+      placed.push({ unit, index, ...target, ...sizeOf(unit, target.page, target.heading) });
+      return;
+    }
+    if (target) untitled++;
+    else unfetched++;
+    unseen[unit.kind]++;
   });
   if (unfetched > 0) facts.push(`${unfetched} of ${units.length} units point to no fetched page or heading`);
   if (untitled > 0) facts.push(`${untitled} of ${units.length} titles not on the page`);
 
-  // Rule 5: too many unseen.
-  const unseen = unfetched + untitled;
-  if (unseen > MAX_UNSEEN_SHARE * units.length) return refuse(`units refused: ${unseen} of ${units.length} titles not on the page`);
+  // Rule 5: too many unseen, per kind. Unseen reading units refuse the verdict; unseen practice units only keep the
+  // practice units from becoming an item list.
+  const readCount = units.filter((u) => u.kind === "read").length;
+  if (unseen.read > MAX_UNSEEN_SHARE * readCount) return refuse(`units refused: ${unseen.read} of ${readCount} titles not on the page`);
+  const practiceCount = units.length - readCount;
+  const practiceSeen = unseen.practice <= MAX_UNSEEN_SHARE * practiceCount;
+  if (!practiceSeen) facts.push(`practice units refused: ${unseen.practice} of ${practiceCount} titles not on the page`);
 
   // Rule 6: nested and repeated units.
   const kept = withoutRepeats(placed, pages, book);
@@ -181,7 +194,7 @@ export function checkUnits(input: {
   }
 
   // Rule 13: practice. It never refuses the reading toc; it only makes no list.
-  const list = practiceList(answer.listUrl, lists, kinds.includes("practice") && !!material.practice, practice, material.url, pages, facts);
+  const list = practiceList(answer.listUrl, lists, kinds.includes("practice") && !!material.practice, practiceSeen ? practice : [], material.url, pages, facts);
   return { toc, minutes, basis, list, refused: null, facts };
 }
 
