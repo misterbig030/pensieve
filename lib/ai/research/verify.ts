@@ -143,6 +143,13 @@ const VIDEO_HOSTS = /(^|\.)(youtube\.com|youtu\.be|vimeo\.com)$/;
 const CODE_HOSTS = /(^|\.)(github\.com|gitlab\.com|codeberg\.org|bitbucket\.org)$/;
 const PAPER_HOSTS = /(^|\.)(arxiv\.org|openreview\.net|aclanthology\.org|dl\.acm\.org|papers\.nips\.cc|proceedings\.neurips\.cc|proceedings\.mlr\.press|ieeexplore\.ieee\.org|semanticscholar\.org|biorxiv\.org|ssrn\.com)$/;
 
+const SHOP_HOSTS = /(^|\.)(amazon\.[a-z.]+|ebay\.[a-z.]+|barnesandnoble\.com|bookshop\.org|abebooks\.[a-z.]+|thriftbooks\.com|walmart\.com|booksamillion\.com|goodreads\.com|audible\.[a-z.]+)$/;
+
+/** Whether a page sells or rates a book rather than being its publisher's or author's: never a book's own page. */
+export function isShopListing(url: string): boolean {
+  return SHOP_HOSTS.test(hostOf(url) ?? "");
+}
+
 /** Whether a claimed kind is plausible for where the page lives. `null` means plausible. */
 export function kindProblem(kind: MaterialKind, url: string): string | null {
   const host = hostOf(url) ?? "";
@@ -532,6 +539,29 @@ function catalogueEntry(match: BookMatch, claimedAuthor: string | null | undefin
   return { ok: true, url: `https://openlibrary.org${match.key}`, fetchedTitle: clip(match.title, 300), verifiedAt: now().toISOString(), author: null };
 }
 
+/** Why a catalogue match cannot stand in for a book's page: what `catalogueEntry` needs that the claim or the match lacks. */
+function unconfirmedMatch(match: BookMatch, claimedAuthor: string | null | undefined): string {
+  if (!claimedAuthor?.trim()) return "Open Library matched the title, but no author was given to confirm it";
+  if (match.authors.length === 0) return "Open Library's match names no author to confirm it";
+  return "Open Library's match has no work page";
+}
+
+/** A fetch the site turned away (a 401, 403 or 429) or that timed out: the page is there, it just would not serve a robot. */
+const TURNED_AWAY = /^(?:returned (?:401|403|429)\b|timed out$)/;
+
+/**
+ * The page standing for a book Open Library matched when its own page did not pass. A claimed page the site turned
+ * away stays the book's link, the catalogue vouching for the book; one that is gone, opened as something else, or
+ * is a shop gives way to the catalogue entry. `pageReason` is null for a book claimed with no address.
+ */
+function bookPage(match: BookMatch, claim: { url: string; author?: string | null }, outcome: FetchOutcome, pageReason: string | null, now: () => Date): PageCheck {
+  const entry = catalogueEntry(match, claim.author, now);
+  if (!entry) return { ok: false, reason: pageReason ? `${pageReason}; ${unconfirmedMatch(match, claim.author)}` : unconfirmedMatch(match, claim.author) };
+  const turnedAway = !outcome.ok && TURNED_AWAY.test(outcome.reason);
+  const own = turnedAway && claim.url.trim().toLowerCase().startsWith("https://") && !isShopListing(claim.url) ? canonicalUrl(claim.url) : null;
+  return own && entry.ok ? { ...entry, url: own } : entry;
+}
+
 function pageTitle(outcome: FetchOutcome & { ok: true }): string | null {
   return outcome.page.ogTitle ?? outcome.page.title ?? outcome.page.h1;
 }
@@ -667,8 +697,8 @@ export async function runGate(input: GateInput): Promise<GateResult> {
         year = check.match.year ?? year;
         bookPages = check.match.pages ?? null;
         toc = check.toc;
-        // The book is real. If its own page cannot be used, its Open Library entry is the link.
-        if (!page.ok) page = catalogueEntry(check.match, c.author, now) ?? page;
+        // The book is real. If its own page cannot be used, the page its site turned away or its Open Library entry is the link.
+        if (!page.ok) page = bookPage(check.match, c, outcomes[i], readable(c) ? page.reason : null, now);
       } else if (check?.unavailable) {
         // With a page that passes, keep the book but not catalogued: no Open Library year, and never the backbone.
         year = null;
@@ -795,7 +825,8 @@ export async function reverifyMaterial(
 ): Promise<Material | null> {
   const researched = material.origin === "research";
   const claim = { url: material.url, title: material.title, kind: researched ? material.kind : null };
-  let page = checkPage(claim, await fetcher.fetch(material.url, signal), TITLE_MATCH_THRESHOLD);
+  const outcome = await fetcher.fetch(material.url, signal);
+  let page = checkPage(claim, outcome, TITLE_MATCH_THRESHOLD);
   let year = material.year;
   let backbone = material.backbone;
   if (researched && material.kind === "book") {
@@ -803,7 +834,7 @@ export async function reverifyMaterial(
       const hit = await books.find(material.title, material.author, signal);
       if (!hit) return null;
       year = hit.year ?? year;
-      if (!page.ok) page = catalogueEntry(hit, material.author, now) ?? page;
+      if (!page.ok) page = bookPage(hit, material, outcome, page.reason, now);
     } catch {
       year = null;
       backbone = false;

@@ -5,7 +5,7 @@ import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
-import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, isBookListPage, namedButNotListed, practiceLines, readButNotListed } from "./agent";
+import { bookPageFromNotes, briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, isBookListPage, namedButNotListed, practiceLines, readButNotListed } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
 import { isThin, researchMaterials, streamWhile, verifiedReading } from "./pipeline";
@@ -511,6 +511,17 @@ describe("extraction: every credible source, no choosing", () => {
     expect(candidates?.facts).not.toContain("read but not listed: https://docs.example.com/a (research)");
   });
 
+  it("fills a book listed without an address from a page the notes tried, and says so", async () => {
+    const page = "https://publisher.example.com/books/designing-data-intensive-applications/";
+    const list: CandidateList = { learner: [], candidates: [{ url: "", title: "Designing Data-Intensive Applications", kind: "book", author: "Martin Kleppmann", why: "Depth", recommendedBy: [] }] };
+    const { model } = scriptedModel([{ calls: [{ tool: "fetchSource", input: { url: page } }] }, { text: "Done." }], [list]);
+    const { fetcher } = fetcherFor();
+    const rows: ModelCall[] = [];
+    const result = await createAgentArm({ provider: fakeProvider(), model })({ brief: { topic: "T", weeks: 4, sources: [] }, fetcher, emit: () => {}, log: { onCall: (c) => void rows.push(c) } });
+    expect(result.candidates[0].url).toBe(page);
+    expect(rows.find((r) => r.label === "Research · candidates")?.facts).toContain(`book page from the notes: Designing Data-Intensive Applications → ${page}`);
+  });
+
   it("cuts a longer list to the first 25 and says so", async () => {
     const many: CandidateList = {
       learner: [],
@@ -565,9 +576,38 @@ describe("books the notes name", () => {
     ]);
   });
 
-  it("lets a book the notes give no page for be listed with an empty url", () => {
+  it("lets a book the notes give no page for be listed with an empty url, and keeps one they give", () => {
     const prompt = buildFinalPrompt({ topic: "T", weeks: 8, hoursPerWeek: 6, sources: [] }, "notes");
+    expect(prompt).toContain("never a shop listing (Amazon or another retailer), even when that page could not be read.");
     expect(prompt).toContain("A book the notes name without such a page is still listed, with url empty: the catalogue vouches for it.");
+  });
+
+  it("gives a book listed without an address the page the notes carry for it: one tried first, then a result, then the notes", () => {
+    const oreilly2 = "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781098119058/";
+    const oreilly1 = "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/";
+    const backbone = new ResearchNotes();
+    backbone.searches.push({ query: "q", results: [
+      { title: "r/x", url: "https://www.reddit.com/r/x/comments/1/designing_data_intensive_applications/", snippet: "", publishedDate: null },
+      { title: "Shop", url: "https://www.amazon.com/designing-data-intensive-applications/dp/1449373321", snippet: "", publishedDate: null },
+      { title: "Review", url: "https://blog.example.com/designing-data-intensive-applications-review", snippet: "", publishedDate: null },
+    ] });
+    backbone.fetches.push({ url: oreilly2, ok: false, title: null, finalUrl: null, reason: "returned 403", excerpt: "" });
+    backbone.remarks.push(`The 1st-edition page: ${oreilly1}.`);
+    const ddia = book("Designing Data-Intensive Applications");
+    expect(bookPageFromNotes(ddia, [{ direction: "backbone", notes: backbone }]).url).toBe(oreilly2);
+    // Without the read, the address in the notes; without either, nothing a shop, a review or a forum offers.
+    const noted = new ResearchNotes();
+    noted.searches.push(...backbone.searches);
+    noted.remarks.push(...backbone.remarks);
+    expect(bookPageFromNotes(ddia, [{ direction: "backbone", notes: noted }]).url).toBe(oreilly1);
+    const bare = new ResearchNotes();
+    bare.searches.push(...backbone.searches);
+    expect(bookPageFromNotes(ddia, [{ direction: "backbone", notes: bare }])).toBe(ddia);
+    // A listed address, and anything but a book, stay as they are.
+    const listed = { ...ddia, url: "https://dataintensive.net/" };
+    expect(bookPageFromNotes(listed, [{ direction: "backbone", notes: backbone }])).toBe(listed);
+    const essay = { ...ddia, kind: "essay" as const };
+    expect(bookPageFromNotes(essay, [{ direction: "backbone", notes: backbone }])).toBe(essay);
   });
 });
 

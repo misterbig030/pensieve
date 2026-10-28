@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { isPracticeOnly } from "@/lib/materials";
+import { EgressError } from "./egress";
 import type { PageInfo } from "./extract";
 import type { ResearchEvent } from "./events";
 import { signMaterial, verifyMaterialSig } from "./signature";
@@ -249,6 +250,70 @@ describe("runGate", () => {
     expect(f.fetchPage).not.toHaveBeenCalled();
   });
 
+  it("drops a catalogue match that cannot stand in for the book's page with the reason, not as an address", async () => {
+    const authorless: BookLookup = { find: async (title) => ({ key: "/works/OL5W", title, authors: [], year: 2024 }) };
+    const f = gateFixture({ "https://publisher.example.com/patterns": new Error("returned 403") }, authorless);
+    const result = await runGate({
+      candidates: [
+        candidate({ url: "", title: "Coding Interview Patterns", kind: "book", author: "Alex Xu" }),
+        candidate({ url: "https://publisher.example.com/patterns", title: "Coding Interview Patterns II", kind: "book", author: "Alex Xu" }),
+        candidate({ url: "", title: "Anonymous Book", kind: "book" }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+      now,
+    });
+    expect(result.materials).toEqual([]);
+    expect(result.dropped.map((d) => d.reason)).toEqual([
+      "Open Library's match names no author to confirm it",
+      expect.stringMatching(/^.+; Open Library's match names no author to confirm it$/),
+      "Open Library matched the title, but no author was given to confirm it",
+    ]);
+    expect(result.dropped[1].reason).not.toMatch(/https address/);
+  });
+
+  it("keeps a book's own page its site turned away as its link, the catalogue vouching for it, but not one gone, opened as something else, or a shop", async () => {
+    const works = ["Designing Data-Intensive Applications", "Gone Data Book", "Other Data Book", "Shop Data Book"];
+    const lookup: BookLookup = { find: async (title) => ({ key: `/works/OL${works.indexOf(title) + 1}W`, title, authors: ["Martin Kleppmann"], year: 2017 }) };
+    const blocked = "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781098119058/";
+    const f = gateFixture(
+      {
+        [blocked]: new EgressError("status", "HTTP 403"),
+        "https://publisher.example.com/gone": new EgressError("status", "HTTP 404"),
+        "https://publisher.example.com/other": info("https://publisher.example.com/other", "Cookie policy"),
+        "https://www.amazon.com/dp/1449373321": new EgressError("status", "HTTP 403"),
+      },
+      lookup,
+    );
+    const result = await runGate({
+      candidates: [
+        candidate({ url: blocked, title: "Designing Data-Intensive Applications", kind: "book", author: "Martin Kleppmann" }),
+        candidate({ url: "https://publisher.example.com/gone", title: "Gone Data Book", kind: "book", author: "Martin Kleppmann" }),
+        candidate({ url: "https://publisher.example.com/other", title: "Other Data Book", kind: "book", author: "Martin Kleppmann" }),
+        candidate({ url: "https://www.amazon.com/dp/1449373321", title: "Shop Data Book", kind: "book", author: "Martin Kleppmann" }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+      now,
+    });
+    expect(result.materials.map((m) => [m.title, m.url, m.fetchedTitle])).toEqual([
+      ["Designing Data-Intensive Applications", "https://oreilly.com/library/view/designing-data-intensive-applications/9781098119058", "Designing Data-Intensive Applications"],
+      ["Gone Data Book", "https://openlibrary.org/works/OL2W", "Gone Data Book"],
+      ["Other Data Book", "https://openlibrary.org/works/OL3W", "Other Data Book"],
+      ["Shop Data Book", "https://openlibrary.org/works/OL4W", "Shop Data Book"],
+    ]);
+  });
+
   it("marks matched books catalogued and chooses no backbone, keeping the arm's order", async () => {
     const other = "https://www.oreilly.com/library/view/other-book/9781098000000";
     const down = "https://www.oreilly.com/library/view/down-book/9781098000001";
@@ -458,7 +523,7 @@ describe("runGate", () => {
 
     const noAuthor = await run(candidate({ url: book, title: "AI Engineering", kind: "book" }), bookLookup);
     expect(noAuthor.materials).toHaveLength(0);
-    expect(noAuthor.dropped[0].reason).toBe("could not be opened");
+    expect(noAuthor.dropped[0].reason).toBe("could not be opened; Open Library matched the title, but no author was given to confirm it");
 
     const unknown = await run(withAuthor, { find: async () => null });
     expect(unknown.materials).toHaveLength(0);
