@@ -735,7 +735,7 @@ export interface LevelChecks {
   breaches: Breach[];
 }
 
-type CheckMaterial = Pick<Material, "id" | "toc" | "minutes" | "practice"> & { backbone?: boolean; kind?: Material["kind"] };
+type CheckMaterial = Pick<Material, "id" | "toc" | "minutes" | "practice"> & { backbone?: boolean; kind?: Material["kind"]; minutesBasis?: Material["minutesBasis"] };
 
 export interface LevelCheckInput {
   root: PlanNode;
@@ -1251,11 +1251,14 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
 
   // The top level reserves each material whose units are all sized toward its budget: its units' minutes at headings,
   // its rows' at leaves. An unsized unit would count nothing, so a list with one is not held to its budget. No row can
-  // be dropped to cure a miss, so after the retry it stays a fact.
+  // be dropped to cure a miss, so after the retry it stays a fact. A book whose size is an estimate is not held either:
+  // its chapters' minutes are shares of that estimate, which never cap its budget (`budgetCap`), so no set of chapters
+  // need add up to it.
   if (input.top) {
     for (const m of input.materials) {
       const budget = m.minutes;
       if (!listed(m.id) || budget === null || budget === undefined || !m.toc!.chapters.every((c) => c.minutes !== null)) continue;
+      if (m.kind === "book" && m.minutesBasis !== "measured") continue;
       const reads = input.nodes.flatMap((n) => refsOf(n).filter((r) => isRead(r) && r.id === m.id));
       const reserved = Math.round(reads.reduce((sum, r) => sum + (input.leaves && typeof r.minutes === "number" ? r.minutes : knownMinutes(r)), 0));
       if (Math.abs(reserved - budget) <= budgetMissSlack(budget)) continue;

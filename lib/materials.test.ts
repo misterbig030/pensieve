@@ -397,16 +397,14 @@ describe("levelChecks", () => {
     const root = aiePlan();
     weeksOf(root)[1].materials!.push(read(1, 107));
     const out = treeChecks(root, AIE_MATERIALS, { granularity: "week", ...share });
+    // The months leave ch. 7–9 out, but the backbone's size has no measured basis, so it is not held to a budget.
     expect(out.breaches.map((b) => b.text)).toEqual([
-      // The months leave ch. 7–9 out: 787 of the backbone's 1105 min.
-      "M1's units reserved add up to about 787 min against its budget of about 1105 min",
       "Week 1's must-reading is 247 min against a budget of about 144 min",
       "Week 2 reads M1.1, which Week 1 holds",
       "Week 2's must-reading is 326 min against a budget of about 144 min",
     ]);
     expect(out.facts).toContain("backbone ch. 7, 8, 9 not reserved");
-    expect(out.breaches[0].index).toBe(-1);
-    expect(out.nodes[out.breaches[2].index].id).toBe("w2");
+    expect(out.nodes[out.breaches[1].index].id).toBe("w2");
   });
 });
 
@@ -443,6 +441,15 @@ describe("budget-miss", () => {
   it("is not checked for units without sizes, or below the top level", () => {
     expect(check([[], []], primer([null, null, null])).breaches).toEqual([]);
     expect(misses(check([[1, 2], [3, 4]], primer(), false))).toEqual([]);
+  });
+  it("is not checked for a book whose size is an estimate: its chapters are shares of that estimate and never cap its budget", () => {
+    // Every chapter reserved (48 min) against a budget of 120 the allocation was free to give: no reservation could meet it.
+    const book = (minutesBasis: "estimated" | "measured") => ({ id: "B", kind: "book" as const, minutes: 120, minutesBasis, toc: tocOf(UNITS) });
+    const all = [[1, 2, 3], [4, 5], [6, 7, 8]];
+    const run = (m: ReturnType<typeof book>) =>
+      misses(levelChecks({ root: layout(makeRoot(weeks(all, "B"))), nodes: weeks(all, "B"), leaves: false, top: true, materials: [{ id: "E", minutes: 30 }, m], unknownIds: [], daysPerWeek: 7 }));
+    expect(run(book("estimated"))).toEqual([]);
+    expect(run(book("measured"))).toEqual(["M2's units reserved add up to about 48 min against its budget of about 120 min"]);
   });
   it("is not checked when any unit is unsized: an unsized unit would count 0 and the miss could not be cured", () => {
     // Every unit reserved: the sized ones count 40 min against a budget of 60 that the unsized unit makes up.
