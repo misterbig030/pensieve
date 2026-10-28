@@ -77,6 +77,34 @@ describe("parseOutline", () => {
     expect(o.links).toEqual([{ url: "https://example.com/docs/intro", text: "Intro" }]);
   });
 
+  it("gives a link in a table row or list item that row's text outside its links, and no other link any", () => {
+    const o = parseOutline(
+      `<main><table><tr><th>Question</th><th></th></tr>
+        <tr><td>Design Pastebin.com (or Bit.ly)</td><td><a href="/s/pastebin">Solution</a></td></tr>
+        <tr><td>Design a hash map</td><td><a href="/s/hash_map.ipynb">Solution</a></td></tr></table>
+      <ul><li><a href="/foo">Foo</a> and <a href="/bar">Bar</a></li>
+        <li>Week 1 <ul><li><a href="/w1">notes</a></li></ul></li>
+        <li>Week 2 <ul><li>slides</li></ul> <a href="/w2">notes</a></li></ul>
+      <p>See <a href="/plain">the guide</a> for more.</p>
+      <ol><li>Alpha <a href="/alpha">Solution</a><li>Beta</li></ol></main>`,
+      "https://example.com/",
+    );
+    const context = Object.fromEntries(o.links.map((l) => [new URL(l.url).pathname, l.context ?? null]));
+    expect(context).toEqual({
+      "/s/pastebin": "Design Pastebin.com (or Bit.ly)",
+      "/s/hash_map.ipynb": "Design a hash map",
+      // Each of two links in one item has only the words around them, never the other link's text.
+      "/foo": "and",
+      "/bar": "and",
+      // The innermost item holds only the link; an item a nested list closed inside is not read past.
+      "/w1": null,
+      "/w2": null,
+      "/plain": null,
+      // An item whose closing tag the page leaves out ends where the next one starts.
+      "/alpha": "Alpha",
+    });
+  });
+
   it("puts each link under the heading it sits in", () => {
     const o = parseOutline(
       `<main><h2 id="a">A</h2><a href="/one">One</a><h3 id="a1">A1</h3><a href="/two">Two</a><h2 id="b">B</h2><a href="/three">Three</a><p>${"w ".repeat(300)}</p></main>`,

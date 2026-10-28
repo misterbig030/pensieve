@@ -302,8 +302,8 @@ function inside(title: string, said: string | null | undefined): boolean {
  * Rule 4: the title the unit is saved under, or null when it is not on the page. Every word saved must be the page's:
  * - a heading unit's title sits inside its heading (kept as the model wrote it), or its heading sits inside the
  *   title (saved as the heading's own title, so no word the page lacks survives);
- * - a linked unit's title sits inside the text of a link to its page on any seen page, or the page's own title or
- *   first heading;
+ * - a linked unit's title sits inside the text of a link to its page on any seen page, or in the rest of the table row
+ *   or list item that link sits in (a question beside its "Solution" link), or the page's own title or first heading;
  * - a book's title sits among its page's headings, link text and text.
  */
 function seenTitle(rawTitle: string, page: SeenPage, heading: number | null, pages: SeenPage[], book: boolean): string | null {
@@ -320,7 +320,7 @@ function seenTitle(rawTitle: string, page: SeenPage, heading: number | null, pag
     return within(normalText(own), title) ? own : null;
   }
   const keys = pageKeys(page);
-  const linked = pages.some((p) => p.outline?.links.some((l) => keys.has(canonicalUrl(l.url) ?? "") && inside(title, l.text)));
+  const linked = pages.some((p) => p.outline?.links.some((l) => keys.has(canonicalUrl(l.url) ?? "") && (inside(title, l.text) || inside(title, l.context))));
   return linked || inside(title, page.title) || inside(title, outline?.headings[0]?.title) ? rawTitle : null;
 }
 

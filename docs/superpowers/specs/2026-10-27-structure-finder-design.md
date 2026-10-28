@@ -161,8 +161,9 @@ Runs on each finder's answer before anything is saved. It is pure code, with no 
 
 - **Every unit points to something fetched.** `at` must be a page one of the finder's tools returned, or a heading
   anchor on one (canonical URL match, as `validateChaptersAnswer` does today).
-- **Every title is real.** The title must appear, as normalised text, among that page's headings or in the link text
-  that points to it. A unit that doesn't is dropped. If more than `MAX_UNSEEN_SHARE` (10%) of units are dropped this
+- **Every title is real.** The title must appear, as normalised text, among that page's headings, in the link text
+  that points to it, or in the rest of the table row or list item that link sits in (a question beside its
+  "Solution" link). A unit that doesn't is dropped. If more than `MAX_UNSEEN_SHARE` (10%) of units are dropped this
   way, the whole list is refused.
 - **Sizes come from the tools.** A heading unit's minutes are the words under it ÷ `WORDS_PER_MINUTE`. A linked unit's
   are its page's measured size. A model `minutes` is kept only for a unit whose target couldn't be measured, and the

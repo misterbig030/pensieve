@@ -6,6 +6,11 @@ export interface OutlineLink {
   url: string;
   /** Decoded, whitespace-collapsed link text. */
   text: string;
+  /**
+   * The text of the table row or list item the link sits in, outside every link in it: a question beside its
+   * "Solution" link. Absent when the link is in neither, or the row says nothing else.
+   */
+  context?: string;
 }
 
 export interface OutlineHeading {
@@ -149,6 +154,7 @@ function normalizeAnchor(raw: string): string | null {
 /** Every http(s) link in the markup, resolved against the page's URL. Same-page `#` links and mail or script links are left out. */
 function linksIn(markup: string, finalUrl: string): OutlineLink[] {
   const out: OutlineLink[] = [];
+  const lower = markup.toLowerCase();
   for (const m of markup.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
     const href = attrs(`<a ${m[1]}>`).href?.trim();
     if (!href || href.startsWith("#")) continue;
@@ -159,9 +165,32 @@ function linksIn(markup: string, finalUrl: string): OutlineLink[] {
       continue;
     }
     if (url.protocol !== "https:" && url.protocol !== "http:") continue;
-    out.push({ url: url.href, text: clean(m[2]) ?? "" });
+    const context = rowText(markup, lower, m.index, m.index + m[0].length);
+    out.push({ url: url.href, text: clean(m[2]) ?? "", ...(context ? { context } : {}) });
   }
   return dedupe(out);
+}
+
+/**
+ * The text outside links of the innermost table row or list item around the link at [start, end): null when the link
+ * sits in neither, or when the nearest row or item before it closes before the link (a nested list ended inside it).
+ */
+function rowText(markup: string, lower: string, start: number, end: number): string | null {
+  let open = -1;
+  let tag = "";
+  for (const t of ["li", "tr"]) {
+    for (let at = lower.lastIndexOf(`<${t}`, start); at !== -1; at = lower.lastIndexOf(`<${t}`, at - 1)) {
+      // `<link` and `<track` are not rows.
+      if (!/[\s>]/.test(lower[at + t.length + 1] ?? "")) continue;
+      if (at > open) [open, tag] = [at, t];
+      break;
+    }
+  }
+  if (open === -1 || lower.indexOf(`</${tag}`, open) < start) return null;
+  // It ends at its closing tag, or at the next row or item when the page leaves the closing tag out.
+  const ends = [lower.indexOf(`</${tag}`, end), lower.indexOf(`<${tag}>`, end), lower.indexOf(`<${tag} `, end)].filter((i) => i !== -1);
+  const row = markup.slice(open, ends.length > 0 ? Math.min(...ends) : undefined);
+  return clean(row.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, " "));
 }
 
 /** The same link with the same text twice adds nothing. */

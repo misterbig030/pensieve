@@ -189,6 +189,28 @@ describe("checkUnits", () => {
     expect(check({ answer: answer(wrongHeading), pages: [sectionsPage] }).refused).toBe("units refused: 3 of 22 titles not on the page");
   });
 
+  it("rule 4: a linked unit's title may sit in the table row or list item of a link to its page, outside that link", () => {
+    const solution = (slug: string) => `${PRIMER}/blob/master/solutions/${slug}`;
+    const QUESTIONS = ["Design Pastebin.com (or Bit.ly)", "Design a web crawler", "Design a hash map"];
+    const slugs = ["pastebin/README.md", "web_crawler/README.md", "hash_map.ipynb"];
+    const table = seen(
+      PRIMER,
+      readme("primer", `<h2 id="user-content-questions">Questions</h2><table>${QUESTIONS.map((q, i) => `<tr><td>${q}</td><td><a href="${solution(slugs[i])}">Solution</a></td></tr>`).join("")}</table>
+        <ul><li><a href="${solution("foo.md")}">Foo</a> and <a href="${solution("bar.md")}">Bar</a></li></ul>`),
+    );
+    // The solution pages say nothing of their titles: a notebook GitHub draws with script.
+    const pages = [table, ...[...slugs, "foo.md", "bar.md"].map((s) => bare(solution(s), { title: "solutions · GitHub", words: 55 }))];
+    const practice = (title: string, slug: string) => unit(title, solution(slug), { kind: "practice" });
+    const run = (units: Unit[]) => check({ answer: answer(units), pages, role: "practice", material: { url: PRIMER, practice: PRACTICE } });
+
+    const v = run(QUESTIONS.map((q, i) => practice(q, slugs[i])));
+    expect(v.refused).toBeNull();
+    expect(v.list!.items.map((i) => i.title)).toEqual(QUESTIONS);
+    // A row's title does not vouch for another row's link, and one link's text does not vouch for its neighbour's.
+    expect(run([practice("Design a web crawler", slugs[0]), practice(QUESTIONS[2], slugs[2])]).facts).toContain("practice units refused: 1 of 2 titles not on the page");
+    expect(run([practice("Foo", "bar.md"), practice(QUESTIONS[2], slugs[2])]).facts).toContain("practice units refused: 1 of 2 titles not on the page");
+  });
+
   it("rule 5: 4 of 22 titles unseen refuses the units; 2 of 22 keeps 20", () => {
     const four = sectionUnits().map((u, i) => (i < 2 ? { ...u, title: `Invented ${i}` } : i < 4 ? { ...u, at: `${REPO}#nowhere-${i}` } : u));
     expect(check({ answer: answer(four), pages: [sectionsPage] })).toEqual({
