@@ -15,7 +15,7 @@ import {
   type SearchProvider,
   type SourceFetcher,
 } from "./tools";
-import { FOUND_BY, MAX_CANDIDATES, candidateListSchema, canonicalUrl, capCandidates, isShopListing, mainTitle, normalizeCoverage, titleTokens, type Candidate, type CandidateList, type FoundBy, type LearnerNote } from "./verify";
+import { FOUND_BY, MAX_CANDIDATES, candidateListSchema, canonicalUrl, capCandidates, isShopListing, kindProblem, mainTitle, normalizeCoverage, titleTokens, type Candidate, type CandidateList, type FoundBy, type LearnerNote } from "./verify";
 
 /** What research knows about the learner: the brief, unchanged. */
 export interface ResearchBrief {
@@ -428,8 +428,8 @@ export function namedButNotListed(found: FoundSource[], candidates: Pick<Candida
 /**
  * A book listed without an address takes its own page from the notes when they carry one: an https address, read or
  * not, with a path segment that is the book's title ("/library/view/designing-data-intensive-applications/…"), off
- * any shop. Pages a researcher tried to read come first, then search results, then addresses in the notes' text.
- * Anything else is returned as it is.
+ * any shop and any host a book is unlikely on (a code host, a video site). Pages a researcher tried to read come
+ * first, then search results, then addresses in the notes' text. Anything else is returned as it is.
  */
 export function bookPageFromNotes(candidate: Candidate, found: FoundSource[]): Candidate {
   if (candidate.kind !== "book" || candidate.url.trim()) return candidate;
@@ -441,7 +441,7 @@ export function bookPageFromNotes(candidate: Candidate, found: FoundSource[]): C
     ...found.flatMap(({ notes }) => notes.remarks.flatMap((r) => r.match(/https:\/\/[^\s<>()[\]"'`]+/g) ?? [])),
   ];
   const own = urls.find((url) => {
-    if (!url.toLowerCase().startsWith("https://") || isShopListing(url)) return false;
+    if (!url.toLowerCase().startsWith("https://") || isShopListing(url) || kindProblem("book", url)) return false;
     try {
       return new URL(url.replace(/[.,;:]+$/, "")).pathname.toLowerCase().split("/").includes(slug);
     } catch {

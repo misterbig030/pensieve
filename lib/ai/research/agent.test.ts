@@ -609,6 +609,18 @@ describe("books the notes name", () => {
     const essay = { ...ddia, kind: "essay" as const };
     expect(bookPageFromNotes(essay, [{ direction: "backbone", notes: backbone }])).toBe(essay);
   });
+
+  it("does not take a code host's page as a book's, though its path names the book", () => {
+    const notes = new ResearchNotes();
+    notes.fetches.push({ url: "https://github.com/ByteByteGoHq/coding-interview-patterns", ok: true, title: "Code", finalUrl: null, excerpt: "" });
+    notes.searches.push({ query: "q", results: [{ title: "Topic", url: "https://github.com/topics/system-design-interview", snippet: "", publishedDate: null }] });
+    const patterns = book("Coding Interview Patterns: Nail Your Next Coding Interview");
+    const sdi = book("System Design Interview – An Insider's Guide");
+    expect(bookPageFromNotes(patterns, [{ direction: "backbone", notes }])).toBe(patterns);
+    expect(bookPageFromNotes(sdi, [{ direction: "backbone", notes }])).toBe(sdi);
+    notes.remarks.push("Its page: https://bytebytego.com/coding-interview-patterns.");
+    expect(bookPageFromNotes(patterns, [{ direction: "backbone", notes }]).url).toBe("https://bytebytego.com/coding-interview-patterns");
+  });
 });
 
 describe("a provider refusal on a user's key", () => {
