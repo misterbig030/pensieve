@@ -9,7 +9,7 @@ import type { PageInfo } from "./extract";
 import { listGroups, readItemListAt, type FullReader } from "./itemFinder";
 import type { OutlineHeading, OutlineLink, PageOutline } from "./outline";
 import { SEARCH_RESULTS, type SearchProvider, type SourceFetcher } from "./tools";
-import { checkUnits, structureAnswerSchema, type SeenPage, type StructureAnswer, type StructureRole, type UnitsVerdict } from "./units";
+import { checkUnits, citedUnfetched, structureAnswerSchema, type SeenPage, type StructureAnswer, type StructureRole, type UnitsVerdict } from "./units";
 import { mainTitle } from "./verify";
 
 /**
@@ -139,7 +139,7 @@ export function buildStructurePrompt(material: Material, role: StructureRole): s
     "",
     "Answer by calling `answer`:",
     "- \"units\" in the source's own order. Write each title exactly as the page writes it.",
-    "- \"at\": an absolute URL one of the tools returned, or that URL followed by #anchor with an anchor the `outline` tool gave for one of its headings.",
+    "- \"at\": an absolute URL of a page the tools fetched, or that URL followed by #anchor with an anchor the `outline` tool gave for one of its headings. A page you saw only as a link is not fetched: `measure` it before you answer with it.",
     "- \"group\": the heading or folder the unit sits under, or null.",
     "- \"minutes\": only for a unit the tools couldn't measure (slides, a lecture video with no runtime); otherwise null. Code sizes the rest from the tools.",
     `- If the source has more than ${MAX_CHAPTERS} units, use the next level up.`,
@@ -511,9 +511,23 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
         flush(["no answer"]);
         return { ...NOTHING, facts: ["no answer"], note: null, units: 0, counts, costUsd };
       }
+      // Pages the answer cites from a link without measuring them are measured now, in the finder's time, so a unit is
+      // checked against its page rather than refused for a skipped step.
+      const cited = signal.aborted ? [] : citedUnfetched(answer, role, material.url, seen).slice(0, MAX_CHAPTERS);
+      if (cited.length > 0) {
+        clock.resume();
+        try {
+          for (let i = 0; i < cited.length && !signal.aborted; i += MEASURE_BATCH) {
+            await Promise.all(cited.slice(i, i + MEASURE_BATCH).map((url) => fetchPage(url, signal)));
+          }
+        } finally {
+          clock.pause();
+        }
+      }
       const verdict = checkUnits({ material, role, answer, pages: [...seen, ...itemPages], lists });
       const units = verdict.toc?.chapters.length ?? 0;
-      flush([verdict.refused ?? `units kept: ${units}`, ...verdict.facts]);
+      const measured = cited.length > 0 ? [`measured ${cited.length} cited pages after the answer`] : [];
+      flush([verdict.refused ?? `units kept: ${units}`, ...measured, ...verdict.facts]);
       return { ...verdict, note: answer.note.trim() || null, units, counts, costUsd };
     },
   };

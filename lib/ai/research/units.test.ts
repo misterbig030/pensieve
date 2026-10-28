@@ -4,7 +4,7 @@ import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { chapterListSchema, type MaterialPractice, type PracticeList } from "@/lib/schemas/material";
 import { extractHtml } from "./extract";
-import { checkUnits, type SeenPage, type StructureAnswer, type StructureRole } from "./units";
+import { checkUnits, citedUnfetched, type SeenPage, type StructureAnswer, type StructureRole } from "./units";
 
 function fixture(name: string): string {
   return gunzipSync(readFileSync(join(__dirname, "__fixtures__", "pages", `${name}.html.gz`))).toString("utf8");
@@ -196,7 +196,7 @@ describe("checkUnits", () => {
       minutes: null,
       basis: null,
       list: null,
-      refused: "units refused: 4 of 22 titles not on the page",
+      refused: "units refused: 4 of 22 unseen: 2 point to no fetched page or heading, 2 titles not on the page",
       facts: expect.any(Array),
     });
     const two = sectionUnits().map((u, i) => (i < 2 ? { ...u, title: `Invented ${i}` } : u));
@@ -204,6 +204,16 @@ describe("checkUnits", () => {
     expect(v.refused).toBeNull();
     expect(v.toc!.chapters).toHaveLength(20);
     expect(v.facts).toContain("2 of 22 titles not on the page");
+  });
+
+  it("rule 5: units on pages no tool fetched are refused for that, not for their titles", () => {
+    const [hub] = hubPages();
+    const units = [1, 2, 4].map((n) => unit(`Week ${n}`, `${REPO}/tree/main/week0${n}`));
+    expect(check({ answer: answer(units), pages: [hub] }).refused).toBe("units refused: 3 of 3 point to no fetched page or heading");
+    const practice = [...sectionUnits(), ...units.map((u) => ({ ...u, kind: "practice" as const }))];
+    const v = check({ answer: answer(practice), pages: [sectionsPage, hub], role: "both", material: { practice: PRACTICE } });
+    expect(v.toc!.chapters).toHaveLength(22);
+    expect(v.facts).toContain("practice units refused: 3 of 3 point to no fetched page or heading");
   });
 
   it("rule 6: a nested h3 inside a kept h2 unit is dropped, and so is a second unit with the same at", () => {
@@ -436,5 +446,23 @@ describe("checkUnits", () => {
     expect(v.refused).toBeNull();
     expect(v.toc!.chapters).toHaveLength(20);
     expect(v.list).toBeNull(); // two items are fewer than MIN_PRACTICE_ITEMS
+  });
+});
+
+describe("citedUnfetched", () => {
+  it("lists, once each, the pages the answer's units cite that a fetched page links to but no tool fetched", () => {
+    const [hub] = hubPages();
+    const units = [
+      unit("Week 1: Intro", "/a/b/tree/main/week01"),
+      unit("Week 2: Audio features", `${REPO}/tree/main/week02#setup`),
+      unit("Week 2: Audio features and spectrograms", "https://www.github.com/a/b/tree/main/week02/"),
+      unit("Weeks", `${REPO}#weeks`),
+      unit("Week 9: Diffusion", `${REPO}/tree/main/week09`),
+      unit("Week 4: Vocoders", `${REPO}/tree/main/week04`, { kind: "practice" }),
+    ];
+    expect(citedUnfetched(answer(units), "read", REPO, [hub])).toEqual([`${REPO}/tree/main/week01`, `${REPO}/tree/main/week02`]);
+    expect(citedUnfetched(answer(units), "both", REPO, [hub])).toEqual([`${REPO}/tree/main/week01`, `${REPO}/tree/main/week02`, `${REPO}/tree/main/week04`]);
+    expect(citedUnfetched(answer(units), "read", REPO, hubPages())).toEqual([]);
+    expect(citedUnfetched(answer(units, { whole: true }), "read", REPO, [hub])).toEqual([]);
   });
 });

@@ -114,9 +114,8 @@ export function checkUnits(input: {
 
   // Rules 3 and 4: units point to fetched pages, and their titles are on them.
   const placed: Placed[] = [];
-  const unseen: Record<UnitKind, number> = { read: 0, practice: 0 };
-  let unfetched = 0;
-  let untitled = 0;
+  const unfetched: Record<UnitKind, number> = { read: 0, practice: 0 };
+  const untitled: Record<UnitKind, number> = { read: 0, practice: 0 };
   units.forEach((unit, index) => {
     const target = locate(unit, pages, source, book);
     const title = target ? seenTitle(unit.title, target.page, target.heading, pages, book) : null;
@@ -124,20 +123,21 @@ export function checkUnits(input: {
       placed.push({ unit, index, title, ...target, ...sizeOf(unit, target.page, target.heading) });
       return;
     }
-    if (target) untitled++;
-    else unfetched++;
-    unseen[unit.kind]++;
+    if (target) untitled[unit.kind]++;
+    else unfetched[unit.kind]++;
   });
-  if (unfetched > 0) facts.push(`${unfetched} of ${units.length} units point to no fetched page or heading`);
-  if (untitled > 0) facts.push(`${untitled} of ${units.length} titles not on the page`);
+  const allUnfetched = unfetched.read + unfetched.practice;
+  const allUntitled = untitled.read + untitled.practice;
+  if (allUnfetched > 0) facts.push(`${allUnfetched} of ${units.length} units point to no fetched page or heading`);
+  if (allUntitled > 0) facts.push(`${allUntitled} of ${units.length} titles not on the page`);
 
   // Rule 5: too many unseen, per kind. Unseen reading units refuse the verdict; unseen practice units only keep the
   // practice units from becoming an item list.
   const readCount = units.filter((u) => u.kind === "read").length;
-  if (unseen.read > MAX_UNSEEN_SHARE * readCount) return refuse(`units refused: ${unseen.read} of ${readCount} titles not on the page`);
+  if (unfetched.read + untitled.read > MAX_UNSEEN_SHARE * readCount) return refuse(`units refused: ${unseenWhy(readCount, unfetched.read, untitled.read)}`);
   const practiceCount = units.length - readCount;
-  const practiceSeen = unseen.practice <= MAX_UNSEEN_SHARE * practiceCount;
-  if (!practiceSeen) facts.push(`practice units refused: ${unseen.practice} of ${practiceCount} titles not on the page`);
+  const practiceSeen = unfetched.practice + untitled.practice <= MAX_UNSEEN_SHARE * practiceCount;
+  if (!practiceSeen) facts.push(`practice units refused: ${unseenWhy(practiceCount, unfetched.practice, untitled.practice)}`);
 
   // Rule 6: nested and repeated units.
   const kept = withoutRepeats(placed, pages, book);
@@ -204,8 +204,38 @@ export function checkUnits(input: {
   return { toc, minutes, basis, list, refused: null, facts };
 }
 
+/** Why units went unseen: "3 of 22 titles not on the page", "6 of 7 point to no fetched page or heading", or both. */
+function unseenWhy(count: number, unfetched: number, untitled: number): string {
+  const nowhere = "point to no fetched page or heading";
+  const offPage = "titles not on the page";
+  if (untitled === 0) return `${unfetched} of ${count} ${nowhere}`;
+  if (unfetched === 0) return `${untitled} of ${count} ${offPage}`;
+  return `${unfetched + untitled} of ${count} unseen: ${unfetched} ${nowhere}, ${untitled} ${offPage}`;
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Where a unit points
+
+/**
+ * The pages the answer's units (of the role's kinds) point at that no tool fetched but a fetched page links to: the
+ * finder measures these before the check, so a unit is not refused only because the model skipped `measure`. Each
+ * page once, without its fragment, in the answer's order. A page no fetched page links to is left alone.
+ */
+export function citedUnfetched(answer: StructureAnswer, role: StructureRole, base: string, pages: SeenPage[]): string[] {
+  if (answer.whole) return [];
+  const linked = new Set(pages.flatMap((p) => p.outline?.links.map((l) => canonicalUrl(l.url)) ?? []).filter((k): k is string => k !== null));
+  const kinds = ROLE_KINDS[role];
+  const cited = new Map<string, string>();
+  for (const unit of answer.units) {
+    if (!kinds.includes(unit.kind)) continue;
+    const at = absoluteAt(unit.at, base);
+    const url = at.split("#")[0];
+    const key = canonicalUrl(url);
+    if (!key || cited.has(key) || !linked.has(key) || pageAt(pages, url)) continue;
+    cited.set(key, url);
+  }
+  return [...cited.values()];
+}
 
 /** The seen page at this address, by its requested or final URL. */
 function pageAt(pages: SeenPage[], url: string): SeenPage | null {

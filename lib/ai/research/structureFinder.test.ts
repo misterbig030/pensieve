@@ -254,6 +254,41 @@ describe("the structure finder", () => {
     expect(MEASURE_BATCH).toBe(12);
   });
 
+  it("measures the linked pages its answer cites but never fetched, before the check", async () => {
+    const hubUrl = "https://github.com/a/b";
+    const weeks = Array.from({ length: 10 }, (_, i) => i + 1);
+    const folder = (n: number) => `${hubUrl}/tree/main/week${n}`;
+    const hub = extractHtml(
+      `<html><head><title>a/b</title></head><body><article class="markdown-body"><h2 id="user-content-weeks">Weeks</h2><ul>${weeks
+        .map((n) => `<li><a href="/a/b/tree/main/week${n}">Week ${n} notes</a></li>`)
+        .join("")}</ul></article></body></html>`,
+      hubUrl,
+    );
+    const week = (n: number) => extractHtml(`<html><head><title>week${n}</title></head><body><article class="markdown-body"><h1>Week ${n} notes</h1><p>${"word ".repeat(900)}</p></article></body></html>`, folder(n));
+    const pages: Record<string, PageInfo> = { [hubUrl]: hub, ...Object.fromEntries(weeks.map((n) => [folder(n), week(n)])) };
+    // Ten weeks the hub links, and an eleventh it never mentions: that one is not fetched on the answer's word.
+    const units = [...weeks, 11].map((n) => ({ title: `Week ${n} notes`, at: folder(n), kind: "read" as const, group: null, minutes: null }));
+    const { model } = scripted([[{ tool: "outline", input: { url: hubUrl } }], [{ tool: "answer", input: answerOf({ units }) }]]);
+    const { ctx, calls: logged, fetchPage } = context(pages);
+    const result = await createStructureFinder({ provider: null, model }).find(material({ url: hubUrl, title: "a/b" }), "read", ctx);
+
+    expect(fetchPage.mock.calls.map(([url]) => url)).toEqual([hubUrl, ...weeks.map(folder)]);
+    expect(result.counts.fetches).toBe(11);
+    expect(result.refused).toBeNull();
+    expect(result.toc!.chapters.map((c) => c.title)).toEqual(weeks.map((n) => `Week ${n} notes`));
+    expect(result.basis).toBe("measured");
+    expect(logged.at(-1)!.facts).toEqual(["answer", "units kept: 10", "measured 10 cited pages after the answer", "1 of 11 units point to no fetched page or heading"]);
+  });
+
+  it("measures nothing after an answer whose units all point at fetched pages", async () => {
+    const units = THIRTY.map((h) => ({ title: h.title, at: `${PRIMER}#${h.anchor}`, kind: "read" as const, group: null, minutes: null }));
+    const { model } = scripted([[{ tool: "outline", input: { url: PRIMER } }], [{ tool: "answer", input: answerOf({ units }) }]]);
+    const { ctx, calls: logged, fetchPage } = context();
+    await createStructureFinder({ provider: null, model }).find(material(), "read", ctx);
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+    expect(logged.at(-1)!.facts.some((f) => f.startsWith("measured"))).toBe(false);
+  });
+
   it("reads an item list with the items tool and keeps it, checked against the read", async () => {
     const listUrl = "https://example.com/problems";
     const text = "The list: Two Sum. Valid Anagram. Group Anagrams.";
@@ -382,6 +417,8 @@ describe("the structure prompt", () => {
     }
     expect(buildStructurePrompt(material(), "practice")).toContain("items");
     expect(buildStructurePrompt(material(), "read")).not.toContain("`items`");
+    // A page seen only as a link must be measured before a unit may point at it.
+    for (const role of ["read", "practice", "both"] as const) expect(buildStructurePrompt(material(), role)).toContain("`measure` it before");
   });
 
   it("leaves the outline its reserve and the allocation its least time", () => {
