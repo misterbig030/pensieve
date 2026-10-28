@@ -726,7 +726,7 @@ function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases)
     );
   }
   lines.push(...availabilityLines(input, aliases));
-  lines.push(`Use only ids from the list.`);
+  lines.push(`Use only ids from the list, and only in id fields: titles, summaries, notes and tasks are read by the learner, so name a resource or its part there in words, never by its id.`);
   return lines.join("\n");
 }
 
@@ -763,7 +763,7 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
       `${B} is the backbone textbook, but its chapters are not listed: it runs in order across the units, continuing from where earlier units stopped. Name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
     );
   }
-  lines.push(`Use only ids from the list.`);
+  lines.push(`Use only ids from the list, and only in id fields: titles, summaries, notes and tasks are read by the learner, so name a resource or its part there in words, never by its id.`);
   return lines.join("\n");
 }
 

@@ -37,6 +37,7 @@ import {
   type MaterialKind,
 } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
+import { shortTitle } from "@/lib/shortTitle";
 
 /**
  * Prompts always call materials `M1…Mn` in list order, whatever their real ids are (short ids while drafting, uuids
@@ -136,6 +137,62 @@ export function formatAliases(refs: ResolvedAlias[], aliases: MaterialAliases): 
     })
     .filter((s): s is string => s !== null)
     .join(", ");
+}
+
+/** An id as the model sees it in prose, or a run of one resource's chapters or items ("M9.1–M9.10", "M4.3 to M4.6"). */
+const ALIAS_IN_TEXT = /\bM(\d+)(?:\.(i?)(\d+))?(?:\s*(?:[-–—]|to)\s*M\1\.(i?)(\d+))?\b/g;
+
+type NamedMaterial = Pick<Material, "id" | "title" | "toc" | "practice">;
+
+/**
+ * Text the learner reads with the list's ids put in words. The model sees its materials as `M3` and `M3.4` and copies
+ * them into notes and summaries ("parts M9.1–M9.10"). A resource reads as its short title, a chapter as "ch. 4" by the
+ * work's own number, an item as its title and a run of items as "items 1–4"; a chapter or item of `own` (the row's own
+ * resource) leaves the resource's name out. Anything that is not an id on the list stays as written.
+ */
+export function plainAliases(text: string, materials: NamedMaterial[], aliases: MaterialAliases, own?: string | null): string {
+  return text.replace(ALIAS_IN_TEXT, (match, base: string, i1: string | undefined, n1: string | undefined, i2: string | undefined, n2: string | undefined) => {
+    const first = aliases.resolve(`M${base}${n1 ? `.${i1 ?? ""}${n1}` : ""}`);
+    const m = first && materials.find((x) => x.id === first.id);
+    if (!first || !m) return match;
+    const name = shortTitle(m.title);
+    if (!n1) return name;
+    const last = n2 ? aliases.resolve(`M${base}.${i2 ?? ""}${n2}`) : first;
+    if (!last || (first.item === undefined) !== (last.item === undefined)) return match;
+    const mine = first.id === own;
+    if (first.item !== undefined) {
+      if (last.item === first.item) {
+        const title = aliases.item(first.id, first.item)?.title ?? `item ${first.item}`;
+        return mine ? title : `${title} (${name})`;
+      }
+      return `${mine ? "" : `${name} `}items ${first.item}–${last.item}`;
+    }
+    const number = (c: number) => m.toc?.chapters[c - 1]?.n ?? c;
+    const chapters = last.chapter === first.chapter ? `ch. ${number(first.chapter!)}` : `ch. ${number(first.chapter!)}–${number(last.chapter!)}`;
+    return mine ? chapters : `${name} ${chapters}`;
+  });
+}
+
+/** Puts the list's ids in words in everything a unit shows the learner (see `plainAliases`); returns how many fields changed. */
+export function plainUnitText(node: PlanNode, materials: NamedMaterial[], aliases: MaterialAliases): number {
+  let changed = 0;
+  const plain = (text: string, own?: string | null): string => {
+    const out = plainAliases(text, materials, aliases, own);
+    if (out !== text) changed++;
+    return out;
+  };
+  node.title = plain(node.title);
+  node.summary = plain(node.summary);
+  for (const r of [...(node.covers ?? []), ...(node.materials ?? [])]) if (r.note) r.note = plain(r.note, r.id);
+  for (const r of node.practice ?? []) {
+    r.task = plain(r.task, r.id);
+    r.done = plain(r.done, r.id);
+  }
+  for (const r of node.practiceCovers ?? []) {
+    if (r.note) r.note = plain(r.note, r.id);
+    if (r.task) r.task = plain(r.task, r.id);
+  }
+  return changed;
 }
 
 /** Resolves what the model wrote to real ids and chapters. Unknown ids are dropped and returned so the caller can report them. */

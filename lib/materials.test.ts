@@ -37,6 +37,8 @@ import {
   sizeItemRuns,
   itemAliases,
   itemRun,
+  plainAliases,
+  plainUnitText,
 } from "./materials";
 import { itemMinutes, itemPositions } from "./practice";
 
@@ -1512,5 +1514,43 @@ describe("item aliases on a source with both units and items", () => {
     expect(itemRun(a, "p", 7, 7)).toBe("M2.7");
     expect(itemRun(a, "b", 7, 7)).toBe("M1.i7");
     expect(itemRun(a, "b", 1, 9)).toBe("M1 items 1–9");
+  });
+});
+
+describe("plainAliases", () => {
+  const chapters = ["1. Books", "2. Courses", "3. Mock Interviews"].map((title, i) => ({ n: i + 3, title, page: null, minutes: 2, sections: [] }));
+  const materials = [
+    { id: "pe", title: "Preparing for the Coding Interview - The Pragmatic Engineer", toc: { source: "page" as const, url: "https://example.com/pe", printPages: false, end: null, chapters }, practice: null },
+    { id: "neet", title: "NeetCode | Coding Interview Prep", toc: null, practice: LISTED_PROBLEMS },
+  ];
+  const aliases = aliasMaterials(materials);
+
+  it("puts a run of chapters, a chapter and a resource in words, by the chapters' own numbers", () => {
+    expect(plainAliases("Whole essay (parts M1.1–M1.3), then M1.2 again; see M1", materials, aliases)).toBe(
+      "Whole essay (parts Preparing for the Coding Interview ch. 3–5), then Preparing for the Coding Interview ch. 4 again; see Preparing for the Coding Interview",
+    );
+  });
+
+  it("drops the resource's name for its own row's chapters and items", () => {
+    expect(plainAliases("parts M1.1–M1.3", materials, aliases, "pe")).toBe("parts ch. 3–5");
+    expect(plainAliases("M2.3, then M2.10 to M2.12", materials, aliases, "neet")).toBe("Two Sum, then items 10–12");
+    expect(plainAliases("M2.3", materials, aliases)).toBe("Two Sum (NeetCode)");
+  });
+
+  it("leaves what is not an id on the list as written", () => {
+    expect(plainAliases("M9, M1.7, M2.40 and MM1", materials, aliases)).toBe("M9, M1.7, M2.40 and MM1");
+    expect(plainAliases("Arrays & Hashing; Two Pointers", materials, aliases)).toBe("Arrays & Hashing; Two Pointers");
+  });
+
+  it("puts every text a unit shows in words and counts the fields it changed", () => {
+    const node = makeNode({ level: "day", title: "Start M1", summary: "Read M1.1.", len: 1, budgetHours: null, children: null });
+    node.materials = [{ id: "pe", tier: "must", minutes: 6, note: "parts M1.1–M1.3", chapter: 1, activity: "read" }];
+    node.practice = [{ format: "problem-set", id: "neet", task: "M2.1–M2.3, timed", done: "M2.3 passes", minutes: 30, generated: false, itemFrom: 1, itemTo: 3 }];
+    expect(plainUnitText(node, materials, aliases)).toBe(5);
+    expect(node.title).toBe("Start Preparing for the Coding Interview");
+    expect(node.summary).toBe("Read Preparing for the Coding Interview ch. 3.");
+    expect(node.materials[0].note).toBe("parts ch. 3–5");
+    expect(node.practice[0]).toMatchObject({ task: "items 1–3, timed", done: "Two Sum passes" });
+    expect(plainUnitText(node, materials, aliases)).toBe(0);
   });
 });

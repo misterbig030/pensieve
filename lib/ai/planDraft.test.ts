@@ -114,6 +114,33 @@ describe("streamPlanDraft with materials", () => {
   });
 });
 
+describe("material ids in the text", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+    mockedGenerateObject.mockReset();
+  });
+
+  it("puts ids the model copied into titles, summaries and notes in words, and says so", async () => {
+    const book = { ...bookOfSix(), title: "Ten Hours: A Book" };
+    const essay = material("E", { kind: "essay", title: "On Interviews | A Blog", minutes: 20, minutesBasis: "measured" });
+    mockedStreamObject.mockReturnValue(
+      fakeStream([
+        { title: "Start M1", summary: "Read M1.1–M1.2, then M2.", materials: [{ id: "M1.1", tier: "must", minutes: 100, note: "parts M1.1–M1.2" }, { id: "M2", tier: "should", minutes: 20, note: "whole essay" }] },
+        { title: "Next", summary: "Go on.", materials: [{ id: "M1.3", tier: "must", minutes: 100 }] },
+      ]),
+    );
+    const calls: ModelCall[] = [];
+    let finish: PlanDraftEvent | undefined;
+    for await (const event of streamPlanDraft({ topic: "Interviews", weeks: 2, daysPerWeek: 5, granularity: "week", materials: [book, essay], split: SPLIT, log: { onCall: (c) => void calls.push(c) } })) finish = event;
+    if (finish?.type !== "finish") throw new Error("no finish");
+    const [w1] = finish.root.children!;
+    expect(w1.title).toBe("Start Ten Hours");
+    expect(w1.summary).toBe("Read Ten Hours ch. 1–2, then On Interviews.");
+    expect(w1.materials![0].note).toBe("parts ch. 1–2");
+    expect(calls[0].facts).toContain("ids put in words in 3 fields");
+  });
+});
+
 /** A six-chapter book of ten hours, so a kept chapter set shrinks it. */
 function bookOfSix(): Material {
   return material("M1", {
