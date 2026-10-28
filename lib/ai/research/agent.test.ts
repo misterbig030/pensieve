@@ -5,11 +5,11 @@ import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
-import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, isBookListPage, practiceLines, readButNotListed } from "./agent";
+import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, isBookListPage, namedButNotListed, practiceLines, readButNotListed } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
 import { isThin, researchMaterials, streamWhile, verifiedReading } from "./pipeline";
-import { RESEARCH_CAPS, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
+import { RESEARCH_CAPS, ResearchNotes, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
 import { MAX_CANDIDATES, type BookLookup, type Candidate, type CandidateList } from "./verify";
 
 const usage = {
@@ -524,6 +524,50 @@ describe("extraction: every credible source, no choosing", () => {
     expect(result.candidates.map((c) => c.title).slice(0, 2)).toEqual(["P0", "P1"]);
     expect(result.candidates.at(-1)?.title).toBe("P24");
     expect(rows.find((r) => r.label === "Research · candidates")?.facts).toContain("list cut to 25 of 30");
+  });
+});
+
+describe("books the notes name", () => {
+  // The book researcher's notes from a live draft: a leading book and four rivals, none of them with a page of its own.
+  const NOTES = [
+    "**Leading book (backbone):** *Cracking the Coding Interview: 189 Programming Questions and Solutions*, 6th edition, by Gayle Laakmann McDowell.",
+    "**Rivals and companions for the senior-level gap:**",
+    "- *System Design Interview, Volume 1* (and Volume 2, with Sahn Lam) by Alex Xu. Rockstard says senior candidates *cannot* skip it.",
+    "- *Designing Data-Intensive Applications* by Martin Kleppmann (2nd edition exists).",
+    "- *Elements of Programming Interviews* by Aziz, Lee and Prakash.",
+    "- *Coding Interview Patterns* by Alex Xu and Shaun Gunawardane.",
+  ].join("\n");
+  const found = (direction: "backbone" | "canonical", remarks: string) => {
+    const notes = new ResearchNotes();
+    notes.remarks.push(remarks);
+    return { direction, notes };
+  };
+  const book = (title: string, pageTitle: string | null = null): Candidate => ({ url: "", title, pageTitle, kind: "book", why: "w", recommendedBy: [] });
+
+  it("names each book the book notes set in italics that the list leaves out", () => {
+    const listed = [book("CRACKING the CODING INTERVIEW"), book("Designing Data-Intensive Applications, 2nd Edition")];
+    expect(namedButNotListed([found("backbone", NOTES)], listed)).toEqual([
+      "named in the book notes but not listed: System Design Interview, Volume 1",
+      "named in the book notes but not listed: Elements of Programming Interviews",
+      "named in the book notes but not listed: Coding Interview Patterns",
+    ]);
+  });
+
+  it("counts a book listed under a longer title, its page's title, or a shorter main title", () => {
+    const listed = [book("Cracking the Coding Interview"), book("System Design Interview – An Insider's Guide"), book("DDIA", "Designing Data-Intensive Applications"), book("Elements of Programming Interviews in Python"), book("Coding Interview Patterns: Nail Your Next Coding Interview")];
+    expect(namedButNotListed([found("backbone", NOTES)], listed)).toEqual([]);
+  });
+
+  it("reads only the book notes, and not a non-book of the same name", () => {
+    expect(namedButNotListed([found("canonical", "*The Missing Semester* is a course.")], [])).toEqual([]);
+    expect(namedButNotListed([found("backbone", "*Coding Interview Patterns* by Alex Xu.")], [{ ...book("Coding Interview Patterns"), kind: "course" }])).toEqual([
+      "named in the book notes but not listed: Coding Interview Patterns",
+    ]);
+  });
+
+  it("lets a book the notes give no page for be listed with an empty url", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 8, hoursPerWeek: 6, sources: [] }, "notes");
+    expect(prompt).toContain("A book the notes name without such a page is still listed, with url empty: the catalogue vouches for it.");
   });
 });
 

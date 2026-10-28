@@ -15,7 +15,7 @@ import {
   type SearchProvider,
   type SourceFetcher,
 } from "./tools";
-import { FOUND_BY, MAX_CANDIDATES, candidateListSchema, canonicalUrl, capCandidates, normalizeCoverage, type Candidate, type CandidateList, type FoundBy, type LearnerNote } from "./verify";
+import { FOUND_BY, MAX_CANDIDATES, candidateListSchema, canonicalUrl, capCandidates, mainTitle, normalizeCoverage, titleTokens, type Candidate, type CandidateList, type FoundBy, type LearnerNote } from "./verify";
 
 /** What research knows about the learner: the brief, unchanged. */
 export interface ResearchBrief {
@@ -182,7 +182,7 @@ export function buildFinalPrompt(brief: ResearchBrief, notes: string, options: {
       `"learner": one entry per source the learner provided, in their order, with its url exactly as given, its kind and one line on what it is.${practice.learner}`,
       `"candidates": every credible source the notes found, from every direction, once each: pages read, and sources a researcher's notes name or recommend; a search result seen only as a snippet only when the notes recommend it. List at most ${MAX_CANDIDATES}, keeping the best-evidenced if there are more. Choosing what the plan uses happens later, with sizes in hand, so a source left out here is lost. List every book the notes recommend, under its title as published and its author. Never invent one.`,
       `- url: the material's own page, preferably one from the notes. title: for anything but a book, exactly as that page gives it; a candidate whose page is titled something else is thrown away.`,
-      `- a book is checked against a library catalogue instead, by title and author: give its title as published (not its web page's title) and always its author. pageTitle: the title the book's web page shows, when the notes give one; null for anything else. Its url is the publisher's or the author's page for that one book, read or not, and never a shop listing (Amazon or another retailer).`,
+      `- a book is checked against a library catalogue instead, by title and author: give its title as published (not its web page's title) and always its author. pageTitle: the title the book's web page shows, when the notes give one; null for anything else. Its url is the publisher's or the author's page for that one book, read or not, and never a shop listing (Amazon or another retailer). A book the notes name without such a page is still listed, with url empty: the catalogue vouches for it.`,
       `- kind: book, course, video, docs, essay, paper, repo, tool or note.`,
       `- recommendedBy: URLs from the notes of pages that recommend it; empty when none. A page that only recommends books (a "best books" list or a reading list) is not a material: put it in those books' recommendedBy and leave it out of the list.`,
       `- why: one line on why this material and what it covers that the others don't.`,
@@ -397,6 +397,34 @@ export function readButNotListed(reads: ArmRead[], candidates: { url: string; re
   return [...left.values()].map((e) => `read but not listed: ${e.url} (${e.directions.join(", ")})`);
 }
 
+/** A title the notes set in italics (`*Title*`, not bold): how the book researcher's notes name books. */
+const ITALIC_TITLE = /(?<![*\w])\*(?![*\s])([^*\n]+?)(?<!\s)\*(?![*\w])/g;
+
+/**
+ * Books the book researcher's notes name that the list leaves out, by the title the notes give. Such a book never
+ * reaches the catalogue check, nor the allocation's choice of backbone. A listed book counts when its title, its
+ * page's title or the named one, each up to its subtitle, contains the other.
+ */
+export function namedButNotListed(found: FoundSource[], candidates: Pick<Candidate, "kind" | "title" | "pageTitle">[]): string[] {
+  const words = (title: string) => ` ${titleTokens(mainTitle(title)).join(" ")} `;
+  const listed = candidates.filter((c) => c.kind === "book").flatMap((c) => [c.title, c.pageTitle ?? ""].filter(Boolean).map(words));
+  const named = new Map<string, string>();
+  for (const { direction, notes } of found) {
+    if (direction !== "backbone") continue;
+    for (const remark of notes.remarks) {
+      for (const [, title] of remark.matchAll(ITALIC_TITLE)) {
+        const key = words(title);
+        // A title starts with a capital and runs to two words at least: "*cannot*" is emphasis.
+        if (!/^[\p{Lu}\p{N}]/u.test(title) || key.trim().split(" ").length < 2 || named.has(key)) continue;
+        named.set(key, title.trim());
+      }
+    }
+  }
+  return [...named]
+    .filter(([key]) => !listed.some((l) => l.includes(key) || key.includes(l)))
+    .map(([, title]) => `named in the book notes but not listed: ${title}`);
+}
+
 /**
  * A page the book researcher alone carries, listed as anything but a book, is one it read for its recommendations (a
  * "best books" list), not a material: the books' `recommendedBy` holds it. A page another direction found too, or a
@@ -469,6 +497,7 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
           check: (object) => [
             ...(object.candidates.length > MAX_CANDIDATES ? [`list cut to ${MAX_CANDIDATES} of ${object.candidates.length}`] : []),
             ...readButNotListed(readsOf(found), capCandidates(object.candidates), [...object.learner, ...learnerUrls.map((url) => ({ url }))]),
+            ...namedButNotListed(found, capCandidates(object.candidates)),
             ...capCandidates(object.candidates)
               .map((c) => deriveFoundBy(c, found, learnerUrls))
               .filter(isBookListPage)

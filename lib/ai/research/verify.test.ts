@@ -227,6 +227,28 @@ describe("runGate", () => {
     expect(types.filter((t) => t === "research.dropped")).toHaveLength(3);
   });
 
+  it("keeps a book listed without an address by its catalogue entry, and drops one the catalogue does not know", async () => {
+    const lookup: BookLookup = { find: async (title) => (title === "AI Engineering" ? { key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 } : null) };
+    const f = gateFixture({}, lookup);
+    const result = await runGate({
+      candidates: [
+        candidate({ url: "", title: "AI Engineering", kind: "book", author: "Chip Huyen" }),
+        candidate({ url: "", title: "No Such Book", kind: "book", author: "N. Body" }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+      now,
+    });
+    expect(result.materials.map((m) => [m.title, m.url, m.catalogued])).toEqual([["AI Engineering", catalogue, true]]);
+    expect(result.dropped).toEqual([expect.objectContaining({ title: "No Such Book", reason: "no matching book on Open Library" })]);
+    expect(f.fetchPage).not.toHaveBeenCalled();
+  });
+
   it("marks matched books catalogued and chooses no backbone, keeping the arm's order", async () => {
     const other = "https://www.oreilly.com/library/view/other-book/9781098000000";
     const down = "https://www.oreilly.com/library/view/down-book/9781098000001";

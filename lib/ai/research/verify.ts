@@ -33,7 +33,7 @@ export { FOUND_BY, type FoundBy };
 export const MAX_CANDIDATES = 25;
 
 export const candidateSchema = z.object({
-  url: z.string().describe("The page for this material: its own page, not a page that mentions it"),
+  url: z.string().describe("The page for this material: its own page, not a page that mentions it; empty for a book whose own page the notes do not give"),
   title: z.string().describe("For a book, its title as published, with its author in the author field; otherwise the page's own title, exactly as the page gives it"),
   pageTitle: z.string().nullable().optional().describe("For a book, the title its web page shows, when the notes give one; null otherwise"),
   kind: z.enum(MATERIAL_KINDS),
