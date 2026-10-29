@@ -15,7 +15,7 @@ import {
   type SearchProvider,
   type SourceFetcher,
 } from "./tools";
-import { FOUND_BY, MAX_CANDIDATES, candidateListSchema, canonicalUrl, capCandidates, isShopListing, kindProblem, mainTitle, normalizeCoverage, titleTokens, type Candidate, type CandidateList, type FoundBy, type LearnerNote } from "./verify";
+import { FOUND_BY, MAX_CANDIDATES, candidateListSchema, canonicalUrl, capCandidates, isShopListing, kindProblem, mainTitle, normalizeCoverage, titleTokens, turnedAway, type Candidate, type CandidateList, type FoundBy, type LearnerNote } from "./verify";
 
 /** What research knows about the learner: the brief, unchanged. */
 export interface ResearchBrief {
@@ -426,29 +426,27 @@ export function namedButNotListed(found: FoundSource[], candidates: Pick<Candida
 }
 
 /**
- * A book listed without an address takes its own page from the notes when they carry one: an https address, read or
- * not, with a path segment that is the book's title ("/library/view/designing-data-intensive-applications/…"), off
- * any shop and any host a book is unlikely on (a code host, a video site). Pages a researcher tried to read come
- * first, then search results, then addresses in the notes' text. Anything else is returned as it is.
+ * A book listed without an address takes its own page from the notes when a researcher tried it and the site turned the
+ * reader away (a 401, 403 or 429, or a timeout): the page the model left out only because it could not be read. It
+ * must be an https address with a path segment that is the book's title
+ * ("/library/view/designing-data-intensive-applications/…"), off any shop and any host a book is unlikely on. A page
+ * that could be read is the model's to list, so one it left out stays out, however its path reads. Anything else is
+ * returned as it is.
  */
 export function bookPageFromNotes(candidate: Candidate, found: FoundSource[]): Candidate {
   if (candidate.kind !== "book" || candidate.url.trim()) return candidate;
   const slug = mainTitle(candidate.title).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   if (!slug.includes("-")) return candidate;
-  const urls = [
-    ...found.flatMap(({ notes }) => notes.fetches.flatMap((f) => [f.url, f.finalUrl ?? ""])),
-    ...found.flatMap(({ notes }) => notes.searches.flatMap((s) => s.results.map((r) => r.url))),
-    ...found.flatMap(({ notes }) => notes.remarks.flatMap((r) => r.match(/https:\/\/[^\s<>()[\]"'`]+/g) ?? [])),
-  ];
-  const own = urls.find((url) => {
+  const refused = found.flatMap(({ notes }) => notes.fetches.filter((f) => !f.ok && turnedAway(f.reason ?? "")).map((f) => f.url));
+  const own = refused.find((url) => {
     if (!url.toLowerCase().startsWith("https://") || isShopListing(url) || kindProblem("book", url)) return false;
     try {
-      return new URL(url.replace(/[.,;:]+$/, "")).pathname.toLowerCase().split("/").includes(slug);
+      return new URL(url).pathname.toLowerCase().split("/").includes(slug);
     } catch {
       return false;
     }
   });
-  return own ? { ...candidate, url: own.replace(/[.,;:]+$/, "") } : candidate;
+  return own ? { ...candidate, url: own } : candidate;
 }
 
 /**

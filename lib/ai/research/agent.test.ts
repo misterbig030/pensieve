@@ -7,6 +7,7 @@ import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
 import { bookPageFromNotes, briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, isBookListPage, namedButNotListed, practiceLines, readButNotListed } from "./agent";
 import type { ResearchEvent } from "./events";
+import { EgressError } from "./egress";
 import type { PageInfo } from "./extract";
 import { isThin, researchMaterials, streamWhile, verifiedReading } from "./pipeline";
 import { RESEARCH_CAPS, ResearchNotes, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
@@ -511,11 +512,13 @@ describe("extraction: every credible source, no choosing", () => {
     expect(candidates?.facts).not.toContain("read but not listed: https://docs.example.com/a (research)");
   });
 
-  it("fills a book listed without an address from a page the notes tried, and says so", async () => {
+  it("fills a book listed without an address from a page of its own the site refused the reader, and says so", async () => {
     const page = "https://publisher.example.com/books/designing-data-intensive-applications/";
     const list: CandidateList = { learner: [], candidates: [{ url: "", title: "Designing Data-Intensive Applications", kind: "book", author: "Martin Kleppmann", why: "Depth", recommendedBy: [] }] };
     const { model } = scriptedModel([{ calls: [{ tool: "fetchSource", input: { url: page } }] }, { text: "Done." }], [list]);
-    const { fetcher } = fetcherFor();
+    const fetcher = new SourceFetcher(async () => {
+      throw new EgressError("status", "HTTP 403");
+    });
     const rows: ModelCall[] = [];
     const result = await createAgentArm({ provider: fakeProvider(), model })({ brief: { topic: "T", weeks: 4, sources: [] }, fetcher, emit: () => {}, log: { onCall: (c) => void rows.push(c) } });
     expect(result.candidates[0].url).toBe(page);
@@ -582,44 +585,31 @@ describe("books the notes name", () => {
     expect(prompt).toContain("A book the notes name without such a page is still listed, with url empty: the catalogue vouches for it.");
   });
 
-  it("gives a book listed without an address the page the notes carry for it: one tried first, then a result, then the notes", () => {
-    const oreilly2 = "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781098119058/";
-    const oreilly1 = "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/";
-    const backbone = new ResearchNotes();
-    backbone.searches.push({ query: "q", results: [
-      { title: "r/x", url: "https://www.reddit.com/r/x/comments/1/designing_data_intensive_applications/", snippet: "", publishedDate: null },
-      { title: "Shop", url: "https://www.amazon.com/designing-data-intensive-applications/dp/1449373321", snippet: "", publishedDate: null },
-      { title: "Review", url: "https://blog.example.com/designing-data-intensive-applications-review", snippet: "", publishedDate: null },
-    ] });
-    backbone.fetches.push({ url: oreilly2, ok: false, title: null, finalUrl: null, reason: "returned 403", excerpt: "" });
-    backbone.remarks.push(`The 1st-edition page: ${oreilly1}.`);
+  it("gives a book listed without an address only a page of its own that a researcher tried and was turned away from", () => {
+    const oreilly = "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/";
+    const notes = new ResearchNotes();
+    // Runs 5 and 6: pages whose path names the book but that are not its page, and a page in a result or the notes' text.
+    notes.fetches.push({ url: "https://interviewing.io/guides/system-design-interview", ok: true, title: "Guide", finalUrl: null, excerpt: "" });
+    notes.fetches.push({ url: "https://github.com/ByteByteGoHq/coding-interview-patterns", ok: false, title: null, finalUrl: null, reason: "returned 429", excerpt: "" });
+    notes.fetches.push({ url: "https://www.amazon.com/designing-data-intensive-applications/dp/1449373321", ok: false, title: null, finalUrl: null, reason: "returned 403", excerpt: "" });
+    notes.fetches.push({ url: "https://old.example.com/designing-data-intensive-applications", ok: false, title: null, finalUrl: null, reason: "returned 404", excerpt: "" });
+    notes.searches.push({ query: "q", results: [{ title: "Book", url: "https://bytebytego.com/coding-interview-patterns", snippet: "", publishedDate: null }] });
+    notes.remarks.push(`Its page: ${oreilly}.`);
+    const found = [{ direction: "backbone" as const, notes }];
     const ddia = book("Designing Data-Intensive Applications");
-    expect(bookPageFromNotes(ddia, [{ direction: "backbone", notes: backbone }]).url).toBe(oreilly2);
-    // Without the read, the address in the notes; without either, nothing a shop, a review or a forum offers.
-    const noted = new ResearchNotes();
-    noted.searches.push(...backbone.searches);
-    noted.remarks.push(...backbone.remarks);
-    expect(bookPageFromNotes(ddia, [{ direction: "backbone", notes: noted }]).url).toBe(oreilly1);
-    const bare = new ResearchNotes();
-    bare.searches.push(...backbone.searches);
-    expect(bookPageFromNotes(ddia, [{ direction: "backbone", notes: bare }])).toBe(ddia);
+    const sdi = book("System Design Interview – An Insider's Guide");
+    const patterns = book("Coding Interview Patterns: Nail Your Next Coding Interview");
+    expect(bookPageFromNotes(ddia, found)).toBe(ddia);
+    expect(bookPageFromNotes(sdi, found)).toBe(sdi);
+    expect(bookPageFromNotes(patterns, found)).toBe(patterns);
+    // The publisher's page the site refused, as in run 4: that one is taken.
+    notes.fetches.push({ url: oreilly, ok: false, title: null, finalUrl: null, reason: "returned 403", excerpt: "" });
+    expect(bookPageFromNotes(ddia, found).url).toBe(oreilly);
     // A listed address, and anything but a book, stay as they are.
     const listed = { ...ddia, url: "https://dataintensive.net/" };
-    expect(bookPageFromNotes(listed, [{ direction: "backbone", notes: backbone }])).toBe(listed);
+    expect(bookPageFromNotes(listed, found)).toBe(listed);
     const essay = { ...ddia, kind: "essay" as const };
-    expect(bookPageFromNotes(essay, [{ direction: "backbone", notes: backbone }])).toBe(essay);
-  });
-
-  it("does not take a code host's page as a book's, though its path names the book", () => {
-    const notes = new ResearchNotes();
-    notes.fetches.push({ url: "https://github.com/ByteByteGoHq/coding-interview-patterns", ok: true, title: "Code", finalUrl: null, excerpt: "" });
-    notes.searches.push({ query: "q", results: [{ title: "Topic", url: "https://github.com/topics/system-design-interview", snippet: "", publishedDate: null }] });
-    const patterns = book("Coding Interview Patterns: Nail Your Next Coding Interview");
-    const sdi = book("System Design Interview – An Insider's Guide");
-    expect(bookPageFromNotes(patterns, [{ direction: "backbone", notes }])).toBe(patterns);
-    expect(bookPageFromNotes(sdi, [{ direction: "backbone", notes }])).toBe(sdi);
-    notes.remarks.push("Its page: https://bytebytego.com/coding-interview-patterns.");
-    expect(bookPageFromNotes(patterns, [{ direction: "backbone", notes }]).url).toBe("https://bytebytego.com/coding-interview-patterns");
+    expect(bookPageFromNotes(essay, found)).toBe(essay);
   });
 });
 

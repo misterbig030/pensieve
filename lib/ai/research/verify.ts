@@ -549,6 +549,11 @@ function unconfirmedMatch(match: BookMatch, claimedAuthor: string | null | undef
 /** A fetch the site turned away (a 401, 403 or 429) or that timed out: the page is there, it just would not serve a robot. */
 const TURNED_AWAY = /^(?:returned (?:401|403|429)\b|timed out$)/;
 
+/** Whether a failed read's reason says the site turned the reader away rather than the page being missing or wrong. */
+export function turnedAway(reason: string): boolean {
+  return TURNED_AWAY.test(reason);
+}
+
 /**
  * The page standing for a book Open Library matched when its own page did not pass. A claimed page the site turned
  * away stays the book's link, the catalogue vouching for the book; one that is gone, opened as something else, or
@@ -557,8 +562,8 @@ const TURNED_AWAY = /^(?:returned (?:401|403|429)\b|timed out$)/;
 function bookPage(match: BookMatch, claim: { url: string; author?: string | null }, outcome: FetchOutcome, pageReason: string | null, now: () => Date): PageCheck {
   const entry = catalogueEntry(match, claim.author, now);
   if (!entry) return { ok: false, reason: pageReason ? `${pageReason}; ${unconfirmedMatch(match, claim.author)}` : unconfirmedMatch(match, claim.author) };
-  const turnedAway = !outcome.ok && TURNED_AWAY.test(outcome.reason);
-  const own = turnedAway && claim.url.trim().toLowerCase().startsWith("https://") && !isShopListing(claim.url) ? canonicalUrl(claim.url) : null;
+  const refused = !outcome.ok && turnedAway(outcome.reason);
+  const own = refused && claim.url.trim().toLowerCase().startsWith("https://") && !isShopListing(claim.url) ? canonicalUrl(claim.url) : null;
   return own && entry.ok ? { ...entry, url: own } : entry;
 }
 
