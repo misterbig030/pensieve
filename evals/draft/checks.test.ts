@@ -163,6 +163,14 @@ describe("criterion 1: backbone", () => {
     expect(v.evidence.join("\n")).toContain("Cracking the Coding Interview");
   });
 
+  it("fails a matching backbone that is not a book", () => {
+    const r = record();
+    r.materials.allocated![0].kind = "course";
+    const v = verdict(r, 1);
+    expect(v.status).toBe("fail");
+    expect(v.evidence.join("\n")).toContain("course");
+  });
+
   it("fails a matching title by another author", () => {
     const r = record();
     r.materials.allocated![0].author = "Someone Else";
@@ -468,6 +476,15 @@ describe("warnings", () => {
     r.materials.allocated![1].title = "Database Internals";
     const warning = checkRun(r, SDE).warnings.find((w) => w.kind === "expected-books");
     expect(warning?.text).toContain("1 of 3");
+  });
+
+  it("does not count an essay whose title contains an expected book's", () => {
+    const r = record();
+    r.materials.allocated = [material("M6", "System design interview questions in 2026: real prompts, model answers", { kind: "essay" })];
+    const warning = checkRun(r, SDE).warnings.find((w) => w.kind === "expected-books");
+    expect(warning?.text).toBe(
+      '0 of 3 expected books allocated; missing "Designing Data-Intensive Applications", "System Design Interview", "Cracking the Coding Interview"',
+    );
   });
 
   it("warns about 1-minute reading rows", () => {

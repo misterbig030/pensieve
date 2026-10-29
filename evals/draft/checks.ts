@@ -82,6 +82,11 @@ function titleMatches(label: string, title: string): boolean {
   return containsWords(normalTitle(title), normalTitle(label));
 }
 
+/** A labelled book is a book: an essay titled "System design interview questions in 2026" is not Alex Xu's. */
+function bookMatches(label: string, m: Material): boolean {
+  return m.kind === "book" && titleMatches(label, m.title);
+}
+
 /** The label author's surname is in the material's author; a material with no author is not held against it. */
 function authorMatches(label: string, author: string | null): boolean {
   if (!author) return true;
@@ -179,8 +184,8 @@ function checkBackbone(record: RunRecord, topic: DraftTopic): Verdict {
   if (!labels?.length) return { id: 1, name, status: "n/a", evidence: [] };
   const backbones = (record.materials.allocated ?? []).filter((m) => m.backbone);
   if (backbones.length === 0) return verdict(1, name, [record.materials.allocated ? "no backbone allocated" : "no allocation in the record"]);
-  const hit = backbones.some((m) => labels.some((l) => titleMatches(l.title, m.title) && authorMatches(l.author, m.author)));
-  const found = backbones.map((m) => `backbone ${m.id} "${m.title}" by ${m.author ?? "no author"}`);
+  const hit = backbones.some((m) => labels.some((l) => bookMatches(l.title, m) && authorMatches(l.author, m.author)));
+  const found = backbones.map((m) => `backbone ${m.id} "${m.title}" (${m.kind}) by ${m.author ?? "no author"}`);
   return hit ? verdict(1, name, [], found) : verdict(1, name, [...found, `expected one of: ${labels.map((l) => `"${l.title}" (${l.author})`).join(", ")}`]);
 }
 
@@ -494,7 +499,7 @@ function expectedBooksWarning(record: RunRecord, topic: DraftTopic): Warning | n
   const expected = topic.labels?.expectedBooks;
   if (!expected?.length) return null;
   const allocated = record.materials.allocated ?? [];
-  const found = expected.filter((title) => allocated.some((m) => titleMatches(title, m.title)));
+  const found = expected.filter((title) => allocated.some((m) => bookMatches(title, m)));
   if (found.length >= Math.min(2, expected.length)) return null;
   const missing = expected.filter((title) => !found.includes(title));
   return { kind: "expected-books", text: `${found.length} of ${expected.length} expected books allocated; missing ${missing.map((t) => `"${t}"`).join(", ")}` };
