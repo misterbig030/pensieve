@@ -189,6 +189,16 @@ describe("criterion 2: named practice list", () => {
     expect(v.evidence[0]).toBe("0 of 5 days name an item of the list (at least 3)");
   });
 
+  it("does not count an item position without the item's title in the task", () => {
+    const r = record();
+    days(r).forEach((d, i) => {
+      d.practice = i < 3 ? [{ format: "problem-set", id: "M3", task: "problems 1–4", done: "solved", minutes: 42, generated: false, itemFrom: 1, itemTo: 1 }] : [];
+    });
+    const v = verdict(r, 2);
+    expect(v.status).toBe("fail");
+    expect(v.evidence[0]).toBe("0 of 5 days name an item of the list (at least 3)");
+  });
+
   it("fails a list whose URL was never fetched", () => {
     const r = record();
     r.events = [];

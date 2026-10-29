@@ -186,11 +186,11 @@ function isNamedList(m: Material, names: string[]): boolean {
   return names.map(compact).some((name) => haystacks.some((h) => h.includes(name)));
 }
 
-/** The items of `lists` a practice row names: by its item position, else by an item title in its task. */
+/**
+ * The items of `lists` a practice row names: those whose title is in its task. An item position alone does not count:
+ * a count-only row ("problems 1–4") can carry one and still name nothing.
+ */
 function itemsNamed(row: PracticeRef, lists: Material[]): { m: Material; n: number }[] {
-  const ref = rowItem(row);
-  const own = ref && lists.find((m) => m.id === ref.id);
-  if (own && ref.item && own.practice!.list!.items[ref.item - 1]) return [{ m: own, n: ref.item }];
   const task = plain(row.task);
   return lists.flatMap((m) =>
     m.practice!.list!.items.flatMap((item, i) => {
