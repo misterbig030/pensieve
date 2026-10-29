@@ -47,6 +47,11 @@ export function answerStepOptions(effort: ReasoningEffort, modelId: string) {
   if (!NARROWS_FORCED_TOOL.test(modelId.replace(/\./g, "-"))) return options;
   return { anthropic: { ...options.anthropic, thinking: { type: "adaptive" as const, blockBinding: { prefixMismatchBehavior: "drop_block" as const } } } };
 }
+/** Below this many words, with no headings and no links, a page is an app shell: its content is drawn by script. */
+export const APP_SHELL_WORDS = 40;
+/** What `outline` tells a finder with practice about an app shell (neetcode.io/practice reads as 8 words). */
+export const APP_SHELL_NOTE =
+  "This page shows almost nothing: its list is drawn by script. Look for the source's own published list instead: its open-source repository, or a data file (JSON or CSV) it publishes. Search for it (the source's name with github, for one), outline the repository, and call `items` on the file that holds the whole list.";
 /** How much of a step's tool results the call log shows. */
 const LOG_RESULT_CHARS = 1500;
 
@@ -132,10 +137,12 @@ const ROLE_LINES: Record<StructureRole, string[]> = {
   practice: [
     `This source is practice only. Give its practice units only (such as its labs or exercise sets), each with kind "practice"; its prose sections are not units here.`,
     "If its problems, questions or steps are listed somewhere, call `items` on the page or file that holds the whole list, and set \"listUrl\" to that address; otherwise null.",
+    "A site that draws its list by script shows no list on its page; such a source often publishes the list in its open-source repository as a data file: find that file before answering without a list.",
   ],
   both: [
     `This source is both reading and practice. Give its reading units with kind "read" and its practice units (such as its labs or exercise sets) with kind "practice".`,
     "If its problems, questions or steps are listed somewhere, call `items` on the page or file that holds the whole list, and set \"listUrl\" to that address; otherwise null.",
+    "A site that draws its list by script shows no list on its page; such a source often publishes the list in its open-source repository as a data file: find that file before answering without a list.",
   ],
 };
 
@@ -223,7 +230,13 @@ function looseLinks(outline: PageOutline): OutlineLink[] {
  * The `outline` result: the page's sizes and its heading tree, each heading with the words under it (sub-headings
  * included) and its own links, then the links under no heading. At most `MAX_OUTLINE_LINKS` links in all.
  */
-function outlineResult(url: string, page: PageInfo) {
+function isAppShell(page: PageInfo): boolean {
+  const outline = page.outline;
+  return (page.words ?? 0) < APP_SHELL_WORDS && (outline?.headings.length ?? 0) === 0 && (outline?.links.length ?? 0) === 0;
+}
+
+/** The `outline` result for one page; `shellNote` adds where to look when the page is an app shell. */
+function outlineResult(url: string, page: PageInfo, shellNote = false) {
   const outline = page.outline;
   let left = MAX_OUTLINE_LINKS;
   let cut = 0;
@@ -245,6 +258,7 @@ function outlineResult(url: string, page: PageInfo) {
     headings,
     links,
     ...(cut > 0 ? { linksCut: cut } : {}),
+    ...(shellNote && isAppShell(page) ? { note: APP_SHELL_NOTE } : {}),
   };
 }
 
@@ -337,7 +351,7 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
           inputSchema: z.object({ url: z.string().min(1).max(2000).describe("The page to outline, as an https URL") }),
           execute: async ({ url }, { abortSignal }) => {
             const outcome = await fetchPage(url, abortSignal);
-            return outcome.ok ? outlineResult(url, outcome.page) : { url, error: outcome.reason };
+            return outcome.ok ? outlineResult(url, outcome.page, practiceRole) : { url, error: outcome.reason };
           },
         }),
         measure: tool({

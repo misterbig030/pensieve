@@ -290,6 +290,24 @@ function buildItemsPrompt(source: Material, reads: Read[]): string {
 // ---------------------------------------------------------------------------------------------------------------
 // Reading the item list at an address
 
+/**
+ * A GitHub file page (github.com/owner/repo/blob/ref/path) as its raw file. The page is HTML and is cut at the page
+ * size like any page, so a data file read through it loses most of its records; the raw file is read whole. Any other
+ * address is returned as given.
+ */
+export function githubRawUrl(url: string): string {
+  let u: URL;
+  try {
+    u = new URL(url.trim());
+  } catch {
+    return url;
+  }
+  if (u.hostname.toLowerCase().replace(/^www\./, "") !== "github.com") return url;
+  const [owner, repo, blob, ref, ...path] = u.pathname.split("/").filter(Boolean);
+  if (blob !== "blob" || !ref || path.length === 0) return url;
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path.join("/")}`;
+}
+
 export interface ItemReadContext {
   fetcher: SourceFetcher;
   emit: (event: ResearchEvent) => void;
@@ -390,9 +408,9 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
   const ask = modelAsker({ modelId, languageModel, effort: options.effort }, ctx, (cost) => (costUsd += cost));
 
   const context: Read[] = (options.pages ?? []).map((p) => ({ ...p, full: false, file: false, truncated: false }));
-  const want = canonicalUrl(url);
-  if (!url.trim().toLowerCase().startsWith("https://") || !want) return none();
-  const target = url.trim();
+  const target = githubRawUrl(url.trim());
+  const want = canonicalUrl(target);
+  if (!target.toLowerCase().startsWith("https://") || !want) return none();
 
   // 1. The address, read in full (or taken from the pages already read).
   const given = context.find((r) => canonicalUrl(r.url) === want || canonicalUrl(r.finalUrl) === want);

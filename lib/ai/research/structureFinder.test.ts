@@ -14,6 +14,7 @@ import { extractHtml, type PageInfo } from "./extract";
 import type { FullReader } from "./itemFinder";
 import {
   ANSWER_NOW,
+  APP_SHELL_NOTE,
   MEASURE_BATCH,
   PausableClock,
   STRUCTURE_ALLOCATE_MIN_MS,
@@ -38,6 +39,8 @@ function fixture(name: string): string {
 }
 
 const PRIMER = "https://github.com/donnemartin/system-design-primer";
+/** A page as the extractor reads it: a title and one paragraph, no headings, no links. */
+const info = (url: string, title: string, text: string): PageInfo => extractHtml(`<html><head><title>${title}</title></head><body><p>${text}</p></body></html>`, url);
 const primerInfo = extractHtml(fixture("github-readme"), PRIMER);
 const headings = primerInfo.outline!.headings;
 /**
@@ -318,6 +321,44 @@ describe("the structure finder", () => {
     expect(JSON.stringify(calls[1].prompt)).toMatch(/\\?"items\\?":3/);
   });
 
+  it("tells a practice finder that a page drawn by script holds no list, and where to look instead", async () => {
+    // neetcode.io/practice in run 11: 8 words, no headings, no links. The finder searched once, then gave up.
+    const SHELL = "https://neetcode.io/practice";
+    const shell = info(SHELL, "NeetCode | Coding Interview Prep, Courses, Versus Mode", "NeetCode Coding Interview Prep Courses Versus Mode");
+    const practice = { format: "problem-set" as const, items: 150, perItemMinutes: null, minutes: null, answers: true };
+    const outlineOf = async (role: "practice" | "both" | "read", page: PageInfo = shell) => {
+      const { model, calls } = scripted([[{ tool: "outline", input: { url: SHELL } }], [{ tool: "answer", input: answerOf({ whole: true }) }]]);
+      await createStructureFinder({ provider: null, model }).find(material({ url: SHELL, kind: "tool", practice, minutes: null }), role, context({ [SHELL]: page }).ctx);
+      return JSON.stringify(calls[1].prompt);
+    };
+
+    expect(APP_SHELL_NOTE).toMatch(/repository/);
+    expect(APP_SHELL_NOTE).toMatch(/`items`/);
+    const note = JSON.stringify(APP_SHELL_NOTE).slice(1, 60);
+    expect(await outlineOf("practice")).toContain(note);
+    expect(await outlineOf("both")).toContain(note);
+    // Reading has no list to look for; a page with words is not a shell.
+    expect(await outlineOf("read")).not.toContain(note);
+    const words = info(SHELL, "NeetCode", Array.from({ length: 120 }, (_, i) => `word${i}`).join(" "));
+    expect(await outlineOf("practice", words)).not.toContain(note);
+  });
+
+  it("keeps a list read from a GitHub file page under the raw address it was read at, when the answer names either", async () => {
+    const BLOB = "https://github.com/acme/problems/blob/main/list.json";
+    const RAW = "https://raw.githubusercontent.com/acme/problems/main/list.json";
+    const file = JSON.stringify(["Two Sum", "Valid Anagram", "Group Anagrams"].map((problem) => ({ problem })));
+    const read = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text: file, file: true, truncated: false }));
+    const mapping = { found: true, path: "", title: "problem", number: null, group: null, difficulty: null, minutes: null, url: null, solutionUrl: null, subset: null };
+    const practice = { format: "problem-set" as const, items: 3, perItemMinutes: 20, minutes: 60, answers: true };
+    for (const listUrl of [BLOB, RAW]) {
+      const { model } = scripted([[{ tool: "items", input: { url: BLOB } }], [{ tool: "answer", input: answerOf({ whole: true, listUrl }) }]], [mapping]);
+      const result = await createStructureFinder({ provider: null, model, read }).find(material({ practice, minutes: null }), "practice", context().ctx);
+      expect(read).toHaveBeenLastCalledWith(RAW, expect.anything());
+      expect(result.list?.url).toBe(RAW);
+      expect(result.list!.items.map((i) => i.title)).toEqual(["Two Sum", "Valid Anagram", "Group Anagrams"]);
+    }
+  });
+
   it("keeps an item list whose read takes longer than the finder's wall clock: the clock stands still meanwhile", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     try {
@@ -422,6 +463,9 @@ describe("the structure prompt", () => {
     }
     expect(buildStructurePrompt(material(), "practice")).toContain("items");
     expect(buildStructurePrompt(material(), "read")).not.toContain("`items`");
+    // A practice source whose site draws its list by script is pointed at its repository's data file.
+    for (const role of ["practice", "both"] as const) expect(buildStructurePrompt(material(), role)).toContain("publishes the list in its open-source repository as a data file");
+    expect(buildStructurePrompt(material(), "read")).not.toContain("open-source repository");
     // A page seen only as a link must be measured before a unit may point at it.
     for (const role of ["read", "practice", "both"] as const) expect(buildStructurePrompt(material(), role)).toContain("`measure` it before");
   });

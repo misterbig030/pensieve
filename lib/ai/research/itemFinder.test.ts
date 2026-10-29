@@ -11,6 +11,7 @@ import type { PageInfo } from "./extract";
 import { SAMPLE_RECORDS } from "./dataFile";
 import {
   ITEM_FILE_BYTES,
+  githubRawUrl,
   guardedFullReader,
   ITEM_FULL_PAGE_CHARS,
   itemListFacts,
@@ -344,6 +345,18 @@ describe("reading the item list at a given address", () => {
     expect(events.map((e) => e.type)).toEqual(["research.reading", "research.fetch"]);
   });
 
+  it("reads a GitHub file page as its raw file, so a data file is mapped whole and not cut as a page", async () => {
+    // GitHub's page for a file is HTML: read as a page it is cut at the page size (30 of NeetCode's 150 in a live check).
+    const BLOB_URL = "https://github.com/neetcode-gh/leetcode/blob/main/.problemSiteData.json";
+    const model = answers(MAPPING);
+    const read = fileRead(FIXTURE);
+    const result = await readItemListAt(source, BLOB_URL, ctx().ctx, { model, read });
+
+    expect(read.mock.calls.map((call) => call[0])).toEqual([RAW_URL]);
+    expect(result.list).toMatchObject({ source: "file", url: RAW_URL });
+    expect(result.list!.items).toHaveLength(ENTRIES.length);
+  });
+
   it("transcribes a page that is not a data file, that page the only read", async () => {
     const text = "The list: Two Sum. Valid Anagram. Group Anagrams.";
     const model = answers({ found: true, url: REPO_URL, items: [draft("Two Sum"), draft("Valid Anagram"), draft("Group Anagrams")] });
@@ -460,5 +473,24 @@ describe("the full reader", () => {
     const page = await guardedFullReader({ resolver, transport: transportFor("text/html", html) })("https://example.com/list");
     expect(page.text).toHaveLength(ITEM_FULL_PAGE_CHARS);
     expect(page.truncated).toBe(true);
+  });
+});
+
+describe("githubRawUrl", () => {
+  it("turns a GitHub file page into its raw file, and leaves every other address alone", () => {
+    expect(githubRawUrl("https://github.com/neetcode-gh/leetcode/blob/main/.problemSiteData.json")).toBe(
+      "https://raw.githubusercontent.com/neetcode-gh/leetcode/main/.problemSiteData.json",
+    );
+    expect(githubRawUrl("https://www.github.com/a/b/blob/v1.2/data/list.csv?plain=1#L3")).toBe("https://raw.githubusercontent.com/a/b/v1.2/data/list.csv");
+    for (const same of [
+      "https://github.com/neetcode-gh/leetcode",
+      "https://github.com/a/b/tree/main/data",
+      "https://raw.githubusercontent.com/a/b/main/list.json",
+      "https://gitlab.com/a/b/blob/main/list.json",
+      "https://github.com/a/b/blob/main",
+      "not a url",
+    ]) {
+      expect(githubRawUrl(same)).toBe(same);
+    }
   });
 });

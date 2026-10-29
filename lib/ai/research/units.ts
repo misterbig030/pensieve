@@ -13,7 +13,7 @@ import {
   type PracticeList,
 } from "@/lib/schemas/material";
 import { SECTION_SKIP_RE, withChapterSizes } from "./chapters";
-import { MAX_UNSEEN_SHARE, itemNumber, normalText, validateItemList, type ItemDraft } from "./itemFinder";
+import { MAX_UNSEEN_SHARE, githubRawUrl, itemNumber, normalText, validateItemList, type ItemDraft } from "./itemFinder";
 import type { OutlineHeading, OutlineLink, PageOutline } from "./outline";
 import { MIN_MEASURED_WORDS, WORDS_PER_MINUTE, canonicalUrl } from "./verify";
 
@@ -545,8 +545,9 @@ function practiceList(
   facts: string[],
 ): PracticeList | null {
   if (!practiceRole) return null;
-  const key = listUrl ? canonicalUrl(listUrl) : null;
-  const named = key ? lists.find((l) => canonicalUrl(l.url) === key) : undefined;
+  // The `items` tool reads a GitHub file page at its raw address, and the answer may name either.
+  const key = listUrl ? canonicalUrl(githubRawUrl(listUrl)) : null;
+  const named = key ? lists.find((l) => canonicalUrl(githubRawUrl(l.url)) === key) : undefined;
   if (named) {
     const list = validateItemList({ url: named.url, source: named.source, items: named.items }, seenText(pages));
     facts.push(list ? `practice list from ${named.url}: ${list.items.length} items` : "practice list refused by the item check");
