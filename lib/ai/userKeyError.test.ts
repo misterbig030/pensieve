@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { APICallError } from "ai";
 import type { ResolvedModels } from "./resolve";
-import { UserKeyError, classifyProviderError, guardUserKey, guardUserKeyCall, userKeyMessage } from "./userKeyError";
+import { UserKeyError, classifyProviderError, guardUserKey, guardUserKeyCall, refusalLogLine, userKeyMessage } from "./userKeyError";
 
 function apiError(statusCode: number, responseBody: string) {
   return new APICallError({ message: `status ${statusCode}`, url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode, responseBody, isRetryable: false });
@@ -108,5 +108,31 @@ describe("provider errors as the SDK really throws them", () => {
     });
     await expect(guardUserKeyCall(async () => { throw apiError(401, ""); }, { userId: "u1", models: onUserKey, record })).rejects.toMatchObject({ code: "invalid" });
     expect(recorded).toBe(true);
+  });
+});
+
+describe("the refusal in the server log", () => {
+  it("names the provider, the kind, the status and what the provider said, on one line", () => {
+    const body = '{"type":"error","error":{"type":"invalid_request_error","message":"messages.3.content.0.text: text content blocks must be non-empty"},\n  "request_id":"req_011"}';
+    expect(refusalLogLine("anthropic", "other", apiError(400, body))).toBe(
+      '[user key] Anthropic refused a request (other, status 400): {"type":"error","error":{"type":"invalid_request_error","message":"messages.3.content.0.text: text content blocks must be non-empty"}, "request_id":"req_011"}',
+    );
+  });
+
+  it("says when the provider sent no body, and keeps a long one short", () => {
+    expect(refusalLogLine("anthropic", "invalid", apiError(401, ""))).toBe("[user key] Anthropic refused a request (invalid, status 401): no body");
+    const line = refusalLogLine("anthropic", "other", apiError(400, "x".repeat(5000)));
+    expect(line.length).toBeLessThan(2100);
+    expect(line.endsWith("…")).toBe(true);
+  });
+
+  it("is written when a user-key request is refused, and never for the app's key", async () => {
+    const report = vi.fn();
+    const record = vi.fn(async () => {});
+    await expect(guardUserKeyCall(async () => { throw apiError(400, "bad request"); }, { userId: "u1", models: onUserKey, record, report })).rejects.toMatchObject({ code: "other" });
+    expect(report).toHaveBeenCalledWith("[user key] Anthropic refused a request (other, status 400): bad request");
+    report.mockClear();
+    await expect(guardUserKeyCall(async () => { throw apiError(400, "bad request"); }, { userId: "u1", models: onApp, record, report })).rejects.toBeInstanceOf(APICallError);
+    expect(report).not.toHaveBeenCalled();
   });
 });
