@@ -33,8 +33,9 @@ Besides the database, Clerk and AI Gateway keys:
 - `USER_KEY_ENCRYPTION_SECRET`: encrypts the API keys users store in Settings (AES-256-GCM). 32 random bytes, base64:
   `openssl rand -base64 32`. Without it, saving a key fails; nothing is ever stored in plaintext.
 - `OPEN_LIBRARY_CONTACT`: an email or phone number Open Library may use to reach whoever runs this app, sent in the
-  User-Agent of every catalogue lookup as its API terms ask. With it, lookups run at up to 3 a second; without it, at 1
-  a second. Going faster gets the server's address blocked, and every book then fails its catalogue check.
+  User-Agent of every request to Open Library (catalogue lookups and page reads alike) as its API terms ask. All of
+  them share one pace per server: with a contact, up to 3 a second; without it, 1 a second. Going faster gets the
+  server's address blocked, and every book then fails its catalogue check.
 
 ## Deployment checklist
 

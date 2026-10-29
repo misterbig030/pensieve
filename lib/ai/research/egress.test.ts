@@ -141,6 +141,34 @@ describe("guardedFetch", () => {
     expect(Object.keys(requests[0].headers).map((h) => h.toLowerCase())).not.toContain("authorization");
   });
 
+  it("waits Open Library's pace before each hop to it and names the contact there, and only there", async () => {
+    const pace = vi.fn(async () => {});
+    const { transport, requests } = transportFor({
+      "https://example.com/book": { status: 302, headers: { location: "https://openlibrary.org/works/OL1W" } },
+      "https://openlibrary.org/works/OL1W": { status: 301, headers: { location: "https://openlibrary.org/works/OL1W/Book" } },
+      "https://openlibrary.org/works/OL1W/Book": {},
+    });
+    const resolver = resolverFor({ "example.com": [PUBLIC], "openlibrary.org": [PUBLIC] });
+    await guardedFetch("https://example.com/book", { resolver, transport, openLibrary: { pace, contact: "me@example.com" } });
+
+    // Two hops reach Open Library: two turns; the first hop is elsewhere and waits for nothing.
+    expect(pace).toHaveBeenCalledTimes(2);
+    expect(requests.map((r) => [r.url.hostname, r.headers["user-agent"]])).toEqual([
+      ["example.com", "PensieveResearch/1.0 (study-plan source checker)"],
+      ["openlibrary.org", "PensieveResearch/1.0 (study-plan source checker; me@example.com)"],
+      ["openlibrary.org", "PensieveResearch/1.0 (study-plan source checker; me@example.com)"],
+    ]);
+  });
+
+  it("does not count the wait for Open Library's turn against the fetch's own time", async () => {
+    const pace = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 120)));
+    const { transport } = transportFor({ "https://openlibrary.org/works/OL1W": {} });
+    const resolver = resolverFor({ "openlibrary.org": [PUBLIC] });
+    const res = await guardedFetch("https://openlibrary.org/works/OL1W", { resolver, transport, timeoutMs: 60, openLibrary: { pace, contact: null } });
+    expect(res.status).toBe(200);
+    expect(pace).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses a name that resolves to a private address", async () => {
     const { transport, requests } = transportFor({});
     const resolver = resolverFor({ "evil.example": [{ address: "10.0.0.5", family: 4 }] });

@@ -12,10 +12,6 @@ import {
   canonicalUrl,
   capCandidates,
   createOpenLibraryLookup,
-  createPacer,
-  openLibraryContact,
-  openLibraryUserAgent,
-  OPEN_LIBRARY_PER_SECOND,
   kindProblem,
   mainTitle,
   normalizeCoverage,
@@ -34,6 +30,8 @@ import {
   type BookLookup,
   type Candidate,
 } from "./verify";
+import { guardedFetch, type Transport } from "./egress";
+import { createPacer, openLibraryContact, openLibraryUserAgent, OPEN_LIBRARY_PER_SECOND } from "./openLibrary";
 
 const SECRET = "test-secret";
 
@@ -189,6 +187,36 @@ describe("Open Library's terms", () => {
     clock += 5_000;
     await pace();
     expect(slept).toHaveLength(3);
+  });
+
+  it("puts the catalogue lookups and the page reads on one pace by default", async () => {
+    // Run 12: the lookups were paced, but three openlibrary.org/works pages were read at once beside them.
+    vi.stubEnv("OPEN_LIBRARY_CONTACT", "");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const started: number[] = [];
+      const fetchImpl = vi.fn<typeof fetch>(async () => {
+        started.push(Date.now());
+        return { ok: true, status: 200, json: async () => ({ docs: [] }) } as unknown as Response;
+      });
+      const transport: Transport = async () => {
+        started.push(Date.now());
+        return { status: 200, headers: { "content-type": "text/html" }, body: (async function* () {})(), destroy: () => {} };
+      };
+      const resolver = async () => [{ address: "93.184.216.34", family: 4 as const }];
+      const page = (n: number) => guardedFetch(`https://openlibrary.org/works/OL${n}W`, { resolver, transport, timeoutMs: 60_000 });
+      const all = Promise.all([createOpenLibraryLookup(fetchImpl).find("Book", "A. Author"), page(1), page(2), page(3)]);
+      await vi.advanceTimersByTimeAsync(20_000);
+      await all;
+
+      // Two searches (the lookup tries again when the first finds nothing) and three pages.
+      expect(started).toHaveLength(5);
+      const sorted = [...started].sort((a, b) => a - b);
+      for (let i = 1; i < sorted.length; i++) expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(1000 / OPEN_LIBRARY_PER_SECOND.anonymous);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllEnvs();
+    }
   });
 
   it("allows 1 request a second without a contact and 3 with one, as Open Library's terms set", () => {

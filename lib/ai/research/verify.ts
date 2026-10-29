@@ -7,6 +7,7 @@ import { signMaterial, signingSecret } from "./signature";
 import type { PageInfo } from "./extract";
 import type { FetchOutcome, SourceFetcher } from "./tools";
 import { parseOpenLibraryToc, withChapterSizes, type OpenLibraryTocEntry } from "./chapters";
+import { openLibraryContact, openLibraryPacer, openLibraryUserAgent, type Pacer } from "./openLibrary";
 
 /**
  * The verification gate, shared by both research arms. A material enters the plan only if code fetched it in this
@@ -257,45 +258,6 @@ interface OpenLibraryEdition {
   table_of_contents?: OpenLibraryTocEntry[];
 }
 
-/**
- * Open Library's limits (openlibrary.org/developers/api): an app that does not say who it is gets 1 request a second, one
- * whose User-Agent names it and a contact gets 3. Going over them gets the address blocked.
- */
-export const OPEN_LIBRARY_PER_SECOND = { anonymous: 1, identified: 3 } as const;
-
-/** The email or phone Open Library may write to, from `OPEN_LIBRARY_CONTACT`; null when unset or unfit for a header. */
-export function openLibraryContact(raw: string | undefined = process.env.OPEN_LIBRARY_CONTACT): string | null {
-  const value = raw?.trim();
-  return value && value.length <= 200 && /^[\x20-\x7e]+$/.test(value) && !/[()]/.test(value) ? value : null;
-}
-
-export function openLibraryUserAgent(contact: string | null): string {
-  return `PensieveResearch/1.0 (study-plan source checker${contact ? `; ${contact}` : ""})`;
-}
-
-/** Waits for a request's turn. */
-export type Pacer = () => Promise<void>;
-
-/** A pacer that starts requests at most `perSecond` a second, evenly spaced, however many callers share it. */
-export function createPacer(perSecond: number, now: () => number = Date.now, sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms))): Pacer {
-  const gap = 1000 / perSecond;
-  let next = 0;
-  return async () => {
-    const start = Math.max(now(), next);
-    next = start + gap;
-    const wait = start - now();
-    if (wait > 0) await sleep(wait);
-  };
-}
-
-/** One pacer per rate for the whole process: every draft on this server shares its address, and so Open Library's limit. */
-const sharedPacers = new Map<number, Pacer>();
-function sharedPacer(perSecond: number): Pacer {
-  let pace = sharedPacers.get(perSecond);
-  if (!pace) sharedPacers.set(perSecond, (pace = createPacer(perSecond)));
-  return pace;
-}
-
 function authorsOverlap(claimed: string | null, authors: string[]): boolean {
   if (!claimed || authors.length === 0) return true;
   const want = new Set(titleTokens(claimed));
@@ -353,7 +315,7 @@ export function pickBookMatch(title: string, author: string | null, docs: OpenLi
 export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch, options: { contact?: string | null; pace?: Pacer } = {}): BookLookup {
   const contact = options.contact === undefined ? openLibraryContact() : options.contact;
   const headers = { "user-agent": openLibraryUserAgent(contact) };
-  const pace = options.pace ?? sharedPacer(contact ? OPEN_LIBRARY_PER_SECOND.identified : OPEN_LIBRARY_PER_SECOND.anonymous);
+  const pace = options.pace ?? openLibraryPacer();
   const query = async (params: Record<string, string>, signal?: AbortSignal): Promise<OpenLibraryDoc[]> => {
     const url = new URL("https://openlibrary.org/search.json");
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
