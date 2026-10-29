@@ -131,6 +131,10 @@ describe("writeRun and readRun", () => {
 });
 
 describe("scrubSecrets", () => {
+  it("scrubs extra values such as a user's key, and still skips short ones", () => {
+    expect(scrubSecrets("k=sk-user-abcdef12 s=short", {}, ["sk-user-abcdef12", "short"])).toBe("k=[redacted] s=short");
+  });
+
   it("replaces every occurrence of a value", () => {
     expect(scrubSecrets("a K-1234567890 b K-1234567890", { TAVILY_API_KEY: "K-1234567890" })).toBe("a [redacted] b [redacted]");
   });

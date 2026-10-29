@@ -114,13 +114,14 @@ const SECRET_NAMES = ["AI_GATEWAY_API_KEY", "ANTHROPIC_API_KEY", "TAVILY_API_KEY
 const MIN_SECRET_LENGTH = 8;
 
 /**
- * Replaces the values of the keys and the contact with `[redacted]`, as written and as JSON would escape them. Values
- * under 8 characters are left alone: replacing something that short would mangle the text everywhere.
+ * Replaces the values of the keys and the contact with `[redacted]`, as written and as JSON would escape them, and
+ * likewise any `extra` values (a user's decrypted key, which no environment variable holds). Values under 8
+ * characters are left alone: replacing something that short would mangle the text everywhere.
  */
-export function scrubSecrets(text: string, env: Record<string, string | undefined> = process.env): string {
+export function scrubSecrets(text: string, env: Record<string, string | undefined> = process.env, extra: string[] = []): string {
   let scrubbed = text;
-  for (const name of SECRET_NAMES) {
-    const value = env[name];
+  const values = [...SECRET_NAMES.map((name) => env[name]), ...extra];
+  for (const value of values) {
     if (typeof value !== "string" || value.length < MIN_SECRET_LENGTH) continue;
     for (const form of new Set([value, JSON.stringify(value).slice(1, -1)])) scrubbed = scrubbed.split(form).join("[redacted]");
   }
@@ -132,8 +133,8 @@ export function scrubSecrets(text: string, env: Record<string, string | undefine
 
 const FILES = ["run.json", "events.ndjson", "calls.json", "materials.json", "plan.json"] as const;
 
-/** Writes the record as five files. Every file passes through `scrubSecrets`. `run.json` is an object so scoring can add keys (verdicts) later. */
-export function writeRun(dir: string, record: RunRecord, env?: Record<string, string | undefined>): void {
+/** Writes the record as five files. Every file passes through `scrubSecrets` (with `extraSecrets` too). `run.json` is an object so scoring can add keys (verdicts) later. */
+export function writeRun(dir: string, record: RunRecord, env?: Record<string, string | undefined>, extraSecrets: string[] = []): void {
   mkdirSync(dir, { recursive: true });
   const files: Record<(typeof FILES)[number], string> = {
     "run.json": JSON.stringify({ meta: record.meta }, null, 2),
@@ -142,7 +143,7 @@ export function writeRun(dir: string, record: RunRecord, env?: Record<string, st
     "materials.json": JSON.stringify(record.materials, null, 2),
     "plan.json": JSON.stringify({ split: record.split, plan: record.plan }, null, 2),
   };
-  for (const name of FILES) writeFileSync(join(dir, name), scrubSecrets(files[name], env));
+  for (const name of FILES) writeFileSync(join(dir, name), scrubSecrets(files[name], env, extraSecrets));
 }
 
 function readFile(dir: string, name: (typeof FILES)[number]): string {

@@ -53,6 +53,21 @@ describe("withCallEvents", () => {
     ]);
   });
 
+  it("yields the calls queued before a failure, then rethrows it", async () => {
+    async function* failing(log: GenerationLogContext): AsyncGenerator<Ev> {
+      yield { type: "node", n: 1 };
+      log.onCall?.(call("before the error"));
+      throw new Error("boom");
+    }
+    const seen: string[] = [];
+    await expect(
+      (async () => {
+        for await (const e of withCallEvents(true, {}, failing)) seen.push(e.type === "call" ? `call:${e.call.label}` : e.type);
+      })(),
+    ).rejects.toThrow("boom");
+    expect(seen).toEqual(["node", "call:before the error"]);
+  });
+
   it("flushes a call reported after the last event", async () => {
     async function* tail(log: GenerationLogContext): AsyncGenerator<Ev> {
       yield { type: "finish" };
