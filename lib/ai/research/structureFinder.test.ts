@@ -9,6 +9,7 @@ import { MAX_CHAPTERS, type Material } from "@/lib/schemas/material";
 import type { ModelCall } from "../logged";
 import { OUTLINE_RESERVE_MS } from "../planDraft";
 import { providerError } from "../providerError";
+import type { ServiceEvent } from "../serviceEvents";
 import type { ResearchEvent } from "./events";
 import { extractHtml, type PageInfo } from "./extract";
 import type { FullReader } from "./itemFinder";
@@ -393,6 +394,30 @@ describe("the structure finder", () => {
     const result = await createStructureFinder({ provider: null, model }).find(material(), "read", context().ctx);
     expect(result).toMatchObject({ toc: null, list: null, refused: null, facts: ["no answer"] });
     errors.mockRestore();
+  });
+
+  it("reports a structure finder's swallowed provider failure on the app's key", async () => {
+    const failure = new APICallError({ message: "overloaded", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 500, responseBody: "", isRetryable: false });
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw failure;
+      },
+    });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const events: ServiceEvent[] = [];
+    const { ctx } = context();
+    const result = await createStructureFinder({ provider: null, model }).find(material(), "read", { ...ctx, log: { ...ctx.log, onService: (e) => void events.push(e) } });
+    expect(result).toMatchObject({ toc: null, list: null, refused: null, facts: ["no answer"] });
+    expect(events).toContainEqual(expect.objectContaining({ type: "service", name: "anthropic", ok: false, final: true, where: "structure", status: 500 }));
+    errors.mockRestore();
+  });
+
+  it("reports the searches its tool makes", async () => {
+    const { model } = scripted([[{ tool: "search", input: { query: "toc" } }], [{ tool: "answer", input: answerOf({}) }]]);
+    const events: ServiceEvent[] = [];
+    const { ctx } = context();
+    await createStructureFinder({ provider: provider(), model }).find(material({ kind: "book", minutes: 600 }), "read", { ...ctx, log: { ...ctx.log, onService: (e) => void events.push(e) } });
+    expect(events).toContainEqual(expect.objectContaining({ name: "search", ok: true, final: true }));
   });
 
   it("rethrows a provider refusal on the user's own key", async () => {

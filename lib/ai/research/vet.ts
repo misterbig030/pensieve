@@ -1,4 +1,5 @@
 import type { Material } from "@/lib/schemas/material";
+import type { GenerationLogContext } from "../logged";
 import { signingSecret, verifyMaterialSig } from "./signature";
 import { SourceFetcher } from "./tools";
 import { createOpenLibraryLookup, reverifyMaterial, titleMatches, type BookLookup } from "./verify";
@@ -16,6 +17,8 @@ export interface VetOptions {
   books?: BookLookup;
   secret?: string;
   signal?: AbortSignal;
+  /** Where the catalogue lookup reports its requests, for the draft eval. */
+  log?: GenerationLogContext;
 }
 
 /**
@@ -27,7 +30,7 @@ export interface VetOptions {
 export async function vetMaterials(materials: Material[], options: VetOptions = {}): Promise<VetResult> {
   const secret = options.secret ?? signingSecret();
   const fetcher = options.fetcher ?? new SourceFetcher();
-  const books = options.books ?? createOpenLibraryLookup();
+  const books = options.books ?? createOpenLibraryLookup(undefined, { onService: options.log?.onService });
   const dropped: Material[] = [];
   let reverified = 0;
 

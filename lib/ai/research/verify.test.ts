@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { isPracticeOnly } from "@/lib/materials";
 import { EgressError } from "./egress";
 import type { PageInfo } from "./extract";
+import type { ServiceEvent } from "../serviceEvents";
 import type { ResearchEvent } from "./events";
 import { signMaterial, verifyMaterialSig } from "./signature";
 import { SourceFetcher, type PageFetcher } from "./tools";
@@ -176,6 +177,32 @@ describe("Open Library's terms", () => {
     expect(order).toEqual(["pace", "/search.json", "pace", "/search.json", "pace", "/works/OL1W/editions.json"]);
     for (const [, init] of fetchImpl.mock.calls) expect(new Headers(init?.headers).get("user-agent")).toBe("PensieveResearch/1.0 (study-plan source checker; me@example.com)");
     expect(await createOpenLibraryLookup(fetchJson(docs), { contact: null, pace: async () => {} }).find("Book", "A. Author")).toMatchObject({ key: "/works/OL1W" });
+  });
+
+  it("reports each Open Library request: a refused connection as a failure, no match as a success", async () => {
+    const pace = async () => {};
+    const refused = vi.fn<typeof fetch>(async () => {
+      throw new TypeError("fetch failed");
+    });
+    const events: ServiceEvent[] = [];
+    await expect(createOpenLibraryLookup(refused, { contact: null, pace, onService: (e) => events.push(e) }).find("Book", null)).rejects.toThrow();
+    expect(events).toEqual([expect.objectContaining({ type: "service", name: "openlibrary", ok: false, final: true })]);
+
+    const unavailable = vi.fn<typeof fetch>(async () => ({ ok: false, status: 503 }) as unknown as Response);
+    const down: ServiceEvent[] = [];
+    await expect(createOpenLibraryLookup(unavailable, { contact: null, pace, onService: (e) => down.push(e) }).find("Book", null)).rejects.toThrow();
+    expect(down).toEqual([expect.objectContaining({ name: "openlibrary", ok: false, final: true, status: 503 })]);
+
+    const none: ServiceEvent[] = [];
+    const lookup = createOpenLibraryLookup(fetchJson({ docs: [] }), { contact: null, pace, onService: (e) => none.push(e) });
+    expect(await lookup.find("Book", "A. Author")).toBeNull();
+    expect(none).toHaveLength(2);
+    for (const event of none) expect(event).toMatchObject({ name: "openlibrary", ok: true, final: true });
+
+    const editions: ServiceEvent[] = [];
+    const chapters = createOpenLibraryLookup(fetchJson({ entries: [] }), { contact: null, pace, onService: (e) => editions.push(e) }).chapters!;
+    await chapters({ key: "/works/OL1W", title: "Book", authors: [], year: null });
+    expect(editions).toEqual([expect.objectContaining({ name: "openlibrary", ok: true, final: true })]);
   });
 
   it("starts requests at most so many a second, however many callers ask at once", async () => {

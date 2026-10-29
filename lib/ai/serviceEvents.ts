@@ -23,7 +23,7 @@ export type OnServiceEvent = (event: ServiceEvent) => void;
 
 const REASON_MAX = 200;
 
-function reasonOf(error: unknown): string {
+export function reasonOf(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.slice(0, REASON_MAX);
 }

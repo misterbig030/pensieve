@@ -5,6 +5,7 @@ import { PRACTICE_REGISTRY, type PracticeFormatSpec } from "@/lib/practice";
 import type { Coverage, DroppedMaterial, ResearchEvent } from "./events";
 import { signMaterial, signingSecret } from "./signature";
 import type { PageInfo } from "./extract";
+import { reasonOf, type OnServiceEvent } from "../serviceEvents";
 import type { FetchOutcome, SourceFetcher } from "./tools";
 import { parseOpenLibraryToc, withChapterSizes, type OpenLibraryTocEntry } from "./chapters";
 import { openLibraryContact, openLibraryPacer, openLibraryUserAgent, type Pacer } from "./openLibrary";
@@ -312,23 +313,43 @@ export function pickBookMatch(title: string, author: string | null, docs: OpenLi
  * The catalogue lookup. Every request names Pensieve and, when `contact` is set, how to reach its owner, and waits its
  * turn on `pace`: by default the process's shared pacer at the limit the contact earns.
  */
-export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch, options: { contact?: string | null; pace?: Pacer } = {}): BookLookup {
+export function createOpenLibraryLookup(
+  fetchImpl: typeof fetch = fetch,
+  options: { contact?: string | null; pace?: Pacer; onService?: OnServiceEvent } = {},
+): BookLookup {
   const contact = options.contact === undefined ? openLibraryContact() : options.contact;
   const headers = { "user-agent": openLibraryUserAgent(contact) };
   const pace = options.pace ?? openLibraryPacer();
+  // One request to Open Library, paced, reported once when it answers or throws.
+  const request = async (url: string | URL, signal?: AbortSignal): Promise<Response> => {
+    await pace();
+    const startedAt = performance.now();
+    const ms = () => Math.round(performance.now() - startedAt);
+    const timeout = AbortSignal.timeout(5_000);
+    try {
+      const res = await fetchImpl(url, { headers, signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+      options.onService?.({
+        type: "service",
+        name: "openlibrary",
+        ok: res.ok,
+        final: true,
+        ms: ms(),
+        ...(res.ok ? {} : { status: res.status, reason: `Open Library returned ${res.status}` }),
+      });
+      return res;
+    } catch (error) {
+      options.onService?.({ type: "service", name: "openlibrary", ok: false, final: true, ms: ms(), reason: reasonOf(error) });
+      throw error;
+    }
+  };
   const query = async (params: Record<string, string>, signal?: AbortSignal): Promise<OpenLibraryDoc[]> => {
     const url = new URL("https://openlibrary.org/search.json");
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     url.searchParams.set("limit", "5");
     url.searchParams.set("fields", "key,title,author_name,first_publish_year,number_of_pages_median");
-    await pace();
-    const timeout = AbortSignal.timeout(5_000);
     let res: Response;
     try {
-      res = await fetchImpl(url, {
-        headers,
-        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-      });
+      res = await request(url, signal);
     } catch (error) {
       throw new BookLookupUnavailable(error instanceof Error ? error.message : "Open Library unreachable");
     }
@@ -348,12 +369,7 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch, options
     async chapters(match, signal) {
       if (!match.key) return null;
       try {
-        await pace();
-        const timeout = AbortSignal.timeout(5_000);
-        const res = await fetchImpl(`https://openlibrary.org${match.key}/editions.json?limit=50`, {
-          headers,
-          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-        });
+        const res = await request(`https://openlibrary.org${match.key}/editions.json?limit=50`, signal);
         if (!res.ok) return null;
         const json = (await res.json().catch(() => null)) as { entries?: OpenLibraryEdition[] } | null;
         if (!json || !Array.isArray(json.entries)) return null;

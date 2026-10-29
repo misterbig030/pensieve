@@ -15,6 +15,7 @@ import {
   type PracticeListSource,
 } from "@/lib/schemas/material";
 import { loggedGenerateObject, type GenerationLogContext } from "../logged";
+import { reportServiceFailure } from "../serviceEvents";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, type AiModelId, type ReasoningEffort } from "../models";
 import { providerError } from "../providerError";
 import { applyMapping, fieldMappingSchema, parseDataFile, sampleDataFile, type DataFile, type FieldMapping } from "./dataFile";
@@ -380,6 +381,7 @@ function modelAsker(
         return object;
       } catch (error) {
         if (signal.aborted) break;
+        reportServiceFailure(ctx.log, error, "items");
         if (ctx.log?.keyOwner === "user" && providerError(error)) throw error;
         console.error(`[research] ${label} failed (attempt ${attempt})`, error);
       }

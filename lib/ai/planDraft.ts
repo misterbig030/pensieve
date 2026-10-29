@@ -35,6 +35,7 @@ import type { Material } from "@/lib/schemas/material";
 import { unitListSchema, type UnitDraft } from "@/lib/schemas/plan";
 import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, type GenerationLogContext } from "./logged";
+import { reportServiceFailure } from "./serviceEvents";
 import { allocatePlan } from "./allocate";
 import { DEFAULT_ALLOCATE_MODEL, DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
 import { providerError } from "./providerError";
@@ -375,6 +376,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       // A request that went away stops here. On the user's own key a provider refusal is theirs to hear about;
       // otherwise (the deadline included) the first answer stands, pruned.
       if (ctx.signal?.aborted) throw error;
+      reportServiceFailure(input.log, error, "outline retry");
       if (ctx.outlineModel.keyOwner === "user" && providerError(error)) throw error;
       console.error(`[draft] retry failed for ${label}`, error);
       dropBreaches(final, breaches);
@@ -475,6 +477,7 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
     } catch (error) {
       // Past the deadline the unit stays a heading, its streamed children dropped; any other failure is the draft's.
       if (input.signal?.aborted || input.deadline === undefined || Date.now() < input.deadline) throw error;
+      reportServiceFailure(input.log, error, "outline level");
       console.error(`[draft] out of time planning ${parent.title}; it stays a heading`, error);
       parent.children = null;
       layout(root);

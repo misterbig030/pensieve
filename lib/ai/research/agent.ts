@@ -3,6 +3,7 @@ import type { SourceInput } from "@/lib/schemas/source";
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { DEFAULT_HOURS_PER_WEEK, totalHours, weeksLabel } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, loggedGenerateObject, type GenerationLogContext } from "../logged";
+import { reportServiceFailure } from "../serviceEvents";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, RESEARCH_LOOP_EFFORT, type AiModelId, type ReasoningEffort } from "../models";
 import { providerError } from "../providerError";
 import type { Coverage, ResearchEvent, WorkerDirection } from "./events";
@@ -297,6 +298,7 @@ export async function runResearchLoop(input: LoopInput): Promise<LoopResult> {
     budget,
     notes,
     emit,
+    onService: log?.onService,
     onSearchError: () => {
       stoppedBy = "search-error";
       loop.abort(new Error("search-error"));
@@ -541,6 +543,7 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
     } catch (error) {
       if (input.signal?.aborted) break;
       // On the user's own key a provider refusal is theirs to hear about; a retry on the same key would be refused too.
+      reportServiceFailure(input.log, error, "candidates");
       if (input.log?.keyOwner === "user" && providerError(error)) throw error;
       console.error(`[research] candidate step failed (attempt ${attempt})`, error);
     }

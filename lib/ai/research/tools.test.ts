@@ -4,14 +4,17 @@ import type { ResearchEvent } from "./events";
 import {
   ResearchBudget,
   ResearchNotes,
+  SearchProviderError,
   SourceFetcher,
   createResearchTools,
   createTavilyProvider,
+  reportingSearch,
   type PageFetcher,
   type SearchProvider,
 } from "./tools";
 import { EgressError } from "./egress";
 import type { PageInfo } from "./extract";
+import type { ServiceEvent } from "../serviceEvents";
 
 const page = (url: string, title: string): PageInfo => ({
   finalUrl: url,
@@ -146,6 +149,46 @@ describe("research tools", () => {
     expect(second).toMatchObject({ error: expect.stringMatching(/budget spent/) });
     expect(provider.search).toHaveBeenCalledTimes(1);
     expect(events).toEqual([{ type: "research.search", query: "one", results: 1 }]);
+  });
+
+  it("reports each search: an error as a failure, no results as a success", async () => {
+    const events: ServiceEvent[] = [];
+    const onService = (e: ServiceEvent) => void events.push(e);
+    const failing = reportingSearch(
+      {
+        name: "fake",
+        search: async () => {
+          throw new SearchProviderError("Search returned 429");
+        },
+      },
+      onService,
+    );
+    await expect(failing.search("q", { maxResults: 5 })).rejects.toThrow("Search returned 429");
+    expect(events).toEqual([expect.objectContaining({ type: "service", name: "search", ok: false, final: true, reason: "Search returned 429" })]);
+
+    events.length = 0;
+    const empty = reportingSearch({ name: "fake", search: async () => [] }, onService);
+    expect(await empty.search("q", { maxResults: 5 })).toEqual([]);
+    expect(events).toEqual([expect.objectContaining({ name: "search", ok: true, final: true })]);
+
+    const provider: SearchProvider = { name: "fake", search: async () => [] };
+    expect(reportingSearch(provider, undefined)).toBe(provider);
+  });
+
+  it("reports the searches its tool makes through onService", async () => {
+    const events: ServiceEvent[] = [];
+    const provider: SearchProvider = { name: "fake", search: async () => [] };
+    const tools = createResearchTools({
+      provider,
+      fetcher: new SourceFetcher(),
+      budget: new ResearchBudget({ steps: 12, searches: 1, fetches: 1, wallMs: 60_000 }),
+      notes: new ResearchNotes(),
+      emit: () => {},
+      onSearchError: () => {},
+      onService: (e) => void events.push(e),
+    });
+    await tools.webSearch.execute!({ query: "one" }, execOpts);
+    expect(events).toEqual([expect.objectContaining({ name: "search", ok: true, final: true })]);
   });
 
   it("enforces the fetch cap and emits reading then fetch", async () => {
