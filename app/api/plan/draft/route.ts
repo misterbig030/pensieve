@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isAdminUserId } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
 import { DRAFT_BUDGET_MS, streamResearchedPlanDraft } from "@/lib/ai/planDraft";
-import { defaultArm, defaultChapterFinder, defaultItemFinder } from "@/lib/ai/research/pipeline";
+import { defaultArm, defaultStructureFinder } from "@/lib/ai/research/pipeline";
 import { insertGenerationLog } from "@/lib/db/generationLog";
 import { resolveModels } from "@/lib/ai/resolve";
 import { guardUserKey } from "@/lib/ai/userKeyError";
@@ -14,7 +14,7 @@ import { MAX_WEEKS } from "@/lib/planTree";
 import { DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema } from "@/lib/studyTime";
 
 // One request runs it all in series: research (the workers, then the candidates step), the gate's page and catalogue
-// checks, the chapter finders, the allocation (Opus at high effort), then the outline. Several minutes in all; the
+// checks, the structure finders, the allocation (Opus at high effort), then the outline. Several minutes in all; the
 // draft keeps inside `DRAFT_BUDGET_MS`, dropping what does not fit rather than running past this limit.
 export const maxDuration = 300;
 
@@ -52,10 +52,7 @@ export async function POST(request: Request) {
           materials: body.materials,
           hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
           arm: defaultArm(process.env, { model: models.research.model }),
-          research: {
-            chapters: defaultChapterFinder(process.env, { model: models.research.model }) ?? undefined,
-            items: defaultItemFinder(process.env, { model: models.research.model }) ?? undefined,
-          },
+          research: { structure: defaultStructureFinder(process.env, { model: models.research.model }) },
           outlineModel: models.outline,
           allocateModel: models.allocate,
           // A client that disconnects stops research: the signal reaches search and fetch.

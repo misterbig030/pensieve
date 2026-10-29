@@ -4,8 +4,10 @@ import { FOUND_BY, MATERIAL_KINDS, clip, hostOf, shortId, type ChapterList, type
 import { PRACTICE_REGISTRY, type PracticeFormatSpec } from "@/lib/practice";
 import type { Coverage, DroppedMaterial, ResearchEvent } from "./events";
 import { signMaterial, signingSecret } from "./signature";
+import type { PageInfo } from "./extract";
 import type { FetchOutcome, SourceFetcher } from "./tools";
 import { parseOpenLibraryToc, withChapterSizes, type OpenLibraryTocEntry } from "./chapters";
+import { openLibraryContact, openLibraryPacer, openLibraryUserAgent, type Pacer } from "./openLibrary";
 
 /**
  * The verification gate, shared by both research arms. A material enters the plan only if code fetched it in this
@@ -22,7 +24,7 @@ export const practiceDraftSchema = z.object({
   format: z.string().describe("One of the practice formats named in the prompt"),
   items: z.number().nullable().optional().describe("Problems, questions or steps the source holds that this plan would use; null when it is not counted"),
   perItemMinutes: z.number().nullable().optional().describe("Minutes per item if the source says so; null to use the format's usual"),
-  answers: z.boolean().describe("True only if the source carries answers, solutions or a rubric"),
+  answers: z.boolean().describe("True when the notes show the source has answers, solutions or a rubric, on its page or one they name for it"),
 });
 export type PracticeDraft = z.infer<typeof practiceDraftSchema>;
 
@@ -32,7 +34,7 @@ export { FOUND_BY, type FoundBy };
 export const MAX_CANDIDATES = 25;
 
 export const candidateSchema = z.object({
-  url: z.string().describe("The page for this material: its own page, not a page that mentions it"),
+  url: z.string().describe("The page for this material: its own page, not a page that mentions it; empty for a book whose own page the notes do not give"),
   title: z.string().describe("For a book, its title as published, with its author in the author field; otherwise the page's own title, exactly as the page gives it"),
   pageTitle: z.string().nullable().optional().describe("For a book, the title its web page shows, when the notes give one; null otherwise"),
   kind: z.enum(MATERIAL_KINDS),
@@ -142,6 +144,13 @@ const VIDEO_HOSTS = /(^|\.)(youtube\.com|youtu\.be|vimeo\.com)$/;
 const CODE_HOSTS = /(^|\.)(github\.com|gitlab\.com|codeberg\.org|bitbucket\.org)$/;
 const PAPER_HOSTS = /(^|\.)(arxiv\.org|openreview\.net|aclanthology\.org|dl\.acm\.org|papers\.nips\.cc|proceedings\.neurips\.cc|proceedings\.mlr\.press|ieeexplore\.ieee\.org|semanticscholar\.org|biorxiv\.org|ssrn\.com)$/;
 
+const SHOP_HOSTS = /(^|\.)(amazon\.[a-z.]+|ebay\.[a-z.]+|barnesandnoble\.com|bookshop\.org|abebooks\.[a-z.]+|thriftbooks\.com|walmart\.com|booksamillion\.com|goodreads\.com|audible\.[a-z.]+)$/;
+
+/** Whether a page sells or rates a book rather than being its publisher's or author's: never a book's own page. */
+export function isShopListing(url: string): boolean {
+  return SHOP_HOSTS.test(hostOf(url) ?? "");
+}
+
 /** Whether a claimed kind is plausible for where the page lives. `null` means plausible. */
 export function kindProblem(kind: MaterialKind, url: string): string | null {
   const host = hostOf(url) ?? "";
@@ -249,8 +258,6 @@ interface OpenLibraryEdition {
   table_of_contents?: OpenLibraryTocEntry[];
 }
 
-const OPEN_LIBRARY_USER_AGENT = "PensieveResearch/1.0 (study-plan source checker)";
-
 function authorsOverlap(claimed: string | null, authors: string[]): boolean {
   if (!claimed || authors.length === 0) return true;
   const want = new Set(titleTokens(claimed));
@@ -301,17 +308,25 @@ export function pickBookMatch(title: string, author: string | null, docs: OpenLi
   return { key, title: doc.title, authors: doc.author_name ?? [], year: doc.first_publish_year ?? null, pages };
 }
 
-export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLookup {
+/**
+ * The catalogue lookup. Every request names Pensieve and, when `contact` is set, how to reach its owner, and waits its
+ * turn on `pace`: by default the process's shared pacer at the limit the contact earns.
+ */
+export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch, options: { contact?: string | null; pace?: Pacer } = {}): BookLookup {
+  const contact = options.contact === undefined ? openLibraryContact() : options.contact;
+  const headers = { "user-agent": openLibraryUserAgent(contact) };
+  const pace = options.pace ?? openLibraryPacer();
   const query = async (params: Record<string, string>, signal?: AbortSignal): Promise<OpenLibraryDoc[]> => {
     const url = new URL("https://openlibrary.org/search.json");
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     url.searchParams.set("limit", "5");
     url.searchParams.set("fields", "key,title,author_name,first_publish_year,number_of_pages_median");
+    await pace();
     const timeout = AbortSignal.timeout(5_000);
     let res: Response;
     try {
       res = await fetchImpl(url, {
-        headers: { "user-agent": OPEN_LIBRARY_USER_AGENT },
+        headers,
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
     } catch (error) {
@@ -333,9 +348,10 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLo
     async chapters(match, signal) {
       if (!match.key) return null;
       try {
+        await pace();
         const timeout = AbortSignal.timeout(5_000);
         const res = await fetchImpl(`https://openlibrary.org${match.key}/editions.json?limit=50`, {
-          headers: { "user-agent": OPEN_LIBRARY_USER_AGENT },
+          headers,
           signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         });
         if (!res.ok) return null;
@@ -367,6 +383,8 @@ export const WORDS_PER_MINUTE = 230;
 export const MINUTES_PER_PAGE = 2.5;
 /** A page shorter than this is a landing page or an abstract, not the essay itself. */
 export const MIN_MEASURED_WORDS = 600;
+/** A page that links to at least this many other pages of its own site is a hub, not the work itself. */
+export const HUB_MIN_LINKS = 6;
 const MAX_MINUTES = 60_000;
 
 function validMinutes(minutes: number | null | undefined): number | null {
@@ -385,19 +403,31 @@ export interface SizeInput {
   durationMinutes?: number | null;
   /** A matched book's page count from the catalogue. */
   bookPages?: number | null;
+  /** True when the material's own page mostly links to the rest of its site, so its length is not the work's. */
+  hub?: boolean;
 }
 
 /**
- * How long a material takes, and whether code measured it. A video's runtime, a book's page count and an essay's
- * own length are counted; everything else (courses, docs sites, repos, a part of a larger work) is the model's
- * estimate. An estimate for part of a measured work never exceeds the whole.
+ * What the material's own page measures, whatever the material's size came to: a video's runtime, a book's catalogue
+ * pages, else the page's words at reading speed. Null when the page measures nothing.
+ */
+export function pageMinutesOf(page: Pick<PageInfo, "words" | "durationMinutes">, kind: MaterialKind, bookPages?: number | null): number | null {
+  if (kind === "video") return validMinutes(page.durationMinutes);
+  if (kind === "book" && bookPages) return validMinutes(bookPages * MINUTES_PER_PAGE);
+  return (page.words ?? 0) > 0 ? validMinutes((page.words ?? 0) / WORDS_PER_MINUTE) : null;
+}
+
+/**
+ * How long a material takes, and whether code measured it. A video's runtime, a book's page count and the own length
+ * of an essay or paper, or of a repo whose README is the work, are counted; everything else (courses, docs sites,
+ * hub repos, a part of a larger work) is the model's estimate. An estimate for part of a measured work never exceeds the whole.
  */
 export function sizeMaterial(input: SizeInput): { minutes: number | null; basis: MinutesBasis | null } {
   const claimed = validMinutes(input.claimedMinutes);
   let whole: number | null = null;
   if (input.kind === "video") whole = validMinutes(input.durationMinutes);
   else if (input.kind === "book" && input.bookPages) whole = validMinutes(input.bookPages * MINUTES_PER_PAGE);
-  else if (input.kind === "essay" && (input.words ?? 0) >= MIN_MEASURED_WORDS) whole = validMinutes((input.words ?? 0) / WORDS_PER_MINUTE);
+  else if ((input.kind === "essay" || input.kind === "paper" || (input.kind === "repo" && !input.hub)) && (input.words ?? 0) >= MIN_MEASURED_WORDS) whole = validMinutes((input.words ?? 0) / WORDS_PER_MINUTE);
 
   if (whole !== null && !input.uses) return { minutes: whole, basis: "measured" };
   if (whole !== null) return { minutes: claimed ? Math.min(claimed, whole) : whole, basis: "estimated" };
@@ -517,6 +547,34 @@ function catalogueEntry(match: BookMatch, claimedAuthor: string | null | undefin
   return { ok: true, url: `https://openlibrary.org${match.key}`, fetchedTitle: clip(match.title, 300), verifiedAt: now().toISOString(), author: null };
 }
 
+/** Why a catalogue match cannot stand in for a book's page: what `catalogueEntry` needs that the claim or the match lacks. */
+function unconfirmedMatch(match: BookMatch, claimedAuthor: string | null | undefined): string {
+  if (!claimedAuthor?.trim()) return "Open Library matched the title, but no author was given to confirm it";
+  if (match.authors.length === 0) return "Open Library's match names no author to confirm it";
+  return "Open Library's match has no work page";
+}
+
+/** A fetch the site turned away (a 401, 403 or 429) or that timed out: the page is there, it just would not serve a robot. */
+const TURNED_AWAY = /^(?:returned (?:401|403|429)\b|timed out$)/;
+
+/** Whether a failed read's reason says the site turned the reader away rather than the page being missing or wrong. */
+export function turnedAway(reason: string): boolean {
+  return TURNED_AWAY.test(reason);
+}
+
+/**
+ * The page standing for a book Open Library matched when its own page did not pass. A claimed page the site turned
+ * away stays the book's link, the catalogue vouching for the book; one that is gone, opened as something else, or
+ * is a shop gives way to the catalogue entry. `pageReason` is null for a book claimed with no address.
+ */
+function bookPage(match: BookMatch, claim: { url: string; author?: string | null }, outcome: FetchOutcome, pageReason: string | null, now: () => Date): PageCheck {
+  const entry = catalogueEntry(match, claim.author, now);
+  if (!entry) return { ok: false, reason: pageReason ? `${pageReason}; ${unconfirmedMatch(match, claim.author)}` : unconfirmedMatch(match, claim.author) };
+  const refused = !outcome.ok && turnedAway(outcome.reason);
+  const own = refused && claim.url.trim().toLowerCase().startsWith("https://") && !isShopListing(claim.url) ? canonicalUrl(claim.url) : null;
+  return own && entry.ok ? { ...entry, url: own } : entry;
+}
+
 function pageTitle(outcome: FetchOutcome & { ok: true }): string | null {
   return outcome.page.ogTitle ?? outcome.page.title ?? outcome.page.h1;
 }
@@ -581,7 +639,8 @@ export async function runGate(input: GateInput): Promise<GateResult> {
       fetchedTitle,
       recommendedBy: [],
       sig: verifiedAt ? signMaterial({ url, fetchedTitle, verifiedAt }, secret) : null,
-      ...sizeFields({ kind, uses: null, claimedMinutes: note?.minutes, words: fetched?.page.words, durationMinutes: fetched?.page.durationMinutes }),
+      ...sizeFields({ kind, uses: null, claimedMinutes: note?.minutes, words: fetched?.page.words, durationMinutes: fetched?.page.durationMinutes, hub: isHub(fetched?.page) }),
+      ...pageFields(fetched?.page, kind),
       uses: null,
       toc: null,
       ...(practice ? { practice } : {}),
@@ -651,8 +710,8 @@ export async function runGate(input: GateInput): Promise<GateResult> {
         year = check.match.year ?? year;
         bookPages = check.match.pages ?? null;
         toc = check.toc;
-        // The book is real. If its own page cannot be used, its Open Library entry is the link.
-        if (!page.ok) page = catalogueEntry(check.match, c.author, now) ?? page;
+        // The book is real. If its own page cannot be used, the page its site turned away or its Open Library entry is the link.
+        if (!page.ok) page = bookPage(check.match, c, outcomes[i], readable(c) ? page.reason : null, now);
       } else if (check?.unavailable) {
         // With a page that passes, keep the book but not catalogued: no Open Library year, and never the backbone.
         year = null;
@@ -680,7 +739,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     const size =
       c.practice && c.minutes == null
         ? { minutes: null, minutesBasis: null, uses }
-        : { ...sizeFields({ kind: c.kind, uses, claimedMinutes: c.minutes, words: ownPage?.words, durationMinutes: ownPage?.durationMinutes, bookPages }), uses };
+        : { ...sizeFields({ kind: c.kind, uses, claimedMinutes: c.minutes, words: ownPage?.words, durationMinutes: ownPage?.durationMinutes, bookPages, hub: isHub(ownPage) }), uses };
 
     const practice = c.practice ? normalizePractice(c.practice) : null;
 
@@ -721,6 +780,7 @@ export async function runGate(input: GateInput): Promise<GateResult> {
       fetchedTitle,
       sig: signMaterial({ url: finalUrl, fetchedTitle, verifiedAt }, secret),
       ...size,
+      ...pageFields(ownPage, c.kind, bookPages),
       toc: toc ? withChapterSizes(toc, size.minutes) : null,
       ...(practice ? { practice } : {}),
       ...(bookMatched ? { catalogued: true } : {}),
@@ -740,6 +800,16 @@ export async function runGate(input: GateInput): Promise<GateResult> {
     if (m.toc) input.emit({ type: "research.chapters", id: m.id, title: m.title, chapters: m.toc.chapters.length, source: m.toc.source, url: m.toc.url });
   }
   return { materials, dropped, verified: accepted.length, proposed: valid.length };
+}
+
+/** True when a page mostly links to the rest of its site (see `HUB_MIN_LINKS`). */
+function isHub(page: PageInfo | null | undefined): boolean {
+  return (page?.siteLinks ?? 0) >= HUB_MIN_LINKS;
+}
+
+/** The draft-only fields of a material whose own page was read; none when it was not (the catalogue entry, a failed read). */
+function pageFields(page: PageInfo | null | undefined, kind: MaterialKind, bookPages?: number | null): { pageMinutes?: number | null; hub?: boolean } {
+  return page ? { pageMinutes: pageMinutesOf(page, kind, bookPages), hub: isHub(page) } : {};
 }
 
 function sizeFields(input: SizeInput): { minutes: number | null; minutesBasis: MinutesBasis | null } {
@@ -768,7 +838,8 @@ export async function reverifyMaterial(
 ): Promise<Material | null> {
   const researched = material.origin === "research";
   const claim = { url: material.url, title: material.title, kind: researched ? material.kind : null };
-  let page = checkPage(claim, await fetcher.fetch(material.url, signal), TITLE_MATCH_THRESHOLD);
+  const outcome = await fetcher.fetch(material.url, signal);
+  let page = checkPage(claim, outcome, TITLE_MATCH_THRESHOLD);
   let year = material.year;
   let backbone = material.backbone;
   if (researched && material.kind === "book") {
@@ -776,7 +847,7 @@ export async function reverifyMaterial(
       const hit = await books.find(material.title, material.author, signal);
       if (!hit) return null;
       year = hit.year ?? year;
-      if (!page.ok) page = catalogueEntry(hit, material.author, now) ?? page;
+      if (!page.ok) page = bookPage(hit, material, outcome, page.reason, now);
     } catch {
       year = null;
       backbone = false;

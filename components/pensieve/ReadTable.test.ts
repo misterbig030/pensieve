@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
 import type { Material, PracticeItem } from "@/lib/schemas/material";
 import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
-import { budgetLine, byTier, chapterLabel, coverPracticeRows, DoRows, itemLabel, minutesOver, partLabel, practiceRowsFor, readRowsFor, ReadTable, rowBrief } from "./ReadTable";
+import { budgetLine, byTier, chapterLabel, coverPracticeRows, DoRows, itemLabel, minutesOver, partLabel, practiceRowsFor, readRowsFor, ReadTable, rowBrief, rowHref } from "./ReadTable";
 
 describe("readRowsFor", () => {
   it("fills chapter, activity and a key per row", () => {
@@ -75,6 +75,21 @@ describe("rowBrief", () => {
     expect(rowBrief(review)).toEqual({ head: "Review of ch. 2", detail: "Modeling; Post-Training" });
     expect(rowBrief(whole)).toEqual({ head: "AI Evals", detail: "whole essay" });
     expect(rowBrief({ ...chapter, chapter: { ...chapter.chapter!, n: null } })).toEqual({ head: "Introduction to Building AI Applications with Foundation Models", detail: "The Rise of AI Engineering; Foundation Model Use Cases" });
+  });
+});
+
+describe("rowHref", () => {
+  it("links a chapter row to the chapter's own page when the chapter has one", () => {
+    const byId = new Map(AIE_MATERIALS.map((m) => [m.id, m]));
+    const [chapter] = readRowsFor([{ id: "aie", tier: "must", minutes: 55, note: null, chapter: 1 }], byId);
+    const withUrl = { ...chapter, chapter: { ...chapter.chapter!, url: "https://github.com/a/b/tree/main/week03" } };
+    expect(rowHref(withUrl)).toBe("https://github.com/a/b/tree/main/week03");
+  });
+  it("links to the material's own page for a chapter without a url, and for a row with no chapter", () => {
+    const byId = new Map(AIE_MATERIALS.map((m) => [m.id, m]));
+    const [chapter, whole] = readRowsFor([{ id: "aie", tier: "must", minutes: 55, note: null, chapter: 1 }, { id: "evals", tier: "should", minutes: 79, note: null }], byId);
+    expect(rowHref(chapter)).toBe(chapter.material.url);
+    expect(rowHref({ ...whole, chapter: null })).toBe(whole.material.url);
   });
 });
 

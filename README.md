@@ -32,6 +32,10 @@ Besides the database, Clerk and AI Gateway keys:
   random per-process secret is used, and plans confirmed on another instance re-verify their materials.
 - `USER_KEY_ENCRYPTION_SECRET`: encrypts the API keys users store in Settings (AES-256-GCM). 32 random bytes, base64:
   `openssl rand -base64 32`. Without it, saving a key fails; nothing is ever stored in plaintext.
+- `OPEN_LIBRARY_CONTACT`: an email or phone number Open Library may use to reach whoever runs this app, sent in the
+  User-Agent of every request to Open Library (catalogue lookups and page reads alike) as its API terms ask. All of
+  them share one pace per server: with a contact, up to 3 a second; without it, 1 a second. Going faster gets the
+  server's address blocked, and every book then fails its catalogue check.
 
 ## Deployment checklist
 
@@ -43,7 +47,8 @@ first deployment, in this order:
   them unreadable, and every user would have to re-enter their key. Read it from the file so it never shows on screen:
   `grep '^USER_KEY_ENCRYPTION_SECRET=' .env.local | cut -d= -f2- > /tmp/s && vercel env add USER_KEY_ENCRYPTION_SECRET production preview < /tmp/s; rm -f /tmp/s`
 - [ ] Set the rest of the local environment the same way: the database URL, the Clerk keys, `AI_GATEWAY_API_KEY`,
-  `TAVILY_API_KEY`, `MATERIALS_SIGNING_SECRET`, `ADMIN_USER_IDS`, and `RESEARCH_ARM` if it is set locally.
+  `TAVILY_API_KEY`, `MATERIALS_SIGNING_SECRET`, `ADMIN_USER_IDS`, `OPEN_LIBRARY_CONTACT`, and `RESEARCH_ARM` if it is set
+  locally.
 - [ ] Apply any pending migrations with `npx drizzle-kit migrate` **before** the deploy that needs them. New columns
   must exist before the new code inserts into them; old code tolerates new columns because they carry defaults.
 - [ ] After the first deploy, run one plan draft on a stored user key and confirm the admin model-calls panel shows

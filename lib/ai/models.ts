@@ -67,6 +67,8 @@ export const CANDIDATE_STEP_EFFORT: ReasoningEffort = "low";
 export const ALLOCATE_EFFORT: ReasoningEffort = "high";
 /** The outline and revision calls run at this effort: placing the reservations across the weeks is a judgment call too. */
 export const OUTLINE_EFFORT: ReasoningEffort = "high";
+/** The structure finder runs at this effort: choosing a source's units is judgement, not transcription. */
+export const STRUCTURE_EFFORT: ReasoningEffort = "medium";
 
 interface TokenUsage {
   inputTokens?: number;

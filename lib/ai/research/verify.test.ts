@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { isPracticeOnly } from "@/lib/materials";
+import { EgressError } from "./egress";
 import type { PageInfo } from "./extract";
 import type { ResearchEvent } from "./events";
 import { signMaterial, verifyMaterialSig } from "./signature";
@@ -15,6 +16,7 @@ import {
   mainTitle,
   normalizeCoverage,
   normalizePractice,
+  pageMinutesOf,
   pickBookMatch,
   recommendingDomains,
   registrableDomain,
@@ -28,6 +30,8 @@ import {
   type BookLookup,
   type Candidate,
 } from "./verify";
+import { guardedFetch, type Transport } from "./egress";
+import { createPacer, openLibraryContact, openLibraryUserAgent, OPEN_LIBRARY_PER_SECOND } from "./openLibrary";
 
 const SECRET = "test-secret";
 
@@ -138,9 +142,85 @@ describe("Open Library match", () => {
       return { ok: true, status: 200, json: async () => ({ docs: title === "Designing Data-Intensive Applications" ? [ddia] : [] }) } as unknown as Response;
     });
     const claimed = "Designing Data-Intensive Applications (DDIA) — an O’Reilly book by Martin Kleppmann (The Wild Boar Book)";
-    const match = await createOpenLibraryLookup(fetchImpl).find(claimed, "Martin Kleppmann");
+    const match = await createOpenLibraryLookup(fetchImpl, { contact: null, pace: async () => {} }).find(claimed, "Martin Kleppmann");
     expect(match).toMatchObject({ key: "/works/OL19293745W", title: "Designing Data-Intensive Applications" });
     expect(new URL(String(fetchImpl.mock.calls[0][0])).searchParams.get("author")).toBe("Martin Kleppmann");
+  });
+});
+
+describe("Open Library's terms", () => {
+  const docs = { docs: [{ key: "/works/OL1W", title: "Book", author_name: ["A. Author"], first_publish_year: 2020 }] };
+  const fetchJson = (body: unknown) => vi.fn<typeof fetch>(async () => ({ ok: true, status: 200, json: async () => body }) as unknown as Response);
+
+  it("takes a contact for the User-Agent from OPEN_LIBRARY_CONTACT, and nothing that could break the header", () => {
+    expect(openLibraryContact("  me@example.com ")).toBe("me@example.com");
+    expect(openLibraryContact("+1 555 0100")).toBe("+1 555 0100");
+    expect(openLibraryContact(undefined)).toBeNull();
+    expect(openLibraryContact("  ")).toBeNull();
+    expect(openLibraryContact("me@example.com\r\nX-Other: 1")).toBeNull();
+    expect(openLibraryContact("me (at) example.com")).toBeNull();
+    expect(openLibraryUserAgent("me@example.com")).toBe("PensieveResearch/1.0 (study-plan source checker; me@example.com)");
+    expect(openLibraryUserAgent(null)).toBe("PensieveResearch/1.0 (study-plan source checker)");
+  });
+
+  it("names the contact on every request and waits its turn before each one", async () => {
+    const order: string[] = [];
+    const pace = vi.fn(async () => void order.push("pace"));
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      order.push(new URL(String(url)).pathname);
+      return { ok: true, status: 200, json: async () => (String(url).includes("editions") ? { entries: [] } : { docs: [] }) } as unknown as Response;
+    });
+    const lookup = createOpenLibraryLookup(fetchImpl, { contact: "me@example.com", pace });
+    await lookup.find("Book", "A. Author");
+    await lookup.chapters!({ key: "/works/OL1W", title: "Book", authors: [], year: null });
+    expect(order).toEqual(["pace", "/search.json", "pace", "/search.json", "pace", "/works/OL1W/editions.json"]);
+    for (const [, init] of fetchImpl.mock.calls) expect(new Headers(init?.headers).get("user-agent")).toBe("PensieveResearch/1.0 (study-plan source checker; me@example.com)");
+    expect(await createOpenLibraryLookup(fetchJson(docs), { contact: null, pace: async () => {} }).find("Book", "A. Author")).toMatchObject({ key: "/works/OL1W" });
+  });
+
+  it("starts requests at most so many a second, however many callers ask at once", async () => {
+    let clock = 1_000;
+    const slept: number[] = [];
+    const pace = createPacer(3, () => clock, async (ms) => void slept.push(Math.round(ms)));
+    await Promise.all([pace(), pace(), pace(), pace()]);
+    expect(slept).toEqual([333, 667, 1000]);
+    clock += 5_000;
+    await pace();
+    expect(slept).toHaveLength(3);
+  });
+
+  it("puts the catalogue lookups and the page reads on one pace by default", async () => {
+    // Run 12: the lookups were paced, but three openlibrary.org/works pages were read at once beside them.
+    vi.stubEnv("OPEN_LIBRARY_CONTACT", "");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const started: number[] = [];
+      const fetchImpl = vi.fn<typeof fetch>(async () => {
+        started.push(Date.now());
+        return { ok: true, status: 200, json: async () => ({ docs: [] }) } as unknown as Response;
+      });
+      const transport: Transport = async () => {
+        started.push(Date.now());
+        return { status: 200, headers: { "content-type": "text/html" }, body: (async function* () {})(), destroy: () => {} };
+      };
+      const resolver = async () => [{ address: "93.184.216.34", family: 4 as const }];
+      const page = (n: number) => guardedFetch(`https://openlibrary.org/works/OL${n}W`, { resolver, transport, timeoutMs: 60_000 });
+      const all = Promise.all([createOpenLibraryLookup(fetchImpl).find("Book", "A. Author"), page(1), page(2), page(3)]);
+      await vi.advanceTimersByTimeAsync(20_000);
+      await all;
+
+      // Two searches (the lookup tries again when the first finds nothing) and three pages.
+      expect(started).toHaveLength(5);
+      const sorted = [...started].sort((a, b) => a - b);
+      for (let i = 1; i < sorted.length; i++) expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(1000 / OPEN_LIBRARY_PER_SECOND.anonymous);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("allows 1 request a second without a contact and 3 with one, as Open Library's terms set", () => {
+    expect(OPEN_LIBRARY_PER_SECOND).toEqual({ anonymous: 1, identified: 3 });
   });
 });
 
@@ -224,6 +304,113 @@ describe("runGate", () => {
     const types = f.events.map((e) => e.type);
     expect(types.filter((t) => t === "research.verified")).toHaveLength(2);
     expect(types.filter((t) => t === "research.dropped")).toHaveLength(3);
+  });
+
+  it("keeps a book listed without an address by its catalogue entry, and drops one the catalogue does not know", async () => {
+    const lookup: BookLookup = { find: async (title) => (title === "AI Engineering" ? { key: "/works/OL1W", title: "AI Engineering", authors: ["Chip Huyen"], year: 2024 } : null) };
+    const f = gateFixture({}, lookup);
+    const result = await runGate({
+      candidates: [
+        candidate({ url: "", title: "AI Engineering", kind: "book", author: "Chip Huyen" }),
+        candidate({ url: "", title: "No Such Book", kind: "book", author: "N. Body" }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+      now,
+    });
+    expect(result.materials.map((m) => [m.title, m.url, m.catalogued])).toEqual([["AI Engineering", catalogue, true]]);
+    expect(result.dropped).toEqual([expect.objectContaining({ title: "No Such Book", reason: "no matching book on Open Library" })]);
+    expect(f.fetchPage).not.toHaveBeenCalled();
+  });
+
+  it("keeps a book of problems as reading and practice at once", async () => {
+    const lookup: BookLookup = { find: async () => ({ key: "/works/OL2W", title: "Cracking the Coding Interview", authors: ["Gayle Laakmann McDowell"], year: 2015 }) };
+    const f = gateFixture({}, lookup);
+    const result = await runGate({
+      candidates: [
+        candidate({ url: "", title: "Cracking the Coding Interview", kind: "book", author: "Gayle Laakmann McDowell", minutes: 1260, practice: { format: "problem-set", items: 189, perItemMinutes: null, answers: true } }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+      now,
+    });
+    expect(result.dropped).toEqual([]);
+    expect(result.materials[0]).toMatchObject({ kind: "book", catalogued: true, practice: { format: "problem-set", items: 189, answers: true } });
+    expect(result.materials[0].minutes).toBeGreaterThan(0);
+  });
+
+  it("drops a catalogue match that cannot stand in for the book's page with the reason, not as an address", async () => {
+    const authorless: BookLookup = { find: async (title) => ({ key: "/works/OL5W", title, authors: [], year: 2024 }) };
+    const f = gateFixture({ "https://publisher.example.com/patterns": new Error("returned 403") }, authorless);
+    const result = await runGate({
+      candidates: [
+        candidate({ url: "", title: "Coding Interview Patterns", kind: "book", author: "Alex Xu" }),
+        candidate({ url: "https://publisher.example.com/patterns", title: "Coding Interview Patterns II", kind: "book", author: "Alex Xu" }),
+        candidate({ url: "", title: "Anonymous Book", kind: "book" }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+      now,
+    });
+    expect(result.materials).toEqual([]);
+    expect(result.dropped.map((d) => d.reason)).toEqual([
+      "Open Library's match names no author to confirm it",
+      expect.stringMatching(/^.+; Open Library's match names no author to confirm it$/),
+      "Open Library matched the title, but no author was given to confirm it",
+    ]);
+    expect(result.dropped[1].reason).not.toMatch(/https address/);
+  });
+
+  it("keeps a book's own page its site turned away as its link, the catalogue vouching for it, but not one gone, opened as something else, or a shop", async () => {
+    const works = ["Designing Data-Intensive Applications", "Gone Data Book", "Other Data Book", "Shop Data Book"];
+    const lookup: BookLookup = { find: async (title) => ({ key: `/works/OL${works.indexOf(title) + 1}W`, title, authors: ["Martin Kleppmann"], year: 2017 }) };
+    const blocked = "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781098119058/";
+    const f = gateFixture(
+      {
+        [blocked]: new EgressError("status", "HTTP 403"),
+        "https://publisher.example.com/gone": new EgressError("status", "HTTP 404"),
+        "https://publisher.example.com/other": info("https://publisher.example.com/other", "Cookie policy"),
+        "https://www.amazon.com/dp/1449373321": new EgressError("status", "HTTP 403"),
+      },
+      lookup,
+    );
+    const result = await runGate({
+      candidates: [
+        candidate({ url: blocked, title: "Designing Data-Intensive Applications", kind: "book", author: "Martin Kleppmann" }),
+        candidate({ url: "https://publisher.example.com/gone", title: "Gone Data Book", kind: "book", author: "Martin Kleppmann" }),
+        candidate({ url: "https://publisher.example.com/other", title: "Other Data Book", kind: "book", author: "Martin Kleppmann" }),
+        candidate({ url: "https://www.amazon.com/dp/1449373321", title: "Shop Data Book", kind: "book", author: "Martin Kleppmann" }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+      now,
+    });
+    expect(result.materials.map((m) => [m.title, m.url, m.fetchedTitle])).toEqual([
+      ["Designing Data-Intensive Applications", "https://oreilly.com/library/view/designing-data-intensive-applications/9781098119058", "Designing Data-Intensive Applications"],
+      ["Gone Data Book", "https://openlibrary.org/works/OL2W", "Gone Data Book"],
+      ["Other Data Book", "https://openlibrary.org/works/OL3W", "Other Data Book"],
+      ["Shop Data Book", "https://openlibrary.org/works/OL4W", "Shop Data Book"],
+    ]);
   });
 
   it("marks matched books catalogued and chooses no backbone, keeping the arm's order", async () => {
@@ -435,7 +622,7 @@ describe("runGate", () => {
 
     const noAuthor = await run(candidate({ url: book, title: "AI Engineering", kind: "book" }), bookLookup);
     expect(noAuthor.materials).toHaveLength(0);
-    expect(noAuthor.dropped[0].reason).toBe("could not be opened");
+    expect(noAuthor.dropped[0].reason).toBe("could not be opened; Open Library matched the title, but no author was given to confirm it");
 
     const unknown = await run(withAuthor, { find: async () => null });
     expect(unknown.materials).toHaveLength(0);
@@ -570,6 +757,56 @@ describe("sizeMaterial", () => {
     expect(sizeMaterial({ kind: "book", uses: "ch. 1, 7–9", claimedMinutes: 300, bookPages: 400 })).toEqual({ minutes: 300, basis: "estimated" });
     expect(sizeMaterial({ kind: "book", uses: "ch. 1", claimedMinutes: 5000, bookPages: 400 })).toEqual({ minutes: 1000, basis: "estimated" });
     expect(sizeMaterial({ kind: "book", uses: "ch. 1", claimedMinutes: null, bookPages: 400 })).toEqual({ minutes: 1000, basis: "estimated" });
+  });
+});
+
+describe("measuring every page", () => {
+  it("measures a README that is the work", () => {
+    expect(sizeMaterial({ kind: "repo", uses: null, claimedMinutes: 480, words: 11469 })).toEqual({ minutes: 50, basis: "measured" });
+  });
+  it("keeps the estimate for a hub repo", () => {
+    expect(sizeMaterial({ kind: "repo", uses: null, claimedMinutes: 600, words: 900, hub: true })).toEqual({ minutes: 600, basis: "estimated" });
+  });
+  it("measures a paper like an essay", () => {
+    expect(sizeMaterial({ kind: "paper", uses: null, claimedMinutes: 30, words: 6900 }).basis).toBe("measured");
+  });
+  it("keeps a course's estimate whatever its landing page measures", () => {
+    expect(sizeMaterial({ kind: "course", uses: null, claimedMinutes: 1200, words: 2300 })).toEqual({ minutes: 1200, basis: "estimated" });
+  });
+  it("sizes every page", () => {
+    expect(pageMinutesOf({ words: 2300 }, "course")).toBe(10);
+    expect(pageMinutesOf({ durationMinutes: 42 }, "video")).toBe(42);
+    expect(pageMinutesOf({ words: 0 }, "docs")).toBeNull();
+  });
+  it("sizes a book by its catalogue pages, else by its page", () => {
+    expect(pageMinutesOf({ words: 2300 }, "book", 400)).toBe(1000);
+    expect(pageMinutesOf({ words: 2300 }, "book")).toBe(10);
+  });
+
+  it("gives each kept page its length and whether it is a hub, and measures a repo that is the work", async () => {
+    const repo = "https://github.com/acme/handbook";
+    const course = "https://course.example.com/llm";
+    const f = gateFixture({
+      [repo]: info(repo, "acme/handbook", { words: 11469, siteLinks: 2 }),
+      [course]: info(course, "LLM Course", { words: 2300, siteLinks: 9 }),
+    });
+    const result = await runGate({
+      candidates: [
+        candidate({ url: repo, title: "acme/handbook", kind: "repo", minutes: 480 }),
+        candidate({ url: course, title: "LLM Course", kind: "course", minutes: 1200 }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+    });
+    expect(result.materials.map((m) => [m.title, m.minutes, m.minutesBasis, m.hub, m.pageMinutes])).toEqual([
+      ["acme/handbook", 50, "measured", false, 50],
+      ["LLM Course", 1200, "estimated", true, 10],
+    ]);
   });
 });
 

@@ -4,6 +4,7 @@ import {
   dropBreaches,
   levelChecks,
   noSourceFacts,
+  plainUnitText,
   resolveCoverRefs,
   resolveMaterialRefs,
   resolvePracticeCovers,
@@ -333,6 +334,9 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       facts.push(...dropBreaches(final, breaches));
       if (leaf) sizeChapterRows(final, ctx.materials);
     }
+    // After the checks, which read notes as written: ids the model copied from its prompt are put in words for the learner.
+    const plain = final.reduce((sum, node) => sum + plainUnitText(node, ctx.materials, aliases), 0);
+    if (plain > 0) facts.push(`ids put in words in ${plain} field${plain === 1 ? "" : "s"}`);
     return facts;
   };
 
@@ -343,6 +347,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
       const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split);
+      if (aliases) plainUnitText(node, ctx.materials, aliases);
       nodes.push(node);
       yield { type: "node", node };
     } else {
@@ -542,7 +547,7 @@ export interface StreamResearchedDraftInput extends PlanDraftRequest {
   deadline?: number;
   log?: GenerationLogContext;
   /** Tests and the eval inject these; the app uses the defaults. */
-  research?: Pick<ResearchMaterialsInput, "fetcher" | "books" | "caps" | "chapters" | "items">;
+  research?: Pick<ResearchMaterialsInput, "fetcher" | "books" | "caps" | "structure">;
 }
 
 /**
@@ -555,6 +560,7 @@ export async function* streamResearchedPlanDraft(input: StreamResearchedDraftInp
     brief: { topic: input.topic, instructions: input.instructions, weeks: input.weeks, daysPerWeek: input.daysPerWeek, hoursPerWeek: input.hoursPerWeek, sources: input.materials },
     arm: input.arm,
     signal: input.signal,
+    deadline: input.deadline,
     log: input.log,
     ...input.research,
   });

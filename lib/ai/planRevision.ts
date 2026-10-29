@@ -16,7 +16,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import { aliasMaterials, dropBreaches, keepCoverTiers, keepPracticeCovers, resolveCoverRefs, resolveMaterialRefs, resolvePracticeCovers, resolvePracticeRefs, treeChecks, type MaterialAliases } from "@/lib/materials";
+import { aliasMaterials, dropBreaches, keepCoverTiers, keepPracticeCovers, plainUnitText, resolveCoverRefs, resolveMaterialRefs, resolvePracticeCovers, resolvePracticeRefs, treeChecks, type MaterialAliases } from "@/lib/materials";
 import type { CoverRefDraft, MaterialRefDraft, PracticeCover, PracticeCoverDraft, PracticeRef, PracticeRefDraft } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 import { revisedTreeSchema, type RevisedTree } from "@/lib/schemas/plan";
@@ -186,7 +186,10 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
     // Practice rows unchanged from the saved tree keep the item and reserved-source rules as facts; new or changed ones breach.
     const checks = treeChecks(revised, input.materials, { granularity: input.granularity, hoursPerWeek: input.hoursPerWeek, daysPerWeek: input.daysPerWeek, split: input.split, original: tree });
     const dropped = dropBreaches(checks.nodes, checks.breaches);
-    return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...dropped];
+    let plain = 0;
+    walk(revised, (node) => void (plain += plainUnitText(node, input.materials, aliases)));
+    const words = plain > 0 ? [`ids put in words in ${plain} field${plain === 1 ? "" : "s"}`] : [];
+    return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...dropped, ...words];
   };
   const { costUsd } = await loggedGenerateObject(
     {

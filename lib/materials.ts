@@ -37,22 +37,24 @@ import {
   type MaterialKind,
 } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
+import { shortTitle } from "@/lib/shortTitle";
 
 /**
  * Prompts always call materials `M1…Mn` in list order, whatever their real ids are (short ids while drafting, uuids
  * once saved), so the model never has to echo a uuid. A book with a chapter list also gets one alias per chapter,
- * `M1.3` for the third chapter in its list. These map between the two.
+ * `M1.3` for the third chapter in its list; a practice source with an item list gets one per item, `M4.12`, or `M4.i12`
+ * when the source also has chapters (so `M4.3` is never both). These map between the two.
  */
 export interface ResolvedAlias {
   id: string;
   /** 1-based position in the material's chapter list; null for the whole resource. */
   chapter: number | null;
-  /** 1-based position in a practice source's item list; set only by an item alias (`M4.12`), absent otherwise. */
+  /** 1-based position in a practice source's item list; set only by an item alias (`M4.12`, `M4.i12`), absent otherwise. */
   item?: number;
 }
 
 export interface MaterialAliases {
-  /** `M1`, `M1.3` for a chapter (a number), `M4.12` for an item (`{ item: 12 }`). */
+  /** `M1`, `M1.3` for a chapter (a number), `M4.12` for an item (`{ item: 12 }`), `M4.i12` for an item of a source that also has chapters. */
   alias(id: string, part?: number | null | { item: number }): string | undefined;
   resolve(alias: string): ResolvedAlias | undefined;
   /** How many chapters the material's list has; 0 without a list. */
@@ -65,7 +67,7 @@ export interface MaterialAliases {
   item(id: string, position: number): PracticeItem | undefined;
 }
 
-const ALIAS_RE = /^\[?\s*(m\d+)(?:\.(\d+))?\s*\]?$/i;
+const ALIAS_RE = /^\[?\s*(m\d+)(?:\.(i)?(\d+))?\s*\]?$/i;
 
 export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practice">[]): MaterialAliases {
   const toAlias = new Map<string, string>();
@@ -87,18 +89,23 @@ export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practic
     alias: (id, part) => {
       const base = toAlias.get(id);
       if (base === undefined) return undefined;
-      const n = typeof part === "object" && part !== null ? part.item : part;
-      return n ? `${base}.${n}` : base;
+      const item = typeof part === "object" && part !== null;
+      const n = item ? part.item : part;
+      if (!item && !n) return base;
+      // A source with chapters has `M4.3` for its third chapter, so its items take an i.
+      return item && (counts.get(id) ?? 0) > 0 ? `${base}.i${n}` : `${base}.${n}`;
     },
     resolve: (alias) => {
       const m = alias.match(ALIAS_RE);
       if (!m) return undefined;
       const id = fromAlias.get(m[1].toLowerCase());
       if (!id) return undefined;
-      if (m[2] === undefined) return { id, chapter: null };
-      // A suffix names a chapter of a book with a chapter list, or an item of a practice source with an item list.
-      const n = Number(m[2]);
-      if (n >= 1 && n <= (counts.get(id) ?? 0)) return { id, chapter: n };
+      if (m[3] === undefined) return { id, chapter: null };
+      // A suffix names a chapter of a book with a chapter list, or an item of a practice source with an item list. With
+      // both lists, a bare number is a chapter and an item needs the i; with an item list only, either form is an item.
+      const n = Number(m[3]);
+      const chapters = counts.get(id) ?? 0;
+      if (m[2] === undefined && chapters > 0) return n >= 1 && n <= chapters ? { id, chapter: n } : undefined;
       if (n >= 1 && n <= (itemCounts.get(id) ?? 0)) return { id, chapter: null, item: n };
       return undefined;
     },
@@ -130,6 +137,62 @@ export function formatAliases(refs: ResolvedAlias[], aliases: MaterialAliases): 
     })
     .filter((s): s is string => s !== null)
     .join(", ");
+}
+
+/** An id as the model sees it in prose, or a run of one resource's chapters or items ("M9.1–M9.10", "M4.3 to M4.6"). */
+const ALIAS_IN_TEXT = /\bM(\d+)(?:\.(i?)(\d+))?(?:\s*(?:[-–—]|to)\s*M\1\.(i?)(\d+))?\b/g;
+
+type NamedMaterial = Pick<Material, "id" | "title" | "toc" | "practice">;
+
+/**
+ * Text the learner reads with the list's ids put in words. The model sees its materials as `M3` and `M3.4` and copies
+ * them into notes and summaries ("parts M9.1–M9.10"). A resource reads as its short title, a chapter as "ch. 4" by the
+ * work's own number, an item as its title and a run of items as "items 1–4"; a chapter or item of `own` (the row's own
+ * resource) leaves the resource's name out. Anything that is not an id on the list stays as written.
+ */
+export function plainAliases(text: string, materials: NamedMaterial[], aliases: MaterialAliases, own?: string | null): string {
+  return text.replace(ALIAS_IN_TEXT, (match, base: string, i1: string | undefined, n1: string | undefined, i2: string | undefined, n2: string | undefined) => {
+    const first = aliases.resolve(`M${base}${n1 ? `.${i1 ?? ""}${n1}` : ""}`);
+    const m = first && materials.find((x) => x.id === first.id);
+    if (!first || !m) return match;
+    const name = shortTitle(m.title);
+    if (!n1) return name;
+    const last = n2 ? aliases.resolve(`M${base}.${i2 ?? ""}${n2}`) : first;
+    if (!last || (first.item === undefined) !== (last.item === undefined)) return match;
+    const mine = first.id === own;
+    if (first.item !== undefined) {
+      if (last.item === first.item) {
+        const title = aliases.item(first.id, first.item)?.title ?? `item ${first.item}`;
+        return mine ? title : `${title} (${name})`;
+      }
+      return `${mine ? "" : `${name} `}items ${first.item}–${last.item}`;
+    }
+    const number = (c: number) => m.toc?.chapters[c - 1]?.n ?? c;
+    const chapters = last.chapter === first.chapter ? `ch. ${number(first.chapter!)}` : `ch. ${number(first.chapter!)}–${number(last.chapter!)}`;
+    return mine ? chapters : `${name} ${chapters}`;
+  });
+}
+
+/** Puts the list's ids in words in everything a unit shows the learner (see `plainAliases`); returns how many fields changed. */
+export function plainUnitText(node: PlanNode, materials: NamedMaterial[], aliases: MaterialAliases): number {
+  let changed = 0;
+  const plain = (text: string, own?: string | null): string => {
+    const out = plainAliases(text, materials, aliases, own);
+    if (out !== text) changed++;
+    return out;
+  };
+  node.title = plain(node.title);
+  node.summary = plain(node.summary);
+  for (const r of [...(node.covers ?? []), ...(node.materials ?? [])]) if (r.note) r.note = plain(r.note, r.id);
+  for (const r of node.practice ?? []) {
+    r.task = plain(r.task, r.id);
+    r.done = plain(r.done, r.id);
+  }
+  for (const r of node.practiceCovers ?? []) {
+    if (r.note) r.note = plain(r.note, r.id);
+    if (r.task) r.task = plain(r.task, r.id);
+  }
+  return changed;
 }
 
 /** Resolves what the model wrote to real ids and chapters. Unknown ids are dropped and returned so the caller can report them. */
@@ -187,16 +250,21 @@ function rowName(format: string, task: string, item?: string): string {
   return `${label}${item ? ` ${item}` : ""} "${t.length > 60 ? `${t.slice(0, 59)}…` : t}"`;
 }
 
-/** "M2.4", "M2.15–M2.16, M2.20": positions of one list under its alias. */
-export function itemAliases(base: string, positions: Iterable<number>): string {
+/** One item's alias; a source the aliases do not know is named by its own id, as everywhere else. */
+function itemName(aliases: MaterialAliases, id: string, position: number): string {
+  return aliases.alias(id, { item: position }) ?? `${id}.${position}`;
+}
+
+/** "M2.4", "M2.15–M2.16, M2.20", "M2.i4" on a source with chapters: positions of one list under its alias. */
+export function itemAliases(aliases: MaterialAliases, id: string, positions: Iterable<number>): string {
   return numberRuns(positions)
-    .map(([a, b]) => (a === b ? `${base}.${a}` : `${base}.${a}–${base}.${b}`))
+    .map(([a, b]) => (a === b ? itemName(aliases, id, a) : `${itemName(aliases, id, a)}–${itemName(aliases, id, b)}`))
     .join(", ");
 }
 
 /** "M2 items 1–9", "M2.7" for a run of one: a reservation's run as prompts and facts name it. */
-export function itemRun(base: string, from: number, to: number): string {
-  return from === to ? `${base}.${from}` : `${base} items ${from}–${to}`;
+export function itemRun(aliases: MaterialAliases, id: string, from: number, to: number): string {
+  return from === to ? itemName(aliases, id, from) : `${aliases.alias(id) ?? id} items ${from}–${to}`;
 }
 
 export interface ResolvePracticeOptions {
@@ -327,8 +395,7 @@ export function resolvePracticeCovers(
       }
       const [from, to] = [Math.min(...given), Math.max(...given)];
       if (from < 1 || to > size) {
-        const base = aliases.alias(resolved.id)!;
-        unknown.push(`${base}.${from}–${base}.${to}`);
+        unknown.push(`${itemName(aliases, resolved.id, from)}–${itemName(aliases, resolved.id, to)}`);
         continue;
       }
       cover.itemFrom = from;
@@ -682,6 +749,8 @@ function formatChapters(chapters: number[]): string {
  * `practice-overlap`: an item another unit already did, or one two units of a level take; a run two headings reserve.
  * `practice-generated`: a row the model wrote where the registry forbids it (a format never written, or recall not from
  * the unit's own reading).
+ * `budget-miss`: at the top level, a material whose units all have minutes and whose reserved units add up to more or
+ * less than its budget, past `budgetMissSlack`.
  */
 export type BreachKind =
   | "outside"
@@ -692,7 +761,8 @@ export type BreachKind =
   | "unread-reservation"
   | "practice-outside"
   | "practice-overlap"
-  | "practice-generated";
+  | "practice-generated"
+  | "budget-miss";
 
 /** The breaches a drop can cure: the row goes, the unit keeps the rest. Over-budget and unread reservations stay facts. */
 export const DROPPABLE: ReadonlySet<BreachKind> = new Set<BreachKind>(["outside", "overlap", "whole-book", "review-before-read", "practice-outside", "practice-overlap", "practice-generated"]);
@@ -722,7 +792,7 @@ export interface LevelChecks {
   breaches: Breach[];
 }
 
-type CheckMaterial = Pick<Material, "id" | "toc" | "minutes" | "practice"> & { backbone?: boolean; kind?: Material["kind"] };
+type CheckMaterial = Pick<Material, "id" | "toc" | "minutes" | "practice"> & { backbone?: boolean; kind?: Material["kind"]; minutesBasis?: Material["minutesBasis"] };
 
 export interface LevelCheckInput {
   root: PlanNode;
@@ -796,12 +866,20 @@ export const SHARE_TOLERANCE = 1.25;
 /** Minutes a leaf's total or part may run past its tolerance too, so a short budget is not held to the minute. */
 export const BUDGET_SLACK = 10;
 
+/** How far a material's reserved units may fall from its budget: the larger of 20% and 15 minutes. Code only, never a prompt. */
+export const BUDGET_MISS_SHARE = 0.2;
+export const BUDGET_MISS_MINUTES = 15;
+
+export function budgetMissSlack(budget: number): number {
+  return Math.max(budget * BUDGET_MISS_SHARE, BUDGET_MISS_MINUTES);
+}
+
 /** The most a leaf's budget of `minutes`, or one part of it, holds before the checks call it over. */
 export function budgetCeiling(minutes: number): number {
   return minutes * SHARE_TOLERANCE + BUDGET_SLACK;
 }
 
-type RefLike = { id: string; chapter?: number | null; activity?: RefActivity; note?: string | null };
+type RefLike = { id: string; chapter?: number | null; activity?: RefActivity; note?: string | null; minutes?: number | null };
 
 const isRead = (r: RefLike) => (r.activity ?? "read") === "read";
 const toResolved = (r: RefLike): ResolvedAlias => ({ id: r.id, chapter: r.chapter ?? null });
@@ -829,19 +907,42 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const byTopic = (r: RefLike) => !r.chapter && !listed(r.id) && byId.get(r.id)?.kind === "book";
   // A row saved before chapters were data: the whole book, with the chapters in its note. It stands as written.
   const legacy = (r: RefLike) => !r.chapter && listed(r.id) && parseChapters(r.note).length > 0;
-  /** The minutes a reservation is known to take: a chapter's size, a legacy note's chapters, a sized whole resource. */
+  // As drafted: a pick with no source is reading here too, as the leaves' budgets have it (`practiceBudgets`), and an
+  // all-reading pick is all of the time whatever share it shows.
+  const drafted = input.split ? draftedSplit(input.split, input.materials) : null;
+  const share = drafted && isAllReading(drafted) ? 1 : (readingShareOf(drafted) ?? MUST_SHARE);
+  /** A heading's reading budget in minutes: its weeks of the learner's time, at the plan's reading share. */
+  const readingBudget = (node: PlanNode) => budgetFor(weeksOf(input.root, node, input.daysPerWeek), input.hoursPerWeek) * 60 * share;
+  // Headings: a source without units, longer than one unit's reading, may span consecutive units of this level, each
+  // reserving a part of it. These are its holders, by position; any other repeat is an overlap.
+  const spans = new Map<string, number[]>();
+  if (!input.leaves) {
+    const holders = new Map<string, { id: string; at: number[] }>();
+    input.nodes.forEach((n, i) => {
+      for (const r of refsOf(n).filter(isRead)) {
+        if (r.chapter || listed(r.id) || byTopic(r)) continue;
+        const entry = holders.get(refKey(r)) ?? { id: r.id, at: [] };
+        if (entry.at.at(-1) !== i) entry.at.push(i);
+        holders.set(refKey(r), entry);
+      }
+    });
+    for (const [key, { id, at }] of holders) {
+      const minutes = byId.get(id)?.minutes ?? null;
+      const consecutive = at.every((i, k) => i === at[0] + k);
+      if (at.length > 1 && minutes !== null && consecutive && minutes > readingBudget(input.nodes[at[0]])) spans.set(key, at);
+    }
+  }
+  /** The minutes a reservation is known to take: a chapter's size, a legacy note's chapters, a sized whole resource or its share of a span. */
   const knownMinutes = (r: RefLike): number => {
     const m = byId.get(r.id);
     if (r.chapter) return chapterAt(m?.toc, r.chapter)?.minutes ?? 0;
     if (byTopic(r)) return 0;
     if (legacy(r)) return parseChapters(r.note).reduce((sum, n) => sum + (m?.toc?.chapters.find((c) => c.n === n)?.minutes ?? 0), 0);
     if (listed(r.id)) return 0;
+    const span = spans.get(refKey(r));
+    if (span) return Math.round((m?.minutes ?? 0) / span.length);
     return m?.minutes ?? 0;
   };
-  // As drafted: a pick with no source is reading here too, as the leaves' budgets have it (`practiceBudgets`), and an
-  // all-reading pick is all of the time whatever share it shows.
-  const drafted = input.split ? draftedSplit(input.split, input.materials) : null;
-  const share = drafted && isAllReading(drafted) ? 1 : (readingShareOf(drafted) ?? MUST_SHARE);
   const leafBudget = (node: PlanNode) => budgetMinutes(node, input.hoursPerWeek, daysInWeekOf(input.root, node, input.daysPerWeek));
   const verb = input.leaves ? "reads" : "reserves";
   const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
@@ -850,8 +951,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const rowLabel = (row: PracticeRef) => rowName(row.format, row.task, row.id !== null && row.itemFrom ? aliases.alias(row.id, { item: row.itemFrom }) : undefined);
   /** "Problems M2 items 1–9" for a run, "Problems M3" for a source without one. Sourced reservations only. */
   const coverLabel = (c: PracticeCover) => {
-    const base = aliases.alias(c.id!) ?? c.id!;
-    return `${PRACTICE_REGISTRY[c.format].label} ${c.itemFrom && c.itemTo ? itemRun(base, c.itemFrom, c.itemTo) : base}`;
+    return `${PRACTICE_REGISTRY[c.format].label} ${c.itemFrom && c.itemTo ? itemRun(aliases, c.id!, c.itemFrom, c.itemTo) : (aliases.alias(c.id!) ?? c.id!)}`;
   };
   const rowBreach = (kind: BreachKind, index: number, unit: string, row: PracticeRef, text: string): Breach => ({
     kind,
@@ -902,11 +1002,12 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     if (n.id === input.root.id || skip.has(n.id)) return;
     for (const r of refsOf(n).filter(isRead)) if (!byTopic(r) && !inReservation(r) && !taken.has(refKey(r))) taken.set(refKey(r), label(n));
   });
-  // Siblings: a heading holds a resource exclusively; consecutive leaves may share one that is too long for one of them.
+  // Siblings: a heading holds a resource exclusively, unless it spans (`spans`); consecutive leaves may share one that
+  // is too long for one of them.
   const siblingLast = new Map<string, number>();
   const sizeOf = (r: RefLike): number | null => (r.chapter ? (chapterAt(byId.get(r.id)?.toc, r.chapter)?.minutes ?? null) : (byId.get(r.id)?.minutes ?? null));
   const mayShare = (node: PlanNode, r: RefLike, index: number): boolean => {
-    if (!input.leaves) return false;
+    if (!input.leaves) return spans.has(refKey(r));
     const last = siblingLast.get(refKey(r));
     if (last === undefined || last !== index - 1) return false;
     const size = sizeOf(r);
@@ -1070,7 +1171,9 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     const refs = refsOf(node);
     const reads = refs.filter(isRead);
     const whole = reads.filter((r) => !r.chapter && listed(r.id) && !legacy(r));
-    if (whole.length > 0) breach("whole-book", index, unit, whole, `${unit} refers to ${names(whole)} as a whole; use its chapters`);
+    // A book is read by chapters; any other material with units, by its units.
+    const parts = whole.every((r) => byId.get(r.id)?.kind === "book") ? "chapters" : "units";
+    if (whole.length > 0) breach("whole-book", index, unit, whole, `${unit} refers to ${names(whole)} as a whole; use its ${parts}`);
     const chaptered = reads.filter((r) => !whole.includes(r));
     if (hasReservation) {
       const outside = chaptered.filter((r) => !reservedKeys.has(refKey(r)) && !reservedWhole.has(r.id));
@@ -1139,7 +1242,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       if (node.level !== "day") weekRule([node], index, unit, budget);
     } else {
       const known = reads.reduce((sum, r) => sum + knownMinutes(r), 0);
-      const budget = budgetFor(weeksOf(input.root, node, input.daysPerWeek), input.hoursPerWeek) * 60 * share;
+      const budget = readingBudget(node);
       if (known > budget * SHARE_TOLERANCE) {
         breach("over-budget", index, unit, [], `${unit} reserves about ${known} min of reading against a budget of about ${Math.round(budget)} min`);
       }
@@ -1175,9 +1278,8 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
         // only that, so one edge off by one does not empty this unit or the next. Nothing free, and the run goes.
         const free = own.filter((n) => !outside.includes(n) && !holderOf(n));
         const keep = numberRuns(free).reduce<[number, number] | null>((best, r) => (!best || r[1] - r[0] > best[1] - best[0] ? r : best), null);
-        const base = aliases.alias(c.id!) ?? c.id!;
         const text =
-          outside.length > 0 ? notReserved() : `${unit} reserves ${name}, but ${[...held].map(([holder, ns]) => `${holder} holds ${itemAliases(base, ns)}`).join(" and ")}`;
+          outside.length > 0 ? notReserved() : `${unit} reserves ${name}, but ${[...held].map(([holder, ns]) => `${holder} holds ${itemAliases(aliases, c.id!, ns)}`).join(" and ")}`;
         const b = coverBreach(outside.length > 0 ? "practice-outside" : "practice-overlap", index, unit, c, text);
         if (keep) b.practiceCovers![0].keep = { itemFrom: keep[0], itemTo: keep[1] };
         newRule(b, node, c);
@@ -1201,6 +1303,28 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     if (unread.length > 0) {
       const unit = label(parentNode);
       breach("unread-reservation", -1, unit, unread, `${unit} reserved ${names(unread)}, which no ${input.nodes[0].level} reads`);
+    }
+  }
+
+  // The top level reserves each material whose units are all sized toward its budget: its units' minutes at headings,
+  // its rows' at leaves. An unsized unit would count nothing, so a list with one is not held to its budget. No row can
+  // be dropped to cure a miss, so after the retry it stays a fact. A book whose size is an estimate is not held either:
+  // its chapters' minutes are shares of that estimate, which never cap its budget (`budgetCap`), so no set of chapters
+  // need add up to it.
+  if (input.top) {
+    for (const m of input.materials) {
+      const budget = m.minutes;
+      if (!listed(m.id) || budget === null || budget === undefined || !m.toc!.chapters.every((c) => c.minutes !== null)) continue;
+      if (m.kind === "book" && m.minutesBasis !== "measured") continue;
+      const reads = input.nodes.flatMap((n) => refsOf(n).filter((r) => isRead(r) && r.id === m.id));
+      const reserved = Math.round(reads.reduce((sum, r) => sum + (input.leaves && typeof r.minutes === "number" ? r.minutes : knownMinutes(r)), 0));
+      if (Math.abs(reserved - budget) <= budgetMissSlack(budget)) continue;
+      const alias = aliases.alias(m.id) ?? m.id;
+      const text =
+        reads.length === 0
+          ? `${alias} has a budget of about ${budget} min but none of its units is reserved`
+          : `${alias}'s units reserved add up to about ${reserved} min against its budget of about ${budget} min`;
+      breach("budget-miss", -1, "The plan", [], text);
     }
   }
 
@@ -1275,7 +1399,7 @@ function itemListFacts(input: LevelCheckInput, aliases: MaterialAliases, parentN
       for (const [k, { id, positions }] of bySource(runsOf(node))) {
         const [lo, hi] = [Math.min(...positions), Math.max(...positions)];
         const far = furthest.get(k) ?? 0;
-        if (lo < far) facts.push(`${itemRun(base(id), lo, hi)} after item ${far} (${label(node)})`);
+        if (lo < far) facts.push(`${itemRun(aliases, id, lo, hi)} after item ${far} (${label(node)})`);
         furthest.set(k, Math.max(far, hi));
       }
     }

@@ -95,13 +95,19 @@ describe("sizes in the research card and list", () => {
   });
 });
 
-describe("reduceResearch: item lists", () => {
-  it("logs the items line for a found list and for none", () => {
-    const found = reduceResearch(initialResearch(0), { type: "research.items", id: "M3", title: "NeetCode 150", items: 150, groups: 18, url: "https://raw.githubusercontent.com/x/y/main/list.json" }, new Set());
-    expect(found.log.at(-1)).toMatchObject({ kind: "items", text: "Items of “NeetCode 150”: 150 in 18 groups, from raw.githubusercontent.com" });
-    const flat = reduceResearch(initialResearch(0), { type: "research.items", id: "M3", title: "Vimtutor", items: 7, groups: 0, url: "https://example.org/steps" }, new Set());
-    expect(flat.log.at(-1)!.text).toBe("Items of “Vimtutor”: 7, from example.org");
-    const none = reduceResearch(initialResearch(0), { type: "research.items", id: "M3", title: "NeetCode 150", items: 0, groups: 0 }, new Set());
-    expect(none.log.at(-1)!.text).toBe("No item list found for “NeetCode 150”; it will be worked by count.");
+describe("reduceResearch: structure", () => {
+  const line = (event: Omit<Extract<ResearchEvent, { type: "research.structure" }>, "type" | "id">) =>
+    reduceResearch(initialResearch(0), { type: "research.structure", id: "M3", ...event }, new Set()).log.at(-1)!;
+
+  it("says what each finder found, or that the source stays whole", () => {
+    expect(line({ title: "system-design-primer", units: 30, items: 0, url: "https://github.com/donnemartin/system-design-primer" })).toMatchObject({
+      kind: "structure",
+      text: "Found 30 sections in “system-design-primer”",
+    });
+    expect(line({ title: "NeetCode 150", units: 0, items: 150, url: "https://raw.githubusercontent.com/x/y/main/list.json" }).text).toBe("Found 150 items in “NeetCode 150”");
+    expect(line({ title: "CS:APP labs", units: 30, items: 12 }).text).toBe("Found 30 sections and 12 items in “CS:APP labs”");
+    expect(line({ title: "One Pager", units: 1, items: 1 }).text).toBe("Found 1 section and 1 item in “One Pager”");
+    expect(line({ title: "Blog", units: 0, items: 0 }).text).toBe("No parts found in “Blog”; it stays whole.");
+    expect(line({ title: "Blog", units: 0, items: 0, refused: "units refused: 4 of 22 titles not on the page" }).text).toBe("No parts found in “Blog”; it stays whole.");
   });
 });

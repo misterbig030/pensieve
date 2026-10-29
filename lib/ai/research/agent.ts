@@ -15,7 +15,7 @@ import {
   type SearchProvider,
   type SourceFetcher,
 } from "./tools";
-import { FOUND_BY, MAX_CANDIDATES, candidateListSchema, canonicalUrl, capCandidates, normalizeCoverage, type Candidate, type CandidateList, type FoundBy, type LearnerNote } from "./verify";
+import { FOUND_BY, MAX_CANDIDATES, candidateListSchema, canonicalUrl, capCandidates, isShopListing, kindProblem, mainTitle, normalizeCoverage, titleTokens, turnedAway, type Candidate, type CandidateList, type FoundBy, type LearnerNote } from "./verify";
 
 /** What research knows about the learner: the brief, unchanged. */
 export interface ResearchBrief {
@@ -161,9 +161,9 @@ export function buildResearchInstructions(
 /** The `practice` field's guidance for candidates and the learner's notes: which formats, and how to fill it. */
 function practiceFieldLines(): { learner: string; candidate: string; coverage: string } {
   const formats = PRACTICE_FORMATS.map((f) => `${f} (${PRACTICE_REGISTRY[f].label})`).join(", ");
-  const fill = `format: the id of the kind it serves (${formats}). items: the problems, questions, labs or steps the page says it holds, null when it does not say. perItemMinutes: only when the page states a time per item, else null. answers: true only when the source gives solutions, an answer key, worked solutions or a rubric.`;
+  const fill = `format: the id of the kind it serves (${formats}). items: the problems, questions, labs or steps the page says it holds, null when it does not say. perItemMinutes: only when the page states a time per item, else null. answers: true when the notes show the source has solutions, an answer key, worked solutions or a rubric, on its own page or on one they name for it (a walkthrough of every problem, a solutions repository). A page that could not be read, or read as empty, is no evidence that it has none: judge it from what else the notes say about it.`;
   return {
-    candidate: `- practice: set when the source is practice to do, alone or besides reading; leave it out for reading only. ${fill} A practice source's minutes are null unless the plan would also read it. A source that is only practice, for a format that needs answers, is thrown away unless answers is true.`,
+    candidate: `- practice: set when the source is practice to do, alone or besides reading; leave it out for reading only. ${fill} A practice source's minutes are null unless the plan would also read it. A source that is only practice, for a format that needs answers, is thrown away unless answers is true. A book of problems with their solutions (an interview-problems book, for one) is practice besides reading: give it practice too, with the number of problems when the notes give one, and keep its minutes.`,
     learner: ` A learner source that is practice to do (a problem list, a question bank, a lab) also gets "practice", filled the same way (${fill}); its minutes are null unless the plan would also read it. A wrong answers: false removes the tag, so set it false only when the page plainly has no answers.`,
     coverage: ` For practice, a kind of practice the topic needs that nothing serves goes in "open" as "practice: <label>" (for example "practice: ${PRACTICE_REGISTRY.mock.label}").`,
   };
@@ -182,7 +182,7 @@ export function buildFinalPrompt(brief: ResearchBrief, notes: string, options: {
       `"learner": one entry per source the learner provided, in their order, with its url exactly as given, its kind and one line on what it is.${practice.learner}`,
       `"candidates": every credible source the notes found, from every direction, once each: pages read, and sources a researcher's notes name or recommend; a search result seen only as a snippet only when the notes recommend it. List at most ${MAX_CANDIDATES}, keeping the best-evidenced if there are more. Choosing what the plan uses happens later, with sizes in hand, so a source left out here is lost. List every book the notes recommend, under its title as published and its author. Never invent one.`,
       `- url: the material's own page, preferably one from the notes. title: for anything but a book, exactly as that page gives it; a candidate whose page is titled something else is thrown away.`,
-      `- a book is checked against a library catalogue instead, by title and author: give its title as published (not its web page's title) and always its author. pageTitle: the title the book's web page shows, when the notes give one; null for anything else. Its url is the publisher's or the author's page for that one book, read or not, and never a shop listing (Amazon or another retailer).`,
+      `- a book is checked against a library catalogue instead, by title and author: give its title as published (not its web page's title) and always its author. pageTitle: the title the book's web page shows, when the notes give one; null for anything else. Its url is the publisher's or the author's page for that one book when the notes give one, and never a shop listing (Amazon or another retailer), even when that page could not be read. A book the notes name without such a page is still listed, with url empty: the catalogue vouches for it.`,
       `- kind: book, course, video, docs, essay, paper, repo, tool or note.`,
       `- recommendedBy: URLs from the notes of pages that recommend it; empty when none. A page that only recommends books (a "best books" list or a reading list) is not a material: put it in those books' recommendedBy and leave it out of the list.`,
       `- why: one line on why this material and what it covers that the others don't.`,
@@ -397,6 +397,58 @@ export function readButNotListed(reads: ArmRead[], candidates: { url: string; re
   return [...left.values()].map((e) => `read but not listed: ${e.url} (${e.directions.join(", ")})`);
 }
 
+/** A title the notes set in italics (`*Title*`, not bold): how the book researcher's notes name books. */
+const ITALIC_TITLE = /(?<![*\w])\*(?![*\s])([^*\n]+?)(?<!\s)\*(?![*\w])/g;
+
+/**
+ * Books the book researcher's notes name that the list leaves out, by the title the notes give. Such a book never
+ * reaches the catalogue check, nor the allocation's choice of backbone. A listed book counts when its title, its
+ * page's title or the named one, each up to its subtitle, contains the other.
+ */
+export function namedButNotListed(found: FoundSource[], candidates: Pick<Candidate, "kind" | "title" | "pageTitle">[]): string[] {
+  const words = (title: string) => ` ${titleTokens(mainTitle(title)).join(" ")} `;
+  const listed = candidates.filter((c) => c.kind === "book").flatMap((c) => [c.title, c.pageTitle ?? ""].filter(Boolean).map(words));
+  const named = new Map<string, string>();
+  for (const { direction, notes } of found) {
+    if (direction !== "backbone") continue;
+    for (const remark of notes.remarks) {
+      for (const [, title] of remark.matchAll(ITALIC_TITLE)) {
+        const key = words(title);
+        // A title starts with a capital and runs to two words at least: "*cannot*" is emphasis.
+        if (!/^[\p{Lu}\p{N}]/u.test(title) || key.trim().split(" ").length < 2 || named.has(key)) continue;
+        named.set(key, title.trim());
+      }
+    }
+  }
+  return [...named]
+    .filter(([key]) => !listed.some((l) => l.includes(key) || key.includes(l)))
+    .map(([, title]) => `named in the book notes but not listed: ${title}`);
+}
+
+/**
+ * A book listed without an address takes its own page from the notes when a researcher tried it and the site turned the
+ * reader away (a 401, 403 or 429, or a timeout): the page the model left out only because it could not be read. It
+ * must be an https address with a path segment that is the book's title
+ * ("/library/view/designing-data-intensive-applications/…"), off any shop and any host a book is unlikely on. A page
+ * that could be read is the model's to list, so one it left out stays out, however its path reads. Anything else is
+ * returned as it is.
+ */
+export function bookPageFromNotes(candidate: Candidate, found: FoundSource[]): Candidate {
+  if (candidate.kind !== "book" || candidate.url.trim()) return candidate;
+  const slug = mainTitle(candidate.title).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  if (!slug.includes("-")) return candidate;
+  const refused = found.flatMap(({ notes }) => notes.fetches.filter((f) => !f.ok && turnedAway(f.reason ?? "")).map((f) => f.url));
+  const own = refused.find((url) => {
+    if (!url.toLowerCase().startsWith("https://") || isShopListing(url) || kindProblem("book", url)) return false;
+    try {
+      return new URL(url).pathname.toLowerCase().split("/").includes(slug);
+    } catch {
+      return false;
+    }
+  });
+  return own ? { ...candidate, url: own } : candidate;
+}
+
 /**
  * A page the book researcher alone carries, listed as anything but a book, is one it read for its recommendations (a
  * "best books" list), not a material: the books' `recommendedBy` holds it. A page another direction found too, or a
@@ -469,6 +521,11 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
           check: (object) => [
             ...(object.candidates.length > MAX_CANDIDATES ? [`list cut to ${MAX_CANDIDATES} of ${object.candidates.length}`] : []),
             ...readButNotListed(readsOf(found), capCandidates(object.candidates), [...object.learner, ...learnerUrls.map((url) => ({ url }))]),
+            ...namedButNotListed(found, capCandidates(object.candidates)),
+            ...capCandidates(object.candidates)
+              .map((c) => [c, bookPageFromNotes(c, found)] as const)
+              .filter(([c, paged]) => paged !== c)
+              .map(([c, paged]) => `book page from the notes: ${c.title} → ${paged.url}`),
             ...capCandidates(object.candidates)
               .map((c) => deriveFoundBy(c, found, learnerUrls))
               .filter(isBookListPage)
@@ -478,7 +535,7 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
         { ...input.log, caller: "research" },
       );
       costUsd += cost;
-      const candidates = capCandidates(object.candidates).map((c) => deriveFoundBy(c, found, learnerUrls));
+      const candidates = capCandidates(object.candidates).map((c) => deriveFoundBy(bookPageFromNotes(c, found), found, learnerUrls));
       list = { ...object, candidates: candidates.filter((c) => !isBookListPage(c)) };
       break;
     } catch (error) {

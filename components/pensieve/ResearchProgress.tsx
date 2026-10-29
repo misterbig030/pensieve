@@ -103,7 +103,7 @@ const LOG_LABEL: Record<ResearchLogEntry["kind"], string> = {
   dropped: "Dropped",
   failed: "Couldn't open",
   chapters: "Chapters",
-  items: "Items",
+  structure: "Structure",
 };
 
 function LogLine({ entry }: { entry: ResearchLogEntry }) {

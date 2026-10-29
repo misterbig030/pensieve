@@ -3,6 +3,7 @@ import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import { Readable, pipeline } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
+import { isOpenLibraryHost, openLibraryContact, openLibraryPacer, openLibraryUserAgent, type Pacer } from "./openLibrary";
 
 /**
  * The only way research code reaches an arbitrary URL. Every hop is checked before a socket opens: https on the
@@ -84,6 +85,8 @@ export interface GuardedFetchOptions {
   maxBytes?: number;
   /** The content types to read; `ACCEPTED_CONTENT_TYPES` when omitted. Anything else is refused before the body is read. */
   contentTypes?: readonly AcceptedContentType[];
+  /** Open Library's pace and contact for a hop to it; the process's one pacer and `OPEN_LIBRARY_CONTACT` when omitted. */
+  openLibrary?: { pace?: Pacer; contact?: string | null };
 }
 
 export interface GuardedResponse {
@@ -316,17 +319,32 @@ export async function guardedFetch(raw: string, options: GuardedFetchOptions = {
   const transport = options.transport ?? pinnedHttpsTransport;
   const maxBytes = options.maxBytes ?? MAX_BODY_BYTES;
   const contentTypes: readonly string[] = options.contentTypes ?? ACCEPTED_CONTENT_TYPES;
+  const paceOpenLibrary = options.openLibrary?.pace ?? openLibraryPacer();
+  const contact = options.openLibrary?.contact === undefined ? openLibraryContact() : options.openLibrary.contact;
+
+  let url = checkUrl(raw);
+  // A read of Open Library waits its turn with the catalogue lookups before its own clock starts: a queue is not slowness.
+  const pacedFirst = isOpenLibraryHost(url.hostname);
+  if (pacedFirst) {
+    await paceOpenLibrary();
+    if (options.signal?.aborted) throw new EgressError("aborted", "Cancelled");
+  }
   const timeout = AbortSignal.timeout(options.timeoutMs ?? FETCH_TIMEOUT_MS);
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
 
   const abortReason = (): EgressError =>
     timeout.aborted ? new EgressError("timeout", "Timed out") : new EgressError("aborted", "Cancelled");
 
-  let url = checkUrl(raw);
   for (let hop = 0; ; hop++) {
     if (signal.aborted) throw abortReason();
     const address = await resolvePublic(url.hostname, resolver);
     if (signal.aborted) throw abortReason();
+    // Each hop to Open Library takes a turn of its pace and says who is asking, as its terms ask.
+    const toOpenLibrary = isOpenLibraryHost(url.hostname);
+    if (toOpenLibrary && !(hop === 0 && pacedFirst)) {
+      await paceOpenLibrary();
+      if (signal.aborted) throw abortReason();
+    }
     let res: TransportResponse;
     try {
       res = await transport({
@@ -334,7 +352,7 @@ export async function guardedFetch(raw: string, options: GuardedFetchOptions = {
         address,
         signal,
         headers: {
-          "user-agent": EGRESS_USER_AGENT,
+          "user-agent": toOpenLibrary ? openLibraryUserAgent(contact) : EGRESS_USER_AGENT,
           accept: options.contentTypes ? contentTypes.join(",") : "text/html,application/pdf,text/plain;q=0.9",
           "accept-encoding": ACCEPTED_ENCODINGS,
           "accept-language": "en;q=0.9,*;q=0.5",

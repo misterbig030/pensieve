@@ -2,7 +2,7 @@ import { MAX_CHAPTERS, MAX_HEADING, MAX_SECTIONS, MIN_CHAPTERS, clip, type Chapt
 
 /**
  * A book's chapters, the catalogue half: Open Library's `table_of_contents` records, which are not uniform, turned
- * into a `ChapterList`, and chapter sizes as shares of the book. The page half is `chapterFinder.ts`.
+ * into a `ChapterList`, and chapter sizes as shares of the book. The page half is the structure finder (`structureFinder.ts`).
  */
 
 // ---------------------------------------------------------------------------------------------------------------

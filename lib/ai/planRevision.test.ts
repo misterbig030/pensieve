@@ -491,6 +491,20 @@ describe("revisePlanTree checks the whole tree", () => {
     );
     expect(tree.children![1].materials).toEqual([{ id: "evals", tier: "should", minutes: 79, note: null, chapter: null, activity: "read" }]);
   });
+
+  it("puts ids the model copied into a unit's text in words, with a fact", async () => {
+    const one = layout(makeRoot([makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, materials: [{ id: "aie", tier: "must", minutes: 107, note: null, chapter: 1 }] })]));
+    mockedGenerateObject.mockResolvedValueOnce({
+      object: { units: [{ ref: "n1", title: "A", summary: "Read M1.1 again.", days: 1, materials: [{ id: "M1.1", tier: "must", minutes: 107, note: "all of M1.1" }] }] },
+      usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 },
+      finishReason: "stop",
+    } as unknown as Awaited<ReturnType<typeof generateObject>>);
+    const calls: ModelCall[] = [];
+    const { tree } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, daysPerWeek: 7, tree: one, lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
+    expect(tree.children![0].summary).toBe("Read AI Engineering ch. 1 again.");
+    expect(tree.children![0].materials![0].note).toBe("all of ch. 1");
+    expect(calls[0].facts).toContain("ids put in words in 2 fields");
+  });
 });
 
 describe("applyRevision with an item list", () => {

@@ -5,11 +5,12 @@ import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
-import { briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, isBookListPage, practiceLines, readButNotListed } from "./agent";
+import { bookPageFromNotes, briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, isBookListPage, namedButNotListed, practiceLines, readButNotListed } from "./agent";
 import type { ResearchEvent } from "./events";
+import { EgressError } from "./egress";
 import type { PageInfo } from "./extract";
 import { isThin, researchMaterials, streamWhile, verifiedReading } from "./pipeline";
-import { RESEARCH_CAPS, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
+import { RESEARCH_CAPS, ResearchNotes, SourceFetcher, capsFor, type PageFetcher, type ResearchCaps, type SearchProvider } from "./tools";
 import { MAX_CANDIDATES, type BookLookup, type Candidate, type CandidateList } from "./verify";
 
 const usage = {
@@ -404,10 +405,21 @@ describe("practice in the research prompts", () => {
     for (const f of PRACTICE_FORMATS) expect(prompt).toContain(`${f} (${PRACTICE_REGISTRY[f].label})`);
     expect(prompt).toContain("items: the problems, questions, labs or steps");
     expect(prompt).toContain("perItemMinutes: only when the page states a time per item");
-    expect(prompt).toContain("answers: true only when the source gives solutions, an answer key, worked solutions or a rubric");
+    expect(prompt).toContain("answers: true when the notes show the source has solutions, an answer key, worked solutions or a rubric, on its own page or on one they name for it (a walkthrough of every problem, a solutions repository).");
     expect(prompt).toContain("minutes are null unless the plan would also read it");
     expect(prompt).toContain("A wrong answers: false removes the tag");
     expect(prompt).toContain('a kind of practice the topic needs that nothing serves goes in "open" as "practice: <label>"');
+  });
+
+  it("judges answers from all the notes, not only a page that could not be read (run 7: NeetCode read empty)", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 4, sources: [] }, "notes");
+    expect(prompt).not.toContain("answers: true only when the source gives solutions");
+    expect(prompt).toContain("A page that could not be read, or read as empty, is no evidence that it has none: judge it from what else the notes say about it.");
+  });
+
+  it("tags a book of problems with solutions as practice besides reading", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 4, sources: [] }, "notes");
+    expect(prompt).toContain("A book of problems with their solutions (an interview-problems book, for one) is practice besides reading: give it practice too, with the number of problems when the notes give one, and keep its minutes.");
   });
 
   it("lists materials whole and states the learner's hours without capping the list by them", () => {
@@ -511,6 +523,19 @@ describe("extraction: every credible source, no choosing", () => {
     expect(candidates?.facts).not.toContain("read but not listed: https://docs.example.com/a (research)");
   });
 
+  it("fills a book listed without an address from a page of its own the site refused the reader, and says so", async () => {
+    const page = "https://publisher.example.com/books/designing-data-intensive-applications/";
+    const list: CandidateList = { learner: [], candidates: [{ url: "", title: "Designing Data-Intensive Applications", kind: "book", author: "Martin Kleppmann", why: "Depth", recommendedBy: [] }] };
+    const { model } = scriptedModel([{ calls: [{ tool: "fetchSource", input: { url: page } }] }, { text: "Done." }], [list]);
+    const fetcher = new SourceFetcher(async () => {
+      throw new EgressError("status", "HTTP 403");
+    });
+    const rows: ModelCall[] = [];
+    const result = await createAgentArm({ provider: fakeProvider(), model })({ brief: { topic: "T", weeks: 4, sources: [] }, fetcher, emit: () => {}, log: { onCall: (c) => void rows.push(c) } });
+    expect(result.candidates[0].url).toBe(page);
+    expect(rows.find((r) => r.label === "Research · candidates")?.facts).toContain(`book page from the notes: Designing Data-Intensive Applications → ${page}`);
+  });
+
   it("cuts a longer list to the first 25 and says so", async () => {
     const many: CandidateList = {
       learner: [],
@@ -524,6 +549,78 @@ describe("extraction: every credible source, no choosing", () => {
     expect(result.candidates.map((c) => c.title).slice(0, 2)).toEqual(["P0", "P1"]);
     expect(result.candidates.at(-1)?.title).toBe("P24");
     expect(rows.find((r) => r.label === "Research · candidates")?.facts).toContain("list cut to 25 of 30");
+  });
+});
+
+describe("books the notes name", () => {
+  // The book researcher's notes from a live draft: a leading book and four rivals, none of them with a page of its own.
+  const NOTES = [
+    "**Leading book (backbone):** *Cracking the Coding Interview: 189 Programming Questions and Solutions*, 6th edition, by Gayle Laakmann McDowell.",
+    "**Rivals and companions for the senior-level gap:**",
+    "- *System Design Interview, Volume 1* (and Volume 2, with Sahn Lam) by Alex Xu. Rockstard says senior candidates *cannot* skip it.",
+    "- *Designing Data-Intensive Applications* by Martin Kleppmann (2nd edition exists).",
+    "- *Elements of Programming Interviews* by Aziz, Lee and Prakash.",
+    "- *Coding Interview Patterns* by Alex Xu and Shaun Gunawardane.",
+  ].join("\n");
+  const found = (direction: "backbone" | "canonical", remarks: string) => {
+    const notes = new ResearchNotes();
+    notes.remarks.push(remarks);
+    return { direction, notes };
+  };
+  const book = (title: string, pageTitle: string | null = null): Candidate => ({ url: "", title, pageTitle, kind: "book", why: "w", recommendedBy: [] });
+
+  it("names each book the book notes set in italics that the list leaves out", () => {
+    const listed = [book("CRACKING the CODING INTERVIEW"), book("Designing Data-Intensive Applications, 2nd Edition")];
+    expect(namedButNotListed([found("backbone", NOTES)], listed)).toEqual([
+      "named in the book notes but not listed: System Design Interview, Volume 1",
+      "named in the book notes but not listed: Elements of Programming Interviews",
+      "named in the book notes but not listed: Coding Interview Patterns",
+    ]);
+  });
+
+  it("counts a book listed under a longer title, its page's title, or a shorter main title", () => {
+    const listed = [book("Cracking the Coding Interview"), book("System Design Interview – An Insider's Guide"), book("DDIA", "Designing Data-Intensive Applications"), book("Elements of Programming Interviews in Python"), book("Coding Interview Patterns: Nail Your Next Coding Interview")];
+    expect(namedButNotListed([found("backbone", NOTES)], listed)).toEqual([]);
+  });
+
+  it("reads only the book notes, and not a non-book of the same name", () => {
+    expect(namedButNotListed([found("canonical", "*The Missing Semester* is a course.")], [])).toEqual([]);
+    expect(namedButNotListed([found("backbone", "*Coding Interview Patterns* by Alex Xu.")], [{ ...book("Coding Interview Patterns"), kind: "course" }])).toEqual([
+      "named in the book notes but not listed: Coding Interview Patterns",
+    ]);
+  });
+
+  it("lets a book the notes give no page for be listed with an empty url, and keeps one they give", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 8, hoursPerWeek: 6, sources: [] }, "notes");
+    expect(prompt).toContain("never a shop listing (Amazon or another retailer), even when that page could not be read.");
+    expect(prompt).toContain("A book the notes name without such a page is still listed, with url empty: the catalogue vouches for it.");
+  });
+
+  it("gives a book listed without an address only a page of its own that a researcher tried and was turned away from", () => {
+    const oreilly = "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/";
+    const notes = new ResearchNotes();
+    // Runs 5 and 6: pages whose path names the book but that are not its page, and a page in a result or the notes' text.
+    notes.fetches.push({ url: "https://interviewing.io/guides/system-design-interview", ok: true, title: "Guide", finalUrl: null, excerpt: "" });
+    notes.fetches.push({ url: "https://github.com/ByteByteGoHq/coding-interview-patterns", ok: false, title: null, finalUrl: null, reason: "returned 429", excerpt: "" });
+    notes.fetches.push({ url: "https://www.amazon.com/designing-data-intensive-applications/dp/1449373321", ok: false, title: null, finalUrl: null, reason: "returned 403", excerpt: "" });
+    notes.fetches.push({ url: "https://old.example.com/designing-data-intensive-applications", ok: false, title: null, finalUrl: null, reason: "returned 404", excerpt: "" });
+    notes.searches.push({ query: "q", results: [{ title: "Book", url: "https://bytebytego.com/coding-interview-patterns", snippet: "", publishedDate: null }] });
+    notes.remarks.push(`Its page: ${oreilly}.`);
+    const found = [{ direction: "backbone" as const, notes }];
+    const ddia = book("Designing Data-Intensive Applications");
+    const sdi = book("System Design Interview – An Insider's Guide");
+    const patterns = book("Coding Interview Patterns: Nail Your Next Coding Interview");
+    expect(bookPageFromNotes(ddia, found)).toBe(ddia);
+    expect(bookPageFromNotes(sdi, found)).toBe(sdi);
+    expect(bookPageFromNotes(patterns, found)).toBe(patterns);
+    // The publisher's page the site refused, as in run 4: that one is taken.
+    notes.fetches.push({ url: oreilly, ok: false, title: null, finalUrl: null, reason: "returned 403", excerpt: "" });
+    expect(bookPageFromNotes(ddia, found).url).toBe(oreilly);
+    // A listed address, and anything but a book, stay as they are.
+    const listed = { ...ddia, url: "https://dataintensive.net/" };
+    expect(bookPageFromNotes(listed, found)).toBe(listed);
+    const essay = { ...ddia, kind: "essay" as const };
+    expect(bookPageFromNotes(essay, found)).toBe(essay);
   });
 });
 

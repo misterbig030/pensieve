@@ -11,21 +11,18 @@ import type { PageInfo } from "./extract";
 import { SAMPLE_RECORDS } from "./dataFile";
 import {
   ITEM_FILE_BYTES,
-  ITEM_FINDER_WALL_MS,
-  ITEM_FULL_READ_MS,
-  ITEM_GATHER_MS,
-  ITEM_LOCATE_MS,
-  ITEM_MAP_MS,
-  createItemFinder,
+  githubRawUrl,
   guardedFullReader,
   ITEM_FULL_PAGE_CHARS,
   itemListFacts,
   listGroups,
+  normalText,
+  readItemListAt,
   validateItemList,
   type FullReader,
   type ItemDraft,
 } from "./itemFinder";
-import { SearchProviderError, SourceFetcher, type PageFetcher, type SearchProvider } from "./tools";
+import { SourceFetcher, type PageFetcher } from "./tools";
 
 const usage = {
   inputTokens: { total: 100, noCache: 100, cacheRead: undefined, cacheWrite: undefined },
@@ -104,14 +101,6 @@ const pages: Record<string, PageInfo> = {
   ),
 };
 
-const provider = () => ({
-  name: "fake",
-  search: vi.fn<SearchProvider["search"]>(async () => [
-    { title: "neetcode-gh/leetcode", url: REPO_URL, snippet: "", publishedDate: null },
-    { title: "http", url: "http://insecure.example.com/list", snippet: "", publishedDate: null },
-  ]),
-});
-
 const MAPPING = {
   found: true,
   path: "",
@@ -125,33 +114,30 @@ const MAPPING = {
   subset: null,
 };
 const fileRead = (text: string) => vi.fn<FullReader>(async (url) => ({ finalUrl: url, text, file: true, truncated: false }));
-const run = (model: MockLanguageModelV4, read: FullReader, fetched: Record<string, PageInfo> = pages) => {
-  const { fetcher, fetchPage } = fetcherFor(fetched);
+/** The repository page, already read, sits beside the read as context: it is where the link patterns show. */
+const repoPage = { url: REPO_URL, finalUrl: REPO_URL, text: pages[REPO_URL].text };
+const run = (model: MockLanguageModelV4, read: FullReader, url = RAW_URL, log?: { keyOwner: "user" | "app" }) => {
   const events: ResearchEvent[] = [];
-  const p = provider();
-  return { p, fetchPage, events, found: createItemFinder({ provider: p, model, read }).find(source, { fetcher, emit: (e) => void events.push(e) }) };
+  return { events, found: readItemListAt(source, url, { fetcher: fetcherFor({}).fetcher, emit: (e) => void events.push(e), log }, { model, read, pages: [repoPage] }) };
 };
 const promptOf = (model: MockLanguageModelV4, call: number) => JSON.stringify(model.doGenerateCalls[call].prompt);
 
-describe("the item-list finder", () => {
+describe("item lists", () => {
   it("returns the subset the source names", async () => {
     const flagged = ENTRIES.filter((e) => e.neetcode150);
-    // The model only says where the file is and how its fields map; code picks the subset and copies every field.
-    const model = answers({ list: null, read: [RAW_URL] }, { ...MAPPING, subset: { field: "neetcode150", equals: "true" } });
+    // The model only says how the file's fields map; code picks the subset and copies every field.
+    const model = answers({ ...MAPPING, subset: { field: "neetcode150", equals: "true" } });
     const read = fileRead(FIXTURE);
-    const { p, fetchPage, events, found } = run(model, read);
+    const { events, found } = run(model, read);
     const result = await found;
 
-    expect(p.search).toHaveBeenCalledTimes(2);
-    expect(fetchPage.mock.calls.map((c) => c[0])).toEqual([SOURCE_URL, REPO_URL]);
     expect(read.mock.calls.map((c) => c[0])).toEqual([RAW_URL]);
-    expect(result.counts).toEqual({ searches: 2, fetches: 3 });
-    expect(model.doGenerateCalls).toHaveLength(2);
-    const where = promptOf(model, 0);
-    expect(where).toContain("NeetCode 150");
-    expect(where).toContain(source.why!);
-    expect(where).toContain(`--- ${REPO_URL} ---`);
-    const mapping = promptOf(model, 1);
+    expect(result.counts).toEqual({ searches: 0, fetches: 1 });
+    expect(model.doGenerateCalls).toHaveLength(1);
+    const mapping = promptOf(model, 0);
+    expect(mapping).toContain("NeetCode 150");
+    expect(mapping).toContain(source.why!);
+    expect(mapping).toContain(`--- ${REPO_URL} ---`);
     expect(mapping).toContain("Fields: problem, pattern, link, video, difficulty, code, neetcode150, blind75");
     expect(mapping).toContain("leetcode.com/problems/two-sum/"); // the repo page, where the link pattern shows
 
@@ -169,11 +155,11 @@ describe("the item-list finder", () => {
       minutes: null,
     });
     expect(list.items.at(-1)!.difficulty).toBe("hard");
-    expect(events.filter((e) => e.type === "research.fetch").map((e) => (e as { url: string }).url)).toEqual([SOURCE_URL, REPO_URL, RAW_URL]);
+    expect(events.filter((e) => e.type === "research.fetch").map((e) => (e as { url: string }).url)).toEqual([RAW_URL]);
   });
 
   it("takes an item's number from the start of a code field (0049-group-anagrams is 49)", async () => {
-    const model = answers({ list: null, read: [RAW_URL] }, { ...MAPPING, number: "code", subset: { field: "neetcode150", equals: "true" } });
+    const model = answers({ ...MAPPING, number: "code", subset: { field: "neetcode150", equals: "true" } });
     const result = await run(model, fileRead(FIXTURE)).found;
     const items = result.list!.items;
     expect(items.find((i) => i.title === "Group Anagrams")!.number).toBe("49");
@@ -189,11 +175,8 @@ describe("the item-list finder", () => {
       'Group Anagrams,"Arrays, Hashing",Medium,group-anagrams',
       "Climbing Stairs,DP,Easy,climbing-stairs",
     ].join("\r\n");
-    const model = answers(
-      { list: null, read: ["https://files.example.org/list.csv"] },
-      { ...MAPPING, path: null, title: "Title", group: "Topic", difficulty: "Level", url: "https://leetcode.com/problems/{Slug}/", solutionUrl: null },
-    );
-    const list = (await run(model, fileRead(csv)).found).list!;
+    const model = answers({ ...MAPPING, path: null, title: "Title", group: "Topic", difficulty: "Level", url: "https://leetcode.com/problems/{Slug}/", solutionUrl: null });
+    const list = (await run(model, fileRead(csv), "https://files.example.org/list.csv").found).list!;
     expect(list.source).toBe("file");
     expect(list.items.map((i) => [i.title, i.group, i.difficulty, i.url])).toEqual([
       ["Two Sum, Sorted", "Arrays", "medium", "https://leetcode.com/problems/two-sum-ii/"],
@@ -201,7 +184,7 @@ describe("the item-list finder", () => {
       ["Group Anagrams", "Arrays, Hashing", "medium", "https://leetcode.com/problems/group-anagrams/"],
       ["Climbing Stairs", "DP", "easy", "https://leetcode.com/problems/climbing-stairs/"],
     ]);
-    expect(promptOf(model, 1)).toContain("CSV rows: 4");
+    expect(promptOf(model, 0)).toContain("CSV rows: 4");
   });
 
   it("maps records nested in their groups, the group taken from the object they sit in", async () => {
@@ -212,7 +195,7 @@ describe("the item-list finder", () => {
         { name: "Trees", problems: [{ name: "Invert Binary Tree" }, { name: "Same Tree" }] },
       ],
     });
-    const model = answers({ list: null, read: [RAW_URL] }, { ...MAPPING, path: "groups[].problems", title: "name", group: "../name", difficulty: null, url: null, solutionUrl: null });
+    const model = answers({ ...MAPPING, path: "groups[].problems", title: "name", group: "../name", difficulty: null, url: null, solutionUrl: null });
     const list = (await run(model, fileRead(nested)).found).list!;
     expect(list.items.map((i) => [i.title, i.group])).toEqual([
       ["Two Sum", "Arrays"],
@@ -220,45 +203,33 @@ describe("the item-list finder", () => {
       ["Invert Binary Tree", "Trees"],
       ["Same Tree", "Trees"],
     ]);
-    expect(promptOf(model, 1)).toContain('Records at path \\"groups[].problems\\": 4');
+    expect(promptOf(model, 0)).toContain('Records at path \\"groups[].problems\\": 4');
   });
 
   it("shows the model a sample of a large file and lists every record from code", async () => {
     const big = JSON.stringify(Array.from({ length: 300 }, (_, i) => ({ problem: `Problem number ${i + 1}`, pattern: `Group ${Math.floor(i / 30)}` })));
-    const model = answers({ list: null, read: [RAW_URL] }, { ...MAPPING, difficulty: null, url: null, solutionUrl: null });
+    const model = answers({ ...MAPPING, difficulty: null, url: null, solutionUrl: null });
     const list = (await run(model, fileRead(big)).found).list!;
     expect(list.items).toHaveLength(300);
     expect(list.items.at(-1)!.title).toBe("Problem number 300");
-    const prompt = promptOf(model, 1);
+    const prompt = promptOf(model, 0);
     expect(prompt).toContain(`Problem number ${SAMPLE_RECORDS}`);
     expect(prompt).not.toContain(`Problem number ${SAMPLE_RECORDS + 1}`);
     expect(prompt.length).toBeLessThan(big.length);
   });
 
   it("works by count when the mapping names nothing the file has, without transcribing the file", async () => {
-    const wrongPath = answers({ list: null, read: [RAW_URL] }, { ...MAPPING, path: "nowhere" });
+    const wrongPath = answers({ ...MAPPING, path: "nowhere" });
     expect((await run(wrongPath, fileRead(FIXTURE)).found).list).toBeNull();
-    expect(wrongPath.doGenerateCalls).toHaveLength(2);
-    const noFlag = answers({ list: null, read: [RAW_URL] }, { ...MAPPING, subset: { field: "neetcode300", equals: "true" } });
+    expect(wrongPath.doGenerateCalls).toHaveLength(1);
+    const noFlag = answers({ ...MAPPING, subset: { field: "neetcode300", equals: "true" } });
     expect((await run(noFlag, fileRead(FIXTURE)).found).list).toBeNull();
-    expect(noFlag.doGenerateCalls).toHaveLength(2);
-  });
-
-  it("transcribes a page that lists the items when there is no data file", async () => {
-    const listing = { ...pages, [REPO_URL]: info(REPO_URL, "Problems", "The list: Two Sum. Valid Anagram. Group Anagrams. See https://leetcode.com/problems/two-sum/") };
-    const items = [draft("Two Sum", { url: "https://leetcode.com/problems/two-sum/" }), draft("Valid Anagram"), draft("Group Anagrams")];
-    const model = answers({ list: REPO_URL, read: [] }, { found: true, url: `${REPO_URL}/`, items });
-    const read = vi.fn<FullReader>();
-    const result = await run(model, read, listing).found;
-    expect(result.list).toMatchObject({ source: "page", url: REPO_URL });
-    expect(result.list!.items.map((i) => i.title)).toEqual(["Two Sum", "Valid Anagram", "Group Anagrams"]);
-    expect(read).not.toHaveBeenCalled();
-    expect(model.doGenerateCalls).toHaveLength(2);
+    expect(noFlag.doGenerateCalls).toHaveLength(1);
   });
 
   it("discards a transcribed list from a page it never read", async () => {
-    const model = answers({ list: REPO_URL, read: [] }, { found: true, url: "https://elsewhere.example.com/list", items: [draft("A"), draft("B"), draft("C")] });
-    expect((await run(model, vi.fn<FullReader>()).found).list).toBeNull();
+    const model = answers({ found: true, url: "https://elsewhere.example.com/list", items: [draft("A"), draft("B"), draft("C")] });
+    expect((await run(model, vi.fn<FullReader>(), REPO_URL).found).list).toBeNull();
   });
 
   it("drops links to hosts it never read", () => {
@@ -332,37 +303,15 @@ describe("the item-list finder", () => {
     expect(list.items.map((i) => i.number)).toEqual(["49", "Q12", "1.2", "7", "12a", "49", "128", null, null, null, null]);
   });
 
-  it("still reads the source's own page when search is down, and calls no model when nothing opens", async () => {
-    const down = {
-      name: "fake",
-      search: vi.fn<SearchProvider["search"]>(async () => {
-        throw new SearchProviderError("down");
-      }),
-    };
-    const model = answers({ list: null, read: [] });
-    const { fetcher, fetchPage } = fetcherFor(pages);
-    const found = await createItemFinder({ provider: down, model, read: vi.fn<FullReader>() }).find(source, { fetcher, emit: () => {} });
-    expect(fetchPage.mock.calls.map((c) => c[0])).toEqual([SOURCE_URL]);
-    expect(found.list).toBeNull();
-    expect(model.doGenerateCalls).toHaveLength(1);
-
-    const silent = answers({ list: null, read: [] });
-    const none = await createItemFinder({ provider: down, model: silent, read: vi.fn<FullReader>() }).find(source, { fetcher: fetcherFor({}).fetcher, emit: () => {} });
-    expect(none.list).toBeNull();
-    expect(silent.doGenerateCalls).toHaveLength(0);
-  });
-
   it("rethrows a provider refusal on the user's key and swallows one on the app's", async () => {
     const refusing = new MockLanguageModelV4({
       doGenerate: async () => {
         throw new APICallError({ message: "credit balance is too low", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 400, responseBody: "Your credit balance is too low", isRetryable: false });
       },
     });
-    const ctx = { fetcher: fetcherFor(pages).fetcher, emit: () => {} };
-    await expect(createItemFinder({ provider: provider(), model: refusing, read: vi.fn<FullReader>() }).find(source, { ...ctx, log: { keyOwner: "user" } })).rejects.toSatisfy(
-      (e: unknown) => providerError(e)?.statusCode === 400,
-    );
-    expect((await createItemFinder({ provider: provider(), model: refusing, read: vi.fn<FullReader>() }).find(source, ctx)).list).toBeNull();
+    // The repository page, already read, is transcribed: one model call, refused.
+    await expect(run(refusing, vi.fn<FullReader>(), REPO_URL, { keyOwner: "user" }).found).rejects.toSatisfy((e: unknown) => providerError(e)?.statusCode === 400);
+    expect((await run(refusing, vi.fn<FullReader>(), REPO_URL, { keyOwner: "app" }).found).list).toBeNull();
   });
 
   it("states the list's size, groups and page, and a count far from what research said", () => {
@@ -371,12 +320,117 @@ describe("the item-list finder", () => {
     expect(itemListFacts(list, 150)).toEqual(["3 items", "2 groups", RAW_URL, "found 3 items; research said 150"]);
     expect(itemListFacts(null, 150)).toEqual(["no item list"]);
   });
+});
 
-  it("keeps the data-file path within the brief's wall, each stage on its own clock", () => {
-    expect(ITEM_FINDER_WALL_MS).toBe(ITEM_GATHER_MS + ITEM_LOCATE_MS + ITEM_FULL_READ_MS + ITEM_MAP_MS);
-    expect(ITEM_FINDER_WALL_MS).toBeLessThanOrEqual(45_000);
+describe("reading the item list at a given address", () => {
+  const ctx = () => {
+    const events: ResearchEvent[] = [];
+    return { events, ctx: { fetcher: fetcherFor({}).fetcher, emit: (e: ResearchEvent) => void events.push(e) } };
+  };
+
+  it("maps a data file read in full: the whole fixture, from code, with no search and no other page", async () => {
+    const model = answers(MAPPING);
+    const read = fileRead(FIXTURE);
+    const { events, ctx: c } = ctx();
+    const result = await readItemListAt(source, RAW_URL, c, { model, read });
+
+    expect(read.mock.calls.map((call) => call[0])).toEqual([RAW_URL]);
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(result.counts).toEqual({ searches: 0, fetches: 1 });
+    expect(result.costUsd).toBeGreaterThanOrEqual(0);
+    expect(result.list).toMatchObject({ source: "file", url: RAW_URL });
+    expect(result.list!.items).toHaveLength(ENTRIES.length);
+    expect(result.pages).toEqual([{ url: RAW_URL, finalUrl: RAW_URL, text: FIXTURE }]);
+    expect(promptOf(model, 0)).toContain("Fields: problem, pattern, link, video, difficulty, code, neetcode150, blind75");
+    expect(events.map((e) => e.type)).toEqual(["research.reading", "research.fetch"]);
   });
 
+  it("reads a GitHub file page as its raw file, so a data file is mapped whole and not cut as a page", async () => {
+    // GitHub's page for a file is HTML: read as a page it is cut at the page size (30 of NeetCode's 150 in a live check).
+    const BLOB_URL = "https://github.com/neetcode-gh/leetcode/blob/main/.problemSiteData.json";
+    const model = answers(MAPPING);
+    const read = fileRead(FIXTURE);
+    const result = await readItemListAt(source, BLOB_URL, ctx().ctx, { model, read });
+
+    expect(read.mock.calls.map((call) => call[0])).toEqual([RAW_URL]);
+    expect(result.list).toMatchObject({ source: "file", url: RAW_URL });
+    expect(result.list!.items).toHaveLength(ENTRIES.length);
+  });
+
+  it("transcribes a page that is not a data file, that page the only read", async () => {
+    const text = "The list: Two Sum. Valid Anagram. Group Anagrams.";
+    const model = answers({ found: true, url: REPO_URL, items: [draft("Two Sum"), draft("Valid Anagram"), draft("Group Anagrams")] });
+    const read = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text, file: false, truncated: false }));
+    const result = await readItemListAt(source, REPO_URL, ctx().ctx, { model, read });
+
+    expect(result.list).toMatchObject({ source: "page", url: REPO_URL });
+    expect(result.list!.items.map((i) => i.title)).toEqual(["Two Sum", "Valid Anagram", "Group Anagrams"]);
+    expect(result.pages).toEqual([{ url: REPO_URL, finalUrl: REPO_URL, text }]);
+    expect(model.doGenerateCalls).toHaveLength(1);
+    const prompt = promptOf(model, 0);
+    expect(prompt.match(/--- https/g)).toHaveLength(1);
+    expect(prompt).toContain(`--- ${REPO_URL} ---`);
+  });
+
+  it("caps a plain-text file that is not data at the page size before transcribing it", async () => {
+    const head = "Two Sum. Valid Anagram. Group Anagrams. ";
+    const text = head + "x".repeat(ITEM_FULL_PAGE_CHARS) + " TAILMARKER";
+    expect(text.length).toBeGreaterThan(ITEM_FULL_PAGE_CHARS);
+    const model = answers({ found: true, url: RAW_URL, items: [draft("Two Sum"), draft("Valid Anagram"), draft("Group Anagrams")] });
+    const read = fileRead(text);
+    const result = await readItemListAt(source, RAW_URL, ctx().ctx, { model, read });
+    expect(result.list).toMatchObject({ source: "file", url: RAW_URL });
+    const prompt = promptOf(model, 0);
+    expect(prompt).toContain("Two Sum. Valid Anagram");
+    expect(prompt).not.toContain("TAILMARKER");
+    expect(prompt).toContain("cut at the size limit");
+    // The read it returns is what the list was checked against: the text cut as the model saw it.
+    expect(result.pages).toHaveLength(1);
+    expect(result.pages[0].text).toHaveLength(ITEM_FULL_PAGE_CHARS);
+    expect(result.pages[0].text).not.toContain("TAILMARKER");
+    expect(prompt.length).toBeLessThan(ITEM_FULL_PAGE_CHARS + 5_000);
+  });
+
+  it("returns no list when the address does not open, without calling the model", async () => {
+    const model = answers(MAPPING);
+    const read = vi.fn<FullReader>(async () => {
+      throw new Error("404");
+    });
+    const { events, ctx: c } = ctx();
+    const result = await readItemListAt(source, RAW_URL, c, { model, read });
+    expect(result).toEqual({ list: null, counts: { searches: 0, fetches: 1 }, costUsd: 0, pages: [] });
+    expect(model.doGenerateCalls).toHaveLength(0);
+    expect(events.at(-1)).toMatchObject({ type: "research.fetch", url: RAW_URL, ok: false });
+  });
+
+  it("works by count when the file is not mapped, without transcribing a data file", async () => {
+    const model = answers({ ...MAPPING, path: "nowhere" });
+    const result = await readItemListAt(source, RAW_URL, ctx().ctx, { model, read: fileRead(FIXTURE) });
+    expect(result.list).toBeNull();
+    expect(model.doGenerateCalls).toHaveLength(1);
+  });
+
+  it("transcribes a page already read without reading it again, the other pages beside it as context", async () => {
+    const listing = "The list: Two Sum. Valid Anagram. Group Anagrams.";
+    const model = answers({ found: true, url: REPO_URL, items: [draft("Two Sum"), draft("Valid Anagram"), draft("Group Anagrams")] });
+    const read = vi.fn<FullReader>();
+    const given = [
+      { url: SOURCE_URL, finalUrl: SOURCE_URL, text: "NeetCode" },
+      { url: REPO_URL, finalUrl: REPO_URL, text: listing },
+    ];
+    const result = await readItemListAt(source, `${REPO_URL}/`, ctx().ctx, { model, read, pages: given });
+    expect(read).not.toHaveBeenCalled();
+    expect(result.counts).toEqual({ searches: 0, fetches: 0 });
+    expect(result.list).toMatchObject({ source: "page", url: REPO_URL });
+    expect(result.pages).toEqual(given);
+    const prompt = promptOf(model, 0);
+    expect(prompt).toContain(`--- ${SOURCE_URL} ---`);
+    expect(prompt.match(new RegExp(`--- ${REPO_URL} ---`, "g"))).toHaveLength(1);
+  });
+
+  it("keeps the normal-text form exported", () => {
+    expect(normalText("  Two-Sum, II! ")).toBe("two sum ii");
+  });
 });
 
 describe("the full reader", () => {
@@ -419,5 +473,24 @@ describe("the full reader", () => {
     const page = await guardedFullReader({ resolver, transport: transportFor("text/html", html) })("https://example.com/list");
     expect(page.text).toHaveLength(ITEM_FULL_PAGE_CHARS);
     expect(page.truncated).toBe(true);
+  });
+});
+
+describe("githubRawUrl", () => {
+  it("turns a GitHub file page into its raw file, and leaves every other address alone", () => {
+    expect(githubRawUrl("https://github.com/neetcode-gh/leetcode/blob/main/.problemSiteData.json")).toBe(
+      "https://raw.githubusercontent.com/neetcode-gh/leetcode/main/.problemSiteData.json",
+    );
+    expect(githubRawUrl("https://www.github.com/a/b/blob/v1.2/data/list.csv?plain=1#L3")).toBe("https://raw.githubusercontent.com/a/b/v1.2/data/list.csv");
+    for (const same of [
+      "https://github.com/neetcode-gh/leetcode",
+      "https://github.com/a/b/tree/main/data",
+      "https://raw.githubusercontent.com/a/b/main/list.json",
+      "https://gitlab.com/a/b/blob/main/list.json",
+      "https://github.com/a/b/blob/main",
+      "not a url",
+    ]) {
+      expect(githubRawUrl(same)).toBe(same);
+    }
   });
 });

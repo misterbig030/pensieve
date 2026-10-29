@@ -1,4 +1,5 @@
 import type { GuardedResponse } from "./egress";
+import { isGithubRepoPage, parseOutline, siteLinkCount, type PageOutline } from "./outline";
 
 /** What `fetchSource` hands the model and the gate: the page's own claims about itself, plus readable text. */
 export interface PageInfo {
@@ -14,6 +15,12 @@ export interface PageInfo {
   words?: number | null;
   /** A video page's stated runtime in minutes. */
   durationMinutes?: number | null;
+  /** The page's heading tree, words per heading and links, parsed once here so the cached page carries them. HTML pages only. */
+  outline?: PageOutline;
+  /** Distinct pages of the page's own site that it links to (a GitHub repo's own files and folders count, its chrome does not). HTML pages only. */
+  siteLinks?: number;
+  /** A PDF's page count, when its page objects are readable in the bytes read; null when they are not. */
+  pages?: number | null;
 }
 
 /** About 4k tokens of English. */
@@ -49,13 +56,13 @@ export function decodeEntities(text: string): string {
   });
 }
 
-function clean(text: string | null | undefined): string | null {
+export function clean(text: string | null | undefined): string | null {
   if (!text) return null;
   const out = decodeEntities(text.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
   return out.length > 0 ? out.slice(0, 300) : null;
 }
 
-function attrs(tag: string): Record<string, string> {
+export function attrs(tag: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const m of tag.matchAll(/([a-zA-Z:_-]+)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) {
     out[m[1].toLowerCase()] = m[3] ?? m[4] ?? m[5] ?? "";
@@ -109,24 +116,39 @@ export function htmlToText(html: string): string {
 
 /** The page's whole readable text, uncut. */
 export function readableText(html: string): string {
+  return markupToText(readableRegion(html));
+}
+
+/** The part of the page worth reading, as markup: `main` or `article` when it holds enough, else the whole page, minus scripts, navigation and the like. */
+export function readableRegion(html: string): string {
   let body = html;
   const main = html.match(/<(main|article)\b[^>]*>([\s\S]*?)<\/\1>/i);
   if (main && main[2].length > 500) body = main[2];
-  body = body
+  return stripChrome(body);
+}
+
+/** Removes what is not reading matter (comments, scripts, styles, navigation, forms), leaving the other tags. */
+export function stripChrome(html: string): string {
+  return html
     .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<(script|style|noscript|svg|template|iframe|nav|header|footer|aside|form|button|select)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<(script|style|noscript|svg|template|iframe|nav|header|footer|aside|form|button|select)\b[\s\S]*?<\/\1>/gi, " ");
+}
+
+/** Markup as text: tags go, block ends and list items become line breaks, entities decode. */
+export function markupToText(markup: string): string {
+  const body = markup
     .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr|\/section|\/article|\/blockquote|\/pre)\b[^>]*>/gi, "\n")
     .replace(/<li\b[^>]*>/gi, "\n- ")
     .replace(/<[^>]+>/g, " ");
   return decodeEntities(body)
     .split("\n")
-    .map((line) => line.replace(/[ \t\f\v ]+/g, " ").trim())
+    .map((line) => line.replace(/[ \t\f\v\u00a0]+/g, " ").trim())
     .filter(Boolean)
     .join("\n");
 }
 
 /** Removes markup that can hold tag-like text (scripts, styles, comments) so it is never mistaken for the page. */
-function stripCode(html: string): string {
+export function stripCode(html: string): string {
   return html.replace(/<!--[\s\S]*?-->/g, " ").replace(/<(script|style|noscript|template)\b[\s\S]*?<\/\1>/gi, " ");
 }
 
@@ -136,6 +158,7 @@ export function extractHtml(raw: string, finalUrl: string): PageInfo {
   const title = clean(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]);
   const h1 = clean(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1]);
   const full = readableText(html);
+  const outline = parseOutline(html, finalUrl);
   return {
     finalUrl,
     title,
@@ -151,8 +174,11 @@ export function extractHtml(raw: string, finalUrl: string): PageInfo {
       "book:release_date",
     ]),
     text: full.slice(0, MAX_TEXT_CHARS),
-    words: countWords(full),
+    // On a GitHub repo page the README is the content; the rest of the page is GitHub's own chrome.
+    words: isGithubRepoPage(finalUrl) ? outline.words : countWords(full),
     durationMinutes: parseDurationMinutes(meta.get("duration") ?? meta.get("video:duration") ?? meta.get("og:video:duration")),
+    outline,
+    siteLinks: siteLinkCount(outline, finalUrl),
   };
 }
 
@@ -166,7 +192,9 @@ export function extractPdf(bytes: Uint8Array, finalUrl: string): PageInfo {
     if (hex) return clean(decodePdfHex(hex[1]));
     return null;
   };
-  return { finalUrl, title: field("Title"), ogTitle: null, h1: null, author: field("Author"), published: null, text: "" };
+  // `/Type /Page` is one page; `/Type /Pages` is the tree node above them, which `\b` rules out.
+  const pages = raw.match(/\/Type\s*\/Page\b/g)?.length ?? 0;
+  return { finalUrl, title: field("Title"), ogTitle: null, h1: null, author: field("Author"), published: null, text: "", pages: pages > 0 ? pages : null };
 }
 
 function decodePdfHex(hex: string): string {

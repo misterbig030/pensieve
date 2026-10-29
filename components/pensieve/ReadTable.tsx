@@ -118,6 +118,11 @@ export function rowBrief(row: Pick<ReadRow, "material" | "chapter" | "activity" 
   return { head, detail: row.note };
 }
 
+/** Where a Read row links: the chapter's own page when it has one, else the material's page. */
+export function rowHref(row: Pick<ReadRow, "material" | "chapter">): string {
+  return row.chapter?.url ?? row.material.url;
+}
+
 export function sumMinutes(rows: ReadRow[]): { must: number; should: number } {
   return rows.reduce((t, r) => (r.tier === "must" ? { ...t, must: t.must + (r.minutes ?? 0) } : { ...t, should: t.should + (r.minutes ?? 0) }), { must: 0, should: 0 });
 }
@@ -168,17 +173,17 @@ function PracticeSource({ row, link = true }: { row: PracticeRow; link?: boolean
   if (!row.material) return <span>Generated</span>;
   return (
     <span>
-      <ItemLink material={row.material} link={link} />
+      <ItemLink material={row.material} href={row.material.url} link={link} />
       {row.generated && " · from your reading"}
     </span>
   );
 }
 
-function ItemLink({ material: m, className, link = true }: { material: Material; className?: string; link?: boolean }) {
+function ItemLink({ material: m, href, className, link = true }: { material: Material; href: string; className?: string; link?: boolean }) {
   // The row names the material short; the tooltip keeps its full title.
   if (!link || m.type === "note" || m.type === "file") return <span className={className} title={m.title}>{shortTitle(m.title)}</span>;
   return (
-    <a href={m.url} target="_blank" rel="noreferrer" title={m.title} onClick={(e) => e.stopPropagation()} className={cn("hover:text-accent-700 hover:underline", className)}>
+    <a href={href} target="_blank" rel="noreferrer" title={m.title} onClick={(e) => e.stopPropagation()} className={cn("hover:text-accent-700 hover:underline", className)}>
       {shortTitle(m.title)}
     </a>
   );
@@ -256,7 +261,7 @@ export function ReadRows({ rows, link = true }: { rows: ReadRow[]; link?: boolea
         <div key={r.key} className="contents">
           <TierPill tier={r.tier} />
           <span className="min-w-0 truncate">
-            <ItemLink material={r.material} className="font-semibold" link={link} />
+            <ItemLink material={r.material} href={rowHref(r)} className="font-semibold" link={link} />
             {partLabel(r) && (
               <span className="text-muted-foreground" title={r.activity === "review" ? REVIEW_HINT : undefined}>
                 {" "}
@@ -332,7 +337,7 @@ export function ReadTable({ rows, practice = [], budgetMinutes }: { rows: ReadRo
                 <td className="px-2 py-3">
                   <div className="flex flex-col gap-0.5">
                     <span>
-                      <ItemLink material={r.material} className="font-semibold" />
+                      <ItemLink material={r.material} href={rowHref(r)} className="font-semibold" />
                       {r.material.backbone && (
                         <span className="ml-1.5 inline-flex rounded-full bg-accent-2-800 px-[7px] py-px align-[1px] text-[10px] font-semibold text-accent-2-100">BACKBONE</span>
                       )}

@@ -2,6 +2,7 @@ import {
   aliasMaterials,
   draftedSplit,
   formatAliases,
+  itemAliases,
   itemRun,
   pickSources,
   placedMinutes,
@@ -93,7 +94,7 @@ type PracticeLike = { id: string | null; task?: string; minutes?: number; note?:
 function practiceItem(r: PracticeLike, aliases: MaterialAliases): string | null {
   const base = r.id === null ? null : aliases.alias(r.id);
   if (base === undefined) return null;
-  const alias = base !== null && r.itemFrom && r.itemTo ? itemRun(base, r.itemFrom, r.itemTo) : base;
+  const alias = base !== null && r.id !== null && r.itemFrom && r.itemTo ? itemRun(aliases, r.id, r.itemFrom, r.itemTo) : base;
   const generated = r.id === null || r.generated;
   const who = [alias, generated ? "generated" : null].filter(Boolean).join(" ");
   return `${who}${r.minutes ? ` ${r.minutes} min` : ""}${r.task ? `: ${r.task}` : ""}${refNote(r.note ?? null)}`;
@@ -178,8 +179,12 @@ export function assignRefs(root: PlanNode): Map<string, string> {
   return refs;
 }
 
-/** " · ch. 1, 7–9, about 5 h (estimated)" for a sized material; empty when its size is not known. */
+/**
+ * " · ch. 1, 7–9, about 5 h (estimated)" for a sized material; empty when its size is not known. A material with units
+ * has a budget instead, which the outline reserves its units toward: " · budget about 50 min for building blocks".
+ */
 function sizeNote(m: Material): string {
+  if (m.toc && m.minutes) return ` · budget about ${formatMinutes(m.minutes)}${m.uses ? ` for ${m.uses}` : ""}`;
   if (!m.minutes) return m.uses ? ` · ${m.uses}` : "";
   return ` · ${m.uses ? `${m.uses}, ` : ""}about ${formatMinutes(m.minutes)}${m.minutesBasis === "estimated" ? " (estimated)" : ""}`;
 }
@@ -192,10 +197,12 @@ export interface RenderMaterialsOptions {
 /**
  * The indented chapter lines under a book, then the source line: `  M1.5 ch. 5 "Prompt Engineering" · pp. 453–540 ·
  * about 2 h — Introduction to Prompting; …`. The alias prefix appears when the book's alias is given; the number, the
- * pages, the size and the sections each appear only when known (and, for sections, asked for).
+ * pages, the size and the sections each appear only when known (and, for sections, asked for). Units that have groups
+ * get a group line before the first unit of each (`  building blocks:`); a source that is not a book names them units.
  */
-export function renderChapters(toc: ChapterList, options: { sections: boolean; alias?: string }): string[] {
-  const lines = toc.chapters.map((c, i) => {
+export function renderChapters(toc: ChapterList, options: { sections: boolean; alias?: string; book?: boolean }): string[] {
+  let group: string | null = null;
+  const lines = toc.chapters.flatMap((c, i) => {
     const parts = [`${options.alias ? `${options.alias}.${i + 1} ` : ""}${c.n !== null ? `ch. ${c.n} ` : ""}"${c.title}"`];
     if (toc.printPages && c.page !== null) {
       // A chapter whose successor was cut carries its own end; otherwise its span ends where the next one starts.
@@ -204,9 +211,11 @@ export function renderChapters(toc: ChapterList, options: { sections: boolean; a
     }
     if (c.minutes !== null) parts.push(`about ${formatMinutes(c.minutes)}`);
     const tail = options.sections && c.sections.length > 0 ? ` — ${c.sections.join("; ")}` : "";
-    return `  ${parts.join(" · ")}${tail}`;
+    const heading = c.group && c.group !== group ? [`  ${c.group}:`] : [];
+    group = c.group ?? null;
+    return [...heading, `  ${parts.join(" · ")}${tail}`];
   });
-  lines.push(`  (chapters from ${toc.source === "catalogue" ? "Open Library" : (hostOf(toc.url) ?? "a page")})`);
+  lines.push(`  (${options.book === false ? "units" : "chapters"} from ${toc.source === "catalogue" ? "Open Library" : (hostOf(toc.url) ?? "a page")})`);
   return lines;
 }
 
@@ -242,31 +251,36 @@ export function renderMaterials(materials: Material[], aliases: MaterialAliases 
       const byline = [m.author, m.year].filter(Boolean).join(", ");
       const where = m.type === "note" || m.type === "file" ? "" : ` <${m.url}>`;
       const alias = aliases.alias(m.id);
-      const resource = m.toc ? `${m.why ? "" : "."} Refer to its chapters by id; ${alias} itself is not a resource.` : "";
+      const book = m.kind === "book";
+      const resource = m.toc ? `${m.why ? "" : "."} Refer to its ${book ? "chapters" : "units"} by id; ${alias} itself is not a resource.` : "";
       const line = `${alias} [${tags}] "${m.title}"${byline ? ` — ${byline}` : ""}${where}${sizeNote(m)}${m.why ? `. ${m.why}` : ""}${resource}`;
-      const list = m.practice?.list ? [renderItemGroups(m.practice.format, m.practice.list, alias!)] : [];
-      return m.toc ? [line, ...renderChapters(m.toc, { sections: !!options.sections && m.backbone, alias }), ...list] : [line, ...list];
+      const list = m.practice?.list ? [renderItemGroups(m.practice.format, m.practice.list, aliases, m)] : [];
+      return m.toc ? [line, ...renderChapters(m.toc, { sections: !!options.sections && m.backbone, alias, book }), ...list] : [line, ...list];
     })
     .join("\n");
 }
 
 /**
  * A listed practice source's groups on one line under it, by position, never by title: `  M4 items 1–9 Arrays & Hashing
- * (3.3 h); 10–14 Two Pointers (2.1 h)`. A group is every item of that name, so one that comes back shows each run.
+ * (3.3 h); 10–14 Two Pointers (2.1 h)`. A group is every item of that name, so one that comes back shows each run. A source
+ * that also has chapters says what its items are called: `  M4 items, as M4.i1–M4.i21: 1–9 Arrays & Hashing (3.3 h); …`.
  */
-function renderItemGroups(format: PracticeFormat, list: PracticeList, alias: string): string {
+function renderItemGroups(format: PracticeFormat, list: PracticeList, aliases: MaterialAliases, m: Pick<Material, "id" | "toc">): string {
+  const alias = aliases.alias(m.id)!;
   const groups = listGroups(list.items).map(({ name, positions, items }) => {
     const minutes = items.reduce((sum, item) => sum + itemMinutes(format, item), 0);
     return `${formatRuns(positions)} ${name ?? "no group"} (${formatMinutes(minutes)})`;
   });
-  return `  ${alias} items ${groups.join("; ")}`;
+  // A source with chapters names its items apart from them (`M4.i1`), so the line says how.
+  const named = m.toc ? `, as ${itemAliases(aliases, m.id, list.items.map((_, i) => i + 1))}:` : "";
+  return `  ${alias} items${named} ${groups.join("; ")}`;
 }
 
 /** `M4.12 49. Group Anagrams · Arrays & Hashing · medium · 25 min`: one listed item as a leaf takes it. */
-function itemLine(format: PracticeFormat, list: PracticeList, alias: string, position: number): string {
+function itemLine(format: PracticeFormat, list: PracticeList, aliases: MaterialAliases, id: string, position: number): string {
   const item = list.items[position - 1];
   const title = `${item.number ? `${item.number}. ` : ""}${item.title}`;
-  return `  ${alias}.${position} ${[title, item.group, item.difficulty, `${itemMinutes(format, item)} min`].filter(Boolean).join(" · ")}`;
+  return `  ${aliases.alias(id, { item: position })} ${[title, item.group, item.difficulty, `${itemMinutes(format, item)} min`].filter(Boolean).join(" · ")}`;
 }
 
 function contextLines(ctx: PlanPromptContext, options: RenderMaterialsOptions = {}): string[] {
@@ -416,8 +430,8 @@ function otherUnits(input: UnitsPromptInput): PlanNode[] {
 }
 
 /** "M4.3", "M4 items 1–3, 7": positions of a listed source. */
-function positionsText(alias: string, positions: number[]): string {
-  return positions.length === 1 ? `${alias}.${positions[0]}` : `${alias} items ${formatRuns(positions)}`;
+function positionsText(aliases: MaterialAliases, id: string, positions: number[]): string {
+  return positions.length === 1 ? aliases.alias(id, { item: positions[0] })! : `${aliases.alias(id)} items ${formatRuns(positions)}`;
 }
 
 /**
@@ -434,8 +448,7 @@ function practiceHeld(input: UnitsPromptInput, aliases: MaterialAliases, format:
       else items.push(practiceItem(r, aliases));
     }
     for (const [id, positions] of done) {
-      const alias = aliases.alias(id);
-      if (alias) items.push(positionsText(alias, positions));
+      if (aliases.alias(id)) items.push(positionsText(aliases, id, positions));
     }
     const named = items.filter((s): s is string => s !== null);
     if (named.length > 0) held.push(`${named.join("; ")} in ${fullLabelOf(input.tree!, n)}`);
@@ -493,7 +506,7 @@ function leafPickSources(input: UnitsPromptInput, aliases: MaterialAliases, p: P
   const rule = write === null ? "Every row names one of them; never write rows of this format yourself." : `When none fits, ${write}`;
   const itemsOf = (id: string, list: PracticeList, positions: number[]) => {
     const taken = takenPositions(input, id);
-    return positions.filter((n) => !taken.has(n)).map((n) => itemLine(pick.format, list, aliases.alias(id)!, n));
+    return positions.filter((n) => !taken.has(n)).map((n) => itemLine(pick.format, list, aliases, id, n));
   };
   const reserved = reservedPractice(input, pick.format).filter((c) => c.id === null || aliases.alias(c.id) !== undefined);
   if (reserved.length > 0) {
@@ -507,7 +520,7 @@ function leafPickSources(input: UnitsPromptInput, aliases: MaterialAliases, p: P
     for (const id of listedIds) {
       const list = listOf(input, id)!;
       const positions = reservedPositions(reserved.filter((c) => c.id === id), list);
-      parts.push(positionsText(aliases.alias(id)!, positions));
+      parts.push(positionsText(aliases, id, positions));
       items.push(...itemsOf(id, list, positions));
     }
     const listed = listedIds.length > 0 ? "; the items not yet done are below, one row each" : "";
@@ -612,7 +625,7 @@ function headingPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases)
       const unlisted = reserved.filter((c) => !listOf(input, c.id)).map((c) => practiceItem(c, aliases)).filter((s): s is string => s !== null);
       const listed = [...new Set(reserved.filter((c) => listOf(input, c.id)).map((c) => c.id!))].map((id) => {
         const positions = reservedPositions(reserved.filter((c) => c.id === id), listOf(input, id)!);
-        return `${positionsText(aliases.alias(id)!, positions)}: ${runRule(p.pick.format, true)}`;
+        return `${positionsText(aliases, id, positions)}: ${runRule(p.pick.format, true)}`;
       });
       const rest = unlisted.length === 0 ? "" : listed.length > 0 ? ` Also ${unlisted.join("; ")}.` : `${unlisted.join("; ")}.`;
       lines.push(`${name}: from this unit's reservation, ${listed.join(" ")}${rest}${held}`);
@@ -662,7 +675,7 @@ export function availabilityLines(input: UnitsPromptInput, aliases: MaterialAlia
   if (!input.tree || !parent) {
     const each = input.unitsAreLeaves
       ? `Read each in one ${noun}, or in consecutive ${noun}s when it is longer than one ${noun}'s reading time`
-      : `Reserve each in at most one ${noun}`;
+      : `Reserve each as the rules above say`;
     return [`Every resource is free. ${each}${listedBackbone ? "; the book's chapters in order" : ""}.`];
   }
   const lines: string[] = [];
@@ -695,20 +708,25 @@ function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases)
   const kids = UNIT_NOUN[childLevel(input.level) ?? "day"];
   const B = `M${backbone + 1}`;
   const lines = [
-    `Materials: for each unit, list in "covers" the resources its ${kids}s will read, as { id, note }. note names the part only for a resource without chapters ("lectures 3–4"); leave it out otherwise. No tier and no minutes yet: the units inside are planned later from this reservation.`,
+    `Materials: for each unit, list in "covers" the resources its ${kids}s will read, as { id, note }. note names the part, only for a resource without units ("lectures 3–4"); leave it out otherwise. No tier and no minutes yet: the units inside are planned later from this reservation.`,
   ];
-  if (backbone < 0) lines.push(`Each resource is read in at most one unit at this level; spread the materials where they fit best.`);
-  else if (input.materials[backbone].toc) {
+  if (input.materials.some((m) => m.toc)) {
     lines.push(
-      `Each resource is read in at most one unit at this level. ${B}'s chapters are resources of their own (${B}.1, ${B}.2, …): reserve them in order across the units, each chapter in exactly one unit, and never refer to ${B} itself.`,
+      `A resource with units (Mn.1, Mn.2, …) is reserved by its units, never as a whole. Choose the units that serve its purpose and add up to about its budget, and reserve them in order across consecutive units at this level, each unit in exactly one.`,
     );
-  } else {
+  }
+  if (input.materials[backbone]?.toc) lines.push(`The backbone's units run in order through the plan.`);
+  lines.push(
+    `Any other resource is reserved in at most one unit at this level, unless its budget is more than one unit's reading time: then reserve it in consecutive units, naming the part in each note.`,
+  );
+  if (backbone < 0) lines.push(`Spread the materials where they fit best.`);
+  else if (!input.materials[backbone].toc) {
     lines.push(
-      `Each resource is read in at most one unit at this level. ${B} is the backbone textbook, but its chapters are not listed: reserve it in order across the units and name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
+      `${B} is the backbone textbook, but its chapters are not listed: reserve it in order across the units and name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
     );
   }
   lines.push(...availabilityLines(input, aliases));
-  lines.push(`Use only ids from the list.`);
+  lines.push(`Use only ids from the list, and only in id fields: titles, summaries, notes and tasks are read by the learner, so name a resource or its part there in words, never by its id.`);
   return lines.join("\n");
 }
 
@@ -731,6 +749,10 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     ...availabilityLines(input, aliases),
     rules,
   ];
+  // The top level is held to each budget whether its units are headings or leaves; under a parent, the reservation was.
+  if (!input.parentId && input.materials.some((m) => m.toc)) {
+    lines.push(`A resource with units (Mn.1, Mn.2, …) is read by its units, never as a whole. Choose the units that serve its purpose and add up to about its budget.`);
+  }
   const size = input.materials.some((m) => m.minutes) ? "Each resource's size is in the list. " : "";
   lines.push(
     `${size}A chapter longer than one unit's reading time spans consecutive units: list it in each with the part in the note; across those units its minutes add up to its size. A resource is read once: do not assign what another unit reads${listed ? `, and never refer to ${B} itself` : ""}.`,
@@ -741,7 +763,7 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
       `${B} is the backbone textbook, but its chapters are not listed: it runs in order across the units, continuing from where earlier units stopped. Name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
     );
   }
-  lines.push(`Use only ids from the list.`);
+  lines.push(`Use only ids from the list, and only in id fields: titles, summaries, notes and tasks are read by the learner, so name a resource or its part there in words, never by its id.`);
   return lines.join("\n");
 }
 
