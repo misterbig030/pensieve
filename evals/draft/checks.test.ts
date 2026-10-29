@@ -204,7 +204,16 @@ describe("criterion 2: named practice list", () => {
     r.events = [];
     const v = verdict(r, 2);
     expect(v.status).toBe("fail");
-    expect(v.evidence.join("\n")).toContain("NeetCode 150");
+    expect(v.evidence).toContain('M3 "NeetCode 150": its list at https://neetcode.io/practice was never read');
+  });
+
+  it("counts a title inside a longer title as the longer item only", () => {
+    const r = record();
+    const list = r.materials.allocated![2].practice!.list!;
+    list.items[7] = { ...list.items[7], title: "Two Sum II – Input Array Is Sorted" };
+    days(r)[0].practice = [{ ...days(r)[0].practice![0], task: "Two Sum", itemFrom: 3, itemTo: 3 }];
+    days(r)[2].practice = [{ ...days(r)[2].practice![0], task: "Two Sum II – Input Array Is Sorted", itemFrom: 8, itemTo: 8 }];
+    expect(verdict(r, 2).status).toBe("pass");
   });
 
   it("fails an item named on two days", () => {
@@ -238,6 +247,22 @@ describe("criterion 3: reservations add up", () => {
     expect(v.evidence.filter((line) => line.includes("reserved by"))).toEqual(["M1.3 reserved by Week 2 and Week 4"]);
   });
 
+  it("counts a whole cover of a chaptered material as reserving its chapters", () => {
+    const r = record();
+    weeks(r)[1].covers!.push({ id: "M2", note: null });
+    r.plan = makeRoot([...weeks(r), week(3), week(4, { covers: [{ id: "M2", chapter: 3, note: null }] })]);
+    const v = verdict(r, 3);
+    expect(v.status).toBe("fail");
+    expect(v.evidence).toContain("M2.3 reserved by Week 2 and Week 4");
+  });
+
+  it("reads a practice cover's item id as its source", () => {
+    const r = record();
+    weeks(r)[0].practiceCovers![0].id = "M3.i1";
+    weeks(r)[1].practiceCovers![0].id = "M3.i6";
+    expect(verdict(r, 3).status).toBe("pass");
+  });
+
   it("fails an item range two weeks share", () => {
     const r = record();
     weeks(r)[1].practiceCovers = [{ format: "problem-set", id: "M3", note: null, itemFrom: 5, itemTo: 8 }];
@@ -267,6 +292,22 @@ describe("criterion 3: reservations add up", () => {
     expect(verdict(r, 3).status).toBe("pass");
   });
 
+  it("fails a Week 1 day reading a chaptered material whole when Week 1 reserves only a chapter", () => {
+    const r = record();
+    days(r)[1].materials = [{ id: "M2", tier: "must", minutes: 30, note: null }];
+    const v = verdict(r, 3);
+    expect(v.status).toBe("fail");
+    expect(v.evidence).toContain("Day 2 reads M2, which Week 1 does not reserve");
+  });
+
+  it("passes a Week 1 day reading a chaptered material whole when Week 1 covers it whole", () => {
+    const r = record();
+    weeks(r)[0].covers![1] = { id: "M2", note: null };
+    weeks(r)[1].covers = [{ id: "M1", chapter: 2, note: null }];
+    days(r)[1].materials = [{ id: "M2", tier: "must", minutes: 30, note: null }];
+    expect(verdict(r, 3).status).toBe("pass");
+  });
+
   it("fails a Week 1 day reading what Week 1 does not reserve", () => {
     const r = record();
     days(r)[2].materials = [{ id: "M1", chapter: 2, tier: "must", minutes: 30, note: null }];
@@ -292,7 +333,7 @@ describe("criterion 4: outside services", () => {
     const result = checkRun(r, SDE);
     expect(result.verdicts.find((v) => v.id === 4)!.status).toBe("pass");
     expect(result.warnings.filter((w) => w.kind === "retries")).toHaveLength(1);
-    expect(result.warnings.find((w) => w.kind === "retries")!.text).toContain("anthropic 2");
+    expect(result.warnings.find((w) => w.kind === "retries")!.text).toBe("anthropic: 2 failed attempts, 0 calls gave up");
   });
 
   it("fails a failed page read on openlibrary.org", () => {
@@ -353,6 +394,17 @@ describe("criterion 5: practice time served", () => {
     expect(verdict(r, 5).status).toBe("pass");
   });
 
+  it("passes a source sized by items × minutes per item", () => {
+    const r = record();
+    const practice = r.materials.allocated![2].practice!;
+    practice.minutes = null;
+    practice.items = 20;
+    practice.perItemMinutes = 40;
+    const v = verdict(r, 5);
+    expect(v.status).toBe("pass");
+    expect(v.evidence).toEqual(["problem-set: 800 of 1152 min from M3"]);
+  });
+
   it("counts items × minutes per item when a source has no minutes", () => {
     const r = record();
     const practice = r.materials.allocated![2].practice!;
@@ -385,6 +437,14 @@ describe("criterion 6: Week 1 days", () => {
     const v = verdict(r, 6);
     expect(v.status).toBe("fail");
     expect(v.evidence.join("\n")).toContain("M9.1");
+  });
+
+  it("fails a chaptered material read whole on one day and by chapter on another", () => {
+    const r = record();
+    days(r)[0].materials = [{ id: "M2", tier: "must", minutes: 30, note: null }];
+    const v = verdict(r, 6);
+    expect(v.status).toBe("fail");
+    expect(v.evidence).toContain("M2.1 read on Day 1 and Day 2");
   });
 
   it("fails a chapter read on two days", () => {

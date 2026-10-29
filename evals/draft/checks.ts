@@ -35,11 +35,15 @@ const ID_IN_TEXT = /\bM\d+(?:\.i?\d+)?\b/g;
 // ---------------------------------------------------------------------------------------------------------------
 // References and titles
 
-/** A reference's material and chapter: `{ id: "M1", chapter: 3 }` and `{ id: "M1.3" }` are the same chapter. */
+/**
+ * A reference's material and chapter: `{ id: "M1", chapter: 3 }` and `{ id: "M1.3" }` are the same chapter. An item
+ * suffix (`M4.i12`) names the source, not a chapter.
+ */
 function parseRef(ref: { id: string; chapter?: number | null }): { id: string; chapter: number | null } {
   if (ref.chapter) return { id: ref.id, chapter: ref.chapter };
-  const match = ref.id.match(/^(.+)\.(\d+)$/);
-  return match ? { id: match[1], chapter: Number(match[2]) } : { id: ref.id, chapter: null };
+  const match = ref.id.match(/^(.+)\.(i?)(\d+)$/);
+  if (!match) return { id: ref.id, chapter: null };
+  return { id: match[1], chapter: match[2] ? null : Number(match[3]) };
 }
 
 /** One key per chapter or whole resource, whichever way the reference writes it. */
@@ -117,6 +121,16 @@ function servedMinutes(materials: Material[], format: PracticeFormat): number {
   return materials.filter((m) => m.practice?.format === format).reduce((sum, m) => sum + practiceMinutes(m), 0);
 }
 
+/**
+ * The chapter keys a reading reference takes: its chapter, or every chapter of a material it reads whole. A whole
+ * resource with no chapters has no structure to overlap and takes none.
+ */
+function chapterKeys(ref: { id: string; chapter?: number | null }, byId: Map<string, Material>): string[] {
+  const { id, chapter } = parseRef(ref);
+  if (chapter) return [`${id}.${chapter}`];
+  return (byId.get(id)?.toc?.chapters ?? []).map((_, i) => `${id}.${i + 1}`);
+}
+
 const hasChapters = (m: Material | undefined) => (m?.toc?.chapters.length ?? 0) > 0;
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -187,17 +201,19 @@ function isNamedList(m: Material, names: string[]): boolean {
 }
 
 /**
- * The items of `lists` a practice row names: those whose title is in its task. An item position alone does not count:
- * a count-only row ("problems 1–4") can carry one and still name nothing.
+ * The items of `lists` a practice row names: those whose title is in its task, longest titles only. An item position
+ * alone does not count: a count-only row ("problems 1–4") can carry one and still name nothing.
  */
 function itemsNamed(row: PracticeRef, lists: Material[]): { m: Material; n: number }[] {
   const task = plain(row.task);
-  return lists.flatMap((m) =>
+  const found = lists.flatMap((m) =>
     m.practice!.list!.items.flatMap((item, i) => {
       const title = plain(item.title);
-      return title.length >= 3 && containsWords(task, title) ? [{ m, n: i + 1 }] : [];
+      return title.length >= 3 && containsWords(task, title) ? [{ m, n: i + 1, title }] : [];
     }),
   );
+  // "Two Sum II – Input Array Is Sorted" names that item, not "Two Sum" as well.
+  return found.filter((a) => !found.some((b) => b.title !== a.title && containsWords(b.title, a.title))).map(({ m, n }) => ({ m, n }));
 }
 
 /** 2. A read LeetCode/NeetCode list carries the problem-set time and names Week 1's problems, none twice. */
@@ -252,11 +268,9 @@ function checkReservations(record: RunRecord, { weeks, days }: Shape): Verdict {
 
   weeks.forEach((w, i) => {
     for (const c of w.covers ?? []) {
-      const ref = parseRef(c);
-      reserved.add(ref.id);
-      // A review revisits what an earlier week read; a whole resource with no chapters may be shared.
-      if (c.activity === "review" || (!ref.chapter && !hasChapters(byId.get(ref.id)))) continue;
-      use(chapterUses, resourceKey(c), weekLabel(i));
+      reserved.add(parseRef(c).id);
+      // A review revisits what an earlier week read.
+      if (c.activity !== "review") for (const key of chapterKeys(c, byId)) use(chapterUses, key, weekLabel(i));
     }
     for (const p of w.practiceCovers ?? []) {
       if (p.id === null) continue;
@@ -286,7 +300,8 @@ function checkReservations(record: RunRecord, { weeks, days }: Shape): Verdict {
     days.forEach((d, i) => {
       for (const r of d.materials ?? []) {
         const ref = parseRef(r);
-        const ok = ref.chapter ? keys.has(resourceKey(r)) || whole.has(ref.id) : bases.has(ref.id);
+        // A whole read of a chaptered material needs the whole of it; of one with no chapters, any cover of it.
+        const ok = ref.chapter ? keys.has(resourceKey(r)) || whole.has(ref.id) : hasChapters(byId.get(ref.id)) ? whole.has(ref.id) : bases.has(ref.id);
         if (!ok) failures.push(`${dayLabel(i)} reads ${resourceKey(r)}, which Week 1 does not reserve`);
       }
       for (const row of d.practice ?? []) {
@@ -371,10 +386,7 @@ function checkWeekOne(record: RunRecord, topic: DraftTopic, days: PlanNode[] | n
     const total = (d.materials ?? []).reduce((sum, r) => sum + (r.minutes ?? 0), 0) + (d.practice ?? []).reduce((sum, r) => sum + r.minutes, 0);
     totals.push(total);
     if (total < low || total > high) failures.push(`${dayLabel(i)} plans ${total} min, outside ${Math.round(low)}–${Math.round(high)}`);
-    for (const r of d.materials ?? []) {
-      const ref = parseRef(r);
-      if (r.activity !== "review" && (ref.chapter || hasChapters(byId.get(ref.id)))) use(reads, resourceKey(r), dayLabel(i));
-    }
+    for (const r of d.materials ?? []) if (r.activity !== "review") for (const key of chapterKeys(r, byId)) use(reads, key, dayLabel(i));
     for (const row of d.practice ?? []) {
       const ref = rowItem(row);
       if (ref?.item) use(items, `${ref.id} item ${ref.item}`, dayLabel(i));
@@ -458,20 +470,24 @@ function costTimeWarnings(record: RunRecord): Warning[] {
   return out;
 }
 
-/** Calls that failed and recovered, per service (failed attempts less final failures), and levels re-asked after a breach. */
+/** Per service, the failed attempts and the calls that gave up; and levels re-asked after a breach (`breach:` facts). */
 function retryWarning(record: RunRecord): Warning | null {
-  const attempts = new Map<string, number>();
-  const finals = new Map<string, number>();
+  const counts = new Map<string, { attempts: number; finals: number }>();
   for (const e of record.events) {
     if (e.type !== "service" || e.ok) continue;
-    const counts = e.final ? finals : attempts;
-    counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
+    const c = counts.get(e.name) ?? { attempts: 0, finals: 0 };
+    if (e.final) c.finals += 1;
+    else c.attempts += 1;
+    counts.set(e.name, c);
   }
-  const recovered = [...attempts].map(([name, n]) => [name, Math.max(0, n - (finals.get(name) ?? 0))] as const).filter(([, n]) => n > 0);
   const breaches = record.calls.reduce((sum, call) => sum + call.facts.filter((f) => f.startsWith("breach:")).length, 0);
-  if (recovered.length === 0 && breaches === 0) return null;
-  const parts = [...recovered.map(([name, n]) => `${name} ${n}`), ...(breaches > 0 ? [`breach re-asks ${breaches}`] : [])];
-  return { kind: "retries", text: `recovered retries: ${parts.join(", ")}` };
+  if (counts.size === 0 && breaches === 0) return null;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const parts = [
+    ...[...counts].map(([name, c]) => `${name}: ${plural(c.attempts, "failed attempt")}, ${plural(c.finals, "call")} gave up`),
+    ...(breaches > 0 ? [`breach re-asks: ${breaches}`] : []),
+  ];
+  return { kind: "retries", text: parts.join("; ") };
 }
 
 function expectedBooksWarning(record: RunRecord, topic: DraftTopic): Warning | null {
