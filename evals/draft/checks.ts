@@ -78,8 +78,13 @@ function containsWords(haystack: string, needle: string): boolean {
   return needle !== "" && ` ${haystack} `.includes(` ${needle} `);
 }
 
+/**
+ * Whether the title is the label's book: its main title starts with the label's ("System Design Interview, Volume 2"
+ * is Alex Xu's; "Machine Learning System Design Interview" only contains its words and is another book).
+ */
 function titleMatches(label: string, title: string): boolean {
-  return containsWords(normalTitle(title), normalTitle(label));
+  const needle = normalTitle(label);
+  return needle !== "" && `${normalTitle(title)} `.startsWith(`${needle} `);
 }
 
 /** A labelled book is a book: an essay titled "System design interview questions in 2026" is not Alex Xu's. */
@@ -339,12 +344,17 @@ function checkServices(record: RunRecord): Verdict {
   return verdict(4, "Outside services", failures, failures.length === 0 ? ["no failed service call"] : []);
 }
 
+/** The request the run drafted; a folder saved before runs recorded it is judged by the topic's. */
+function requestOf(record: RunRecord, topic: DraftTopic): DraftTopic["request"] {
+  return record.meta.request ?? topic.request;
+}
+
 /** 5. Every picked format that needs a source has one, and served formats get at least half their share of practice time. */
 function checkPracticeTime(record: RunRecord, topic: DraftTopic): Verdict {
   const name = "Practice time served";
   const split = record.split;
   if (!split) return { id: 5, name, status: "n/a", evidence: ["no split in the record"] };
-  const { hoursPerWeek = DEFAULT_HOURS_PER_WEEK, weeks } = topic.request;
+  const { hoursPerWeek = DEFAULT_HOURS_PER_WEEK, weeks } = requestOf(record, topic);
   const practice = (hoursPerWeek * weeks * 60 * (100 - split.readingShare)) / 100;
   const allocated = record.materials.allocated ?? [];
   const failures: string[] = [];
@@ -379,7 +389,7 @@ function textsOf(node: PlanNode): [string, string][] {
 /** 6. Week 1's days fit the daily minutes, no text shows a material id, and nothing with structure is used twice. */
 function checkWeekOne(record: RunRecord, topic: DraftTopic, days: PlanNode[] | null): Verdict {
   const failures: string[] = days ? [] : [NOT_DRAFTED];
-  const { hoursPerWeek = DEFAULT_HOURS_PER_WEEK, daysPerWeek } = topic.request;
+  const { hoursPerWeek = DEFAULT_HOURS_PER_WEEK, daysPerWeek } = requestOf(record, topic);
   const daily = (hoursPerWeek * 60) / daysPerWeek;
   const [low, high] = [daily * (1 - DAY_TOLERANCE), daily * (1 + DAY_TOLERANCE)];
   const byId = new Map((record.materials.allocated ?? []).map((m) => [m.id, m]));

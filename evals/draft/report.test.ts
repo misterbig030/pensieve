@@ -3,12 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ModelCall } from "@/lib/ai/logged";
+import { ALLOCATE_EFFORT, OUTLINE_EFFORT, RESEARCH_LOOP_EFFORT, STRUCTURE_EFFORT } from "@/lib/ai/models";
 import { resolveWith } from "@/lib/ai/resolve";
 import { makeNode, makeRoot } from "@/lib/planTree";
 import type { checkRun } from "./checks";
 import { renderRunReport, renderSummary } from "./report";
 import { mapLimit, rescore, runLine, runRound, type DraftStream } from "./run";
 import { writeRun, type RunRecord } from "./record";
+import { DRAFT_TOPICS } from "./topics";
 
 type Result = ReturnType<typeof checkRun>;
 
@@ -65,6 +67,13 @@ describe("renderRunReport", () => {
     expect(report).toMatch(/Named list[^\n]*fail/i);
     expect(report).toMatch(/Reservations[^\n]*n\/a/i);
     expect(report).toContain("outline: 2 failed attempts");
+  });
+
+  it("names each role's effort and the request the run drafted, when the record has them", () => {
+    const report = renderRunReport(record(1, { effort: { research: "high" }, request: DRAFT_TOPICS.sde.request }), result(["pass", "pass", "pass", "pass", "pass", "pass"]));
+    expect(report).toContain("research anthropic/claude-sonnet-5.5 (high)");
+    expect(report).toContain('Request: "Senior software engineer interview preparation", 8 weeks × 5 days, 6 h/week, by day');
+    expect(renderRunReport(record(1), result(["pass", "pass", "pass", "pass", "pass", "pass"]))).not.toContain("Request:");
   });
 
   it("says plainly when there are no warnings", () => {
@@ -227,6 +236,13 @@ describe("runRound", () => {
     expect(JSON.parse(readFileSync(join(dir, "draft-T1-sde-2", "run.json"), "utf8")).result.verdicts).toHaveLength(6);
     expect(lines).toHaveLength(3);
     expect(readFileSync(summaryPath, "utf8")).toContain("draft-T1-sde-3");
+  });
+
+  it("saves the request each run drafted and each role's effort, so a rescore judges the run by them", async () => {
+    await round(1);
+    const meta = JSON.parse(readFileSync(join(dir, "draft-T1-sde-1", "run.json"), "utf8")).meta;
+    expect(meta.request).toEqual(DRAFT_TOPICS.sde.request);
+    expect(meta.effort).toEqual({ research: RESEARCH_LOOP_EFFORT, structure: STRUCTURE_EFFORT, outline: OUTLINE_EFFORT, allocate: ALLOCATE_EFFORT });
   });
 
   it("runs one at a time by default and never more than two with --parallel 2", async () => {

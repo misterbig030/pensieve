@@ -79,6 +79,19 @@ describe("captureRun", () => {
     expect(record.plan).toEqual(finished);
   });
 
+  it("times an event stamped when it happened by that stamp, not by when the stream sent it", async () => {
+    const started = Date.now();
+    async function* late(): AsyncGenerator<PlanDraftEvent> {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      yield { type: "service", name: "openlibrary", ok: false, final: true, ms: 3, at: started + 5 } as unknown as PlanDraftEvent;
+      yield { type: "research.start", caps: { searches: 1, fetches: 1, steps: 1 } } as PlanDraftEvent;
+    }
+    const record = await captureRun(late(), META);
+    expect(record.events[0].t).toBeLessThan(30);
+    expect(record.events[0]).not.toHaveProperty("at");
+    expect(record.events[1].t).toBeGreaterThanOrEqual(30);
+  });
+
   it("takes the cost from the finish event when no call was captured", async () => {
     const record = await captureRun(from([{ type: "finish", root: finished, costUsd: 1.5 }]), META);
     expect(record.meta.costUsd).toBe(1.5);
@@ -120,6 +133,16 @@ describe("writeRun and readRun", () => {
       for (const value of Object.values(env)) expect(text, file).not.toContain(value);
     }
     expect(readFileSync(join(dir, "events.ndjson"), "utf8")).toContain("[redacted]");
+  });
+
+  it("never writes the database address or the Vercel token", async () => {
+    const env = { DATABASE_URL: "postgres://user:pw-secret@db.example.com/pensieve", VERCEL_OIDC_TOKEN: "eyJhbGciOiJSUzI1NiJ9.secret-token" };
+    const record = await captureRun(from([], new Error(`connect failed: ${env.DATABASE_URL} with ${env.VERCEL_OIDC_TOKEN}`)), META);
+    writeRun(dir, record, env);
+    for (const file of readdirSync(dir)) {
+      const text = readFileSync(join(dir, file), "utf8");
+      for (const value of Object.values(env)) expect(text, file).not.toContain(value);
+    }
   });
 
   it("names the missing file when a folder is incomplete", async () => {

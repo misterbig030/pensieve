@@ -24,7 +24,7 @@ export function withCallEvents<T>(
     },
     onService: (event) => {
       log.onService?.(event);
-      queue.push(event);
+      queue.push({ ...event, at: Date.now() });
     },
   });
   return (async function* () {

@@ -28,7 +28,8 @@ function median(values: number[]): number | null {
 export function renderRunReport(record: RunRecord, result: CheckResult): string {
   const { meta } = record;
   const stages = Object.entries(meta.costByStage).map(([stage, cost]) => `${stage} ${usd(cost)}`);
-  const models = Object.entries(meta.models).map(([role, id]) => `${role} ${id}`);
+  const models = Object.entries(meta.models).map(([role, id]) => `${role} ${id}${meta.effort?.[role] ? ` (${meta.effort[role]})` : ""}`);
+  const request = meta.request;
   const lines = [
     `# Draft run: ${meta.topic}, run ${meta.run}`,
     "",
@@ -38,6 +39,9 @@ export function renderRunReport(record: RunRecord, result: CheckResult): string 
     `- Time: ${seconds(meta.ms)}`,
     `- Cost: ${usd(meta.costUsd)}${stages.length > 0 ? ` (${stages.join(", ")})` : ""}`,
     ...(models.length > 0 ? [`- Models: ${models.join(", ")}`] : []),
+    ...(request
+      ? [`- Request: "${request.topic}", ${request.weeks} weeks × ${request.daysPerWeek} days, ${request.hoursPerWeek ?? "default"} h/week, by ${request.granularity}${request.materials.length > 0 ? `, ${request.materials.length} materials` : ""}`]
+      : []),
     `- Result: ${result.passed ? "pass" : "fail"}`,
     "",
     "## Criteria",

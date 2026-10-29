@@ -20,6 +20,7 @@ import "./env";
 import { withCallEvents } from "@/lib/ai/callEvents";
 import { researchedDraftInput } from "@/lib/ai/draftRequest";
 import { DRAFT_BUDGET_MS, streamResearchedPlanDraft } from "@/lib/ai/planDraft";
+import { ALLOCATE_EFFORT, OUTLINE_EFFORT, RESEARCH_LOOP_EFFORT, STRUCTURE_EFFORT } from "@/lib/ai/models";
 import type { GenerationLogContext } from "@/lib/ai/logged";
 import type { PlanDraftEvent } from "@/lib/planChat";
 import { resolveWith, type ResolvedModels } from "@/lib/ai/resolve";
@@ -33,6 +34,9 @@ import { DRAFT_TOPICS, type DraftTopic } from "./topics";
 type CheckResult = ReturnType<typeof checkRun>;
 
 const RESULTS_DIR = path.join("evals", "results");
+
+/** The effort each role runs at, as the app sets it (the draft route passes none of its own). */
+const ROLE_EFFORT = { research: RESEARCH_LOOP_EFFORT, structure: STRUCTURE_EFFORT, outline: OUTLINE_EFFORT, allocate: ALLOCATE_EFFORT };
 
 /** The round's shared stamp, safe in a file name: `2026-10-29T10-00-00-000Z`. */
 export function stamp(date: Date = new Date()): string {
@@ -192,7 +196,9 @@ export async function runRound(options: RoundOptions): Promise<{ summaryPath: st
         startedAt: new Date().toISOString(),
         commit,
         key: options.key,
-        models: { research: models.research.id, outline: models.outline.id, allocate: models.allocate.id },
+        models: { research: models.research.id, structure: models.research.id, outline: models.outline.id, allocate: models.allocate.id },
+        effort: ROLE_EFFORT,
+        request: topic.request,
       });
       writeRun(dir, record, undefined, secrets);
       const result = checkRun(record, topic);

@@ -177,6 +177,20 @@ describe("criterion 1: backbone", () => {
     expect(verdict(r, 1).status).toBe("fail");
   });
 
+  it("fails a book whose title only contains the label's: Machine Learning System Design Interview is not Alex Xu's", () => {
+    const r = record();
+    r.materials.allocated![0] = material("M1", "Machine Learning System Design Interview", { author: "Ali Aminian, Alex Xu", backbone: true, toc: chapters(4) });
+    expect(verdict(r, 1).status).toBe("fail");
+  });
+
+  it("passes the label's title followed by a subtitle or a volume", () => {
+    for (const title of ["System Design Interview, Volume 2", "System Design Interview – An Insider's Guide: Volume 2", "System Design Interview"]) {
+      const r = record();
+      r.materials.allocated![0].title = title;
+      expect(verdict(r, 1).status, title).toBe("pass");
+    }
+  });
+
   it("is n/a without labels", () => {
     expect(verdict(record(), 1, UNLABELLED).status).toBe("n/a");
   });
@@ -433,6 +447,14 @@ describe("criterion 6: Week 1 days", () => {
     expect(verdict(withMinutes(record(), [70, 75, 60, 80, 72]), 6).status).toBe("pass");
   });
 
+  it("judges the run by the request it was run with, not the topic's request today", () => {
+    const r = withMinutes(record(), [120, 120, 120, 120, 120]);
+    expect(verdict(r, 6).status).toBe("fail");
+    r.meta.request = { ...SDE.request, hoursPerWeek: 10 };
+    const v = verdict(r, 6);
+    expect(v.status, v.evidence.join("\n")).toBe("pass");
+  });
+
   it("fails a 40-minute day", () => {
     const v = verdict(withMinutes(record(), [70, 40, 60, 80, 72]), 6);
     expect(v.status).toBe("fail");
@@ -485,6 +507,16 @@ describe("warnings", () => {
     expect(warning?.text).toBe(
       '0 of 3 expected books allocated; missing "Designing Data-Intensive Applications", "System Design Interview", "Cracking the Coding Interview"',
     );
+  });
+
+  it("does not count a book whose title only contains an expected book's, and counts one with a subtitle", () => {
+    const r = record();
+    r.materials.allocated = [
+      material("M6", "Machine Learning System Design Interview", { author: "Ali Aminian, Alex Xu" }),
+      material("M7", "Cracking the Coding Interview: 189 Programming Questions and Solutions", { author: "Gayle Laakmann McDowell" }),
+    ];
+    const warning = checkRun(r, SDE).warnings.find((w) => w.kind === "expected-books");
+    expect(warning?.text).toBe('1 of 3 expected books allocated; missing "Designing Data-Intensive Applications", "System Design Interview"');
   });
 
   it("warns about 1-minute reading rows", () => {

@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CallEvent } from "@/lib/ai/callEvents";
+import type { DraftRequestBody } from "@/lib/ai/draftRequest";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { Coverage, DroppedMaterial, ResearchEvent } from "@/lib/ai/research/events";
 import type { ServiceEvent } from "@/lib/ai/serviceEvents";
@@ -26,6 +27,10 @@ export interface RunMeta {
   commit: string;
   key: "app" | "user";
   models: Record<string, string>;
+  /** The reasoning effort each role ran at, as the app sets it. Absent in folders saved before it was recorded. */
+  effort?: Record<string, string>;
+  /** The request the run drafted, so a rescore judges it by its own inputs. Absent in older folders: the topic's is used. */
+  request?: DraftRequestBody;
   ms: number;
   costUsd: number;
   costByStage: Record<string, number>;
@@ -61,14 +66,19 @@ function stageOf(label: string): string {
  */
 export async function captureRun(stream: AsyncIterable<PlanDraftEvent | CallEvent | ServiceEvent>, meta: CaptureMeta): Promise<RunRecord> {
   const startedAt = performance.now();
+  const startedEpoch = Date.now();
   const events: TimedEvent[] = [];
   const calls: ModelCall[] = [];
   const materials: RunRecord["materials"] = { verified: [], allocated: null, dropped: [], coverage: null };
   let split: PlanSplit | null = null;
   let plan: PlanNode | null = null;
   let finishCost: number | null = null;
-  const push = (event: PlanDraftEvent | CallEvent | ServiceEvent | { type: "error"; message: string }) =>
-    events.push({ ...event, t: Math.round(performance.now() - startedAt) } as TimedEvent);
+  // An event stamped when it happened (`at`, a service event queued until the next event) is timed by that stamp.
+  const push = (event: PlanDraftEvent | CallEvent | ServiceEvent | { type: "error"; message: string }) => {
+    const { at, ...rest } = event as typeof event & { at?: number };
+    const t = typeof at === "number" ? Math.max(0, at - startedEpoch) : performance.now() - startedAt;
+    events.push({ ...rest, t: Math.round(t) } as TimedEvent);
+  };
 
   try {
     for await (const event of stream) {
@@ -110,11 +120,11 @@ export async function captureRun(stream: AsyncIterable<PlanDraftEvent | CallEven
 // ---------------------------------------------------------------------------------------------------------------
 // Secrets
 
-const SECRET_NAMES = ["AI_GATEWAY_API_KEY", "ANTHROPIC_API_KEY", "TAVILY_API_KEY", "OPEN_LIBRARY_CONTACT"];
+const SECRET_NAMES = ["AI_GATEWAY_API_KEY", "ANTHROPIC_API_KEY", "TAVILY_API_KEY", "OPEN_LIBRARY_CONTACT", "DATABASE_URL", "VERCEL_OIDC_TOKEN"];
 const MIN_SECRET_LENGTH = 8;
 
 /**
- * Replaces the values of the keys and the contact with `[redacted]`, as written and as JSON would escape them, and
+ * Replaces the values of the keys, the contact, the database address and the Vercel token with `[redacted]`, as written and as JSON would escape them, and
  * likewise any `extra` values (a user's decrypted key, which no environment variable holds). Values under 8
  * characters are left alone: replacing something that short would mangle the text everywhere.
  */
