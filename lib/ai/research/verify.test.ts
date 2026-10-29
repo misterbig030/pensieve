@@ -12,6 +12,10 @@ import {
   canonicalUrl,
   capCandidates,
   createOpenLibraryLookup,
+  createPacer,
+  openLibraryContact,
+  openLibraryUserAgent,
+  OPEN_LIBRARY_PER_SECOND,
   kindProblem,
   mainTitle,
   normalizeCoverage,
@@ -140,9 +144,55 @@ describe("Open Library match", () => {
       return { ok: true, status: 200, json: async () => ({ docs: title === "Designing Data-Intensive Applications" ? [ddia] : [] }) } as unknown as Response;
     });
     const claimed = "Designing Data-Intensive Applications (DDIA) — an O’Reilly book by Martin Kleppmann (The Wild Boar Book)";
-    const match = await createOpenLibraryLookup(fetchImpl).find(claimed, "Martin Kleppmann");
+    const match = await createOpenLibraryLookup(fetchImpl, { contact: null, pace: async () => {} }).find(claimed, "Martin Kleppmann");
     expect(match).toMatchObject({ key: "/works/OL19293745W", title: "Designing Data-Intensive Applications" });
     expect(new URL(String(fetchImpl.mock.calls[0][0])).searchParams.get("author")).toBe("Martin Kleppmann");
+  });
+});
+
+describe("Open Library's terms", () => {
+  const docs = { docs: [{ key: "/works/OL1W", title: "Book", author_name: ["A. Author"], first_publish_year: 2020 }] };
+  const fetchJson = (body: unknown) => vi.fn<typeof fetch>(async () => ({ ok: true, status: 200, json: async () => body }) as unknown as Response);
+
+  it("takes a contact for the User-Agent from OPEN_LIBRARY_CONTACT, and nothing that could break the header", () => {
+    expect(openLibraryContact("  me@example.com ")).toBe("me@example.com");
+    expect(openLibraryContact("+1 555 0100")).toBe("+1 555 0100");
+    expect(openLibraryContact(undefined)).toBeNull();
+    expect(openLibraryContact("  ")).toBeNull();
+    expect(openLibraryContact("me@example.com\r\nX-Other: 1")).toBeNull();
+    expect(openLibraryContact("me (at) example.com")).toBeNull();
+    expect(openLibraryUserAgent("me@example.com")).toBe("PensieveResearch/1.0 (study-plan source checker; me@example.com)");
+    expect(openLibraryUserAgent(null)).toBe("PensieveResearch/1.0 (study-plan source checker)");
+  });
+
+  it("names the contact on every request and waits its turn before each one", async () => {
+    const order: string[] = [];
+    const pace = vi.fn(async () => void order.push("pace"));
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      order.push(new URL(String(url)).pathname);
+      return { ok: true, status: 200, json: async () => (String(url).includes("editions") ? { entries: [] } : { docs: [] }) } as unknown as Response;
+    });
+    const lookup = createOpenLibraryLookup(fetchImpl, { contact: "me@example.com", pace });
+    await lookup.find("Book", "A. Author");
+    await lookup.chapters!({ key: "/works/OL1W", title: "Book", authors: [], year: null });
+    expect(order).toEqual(["pace", "/search.json", "pace", "/search.json", "pace", "/works/OL1W/editions.json"]);
+    for (const [, init] of fetchImpl.mock.calls) expect(new Headers(init?.headers).get("user-agent")).toBe("PensieveResearch/1.0 (study-plan source checker; me@example.com)");
+    expect(await createOpenLibraryLookup(fetchJson(docs), { contact: null, pace: async () => {} }).find("Book", "A. Author")).toMatchObject({ key: "/works/OL1W" });
+  });
+
+  it("starts requests at most so many a second, however many callers ask at once", async () => {
+    let clock = 1_000;
+    const slept: number[] = [];
+    const pace = createPacer(3, () => clock, async (ms) => void slept.push(Math.round(ms)));
+    await Promise.all([pace(), pace(), pace(), pace()]);
+    expect(slept).toEqual([333, 667, 1000]);
+    clock += 5_000;
+    await pace();
+    expect(slept).toHaveLength(3);
+  });
+
+  it("allows 1 request a second without a contact and 3 with one, as Open Library's terms set", () => {
+    expect(OPEN_LIBRARY_PER_SECOND).toEqual({ anonymous: 1, identified: 3 });
   });
 });
 

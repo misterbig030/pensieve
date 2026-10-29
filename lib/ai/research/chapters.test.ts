@@ -221,10 +221,11 @@ describe("Open Library chapters", () => {
     ],
   };
   const fetchJson = (body: unknown, ok = true) => vi.fn<typeof fetch>(async () => ({ ok, status: ok ? 200 : 500, json: async () => body }) as unknown as Response);
+  const lookup = (fetchImpl: typeof fetch) => createOpenLibraryLookup(fetchImpl, { contact: null, pace: async () => {} });
 
   it("fetches the work's editions and returns the longest usable list", async () => {
     const fetchImpl = fetchJson(editions);
-    const toc = await createOpenLibraryLookup(fetchImpl).chapters!(match);
+    const toc = await lookup(fetchImpl).chapters!(match);
     expect(String(fetchImpl.mock.calls[0][0])).toBe("https://openlibrary.org/works/OL1W/editions.json?limit=50");
     expect(toc).toMatchObject({ source: "catalogue", url: "https://openlibrary.org/books/OL1M", end: 100, printPages: true });
     expect(toc!.chapters.map((c) => c.title)).toEqual(["A", "B", "C"]);
@@ -234,20 +235,20 @@ describe("Open Library chapters", () => {
     const eng = edition("OL980232M");
     const body = { entries: [chi, eng].map((e) => ({ key: e.key, title: e.title, number_of_pages: e.number_of_pages, languages: e.languages, table_of_contents: e.table_of_contents })) };
     const sicp = { key: "/works/OL3267304W", title: "Structure and Interpretation of Computer Programs", authors: ["Harold Abelson"], year: 1985, pages: 657 };
-    const toc = await createOpenLibraryLookup(fetchJson(body)).chapters!(sicp);
+    const toc = await lookup(fetchJson(body)).chapters!(sicp);
     expect(toc?.url).toBe("https://openlibrary.org/books/OL980232M");
     expect(toc?.chapters[0].title).toBe("Building Abstractions with Procedures");
   });
   it("is null without a work key, on a failed request, and when no edition has a usable list", async () => {
-    expect(await createOpenLibraryLookup(fetchJson(editions)).chapters!({ ...match, key: null })).toBeNull();
-    expect(await createOpenLibraryLookup(fetchJson({}, false)).chapters!(match)).toBeNull();
+    expect(await lookup(fetchJson(editions)).chapters!({ ...match, key: null })).toBeNull();
+    expect(await lookup(fetchJson({}, false)).chapters!(match)).toBeNull();
     expect(
-      await createOpenLibraryLookup(
+      await lookup(
         vi.fn<typeof fetch>(async () => {
           throw new Error("down");
         }),
       ).chapters!(match),
     ).toBeNull();
-    expect(await createOpenLibraryLookup(fetchJson({ entries: [editions.entries[0]] })).chapters!(match)).toBeNull();
+    expect(await lookup(fetchJson({ entries: [editions.entries[0]] })).chapters!(match)).toBeNull();
   });
 });

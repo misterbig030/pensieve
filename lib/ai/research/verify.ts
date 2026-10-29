@@ -257,7 +257,44 @@ interface OpenLibraryEdition {
   table_of_contents?: OpenLibraryTocEntry[];
 }
 
-const OPEN_LIBRARY_USER_AGENT = "PensieveResearch/1.0 (study-plan source checker)";
+/**
+ * Open Library's limits (openlibrary.org/developers/api): an app that does not say who it is gets 1 request a second, one
+ * whose User-Agent names it and a contact gets 3. Going over them gets the address blocked.
+ */
+export const OPEN_LIBRARY_PER_SECOND = { anonymous: 1, identified: 3 } as const;
+
+/** The email or phone Open Library may write to, from `OPEN_LIBRARY_CONTACT`; null when unset or unfit for a header. */
+export function openLibraryContact(raw: string | undefined = process.env.OPEN_LIBRARY_CONTACT): string | null {
+  const value = raw?.trim();
+  return value && value.length <= 200 && /^[\x20-\x7e]+$/.test(value) && !/[()]/.test(value) ? value : null;
+}
+
+export function openLibraryUserAgent(contact: string | null): string {
+  return `PensieveResearch/1.0 (study-plan source checker${contact ? `; ${contact}` : ""})`;
+}
+
+/** Waits for a request's turn. */
+export type Pacer = () => Promise<void>;
+
+/** A pacer that starts requests at most `perSecond` a second, evenly spaced, however many callers share it. */
+export function createPacer(perSecond: number, now: () => number = Date.now, sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms))): Pacer {
+  const gap = 1000 / perSecond;
+  let next = 0;
+  return async () => {
+    const start = Math.max(now(), next);
+    next = start + gap;
+    const wait = start - now();
+    if (wait > 0) await sleep(wait);
+  };
+}
+
+/** One pacer per rate for the whole process: every draft on this server shares its address, and so Open Library's limit. */
+const sharedPacers = new Map<number, Pacer>();
+function sharedPacer(perSecond: number): Pacer {
+  let pace = sharedPacers.get(perSecond);
+  if (!pace) sharedPacers.set(perSecond, (pace = createPacer(perSecond)));
+  return pace;
+}
 
 function authorsOverlap(claimed: string | null, authors: string[]): boolean {
   if (!claimed || authors.length === 0) return true;
@@ -309,17 +346,25 @@ export function pickBookMatch(title: string, author: string | null, docs: OpenLi
   return { key, title: doc.title, authors: doc.author_name ?? [], year: doc.first_publish_year ?? null, pages };
 }
 
-export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLookup {
+/**
+ * The catalogue lookup. Every request names Pensieve and, when `contact` is set, how to reach its owner, and waits its
+ * turn on `pace`: by default the process's shared pacer at the limit the contact earns.
+ */
+export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch, options: { contact?: string | null; pace?: Pacer } = {}): BookLookup {
+  const contact = options.contact === undefined ? openLibraryContact() : options.contact;
+  const headers = { "user-agent": openLibraryUserAgent(contact) };
+  const pace = options.pace ?? sharedPacer(contact ? OPEN_LIBRARY_PER_SECOND.identified : OPEN_LIBRARY_PER_SECOND.anonymous);
   const query = async (params: Record<string, string>, signal?: AbortSignal): Promise<OpenLibraryDoc[]> => {
     const url = new URL("https://openlibrary.org/search.json");
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     url.searchParams.set("limit", "5");
     url.searchParams.set("fields", "key,title,author_name,first_publish_year,number_of_pages_median");
+    await pace();
     const timeout = AbortSignal.timeout(5_000);
     let res: Response;
     try {
       res = await fetchImpl(url, {
-        headers: { "user-agent": OPEN_LIBRARY_USER_AGENT },
+        headers,
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
     } catch (error) {
@@ -341,9 +386,10 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch): BookLo
     async chapters(match, signal) {
       if (!match.key) return null;
       try {
+        await pace();
         const timeout = AbortSignal.timeout(5_000);
         const res = await fetchImpl(`https://openlibrary.org${match.key}/editions.json?limit=50`, {
-          headers: { "user-agent": OPEN_LIBRARY_USER_AGENT },
+          headers,
           signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         });
         if (!res.ok) return null;
