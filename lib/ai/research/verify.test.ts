@@ -250,6 +250,27 @@ describe("runGate", () => {
     expect(f.fetchPage).not.toHaveBeenCalled();
   });
 
+  it("keeps a book of problems as reading and practice at once", async () => {
+    const lookup: BookLookup = { find: async () => ({ key: "/works/OL2W", title: "Cracking the Coding Interview", authors: ["Gayle Laakmann McDowell"], year: 2015 }) };
+    const f = gateFixture({}, lookup);
+    const result = await runGate({
+      candidates: [
+        candidate({ url: "", title: "Cracking the Coding Interview", kind: "book", author: "Gayle Laakmann McDowell", minutes: 1260, practice: { format: "problem-set", items: 189, perItemMinutes: null, answers: true } }),
+      ],
+      learner: [],
+      learnerNotes: [],
+      fetcher: f.fetcher,
+      books: f.books,
+      seenUrls: new Set(),
+      emit: f.emit,
+      secret: SECRET,
+      now,
+    });
+    expect(result.dropped).toEqual([]);
+    expect(result.materials[0]).toMatchObject({ kind: "book", catalogued: true, practice: { format: "problem-set", items: 189, answers: true } });
+    expect(result.materials[0].minutes).toBeGreaterThan(0);
+  });
+
   it("drops a catalogue match that cannot stand in for the book's page with the reason, not as an address", async () => {
     const authorless: BookLookup = { find: async (title) => ({ key: "/works/OL5W", title, authors: [], year: 2024 }) };
     const f = gateFixture({ "https://publisher.example.com/patterns": new Error("returned 403") }, authorless);

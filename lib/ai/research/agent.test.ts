@@ -405,10 +405,21 @@ describe("practice in the research prompts", () => {
     for (const f of PRACTICE_FORMATS) expect(prompt).toContain(`${f} (${PRACTICE_REGISTRY[f].label})`);
     expect(prompt).toContain("items: the problems, questions, labs or steps");
     expect(prompt).toContain("perItemMinutes: only when the page states a time per item");
-    expect(prompt).toContain("answers: true only when the source gives solutions, an answer key, worked solutions or a rubric");
+    expect(prompt).toContain("answers: true when the notes show the source has solutions, an answer key, worked solutions or a rubric, on its own page or on one they name for it (a walkthrough of every problem, a solutions repository).");
     expect(prompt).toContain("minutes are null unless the plan would also read it");
     expect(prompt).toContain("A wrong answers: false removes the tag");
     expect(prompt).toContain('a kind of practice the topic needs that nothing serves goes in "open" as "practice: <label>"');
+  });
+
+  it("judges answers from all the notes, not only a page that could not be read (run 7: NeetCode read empty)", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 4, sources: [] }, "notes");
+    expect(prompt).not.toContain("answers: true only when the source gives solutions");
+    expect(prompt).toContain("A page that could not be read, or read as empty, is no evidence that it has none: judge it from what else the notes say about it.");
+  });
+
+  it("tags a book of problems with solutions as practice besides reading", () => {
+    const prompt = buildFinalPrompt({ topic: "T", weeks: 4, sources: [] }, "notes");
+    expect(prompt).toContain("A book of problems with their solutions (an interview-problems book, for one) is practice besides reading: give it practice too, with the number of problems when the notes give one, and keep its minutes.");
   });
 
   it("lists materials whole and states the learner's hours without capping the list by them", () => {

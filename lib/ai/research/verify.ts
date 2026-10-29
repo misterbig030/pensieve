@@ -23,7 +23,7 @@ export const practiceDraftSchema = z.object({
   format: z.string().describe("One of the practice formats named in the prompt"),
   items: z.number().nullable().optional().describe("Problems, questions or steps the source holds that this plan would use; null when it is not counted"),
   perItemMinutes: z.number().nullable().optional().describe("Minutes per item if the source says so; null to use the format's usual"),
-  answers: z.boolean().describe("True only if the source carries answers, solutions or a rubric"),
+  answers: z.boolean().describe("True when the notes show the source has answers, solutions or a rubric, on its page or one they name for it"),
 });
 export type PracticeDraft = z.infer<typeof practiceDraftSchema>;
 
