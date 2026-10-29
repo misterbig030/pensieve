@@ -503,6 +503,36 @@ function sectionRows(heading: OutlineHeading): OutlineLink[][] {
   return rows;
 }
 
+/** A link text that says what the link is (its solution, the problem's page, a video) rather than naming the item. */
+const LABEL_LINK = /^(?:solutions?|answers?|code|video|watch|explanation|walkthrough|problem|question|link|leetcode)$/i;
+/** Of those, the labels of a solution: the row's link is then its solution, not the item. */
+const SOLUTION_LABEL = /^(?:solutions?|answers?|code|video|watch|explanation|walkthrough)$/i;
+
+/** A row's own text as the item's title, without its leading number and its difficulty; null when nothing is left. */
+function rowTitle(context: string): string | null {
+  const title = context
+    .replace(/^\s*#?\d+[.):]?\s+/, "")
+    .replace(/(^|\s)(?:easy|medium|hard)\s*$/i, "")
+    .trim();
+  return /\p{L}/u.test(title) ? title : null;
+}
+
+/** A row as an item: its first link names it, unless that link is a label and the row's own text names it instead. */
+function rowItem(row: OutlineLink[], group: string): ItemDraft {
+  const [first, second] = row;
+  const labelled = LABEL_LINK.test(first.text.trim()) ? rowTitle(first.context!) : null;
+  const solutionFirst = labelled !== null && SOLUTION_LABEL.test(first.text.trim());
+  return {
+    title: labelled ?? first.text,
+    number: itemNumber(first.context),
+    group,
+    difficulty: first.context!.match(ROW_DIFFICULTY)?.[1].toLowerCase() ?? null,
+    url: solutionFirst ? null : first.url,
+    solutionUrl: solutionFirst ? first.url : (second?.url ?? null),
+    minutes: null,
+  };
+}
+
 function hostKey(url: string): string {
   try {
     return new URL(url).host.toLowerCase().replace(/^www\./, "");
@@ -515,15 +545,7 @@ function hostKey(url: string): string {
 function unitItems(p: Placed, sourceUrl: string): ItemDraft[] {
   const rows = p.heading === null ? [] : sectionRows(p.page.outline!.headings[p.heading]);
   if (rows.length >= MIN_SECTION_ROWS) {
-    return rows.map(([item, solution]) => ({
-      title: item.text,
-      number: itemNumber(item.context),
-      group: p.title,
-      difficulty: item.context!.match(ROW_DIFFICULTY)?.[1].toLowerCase() ?? null,
-      url: item.url,
-      solutionUrl: solution?.url ?? null,
-      minutes: null,
-    }));
+    return rows.map((row) => rowItem(row, p.title));
   }
   // Doing takes longer than reading the words that set it, so only a measured runtime (a video lab) sizes an item.
   const minutes = p.heading === null && p.page.durationMinutes && p.minutes !== null && p.minutes <= MAX_ITEM_MINUTES ? p.minutes : null;

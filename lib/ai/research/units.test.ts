@@ -497,6 +497,29 @@ describe("checkUnits", () => {
     expect(v.facts).toContain("practice units: 150 items, from the rows of 18 sections");
   });
 
+  it("rule 13: a row whose link is a label (Solution, Problem, Video) takes its title from the row's own text", () => {
+    // dipjul/NeetCode-150: "| Contains Duplicate | [Solution](…) |" read as 18 items all titled "Solution".
+    const row = (cells: string) => `<tr>${cells}</tr>`;
+    const solutionOnly = ["Contains Duplicate", "Valid Anagram", "Two Sum"].map((t, i) => row(`<td>${t}</td><td><a href="${REPO}/blob/main/01/0${i + 1}.md">Solution</a></td>`));
+    const labelled = [["1", "Two Sum", "Easy"], ["15", "3Sum", "Medium"], ["42", "Trapping Rain Water", "Hard"]].map(([n, t, d]) =>
+      row(`<td>${n}</td><td>${t}</td><td>${d}</td><td><a href="https://leetcode.com/problems/${slug(t)}/">Problem</a></td><td><a href="https://www.youtube.com/watch?v=${slug(t)}">Video</a></td>`),
+    );
+    const page = seen(REPO, readme("a/b", `<h2 id="user-content-arrays">Arrays</h2><table>${solutionOnly.join("")}</table><h2 id="user-content-pointers">Pointers</h2><table>${labelled.join("")}</table>`));
+    const units = ["Arrays", "Pointers"].map((t) => unit(t, `${REPO}#${t.toLowerCase()}`, { kind: "practice" }));
+    const v = check({ answer: answer(units), pages: [page], role: "practice", material: { practice: PRACTICE } });
+
+    expect(v.list!.items.map((i) => i.title)).toEqual(["Contains Duplicate", "Valid Anagram", "Two Sum", "Two Sum", "3Sum", "Trapping Rain Water"]);
+    // A solution label is the solution, not the problem.
+    expect(v.list!.items[0]).toMatchObject({ group: "Arrays", url: null, solutionUrl: `${REPO}/blob/main/01/01.md`, number: null, difficulty: null });
+    expect(v.list!.items[5]).toMatchObject({
+      group: "Pointers",
+      number: "42",
+      difficulty: "hard",
+      url: "https://leetcode.com/problems/trapping-rain-water/",
+      solutionUrl: "https://www.youtube.com/watch?v=trapping-rain-water",
+    });
+  });
+
   it("rule 13: a practice section with fewer than three rows stays one item, and no practice item is sized by its words", () => {
     const one = topics.find((h) => h.title === "Tries")!;
     const page = seen(REPO, readme("a/b", `${h2s(["Lab one", "Lab two"], 400)}<h2 id="user-content-tries">Tries</h2><table>${["Trie", "Word Dictionary"].map((t, i) => `<tr><td>${i + 1}</td><td><a href="https://leetcode.com/problems/${slug(t)}/">${t}</a></td></tr>`).join("")}</table>`));
