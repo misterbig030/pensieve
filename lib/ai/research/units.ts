@@ -13,8 +13,8 @@ import {
   type PracticeList,
 } from "@/lib/schemas/material";
 import { SECTION_SKIP_RE, withChapterSizes } from "./chapters";
-import { MAX_UNSEEN_SHARE, normalText, validateItemList, type ItemDraft } from "./itemFinder";
-import type { OutlineHeading, PageOutline } from "./outline";
+import { MAX_UNSEEN_SHARE, itemNumber, normalText, validateItemList, type ItemDraft } from "./itemFinder";
+import type { OutlineHeading, OutlineLink, PageOutline } from "./outline";
 import { MIN_MEASURED_WORDS, WORDS_PER_MINUTE, canonicalUrl } from "./verify";
 
 /**
@@ -482,10 +482,58 @@ function seenText(pages: SeenPage[]): string {
     .join("\n");
 }
 
+/** A practice section holding at least this many rows of a problem table or list is its problems, not one item. */
+const MIN_SECTION_ROWS = 3;
+
+const ROW_DIFFICULTY = /\b(easy|medium|hard)\b/i;
+
+/**
+ * The rows of a table or list under a heading, each its links in order: the item's own link first, then its solutions.
+ * Only links whose row says something beside them (a number, a difficulty) count. A row ends where that text changes,
+ * or where a link goes to the same site as the row's first link: the next problem.
+ */
+function sectionRows(heading: OutlineHeading): OutlineLink[][] {
+  const rows: OutlineLink[][] = [];
+  for (const link of heading.links) {
+    if (!link.context) continue;
+    const row = rows.at(-1);
+    if (row && row[0].context === link.context && hostKey(row[0].url) !== hostKey(link.url)) row.push(link);
+    else rows.push([link]);
+  }
+  return rows;
+}
+
+function hostKey(url: string): string {
+  try {
+    return new URL(url).host.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+/** A practice unit as items: the problems in its section's rows when it has enough of them, otherwise itself. */
+function unitItems(p: Placed, sourceUrl: string): ItemDraft[] {
+  const rows = p.heading === null ? [] : sectionRows(p.page.outline!.headings[p.heading]);
+  if (rows.length >= MIN_SECTION_ROWS) {
+    return rows.map(([item, solution]) => ({
+      title: item.text,
+      number: itemNumber(item.context),
+      group: p.title,
+      difficulty: item.context!.match(ROW_DIFFICULTY)?.[1].toLowerCase() ?? null,
+      url: item.url,
+      solutionUrl: solution?.url ?? null,
+      minutes: null,
+    }));
+  }
+  // Doing takes longer than reading the words that set it, so only a measured runtime (a video lab) sizes an item.
+  const minutes = p.heading === null && p.page.durationMinutes && p.minutes !== null && p.minutes <= MAX_ITEM_MINUTES ? p.minutes : null;
+  return [{ title: p.title, number: null, group: p.unit.group, difficulty: null, url: unitUrl(p.unit.at, sourceUrl), solutionUrl: null, minutes }];
+}
+
 /**
  * Rule 13, for a role with practice only. The `items` tool's list when `listUrl` names one; otherwise the practice
- * units given (none when the material has no practice or too many were unseen) as items. Either way it goes through
- * `validateItemList` against what the tools returned.
+ * units given (none when the material has no practice or too many were unseen) as items, a section of a problem table
+ * as the problems in its rows. Either way it goes through `validateItemList` against what the tools returned.
  */
 function practiceList(
   listUrl: string | null,
@@ -505,16 +553,11 @@ function practiceList(
     return list;
   }
   if (practice.length === 0) return null;
-  const items: ItemDraft[] = practice.map((p) => ({
-    title: p.title,
-    number: null,
-    group: p.unit.group,
-    difficulty: null,
-    url: unitUrl(p.unit.at, sourceUrl),
-    solutionUrl: null,
-    minutes: p.minutes !== null && p.minutes <= MAX_ITEM_MINUTES ? p.minutes : null,
-  }));
+  const perUnit = practice.map((p) => unitItems(p, sourceUrl));
+  const items = perUnit.flat();
+  const sections = perUnit.filter((drafts) => drafts.length > 1).length;
   const list = validateItemList({ url: sourceUrl, source: "page", items }, seenText(pages));
-  facts.push(list ? `practice units: ${list.items.length} items` : "practice units refused by the item check");
+  const from = sections > 0 ? `, from the rows of ${sections} section${sections === 1 ? "" : "s"}` : "";
+  facts.push(list ? `practice units: ${list.items.length} items${from}` : "practice units refused by the item check");
   return list;
 }

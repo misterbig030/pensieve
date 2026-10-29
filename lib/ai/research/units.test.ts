@@ -111,7 +111,7 @@ describe("checkUnits", () => {
       difficulty: null,
       url: `${PRIMER}#${designs[0].anchor}`,
       solutionUrl: null,
-      minutes: Math.max(1, Math.round(designs[0].words / 230)),
+      minutes: null,
     });
     expect(v.list!.source).toBe("page");
     expect(v.list!.url).toBe(PRIMER);
@@ -468,6 +468,43 @@ describe("checkUnits", () => {
     expect(v.refused).toBeNull();
     expect(v.toc!.chapters).toHaveLength(20);
     expect(v.list).toBeNull(); // two items are fewer than MIN_PRACTICE_ITEMS
+  });
+
+  // Runs 5 and 6: the finder answered NeetCode-Solutions' 18 topic sections as practice units, which became 18 one-minute
+  // "problems", and the plan's problem-set share fell to 1%.
+  const NEETCODE = "https://github.com/mdmzfzl/NeetCode-Solutions";
+  const neetcodePage = seen(NEETCODE, fixture("github-problem-table"));
+  const topics = neetcodePage.outline!.headings.filter((h) => h.level === 2 && h.links.length > 2);
+  const PROBLEMS: MaterialPractice = { format: "problem-set", items: 150, perItemMinutes: 10, minutes: null, answers: true };
+
+  it("rule 13: practice units that are sections of a problem table become the problems in their rows", () => {
+    const units = topics.map((h) => unit(h.title, `${NEETCODE}#${h.anchor}`, { kind: "practice" }));
+    const v = check({ answer: answer(units), pages: [neetcodePage], role: "practice", material: { url: NEETCODE, practice: PROBLEMS } });
+    expect(topics).toHaveLength(18);
+    expect(v.refused).toBeNull();
+    expect(v.list!.items).toHaveLength(150);
+    expect(v.list!.items[0]).toEqual({
+      title: "Contains Duplicate",
+      number: "217",
+      group: "Arrays & Hashing",
+      difficulty: "easy",
+      url: "https://leetcode.com/problems/contains-duplicate/",
+      solutionUrl: `${NEETCODE}/blob/main/01_Arrays_&_Hashing/01_Contains_Duplicate/0217-contains-duplicate.cpp`,
+      minutes: null,
+    });
+    expect(v.list!.items.find((i) => i.title === "Two Sum II")).toMatchObject({ number: "167", group: "Two Pointers", difficulty: "medium" });
+    expect(new Set(v.list!.items.map((i) => i.group)).size).toBe(18);
+    expect(v.facts).toContain("practice units: 150 items, from the rows of 18 sections");
+  });
+
+  it("rule 13: a practice section with fewer than three rows stays one item, and no practice item is sized by its words", () => {
+    const one = topics.find((h) => h.title === "Tries")!;
+    const page = seen(REPO, readme("a/b", `${h2s(["Lab one", "Lab two"], 400)}<h2 id="user-content-tries">Tries</h2><table>${["Trie", "Word Dictionary"].map((t, i) => `<tr><td>${i + 1}</td><td><a href="https://leetcode.com/problems/${slug(t)}/">${t}</a></td></tr>`).join("")}</table>`));
+    const units = ["Lab one", "Lab two", "Tries"].map((t) => unit(t, `${REPO}#${slug(t)}`, { kind: "practice", minutes: 45 }));
+    const v = check({ answer: answer(units), pages: [page], role: "practice", material: { practice: PRACTICE } });
+    expect(one.title).toBe("Tries");
+    expect(v.list!.items.map((i) => [i.title, i.minutes])).toEqual([["Lab one", null], ["Lab two", null], ["Tries", null]]);
+    expect(v.facts).toContain("practice units: 3 items");
   });
 });
 
