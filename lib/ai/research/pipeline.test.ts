@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { APICallError } from "@ai-sdk/provider";
 import { clip, type ChapterList, type Material, type MaterialPractice, type PracticeList } from "@/lib/schemas/material";
 import { providerError } from "../providerError";
+import type { ServiceEvent } from "../serviceEvents";
 import type { ResearchArm } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
@@ -337,6 +338,23 @@ describe("the structure stage", () => {
     expect(byTitle(outcome.materials, "Problem Set")).toEqual(byTitle(gate, "Problem Set"));
     expect(outcome.costUsd).toBeCloseTo(0.11);
     expect(events.at(-1)?.type).toBe("research.done");
+  });
+
+  it("reports no service failure for a finder the stage's end cut off, though it throws the stage's timeout", async () => {
+    vi.useFakeTimers({ now: NOW });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const finder = finderOf(
+      (_m, _role, ctx) =>
+        new Promise<StructureResult>((_, reject) => ctx.signal!.addEventListener("abort", () => reject(ctx.signal!.reason), { once: true })),
+    );
+    const services: ServiceEvent[] = [];
+    const running = run(finder, { deadline: Date.now() + 170_000, log: { onService: (e) => void services.push(e) } });
+    await vi.advanceTimersByTimeAsync(50_000);
+    await running;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(finder.find).toHaveBeenCalled();
+    expect(services).toEqual([]);
+    errors.mockRestore();
   });
 
   it("defaultStructureFinder is a finder with or without a search key", () => {

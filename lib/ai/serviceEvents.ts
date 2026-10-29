@@ -17,6 +17,8 @@ export interface ServiceEvent {
   reason?: string;
   /** The step that gave up, for a final failure ("structure", "outline"). */
   where?: string;
+  /** When it happened (epoch ms): stamped as it is queued, since the stream sends it later, beside the next event. */
+  at?: number;
 }
 
 export type OnServiceEvent = (event: ServiceEvent) => void;
@@ -28,9 +30,14 @@ export function reasonOf(error: unknown): string {
   return message.slice(0, REASON_MAX);
 }
 
-/** A request its caller cancelled (the draft's deadline, a loop that stopped): not the service's failure. A timeout still is. */
-export function cancelledByCaller(signal: AbortSignal | undefined, error: unknown): boolean {
-  return signal?.aborted === true && !isTimeout(error);
+/**
+ * A request ended by its step's own signal: the request going away, a loop that stopped, or one of our own time
+ * limits (the structure finder's clock, the end of the structure stage, the draft's deadline). Not the service's
+ * failure, whatever the error is called: our own limits abort with a TimeoutError too. A request timeout that is not
+ * ours (the provider's, the SDK's) leaves the signal standing, and still counts.
+ */
+export function cancelledByCaller(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
 }
 
 export function isTimeout(error: unknown): boolean {
@@ -44,8 +51,8 @@ export function isTimeout(error: unknown): boolean {
 export function reportingModel(model: AiModelId | LanguageModel, onService: OnServiceEvent): LanguageModel {
   const inner = typeof model === "string" ? gateway(model) : model;
   const failed = (error: unknown, startedAt: number, signal: AbortSignal | undefined): never => {
-    // An attempt its caller aborted did not fail.
-    if (cancelledByCaller(signal, error)) throw error;
+    // An attempt its own signal ended did not fail, a timeout of ours included.
+    if (cancelledByCaller(signal)) throw error;
     const refusal = providerError(error);
     onService({
       type: "service",
@@ -86,10 +93,12 @@ const reported = new WeakSet<object>();
 
 /**
  * Reports that a step gave up on Anthropic: the provider refused it or it timed out. Anything else (a bad output, a
- * bug) is not the service's fault and reports nothing. `ms` is 0 because the failed attempts already carry the timing.
+ * bug) is not the service's fault and reports nothing, and neither does a call `signal` ended: the signal the step's
+ * call ran under, so one of our own time limits is never taken for Anthropic failing. `ms` is 0 because the failed
+ * attempts already carry the timing.
  */
-export function reportServiceFailure(log: GenerationLogContext | undefined, error: unknown, where: string): void {
-  if (!log?.onService) return;
+export function reportServiceFailure(log: GenerationLogContext | undefined, error: unknown, where: string, signal?: AbortSignal): void {
+  if (!log?.onService || cancelledByCaller(signal)) return;
   const refusal = providerError(error);
   if (!refusal && !isTimeout(error)) return;
   const key = (refusal ?? error) as object;

@@ -549,7 +549,7 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
       }
       // On the user's own key a provider refusal is theirs to hear about; a retry on the same key would be refused too.
       if (input.log?.keyOwner === "user" && providerError(error)) {
-        reportServiceFailure(input.log, error, "candidates");
+        reportServiceFailure(input.log, error, "candidates", input.signal);
         throw error;
       }
       failure = error;
@@ -557,7 +557,7 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
     }
   }
   // Both attempts failed: one gave-up report, not one per attempt.
-  if (failure) reportServiceFailure(input.log, failure, "candidates");
+  if (failure) reportServiceFailure(input.log, failure, "candidates", input.signal);
   return { list, costUsd };
 }
 

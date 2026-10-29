@@ -383,7 +383,7 @@ function modelAsker(
       } catch (error) {
         if (signal.aborted) return null;
         if (ctx.log?.keyOwner === "user" && providerError(error)) {
-          reportServiceFailure(ctx.log, error, "items");
+          reportServiceFailure(ctx.log, error, "items", signal);
           throw error;
         }
         failure = error;
@@ -391,7 +391,7 @@ function modelAsker(
       }
     }
     // Both attempts failed: one gave-up report, not one per attempt.
-    reportServiceFailure(ctx.log, failure, "items");
+    reportServiceFailure(ctx.log, failure, "items", signal);
     return null;
   };
 }

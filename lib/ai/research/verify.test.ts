@@ -199,6 +199,31 @@ describe("Open Library's terms", () => {
     expect(timedOut).toEqual([expect.objectContaining({ name: "openlibrary", ok: false, final: true })]);
   });
 
+  it("reports nothing for a fetch our own outer clock cut short, though its abort is a timeout", async () => {
+    const hangs = vi.fn<typeof fetch>((_url, init) => new Promise((_, reject) => init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason))));
+    const clock = new AbortController();
+    const events: ServiceEvent[] = [];
+    const pending = createOpenLibraryLookup(hangs, { contact: null, pace: async () => {}, onService: (e) => events.push(e) }).find("Book", null, clock.signal);
+    const settled = expect(pending).rejects.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    clock.abort(new DOMException("The structure stage ran out of time", "TimeoutError"));
+    await settled;
+    expect(events).toEqual([]);
+  });
+
+  it("reports a 200 whose body cannot be read as a failure, as the lookup then fails", async () => {
+    const pace = async () => {};
+    const garbled = vi.fn<typeof fetch>(async () => ({ ok: true, status: 200, json: async () => Promise.reject(new SyntaxError("Unexpected token <")) }) as unknown as Response);
+    const events: ServiceEvent[] = [];
+    await expect(createOpenLibraryLookup(garbled, { contact: null, pace, onService: (e) => events.push(e) }).find("Book", null)).rejects.toThrow();
+    expect(events).toEqual([expect.objectContaining({ name: "openlibrary", ok: false, final: true, reason: "unreadable body" })]);
+
+    const editions: ServiceEvent[] = [];
+    const chapters = createOpenLibraryLookup(garbled, { contact: null, pace, onService: (e) => editions.push(e) }).chapters!;
+    expect(await chapters({ key: "/works/OL1W", title: "Book", authors: [], year: null })).toBeNull();
+    expect(editions).toEqual([expect.objectContaining({ name: "openlibrary", ok: false, final: true, reason: "unreadable body" })]);
+  });
+
   it("reports each Open Library request: a refused connection as a failure, no match as a success", async () => {
     const pace = async () => {};
     const refused = vi.fn<typeof fetch>(async () => {

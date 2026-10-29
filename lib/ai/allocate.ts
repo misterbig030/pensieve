@@ -722,7 +722,7 @@ export async function allocatePlan(
     return { split, materials, dropped, coverage, costUsd };
   } catch (error) {
     if (input.signal?.aborted) throw error;
-    reportServiceFailure(input.log, error, "allocate");
+    reportServiceFailure(input.log, error, "allocate", abortSignal);
     if (input.model.keyOwner === "user" && providerError(error)) throw error;
     const { split, materials, dropped, coverage, facts } = fallbackAllocation(input);
     console.error("[draft] allocation failed; code chose the materials and the plan is all reading", facts, error);

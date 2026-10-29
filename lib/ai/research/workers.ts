@@ -298,7 +298,7 @@ export function createWorkersArm(options: WorkersArmOptions): ResearchArm {
           });
         } catch (error) {
           // On the user's own key a provider refusal stops the run; the pipeline lets it through and the guard names it.
-          reportServiceFailure(log, error, "worker");
+          reportServiceFailure(log, error, "worker", signal);
           if (log?.keyOwner === "user" && providerError(error)) throw error;
           // A failed model call ends this worker like a search outage; what it had done still counts, and the others go on.
           console.error(`[research] ${plan.direction} worker failed`, error);

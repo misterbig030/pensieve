@@ -411,7 +411,8 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
               lists.push(read.list);
               return { url: read.list.url, items: read.list.items.length, groups: listGroups(read.list).length };
             } catch (error) {
-              reportServiceFailure(log, error, "structure");
+              // The item reading runs under the run's signal, not the finder's clock.
+              reportServiceFailure(log, error, "structure", ctx.signal);
               if (log?.keyOwner === "user" && providerError(error)) {
                 refusal = error;
                 stop.abort(error);
@@ -533,7 +534,8 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
         throw refusal;
       }
       if (failure) {
-        reportServiceFailure(log, failure, "structure");
+        // A loop its own clock (or the stage's end) cut short did not fail on Anthropic.
+        reportServiceFailure(log, failure, "structure", signal);
         if (log?.keyOwner === "user" && providerError(failure)) {
           flush(["refused by the provider"]);
           throw failure;

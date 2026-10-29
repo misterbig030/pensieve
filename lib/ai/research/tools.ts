@@ -87,8 +87,9 @@ export function reportingSearch(provider: SearchProvider, onService: OnServiceEv
         onService({ type: "service", name: "search", ok: true, final: true, ms: ms() });
         return results;
       } catch (error) {
-        // A search the caller aborted is not the service failing.
-        if (!cancelledByCaller(options.signal, error)) onService({ type: "service", name: "search", ok: false, final: true, ms: ms(), reason: reasonOf(error) });
+        // A search its caller's signal ended (a loop that stopped, our own clock) is not the service failing; the
+        // provider's own request timeout leaves that signal standing, and counts.
+        if (!cancelledByCaller(options.signal)) onService({ type: "service", name: "search", ok: false, final: true, ms: ms(), reason: reasonOf(error) });
         throw error;
       }
     },

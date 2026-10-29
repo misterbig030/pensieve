@@ -205,6 +205,23 @@ describe("research tools", () => {
     expect(events).toEqual([expect.objectContaining({ name: "search", ok: false, final: true, reason: "Search timed out" })]);
   });
 
+  it("reports nothing for a search our own clock cut short, though the abort is a timeout", async () => {
+    const events: ServiceEvent[] = [];
+    const clock = new AbortController();
+    const cut = reportingSearch(
+      {
+        name: "fake",
+        search: async (_query, { signal }) => {
+          clock.abort(new DOMException("The structure finder's clock ran out", "TimeoutError"));
+          throw signal!.reason;
+        },
+      },
+      (e) => void events.push(e),
+    );
+    await expect(cut.search("q", { signal: clock.signal, maxResults: 5 })).rejects.toThrow();
+    expect(events).toEqual([]);
+  });
+
   it("reports the searches its tool makes through onService", async () => {
     const events: ServiceEvent[] = [];
     const provider: SearchProvider = { name: "fake", search: async () => [] };

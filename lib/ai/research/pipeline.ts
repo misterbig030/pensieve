@@ -247,7 +247,7 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
     } catch (error) {
       // On the user's own key a provider refusal is theirs to hear about: it stops the request (the guard names it).
       // Everything else, a search outage or a model hiccup on the app's key, shortens the list with a notice.
-      reportServiceFailure(input.log, error, "arm");
+      reportServiceFailure(input.log, error, "arm", input.signal);
       if (input.log?.keyOwner === "user" && providerError(error)) throw error;
       console.error("[research] arm failed", error);
       arm = null;
@@ -290,7 +290,8 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
               try {
                 return await finder.find(m, structureRole(m), { fetcher, emit, signal, log: input.log });
               } catch (error) {
-                reportServiceFailure(input.log, error, "structure");
+                // A finder the stage's end cut off did not fail on Anthropic.
+                reportServiceFailure(input.log, error, "structure", signal);
                 if (input.log?.keyOwner === "user" && providerError(error)) throw error;
                 console.error(`[research] structure finder failed for "${m.title}"`, error);
                 return null;

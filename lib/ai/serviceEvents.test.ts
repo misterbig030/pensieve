@@ -37,7 +37,7 @@ describe("reportingModel", () => {
     );
   });
 
-  it("reports nothing for an attempt its caller aborted, and still reports a timeout", async () => {
+  it("reports nothing for an attempt its own signal ended, a timeout of ours included", async () => {
     const aborted = new AbortController();
     const hung = new MockLanguageModelV4({
       doGenerate: async ({ abortSignal }) => {
@@ -49,15 +49,38 @@ describe("reportingModel", () => {
     await expect(generateText({ model: reportingModel(hung, onService), prompt: "p", maxRetries: 0, abortSignal: aborted.signal })).rejects.toThrow();
     expect(onService).not.toHaveBeenCalled();
 
-    const timedOut = AbortSignal.timeout(1);
-    const slow = new MockLanguageModelV4({
+    // The structure finder's clock, the stage's end, the draft's deadline: our own time limits, not Anthropic failing.
+    const clock = new AbortController();
+    const cut = new MockLanguageModelV4({
       doGenerate: async ({ abortSignal }) => {
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        clock.abort(new DOMException("The structure finder's clock ran out", "TimeoutError"));
         throw abortSignal?.reason;
       },
     });
-    await expect(generateText({ model: reportingModel(slow, onService), prompt: "p", maxRetries: 0, abortSignal: timedOut })).rejects.toThrow();
-    expect(onService).toHaveBeenCalledWith(expect.objectContaining({ name: "anthropic", ok: false, final: false }));
+    await expect(generateText({ model: reportingModel(cut, onService), prompt: "p", maxRetries: 0, abortSignal: clock.signal })).rejects.toThrow();
+    expect(onService).not.toHaveBeenCalled();
+  });
+
+  it("still reports a timeout that is not ours, and a provider error, while its signal stands", async () => {
+    const onService = vi.fn();
+    const signal = new AbortController().signal;
+    const timing = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      },
+    });
+    await expect(generateText({ model: reportingModel(timing, onService), prompt: "p", maxRetries: 0, abortSignal: signal })).rejects.toThrow();
+    expect(onService).toHaveBeenCalledTimes(1);
+    expect(onService).toHaveBeenLastCalledWith(expect.objectContaining({ name: "anthropic", ok: false, final: false }));
+
+    const refusing = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw apiError(400);
+      },
+    });
+    await expect(generateText({ model: reportingModel(refusing, onService), prompt: "p", maxRetries: 0, abortSignal: signal })).rejects.toThrow();
+    expect(onService).toHaveBeenCalledTimes(2);
+    expect(onService).toHaveBeenLastCalledWith(expect.objectContaining({ name: "anthropic", ok: false, final: false, status: 400 }));
   });
 
   it("keeps the inner model id", () => {
@@ -94,6 +117,24 @@ describe("reportServiceFailure", () => {
     reportServiceFailure(log, new Error("wrapped", { cause: refusal }), "arm");
     expect(events).toHaveLength(1);
     expect(events[0].where).toBe("items");
+  });
+
+  it("reports nothing once the step's own signal has fired, whatever the error; a timeout not ours still counts", () => {
+    const events: ServiceEvent[] = [];
+    const log = { onService: (e: ServiceEvent) => events.push(e) };
+    const deadline = new AbortController();
+    deadline.abort(new DOMException("The draft ran out of time", "TimeoutError"));
+    reportServiceFailure(log, deadline.signal.reason, "outline retry", deadline.signal);
+    reportServiceFailure(log, apiError(529), "outline retry", deadline.signal);
+    expect(events).toEqual([]);
+
+    const standing = new AbortController().signal;
+    reportServiceFailure(log, new DOMException("The operation timed out.", "TimeoutError"), "structure", standing);
+    reportServiceFailure(log, apiError(500), "structure", standing);
+    expect(events).toEqual([
+      expect.objectContaining({ ok: false, final: true, where: "structure" }),
+      expect.objectContaining({ ok: false, final: true, where: "structure", status: 500 }),
+    ]);
   });
 
   it("does not take an abort for a timeout", () => {

@@ -9,7 +9,7 @@ import { MAX_CHAPTERS, type Material } from "@/lib/schemas/material";
 import type { ModelCall } from "../logged";
 import { OUTLINE_RESERVE_MS } from "../planDraft";
 import { providerError } from "../providerError";
-import type { ServiceEvent } from "../serviceEvents";
+import { reportingModel, type ServiceEvent } from "../serviceEvents";
 import type { ResearchEvent } from "./events";
 import { extractHtml, type PageInfo } from "./extract";
 import type { FullReader } from "./itemFinder";
@@ -409,6 +409,43 @@ describe("the structure finder", () => {
     const result = await createStructureFinder({ provider: null, model }).find(material(), "read", { ...ctx, log: { ...ctx.log, onService: (e) => void events.push(e) } });
     expect(result).toMatchObject({ toc: null, list: null, refused: null, facts: ["no answer"] });
     expect(events).toContainEqual(expect.objectContaining({ type: "service", name: "anthropic", ok: false, final: true, where: "structure", status: 500 }));
+    errors.mockRestore();
+  });
+
+  it("reports no service failure when its own clock runs out mid-call: our time limit, not Anthropic failing", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const events: ServiceEvent[] = [];
+      const onService = (e: ServiceEvent) => void events.push(e);
+      const slow = new MockLanguageModelV4({
+        doGenerate: async ({ abortSignal }) => {
+          vi.advanceTimersByTime(STRUCTURE_WALL_MS + 1);
+          throw abortSignal?.reason;
+        },
+      });
+      const { ctx } = context();
+      const result = await createStructureFinder({ provider: null, model: reportingModel(slow, onService) }).find(material(), "read", { ...ctx, log: { ...ctx.log, onService } });
+      expect(result).toMatchObject({ toc: null, list: null, facts: ["no answer"] });
+      expect(events).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still reports a provider failure, and a timeout not its own, while its clock runs", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const failure of [new DOMException("The operation timed out.", "TimeoutError"), new APICallError({ message: "overloaded", url: "u", requestBodyValues: {}, statusCode: 529, responseBody: "", isRetryable: false })]) {
+      const events: ServiceEvent[] = [];
+      const onService = (e: ServiceEvent) => void events.push(e);
+      const model = new MockLanguageModelV4({
+        doGenerate: async () => {
+          throw failure;
+        },
+      });
+      const { ctx } = context();
+      await createStructureFinder({ provider: null, model: reportingModel(model, onService) }).find(material(), "read", { ...ctx, log: { ...ctx.log, onService } });
+      expect(events).toContainEqual(expect.objectContaining({ name: "anthropic", ok: false, final: true, where: "structure" }));
+    }
     errors.mockRestore();
   });
 

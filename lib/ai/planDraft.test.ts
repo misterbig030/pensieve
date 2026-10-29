@@ -8,6 +8,7 @@ vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof impor
 import { generateObject, streamObject } from "ai";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelCall } from "./logged";
+import type { ServiceEvent } from "./serviceEvents";
 import { STRUCTURE_ALLOCATE_MIN_MS, STRUCTURE_RESERVE_MS, type StructureFinder } from "./research/structureFinder";
 import { SourceFetcher } from "./research/tools";
 import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
@@ -892,6 +893,72 @@ describe("the draft's time budget", () => {
     const finish = finishOf(events);
     expect(finish.root.children).toHaveLength(4);
     expect(finish.root.children![0].children).toBeNull();
+  });
+
+  /** Every `AbortSignal.timeout` the draft makes, so a test can fire the deadline a call ran under. */
+  function deadlineTimers(): AbortController[] {
+    const timers: AbortController[] = [];
+    vi.spyOn(AbortSignal, "timeout").mockImplementation(() => {
+      const timer = new AbortController();
+      timers.push(timer);
+      return timer.signal;
+    });
+    return timers;
+  }
+
+  /** A stream whose deadline fires as it starts: it fails with the deadline's own timeout. */
+  function cutByDeadline(timers: AbortController[]) {
+    return (opts: unknown) => {
+      const timer = timers.find((t) => t.signal === (opts as { abortSignal?: AbortSignal }).abortSignal);
+      if (!timer) throw new Error("the call did not run under the draft's deadline");
+      timer.abort(new DOMException("The operation timed out.", "TimeoutError"));
+      return failingStream(timer.signal.reason)(opts);
+    };
+  }
+
+  const breaching = () => {
+    const all = AIE_MATERIALS.find((m) => m.id === "aie")!.toc!.chapters.map((_, i) => ({ id: `M1.${i + 1}`, tier: "must" as const, minutes: 100 }));
+    return fakeStream([{ title: "Everything", summary: "s", materials: all }]);
+  };
+  const retryDraft = (services: ServiceEvent[]) =>
+    streamPlanDraft({ topic: "AI", weeks: 1, daysPerWeek: 7, granularity: "week", hoursPerWeek: 6, materials: AIE_MATERIALS, split: { readingShare: 40, practice: "projects", reason: "r" }, deadline: Date.now() + DRAFT_BUDGET_MS, log: { onService: (e) => void services.push(e) } });
+
+  it("reports no service failure for a retry the draft's deadline cut short: the first answer stands", async () => {
+    const timers = deadlineTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mockedStreamObject.mockReturnValueOnce(breaching()).mockImplementationOnce(cutByDeadline(timers));
+    const services: ServiceEvent[] = [];
+    const events: PlanDraftEvent[] = [];
+    for await (const e of retryDraft(services)) events.push(e);
+    expect(mockedStreamObject).toHaveBeenCalledTimes(2);
+    expect(finishOf(events).root.children).toHaveLength(1);
+    expect(services).toEqual([]);
+  });
+
+  it("still reports a retry the provider refused on the app's key", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const overloaded = new APICallError({ message: "overloaded", url: "u", requestBodyValues: {}, statusCode: 529, responseBody: "", isRetryable: false });
+    mockedStreamObject.mockReturnValueOnce(breaching()).mockImplementationOnce(failingStream(overloaded));
+    const services: ServiceEvent[] = [];
+    for await (const e of retryDraft(services)) void e;
+    expect(services).toEqual([expect.objectContaining({ name: "anthropic", ok: false, final: true, status: 529, where: "outline retry" })]);
+  });
+
+  it("reports no service failure for a level the draft's deadline cut off: the unit stays a heading", async () => {
+    const timers = deadlineTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const deadline = Date.now() + STEP_MIN_MS + 30_000;
+    const clock = vi.spyOn(Date, "now");
+    const cut = cutByDeadline(timers);
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weekUnits(4))).mockImplementationOnce((opts: unknown) => {
+      clock.mockReturnValue(deadline + 1);
+      return cut(opts);
+    });
+    const services: ServiceEvent[] = [];
+    const events: PlanDraftEvent[] = [];
+    for await (const e of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 5, granularity: "day", materials: [], split: SPLIT, deadline, log: { onService: (e) => void services.push(e) } })) events.push(e);
+    expect(finishOf(events).root.children![0].children).toBeNull();
+    expect(services).toEqual([]);
   });
 
   it("fails the draft as before when its children fail for another reason", async () => {
