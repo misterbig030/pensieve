@@ -1,5 +1,6 @@
 import { generateObject, type FlexibleSchema, type LanguageModel, type LanguageModelUsage } from "ai";
 import type { GenerationCaller } from "@/lib/db/schema";
+import type { OnServiceEvent } from "./serviceEvents";
 import { estimateCostUsd, type AiModelId, type KeyOwner, type ReasoningEffort } from "./models";
 
 export type { GenerationCaller };
@@ -53,6 +54,8 @@ export interface GenerationLogMeta {
   onLog?: OnGenerationLog;
   /** Receives the full call (prompt and raw response) for the admin panel. Omitted means nothing is captured. */
   onCall?: OnModelCall;
+  /** Receives a report of each failed request to an outside service (Anthropic, Open Library, search). Omitted means none are reported. */
+  onService?: OnServiceEvent;
   /** Who pays for the calls in this request; "app" when omitted. The resolver sets it from the user's keys. */
   keyOwner?: KeyOwner;
 }

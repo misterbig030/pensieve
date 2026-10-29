@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { withCallEvents } from "./callEvents";
+import { withCallEvents, type CallEvent } from "./callEvents";
 import type { GenerationLogContext, ModelCall } from "./logged";
+import type { ServiceEvent } from "./serviceEvents";
 
 function call(label: string): ModelCall {
   return {
@@ -80,5 +81,25 @@ describe("withCallEvents", () => {
     expect(seen?.userId).toBe("u1");
     expect(seen?.trackId).toBe("t1");
     expect(seen?.onLog).toBe(onLog);
+  });
+
+  it("streams service events in order beside call events when enabled, and none when disabled", async () => {
+    const service = (ms: number): ServiceEvent => ({ type: "service", name: "anthropic", ok: false, final: false, ms, status: 529 });
+    const onService = vi.fn();
+    async function* reporting(log: GenerationLogContext): AsyncGenerator<Ev> {
+      yield { type: "node", n: 1 };
+      log.onService?.(service(1));
+      log.onCall?.(call("first"));
+      log.onService?.(service(2));
+      yield { type: "finish" };
+      log.onService?.(service(3));
+    }
+    const label = (e: Ev | CallEvent | ServiceEvent) =>
+      e.type === "call" ? `call:${e.call.label}` : e.type === "service" ? `service:${e.ms}` : e.type;
+    const on = await collect(withCallEvents(true, { onService }, reporting));
+    expect(on.map(label)).toEqual(["node", "service:1", "call:first", "service:2", "finish", "service:3"]);
+    expect(onService).toHaveBeenCalledTimes(3);
+    const off = await collect(withCallEvents(false, {}, reporting));
+    expect(off.map(label)).toEqual(["node", "finish"]);
   });
 });
