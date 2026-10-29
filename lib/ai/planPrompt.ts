@@ -8,6 +8,8 @@ import {
   placedMinutes,
   planBlockBudgets,
   practiceBudgets,
+  reservedRuns,
+  weekPracticeTime,
   type MaterialAliases,
   type PickSources,
   type ResolvedAlias,
@@ -558,20 +560,27 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
   if (picks.length === 0) return null;
   const days = input.level === "day";
-  const budgets = weekBudgetsOf(input);
+  const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
+  // Days inside a week that reserves listed runs do exactly those items: what a run frees or takes is block time,
+  // for blocks the days write themselves when the week reserves none (`weekPracticeTime`, as the checks hold it).
+  const runs = days ? reservedRuns(parent, input.materials) : {};
+  const held = Object.keys(runs).length > 0;
+  const budgets = held ? weekPracticeTime(weekBudgetsOf(input), runs) : weekBudgetsOf(input);
   const week = budgetFor(1, input.hoursPerWeek) * 60;
   const daysInWeek = days ? input.spans.length : input.daysPerWeek;
   const half = Math.round(leafBudgetMinutes("day", daysInWeek, input.hoursPerWeek) / 2 / 5) * 5;
   const lines = [`Practice: ${days ? "the" : "each"} week's time, about ${formatMinutes(week)}, is about ${formatMinutes(budgets.reading)} of reading and, by format:`];
   // A block is never split to fit a week's slice: it is budgeted over the plan, less what earlier units placed.
   const planBlocks = planBlockBudgets(input.split, budgetFor(input.weeks, input.hoursPerWeek) * 60, input.materials);
-  const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
   let firstItem: string | null = null;
   for (const p of picks) {
     const spec = PRACTICE_REGISTRY[p.pick.format];
     let time = `about ${formatMinutes(budgets.practice[p.pick.format] ?? 0)} ${days ? "this week" : "a week"}`;
     let sizing = sizingSentence(p.pick.format);
-    if (isBlockFormat(p.pick.format)) {
+    if (held && runs[p.pick.format] !== undefined) time += ", the minutes of the items reserved below";
+    if (held && isBlockFormat(p.pick.format)) {
+      sizing = `${spec.label} comes in whole blocks of about ${spec.fixedMinutes} min: when this week reserves none, write one yourself in about this week's time.`;
+    } else if (isBlockFormat(p.pick.format)) {
       const total = planBlocks[p.pick.format] ?? 0;
       const placed = input.tree && parent ? placedMinutes(input.tree, p.pick.format, parent.start - 1) : 0;
       const left = Math.max(0, total - placed);
@@ -594,7 +603,12 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   }
   // Block formats are held over the plan, so a week's minutes follow the blocks it holds.
   const blocks = picks.filter((p) => isBlockFormat(p.pick.format)).map((p) => `${PRACTICE_REGISTRY[p.pick.format].label}'s`);
-  const except = blocks.length === 0 ? "" : `, except ${blocks.join(" and ")}: a week that holds a block takes its minutes from the other formats, and a week without one gives its time to them`;
+  const except =
+    blocks.length === 0
+      ? ""
+      : held
+        ? `: the reserved items take exactly theirs, and ${blocks.join(" and ")} time is for blocks, written by the days when the week reserves none`
+        : `, except ${blocks.join(" and ")}: a week that holds a block takes its minutes from the other formats, and a week without one gives its time to them`;
   lines.push(`${days ? "Across the week" : "Within each week"}, each format's minutes add up to about its time${except}. Place a task longer than half a day's budget (about ${formatMinutes(half)}) on a day of its own.`);
   return lines.join("\n");
 }

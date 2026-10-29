@@ -582,6 +582,70 @@ export function practiceBudgets(
   return budgets;
 }
 
+/**
+ * The doing minutes of the listed items a heading reserves for one format: what its units have of that format to do.
+ * Undefined when it reserves no run of a listed source of that format, so the format's share of the week stands.
+ */
+export function reservedRunMinutes(
+  parent: PlanNode | null | undefined,
+  format: PracticeFormat,
+  materials: Pick<Material, "id" | "practice">[],
+): number | undefined {
+  let total: number | undefined;
+  for (const c of parent?.practiceCovers ?? []) {
+    if (c.format !== format || c.id === null) continue;
+    const list = materials.find((m) => m.id === c.id)?.practice?.list;
+    if (!list) continue;
+    const run = itemPositions(c);
+    const positions = run.length > 0 ? run : list.items.map((_, i) => i + 1);
+    total = (total ?? 0) + positions.reduce((sum, n) => sum + (list.items[n - 1] ? itemMinutes(format, list.items[n - 1]) : 0), 0);
+  }
+  return total;
+}
+
+/** `reservedRunMinutes` for every format a heading reserves a listed run of. */
+export function reservedRuns(parent: PlanNode | null | undefined, materials: Pick<Material, "id" | "practice">[]): Partial<Record<PracticeFormat, number>> {
+  const runs: Partial<Record<PracticeFormat, number>> = {};
+  for (const f of PRACTICE_FORMATS) {
+    const minutes = reservedRunMinutes(parent, f, materials);
+    if (minutes !== undefined) runs[f] = minutes;
+  }
+  return runs;
+}
+
+/**
+ * A week's practice minutes by format once its listed runs are known (`reservedRunMinutes`). A listed format gets its
+ * run exactly: its units can take no other items. What that frees against the format's share goes to the block
+ * formats the units can write themselves (a design prompt with a rubric, a mock), by their shares, and to reading
+ * when there are none; a run past its share takes the excess from the blocks, none below 0.
+ */
+export function weekPracticeTime(
+  budgets: { reading: number; practice: Partial<Record<PracticeFormat, number>> },
+  runs: Partial<Record<PracticeFormat, number>>,
+): { reading: number; practice: Partial<Record<PracticeFormat, number>> } {
+  const practice = { ...budgets.practice };
+  let spare = 0;
+  for (const f of PRACTICE_FORMATS) {
+    const run = runs[f];
+    if (run === undefined || practice[f] === undefined || isBlockFormat(f)) continue;
+    spare += practice[f]! - run;
+    practice[f] = run;
+  }
+  if (spare === 0) return { reading: budgets.reading, practice };
+  const blocks = PRACTICE_FORMATS.filter((f) => practice[f] !== undefined && isBlockFormat(f));
+  if (spare > 0) {
+    const written = blocks.filter((f) => PRACTICE_REGISTRY[f].generated !== "never");
+    if (written.length === 0) return { reading: budgets.reading + spare, practice };
+    const shares = shareOut(spare, written.map((f) => practice[f]!));
+    written.forEach((f, i) => (practice[f] = practice[f]! + shares[i]));
+    return { reading: budgets.reading, practice };
+  }
+  const held = blocks.reduce((sum, f) => sum + practice[f]!, 0);
+  const cut = shareOut(Math.min(-spare, held), blocks.map((f) => practice[f]!));
+  blocks.forEach((f, i) => (practice[f] = practice[f]! - cut[i]));
+  return { reading: budgets.reading, practice };
+}
+
 /** A pick on the time card: its hours, or none with `toReading` when it can't be assigned and its time is reading. */
 export type PickHours = ReturnType<typeof formatHours>[number] & { toReading: boolean };
 
@@ -1118,9 +1182,14 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
    * the plan, not the week: the blocks a week holds take their minutes from the per-item formats' budgets, and a week
    * without one gives its slice to them, shared by their picks' shares. Block formats have no budget of their own in
    * a week; the week's practice as a whole is held to its total instead.
+   * Days inside a week that reserves listed runs are the exception: they do exactly those items, so each format,
+   * blocks included, has the week's minutes of its own (`weekPracticeTime`) and a block the days leave unwritten is short.
    */
   const weekRule = (units: PlanNode[], index: number, unit: string, weekMinutes: number) => {
-    const budgets = practiceBudgets(input.split, weekMinutes, input.materials);
+    const plain = practiceBudgets(input.split, weekMinutes, input.materials);
+    const runs = units[0]?.level === "day" ? reservedRuns(parentNode, input.materials) : {};
+    const held = Object.keys(runs).length > 0;
+    const budgets = held ? weekPracticeTime(plain, runs) : plain;
     let must = 0;
     let should = 0;
     const assigned = new Map<PracticeFormat, number>();
@@ -1144,7 +1213,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     // The per-item formats' budgets, with the block slices the week leaves them (none below 0), shared by their picks.
     const pool = Math.max(0, sum(perItem, budgetOf) + sum(blocks, budgetOf) - sum(blocks, usedOf));
     const shares = perItem.map((f) => (budgets.practice[f] === undefined ? 0 : (activePicks(input.split).find((p) => p.format === f)?.share ?? 0)));
-    const scaled = blocks.length > 0 ? shareOut(pool, shares) : perItem.map(budgetOf);
+    const scaled = blocks.length > 0 && !held ? shareOut(pool, shares) : perItem.map(budgetOf);
     const short: string[] = [];
     let perItemOver = false;
     perItem.forEach((f, i) => {
@@ -1156,6 +1225,12 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
         breach("over-budget", index, unit, [], `${unit}'s ${name} practice is ${minutes} min against a budget of about ${budget} min`);
       } else if (minutes < budget / SHARE_TOLERANCE - BUDGET_SLACK) short.push(`${name} ${minutes} of about ${budget} min`);
     });
+    if (held) {
+      for (const f of blocks) {
+        const minutes = usedOf(f);
+        if (minutes < budgetOf(f) / SHARE_TOLERANCE - BUDGET_SLACK) short.push(`${PRACTICE_REGISTRY[f].label} ${minutes} of about ${budgetOf(f)} min`);
+      }
+    }
     if (short.length > 0) facts.push(`${unit} practice short: ${short.join(", ")}`);
     // With blocks, the week's practice as a whole; a per-item breach already names the excess against what the blocks
     // left. Without blocks the per-format budgets are the whole practice budget and hold it on their own.
