@@ -37,6 +37,29 @@ describe("reportingModel", () => {
     );
   });
 
+  it("reports nothing for an attempt its caller aborted, and still reports a timeout", async () => {
+    const aborted = new AbortController();
+    const hung = new MockLanguageModelV4({
+      doGenerate: async ({ abortSignal }) => {
+        aborted.abort(new Error("clock"));
+        throw abortSignal?.reason;
+      },
+    });
+    const onService = vi.fn();
+    await expect(generateText({ model: reportingModel(hung, onService), prompt: "p", maxRetries: 0, abortSignal: aborted.signal })).rejects.toThrow();
+    expect(onService).not.toHaveBeenCalled();
+
+    const timedOut = AbortSignal.timeout(1);
+    const slow = new MockLanguageModelV4({
+      doGenerate: async ({ abortSignal }) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        throw abortSignal?.reason;
+      },
+    });
+    await expect(generateText({ model: reportingModel(slow, onService), prompt: "p", maxRetries: 0, abortSignal: timedOut })).rejects.toThrow();
+    expect(onService).toHaveBeenCalledWith(expect.objectContaining({ name: "anthropic", ok: false, final: false }));
+  });
+
   it("keeps the inner model id", () => {
     expect(reportingModel("anthropic/claude-sonnet-5.5", vi.fn())).toHaveProperty("modelId", "anthropic/claude-sonnet-5.5");
   });
@@ -60,5 +83,25 @@ describe("reportServiceFailure", () => {
     expect(events[1].status).toBeUndefined();
 
     expect(() => reportServiceFailure(undefined, apiError(500), "x")).not.toThrow();
+  });
+
+  it("reports an error once, however many catch sites it passes through", () => {
+    const events: ServiceEvent[] = [];
+    const log = { onService: (e: ServiceEvent) => events.push(e) };
+    const refusal = apiError(400);
+    reportServiceFailure(log, refusal, "items");
+    reportServiceFailure(log, refusal, "structure");
+    reportServiceFailure(log, new Error("wrapped", { cause: refusal }), "arm");
+    expect(events).toHaveLength(1);
+    expect(events[0].where).toBe("items");
+  });
+
+  it("does not take an abort for a timeout", () => {
+    const events: ServiceEvent[] = [];
+    const caller = new AbortController();
+    caller.abort(new Error("clock"));
+    reportServiceFailure({ onService: (e) => events.push(e) }, new DOMException("This operation was aborted", "AbortError"), "x");
+    reportServiceFailure({ onService: (e) => events.push(e) }, caller.signal.reason, "x");
+    expect(events).toEqual([]);
   });
 });

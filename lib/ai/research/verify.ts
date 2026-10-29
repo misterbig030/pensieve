@@ -338,7 +338,10 @@ export function createOpenLibraryLookup(
       });
       return res;
     } catch (error) {
-      options.onService?.({ type: "service", name: "openlibrary", ok: false, final: true, ms: ms(), reason: reasonOf(error) });
+      // A fetch the caller aborted (the draft's deadline) is not Open Library failing; one of our own timeouts is.
+      if (!(signal?.aborted && !timeout.aborted)) {
+        options.onService?.({ type: "service", name: "openlibrary", ok: false, final: true, ms: ms(), reason: reasonOf(error) });
+      }
       throw error;
     }
   };

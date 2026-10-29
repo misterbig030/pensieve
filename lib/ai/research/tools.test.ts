@@ -175,6 +175,36 @@ describe("research tools", () => {
     expect(reportingSearch(provider, undefined)).toBe(provider);
   });
 
+  it("reports nothing for a search its caller aborted, and still reports a timeout", async () => {
+    const events: ServiceEvent[] = [];
+    const onService = (e: ServiceEvent) => void events.push(e);
+    const caller = new AbortController();
+    const aborting = reportingSearch(
+      {
+        name: "fake",
+        search: async () => {
+          caller.abort(new Error("clock"));
+          throw new SearchProviderError("This operation was aborted");
+        },
+      },
+      onService,
+    );
+    await expect(aborting.search("q", { signal: caller.signal, maxResults: 5 })).rejects.toThrow();
+    expect(events).toEqual([]);
+
+    const timing = reportingSearch(
+      {
+        name: "fake",
+        search: async () => {
+          throw new SearchProviderError("Search timed out");
+        },
+      },
+      onService,
+    );
+    await expect(timing.search("q", { signal: new AbortController().signal, maxResults: 5 })).rejects.toThrow();
+    expect(events).toEqual([expect.objectContaining({ name: "search", ok: false, final: true, reason: "Search timed out" })]);
+  });
+
   it("reports the searches its tool makes through onService", async () => {
     const events: ServiceEvent[] = [];
     const provider: SearchProvider = { name: "fake", search: async () => [] };

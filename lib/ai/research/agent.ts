@@ -508,6 +508,7 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
   const learnerUrls = input.brief.sources.map((s) => s.url);
   let list: CandidateStepList = { candidates: [], learner: [] };
   let costUsd = 0;
+  let failure: unknown = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const { object, costUsd: cost } = await loggedGenerateObject(
@@ -539,15 +540,24 @@ export async function runCandidateStep(input: CandidateStepInput): Promise<{ lis
       costUsd += cost;
       const candidates = capCandidates(object.candidates).map((c) => deriveFoundBy(bookPageFromNotes(c, found), found, learnerUrls));
       list = { ...object, candidates: candidates.filter((c) => !isBookListPage(c)) };
+      failure = null;
       break;
     } catch (error) {
-      if (input.signal?.aborted) break;
+      if (input.signal?.aborted) {
+        failure = null;
+        break;
+      }
       // On the user's own key a provider refusal is theirs to hear about; a retry on the same key would be refused too.
-      reportServiceFailure(input.log, error, "candidates");
-      if (input.log?.keyOwner === "user" && providerError(error)) throw error;
+      if (input.log?.keyOwner === "user" && providerError(error)) {
+        reportServiceFailure(input.log, error, "candidates");
+        throw error;
+      }
+      failure = error;
       console.error(`[research] candidate step failed (attempt ${attempt})`, error);
     }
   }
+  // Both attempts failed: one gave-up report, not one per attempt.
+  if (failure) reportServiceFailure(input.log, failure, "candidates");
   return { list, costUsd };
 }
 

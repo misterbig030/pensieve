@@ -179,6 +179,26 @@ describe("Open Library's terms", () => {
     expect(await createOpenLibraryLookup(fetchJson(docs), { contact: null, pace: async () => {} }).find("Book", "A. Author")).toMatchObject({ key: "/works/OL1W" });
   });
 
+  it("reports nothing for a fetch its caller aborted, and still reports one of its own timeouts", async () => {
+    const pace = async () => {};
+    const hangs = vi.fn<typeof fetch>((_url, init) => new Promise((_, reject) => init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason))));
+    const caller = new AbortController();
+    const cancelled: ServiceEvent[] = [];
+    const pending = createOpenLibraryLookup(hangs, { contact: null, pace, onService: (e) => cancelled.push(e) }).find("Book", null, caller.signal);
+    const settled = expect(pending).rejects.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    caller.abort(new Error("clock"));
+    await settled;
+    expect(cancelled).toEqual([]);
+
+    const timedOut: ServiceEvent[] = [];
+    const timing = vi.fn<typeof fetch>(async () => {
+      throw new DOMException("The operation timed out", "TimeoutError");
+    });
+    await expect(createOpenLibraryLookup(timing, { contact: null, pace, onService: (e) => timedOut.push(e) }).find("Book", null, new AbortController().signal)).rejects.toThrow();
+    expect(timedOut).toEqual([expect.objectContaining({ name: "openlibrary", ok: false, final: true })]);
+  });
+
   it("reports each Open Library request: a refused connection as a failure, no match as a success", async () => {
     const pace = async () => {};
     const refused = vi.fn<typeof fetch>(async () => {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { describeEgressError, guardedFetch, type GuardedFetchOptions } from "./egress";
 import { extractPage, type PageInfo } from "./extract";
 import type { ResearchEvent } from "./events";
-import { reasonOf, type OnServiceEvent } from "../serviceEvents";
+import { cancelledByCaller, reasonOf, type OnServiceEvent } from "../serviceEvents";
 
 // ---------------------------------------------------------------------------------------------------------------
 // Search
@@ -87,7 +87,8 @@ export function reportingSearch(provider: SearchProvider, onService: OnServiceEv
         onService({ type: "service", name: "search", ok: true, final: true, ms: ms() });
         return results;
       } catch (error) {
-        onService({ type: "service", name: "search", ok: false, final: true, ms: ms(), reason: reasonOf(error) });
+        // A search the caller aborted is not the service failing.
+        if (!cancelledByCaller(options.signal, error)) onService({ type: "service", name: "search", ok: false, final: true, ms: ms(), reason: reasonOf(error) });
         throw error;
       }
     },

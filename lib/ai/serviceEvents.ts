@@ -28,7 +28,12 @@ export function reasonOf(error: unknown): string {
   return message.slice(0, REASON_MAX);
 }
 
-function isTimeout(error: unknown): boolean {
+/** A request its caller cancelled (the draft's deadline, a loop that stopped): not the service's failure. A timeout still is. */
+export function cancelledByCaller(signal: AbortSignal | undefined, error: unknown): boolean {
+  return signal?.aborted === true && !isTimeout(error);
+}
+
+export function isTimeout(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { name?: unknown }).name === "TimeoutError";
 }
 
@@ -38,7 +43,9 @@ function isTimeout(error: unknown): boolean {
  */
 export function reportingModel(model: AiModelId | LanguageModel, onService: OnServiceEvent): LanguageModel {
   const inner = typeof model === "string" ? gateway(model) : model;
-  const failed = (error: unknown, startedAt: number): never => {
+  const failed = (error: unknown, startedAt: number, signal: AbortSignal | undefined): never => {
+    // An attempt its caller aborted did not fail.
+    if (cancelledByCaller(signal, error)) throw error;
     const refusal = providerError(error);
     onService({
       type: "service",
@@ -54,25 +61,28 @@ export function reportingModel(model: AiModelId | LanguageModel, onService: OnSe
   return wrapLanguageModel({
     model: inner as Parameters<typeof wrapLanguageModel>[0]["model"],
     middleware: {
-      wrapGenerate: async ({ doGenerate }) => {
+      wrapGenerate: async ({ doGenerate, params }) => {
         const startedAt = performance.now();
         try {
           return await doGenerate();
         } catch (error) {
-          return failed(error, startedAt);
+          return failed(error, startedAt, params.abortSignal);
         }
       },
-      wrapStream: async ({ doStream }) => {
+      wrapStream: async ({ doStream, params }) => {
         const startedAt = performance.now();
         try {
           return await doStream();
         } catch (error) {
-          return failed(error, startedAt);
+          return failed(error, startedAt, params.abortSignal);
         }
       },
     },
   });
 }
+
+/** The errors already reported as a final failure: one error reaches several nested catch sites, but is one failure. */
+const reported = new WeakSet<object>();
 
 /**
  * Reports that a step gave up on Anthropic: the provider refused it or it timed out. Anything else (a bad output, a
@@ -82,6 +92,9 @@ export function reportServiceFailure(log: GenerationLogContext | undefined, erro
   if (!log?.onService) return;
   const refusal = providerError(error);
   if (!refusal && !isTimeout(error)) return;
+  const key = (refusal ?? error) as object;
+  if (reported.has(key)) return;
+  reported.add(key);
   log.onService({
     type: "service",
     name: "anthropic",

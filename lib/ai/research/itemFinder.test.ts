@@ -5,6 +5,7 @@ import { MockLanguageModelV4 } from "ai/test";
 import { APICallError } from "@ai-sdk/provider";
 import type { Material } from "@/lib/schemas/material";
 import { providerError } from "../providerError";
+import type { ServiceEvent } from "../serviceEvents";
 import type { ResolvedAddress, Transport } from "./egress";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
@@ -355,6 +356,41 @@ describe("reading the item list at a given address", () => {
     expect(read.mock.calls.map((call) => call[0])).toEqual([RAW_URL]);
     expect(result.list).toMatchObject({ source: "file", url: RAW_URL });
     expect(result.list!.items).toHaveLength(ENTRIES.length);
+  });
+
+  it("reports a gave-up model call once, and not at all when the retry answers", async () => {
+    const failure = () => new APICallError({ message: "overloaded", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 529, responseBody: "", isRetryable: false });
+    const text = "The list: Two Sum. Valid Anagram. Group Anagrams.";
+    const read = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text, file: false, truncated: false }));
+    const answer = { found: true, url: REPO_URL, items: [draft("Two Sum"), draft("Valid Anagram"), draft("Group Anagrams")] };
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const readWith = async (model: MockLanguageModelV4) => {
+      const events: ServiceEvent[] = [];
+      const result = await readItemListAt(source, REPO_URL, { ...ctx().ctx, log: { onService: (e) => void events.push(e) } }, { model, read });
+      return { events, result };
+    };
+
+    let calls = 0;
+    const recovering = new MockLanguageModelV4({
+      doGenerate: async () => {
+        if (++calls === 1) throw failure();
+        return { content: [{ type: "text", text: JSON.stringify(answer) }], finishReason: { unified: "stop", raw: undefined }, usage, warnings: [] };
+      },
+    });
+    const recovered = await readWith(recovering);
+    expect(recovered.result.list).not.toBeNull();
+    expect(recovered.events.filter((e) => e.final)).toEqual([]);
+
+    const failing = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw failure();
+      },
+    });
+    const gaveUp = await readWith(failing);
+    expect(failing.doGenerateCalls).toHaveLength(2);
+    expect(gaveUp.result.list).toBeNull();
+    expect(gaveUp.events.filter((e) => e.final)).toEqual([expect.objectContaining({ name: "anthropic", ok: false, final: true, where: "items", status: 529 })]);
+    errors.mockRestore();
   });
 
   it("transcribes a page that is not a data file, that page the only read", async () => {
