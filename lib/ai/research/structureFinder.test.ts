@@ -21,6 +21,7 @@ import {
   STRUCTURE_SEARCHES,
   STRUCTURE_STEPS,
   STRUCTURE_WALL_MS,
+  answerStepOptions,
   buildStructurePrompt,
   createStructureFinder,
 } from "./structureFinder";
@@ -154,6 +155,7 @@ describe("the structure finder", () => {
     // Outlines the same page on every step, and writes text on the step forced to answer.
     const calls: LanguageModelV4CallOptions[] = [];
     const model = new MockLanguageModelV4({
+      modelId: "claude-sonnet-5-5",
       doGenerate: async (options) => {
         calls.push(options);
         return stepResult(options.toolChoice?.type === "tool" ? { text: "The primer is one long README." } : [{ tool: "outline", input: { url: PRIMER } }]);
@@ -169,6 +171,9 @@ describe("the structure finder", () => {
     // The instruction to answer is in the last step's prompt, not only in its tool choice.
     expect(JSON.stringify(calls.at(-1)!.prompt)).toContain(ANSWER_NOW.slice(0, 40));
     for (const c of calls.slice(0, -1)) expect(JSON.stringify(c.prompt)).not.toContain(ANSWER_NOW.slice(0, 40));
+    // Only the forced step lets Anthropic drop thinking blocks sealed with the full tool list; the others keep the effort alone.
+    expect(calls.at(-1)!.providerOptions).toEqual({ anthropic: { effort: "medium", thinking: { type: "adaptive", blockBinding: { prefixMismatchBehavior: "drop_block" } } } });
+    for (const c of calls.slice(0, -1)) expect(c.providerOptions).toEqual({ anthropic: { effort: "medium" } });
     expect(result).toMatchObject({ toc: null, minutes: null, basis: null, list: null, refused: null, note: null, units: 0, facts: ["no answer"] });
     // Five outlines of one page are one read.
     expect(fetchPage).toHaveBeenCalledTimes(1);
@@ -423,5 +428,47 @@ describe("the structure prompt", () => {
 
   it("leaves the outline its reserve and the allocation its least time", () => {
     expect(STRUCTURE_RESERVE_MS).toBe(STRUCTURE_ALLOCATE_MIN_MS + OUTLINE_RESERVE_MS);
+  });
+});
+
+describe("the forced answer on Anthropic", () => {
+  it("asks Anthropic to drop thinking blocks the narrowed tool list no longer matches", async () => {
+    // Sonnet 5.5 rejects a forced tool, so the provider sends only `answer`; thinking blocks from the earlier steps were
+    // sealed with every tool, and without drop_block Anthropic refuses the request (400, "The `tools` list differs").
+    const { createAnthropic } = await import("@ai-sdk/anthropic");
+    const { generateText, tool } = await import("ai");
+    const { z } = await import("zod");
+    let body: Record<string, unknown> = {};
+    let beta = "";
+    const fetchStub = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body));
+      beta = new Headers(init?.headers).get("anthropic-beta") ?? "";
+      return new Response(
+        JSON.stringify({ id: "msg_1", type: "message", role: "assistant", model: "claude-sonnet-5-5", content: [{ type: "tool_use", id: "toolu_1", name: "answer", input: { units: [] } }], stop_reason: "tool_use", stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    const model = createAnthropic({ apiKey: "test", fetch: fetchStub as typeof fetch })("claude-sonnet-5-5");
+    const tools = {
+      outline: tool({ description: "Read a page", inputSchema: z.object({ url: z.string() }) }),
+      answer: tool({ description: "Answer", inputSchema: z.object({ units: z.array(z.string()) }) }),
+    };
+    await generateText({ model, tools, toolChoice: { type: "tool", toolName: "answer" }, prompt: "Answer now.", providerOptions: answerStepOptions("medium", "claude-sonnet-5-5") });
+
+    expect((body.tools as { name: string }[]).map((t) => t.name)).toEqual(["answer"]);
+    // Anthropic refuses a binding without a thinking type ("thinking.type: Field required"); Sonnet 5.5 thinks adaptively.
+    expect(body.thinking).toEqual({ type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } });
+    expect(body.output_config).toEqual({ effort: "medium" });
+    expect(beta).toContain("thinking-binding-controls-2026-08-01");
+  });
+
+  it("leaves the thinking alone for a model that keeps every tool when forced, by gateway id or API id", () => {
+    // Haiku 4.5 has no adaptive thinking and is sent the whole tool list with the forced choice, so nothing mismatches.
+    expect(answerStepOptions("medium", "claude-haiku-4-5")).toEqual({ anthropic: { effort: "medium" } });
+    expect(answerStepOptions("medium", "anthropic/claude-sonnet-5")).toEqual({ anthropic: { effort: "medium" } });
+    expect(answerStepOptions("medium", "mock-model-id")).toEqual({ anthropic: { effort: "medium" } });
+    for (const id of ["anthropic/claude-sonnet-5.5", "claude-opus-5-5", "anthropic/claude-opus-5.5"]) {
+      expect(answerStepOptions("medium", id).anthropic).toHaveProperty("thinking", { type: "adaptive", blockBinding: { prefixMismatchBehavior: "drop_block" } });
+    }
   });
 });

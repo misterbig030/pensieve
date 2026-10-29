@@ -33,6 +33,20 @@ const MAX_OUTLINE_LINKS = 200;
 /** What the model is told on its last step, beside the forced choice of `answer`. */
 export const ANSWER_NOW =
   "This is your last step. Call `answer` now with the source's units from what the tools returned; if you found none, answer with whole set to true and no units.";
+/** Models the Anthropic provider sends `answer` alone for when it is forced: they reject forced tool use. */
+const NARROWS_FORCED_TOOL = /claude-(sonnet-5-5|opus-5-5|fable-5-1)\b/;
+
+/**
+ * The provider options of the step forced to answer. A model that rejects forced tool use is sent `answer` alone, and
+ * Anthropic seals each thinking block with the tool list it was written under: told nothing, it refuses the step (400,
+ * "The `tools` list differs"); told drop_block, it drops the earlier steps' thinking and keeps their calls and results.
+ * The binding needs a thinking type, and these models think adaptively. Other models keep every tool and are left alone.
+ */
+export function answerStepOptions(effort: ReasoningEffort, modelId: string) {
+  const options = effortOptions(effort);
+  if (!NARROWS_FORCED_TOOL.test(modelId.replace(/\./g, "-"))) return options;
+  return { anthropic: { ...options.anthropic, thinking: { type: "adaptive" as const, blockBinding: { prefixMismatchBehavior: "drop_block" as const } } } };
+}
 /** How much of a step's tool results the call log shows. */
 const LOG_RESULT_CHARS = 1500;
 
@@ -278,6 +292,8 @@ const NOTHING: Omit<UnitsVerdict, "facts"> = { toc: null, minutes: null, basis: 
 export function createStructureFinder(options: StructureFinderOptions): StructureFinder {
   const modelId = (typeof options.model === "string" ? options.model : DEFAULT_RESEARCH_MODEL) as AiModelId;
   const model = options.model ?? DEFAULT_RESEARCH_MODEL;
+  // The id the provider is called with: a user's key model carries its API id ("claude-sonnet-5-5").
+  const apiModelId = typeof model === "string" ? model : model.modelId;
   const effort = options.effort ?? STRUCTURE_EFFORT;
   return {
     async find(material, role, ctx) {
@@ -443,9 +459,11 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
         providerOptions: effortOptions(effort),
         stopWhen: [isStepCount(STRUCTURE_STEPS), hasToolCall("answer")],
         // The last step must answer. The instruction goes in the prompt too: a model that rejects forced tool use (Sonnet
-        // 5.5 on Anthropic) gets the forced choice sent as `auto`.
+        // 5.5 on Anthropic) is sent `answer` alone with `auto`, so that step also lets Anthropic drop mismatched thinking.
         prepareStep: ({ stepNumber, messages }) =>
-          stepNumber === STRUCTURE_STEPS - 1 ? { toolChoice: { type: "tool", toolName: "answer" }, messages: [...messages, { role: "user", content: ANSWER_NOW }] } : {},
+          stepNumber === STRUCTURE_STEPS - 1
+            ? { toolChoice: { type: "tool", toolName: "answer" }, providerOptions: answerStepOptions(effort, apiModelId), messages: [...messages, { role: "user", content: ANSWER_NOW }] }
+            : {},
         onLanguageModelCallEnd: (event) => {
           unstepped = { usage: event.usage, latencyMs: event.performance.responseTimeMs, finishReason: event.finishReason, content: event.content };
         },
