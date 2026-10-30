@@ -1,7 +1,7 @@
 import { ToolChoiceViolationError, ToolLoopAgent, hasToolCall, isStepCount, tool, type LanguageModel, type LanguageModelUsage, type ToolSet } from "ai";
 import { z } from "zod";
 import { MAX_CHAPTERS, clip, type Material, type PracticeList } from "@/lib/schemas/material";
-import { buildGenerationLogRow, effortOptions, emitGenerationLog, type GenerationLogContext, type ModelCall } from "../logged";
+import { buildGenerationLogRow, effortSettings, emitGenerationLog, isAnthropicModel, type GenerationLogContext, type ModelCall } from "../logged";
 import { DEFAULT_RESEARCH_MODEL, STRUCTURE_EFFORT, type AiModelId, type ReasoningEffort } from "../models";
 import { providerError } from "../providerError";
 import type { ResearchCounts, ResearchEvent } from "./events";
@@ -44,7 +44,9 @@ const NARROWS_FORCED_TOOL = /claude-(sonnet-5-5|opus-5-5|fable-5-1)\b/;
  * The binding needs a thinking type, and these models think adaptively. Other models keep every tool and are left alone.
  */
 export function answerStepOptions(effort: ReasoningEffort, modelId: string) {
-  const options = effortOptions(effort);
+  // Another provider's effort is the call's `reasoning` setting, which holds for every step: this step adds nothing.
+  if (!isAnthropicModel(modelId)) return undefined;
+  const options = { anthropic: { effort } };
   if (!NARROWS_FORCED_TOOL.test(modelId.replace(/\./g, "-"))) return options;
   return { anthropic: { ...options.anthropic, thinking: { type: "adaptive" as const, blockBinding: { prefixMismatchBehavior: "drop_block" as const } } } };
 }
@@ -474,7 +476,7 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
       const agent = new ToolLoopAgent({
         model,
         tools,
-        providerOptions: effortOptions(effort),
+        ...effortSettings(effort, model),
         stopWhen: [isStepCount(STRUCTURE_STEPS), hasToolCall("answer")],
         // The last step must answer. The instruction goes in the prompt too: a model that rejects forced tool use (Sonnet
         // 5.5 on Anthropic) is sent `answer` alone with `auto`, so that step also lets Anthropic drop mismatched thinking.

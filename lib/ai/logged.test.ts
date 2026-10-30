@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import type { LanguageModel } from "ai";
 import { estimateCostUsd } from "./models";
 
 vi.mock("ai", () => ({ generateObject: vi.fn() }));
 
 import { generateObject } from "ai";
-import { loggedGenerateObject, type GenerationLogRow, type ModelCall } from "./logged";
+import { effortSettings, loggedGenerateObject, type GenerationLogRow, type ModelCall } from "./logged";
 
 const mockedGenerateObject = vi.mocked(generateObject);
 
@@ -91,6 +92,18 @@ describe("loggedGenerateObject", () => {
     );
     expect(mockedGenerateObject).toHaveBeenCalledWith(expect.objectContaining({ providerOptions: { anthropic: { effort: "low" } } }));
     expect(rows[0].effort).toBe("low");
+  });
+
+  it("records the effort on the log row whatever the provider, sending other providers the portable setting", async () => {
+    mockedGenerateObject.mockResolvedValue(mockResult());
+    const rows: GenerationLogRow[] = [];
+    await loggedGenerateObject(
+      { model: "openai/gpt-5.4", schema, prompt: "hi", effort: "high" },
+      { caller: "research", onLog: (row) => void rows.push(row) },
+    );
+    expect(mockedGenerateObject).toHaveBeenCalledWith(expect.objectContaining({ reasoning: "high" }));
+    expect(mockedGenerateObject.mock.calls[0][0]).not.toHaveProperty("providerOptions");
+    expect(rows[0].effort).toBe("high");
   });
 
   it("records who paid: the app by default, the user when the context or the call says so", async () => {
@@ -203,5 +216,21 @@ describe("loggedGenerateObject", () => {
       loggedGenerateObject({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi" }, { caller: "outline", onLog }),
     ).rejects.toThrow("gateway 500");
     expect(onLog).not.toHaveBeenCalled();
+  });
+});
+
+describe("effortSettings", () => {
+  it("sends Anthropic models their effort as a provider option, as before", () => {
+    expect(effortSettings("high", "anthropic/claude-opus-5.5")).toEqual({ providerOptions: { anthropic: { effort: "high" } } });
+  });
+
+  it("sends other providers the portable reasoning setting", () => {
+    expect(effortSettings("medium", "google/gemini-3-flash")).toEqual({ reasoning: "medium" });
+    expect(effortSettings("high", "openai/gpt-5.4-mini")).toEqual({ reasoning: "high" });
+  });
+
+  it("treats a direct Anthropic instance (a user's key) as Anthropic", () => {
+    const instance = { modelId: "claude-sonnet-5-5", provider: "anthropic.messages" } as unknown as LanguageModel;
+    expect(effortSettings("low", instance)).toEqual({ providerOptions: { anthropic: { effort: "low" } } });
   });
 });

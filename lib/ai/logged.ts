@@ -5,9 +5,22 @@ import { estimateCostUsd, type AiModelId, type KeyOwner, type ReasoningEffort } 
 
 export type { GenerationCaller };
 
-/** The provider options that set Anthropic's reasoning effort on one call. Other providers ignore the key. */
-export function effortOptions(effort: ReasoningEffort): { anthropic: { effort: ReasoningEffort } } {
-  return { anthropic: { effort } };
+/** Whether a model is Anthropic's: a gateway id ("anthropic/claude-opus-5.5"), or an API id on a user's own key ("claude-sonnet-5-5"). */
+export function isAnthropicModel(model: AiModelId | LanguageModel): boolean {
+  const id = typeof model === "string" ? model : model.modelId;
+  return id.startsWith("anthropic/") || id.startsWith("claude-");
+}
+
+/**
+ * The call settings that set reasoning effort on one call. Anthropic models get their own provider option, as they
+ * always have; every other provider gets the AI SDK's portable `reasoning` setting, which the Anthropic key would ignore
+ * and those providers would otherwise never see.
+ */
+export function effortSettings(
+  effort: ReasoningEffort,
+  model: AiModelId | LanguageModel,
+): { providerOptions: { anthropic: { effort: ReasoningEffort } } } | { reasoning: ReasoningEffort } {
+  return isAnthropicModel(model) ? { providerOptions: { anthropic: { effort } } } : { reasoning: effort };
 }
 
 /** One normalized `generation_log` row, ready to insert. Kept free of DB types so the eval harness can collect them in memory. */
@@ -78,7 +91,7 @@ export interface LoggedGenerateObjectOptions<T> {
   abortSignal?: AbortSignal;
   /** Retries on a failed request; the AI SDK's default (2) when omitted. */
   maxRetries?: number;
-  /** Anthropic reasoning effort for this call, sent as a provider option and recorded on the row. Omitted: the model's default. */
+  /** Reasoning effort for this call, sent the way the model's provider takes it and recorded on the row. Omitted: the model's default. */
   effort?: ReasoningEffort;
   /** Who pays for this call when it differs from the context (a resolved model carries its own). */
   keyOwner?: KeyOwner;
@@ -146,7 +159,7 @@ export async function loggedGenerateObject<T>(
     prompt: opts.prompt,
     ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
     ...(opts.maxRetries !== undefined ? { maxRetries: opts.maxRetries } : {}),
-    ...(opts.effort ? { providerOptions: effortOptions(opts.effort) } : {}),
+    ...(opts.effort ? effortSettings(opts.effort, opts.model) : {}),
   });
   const latencyMs = Math.round(performance.now() - startedAt);
   const row = buildGenerationLogRow({

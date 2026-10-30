@@ -2,7 +2,7 @@ import { ToolLoopAgent, isStepCount, type LanguageModel } from "ai";
 import type { SourceInput } from "@/lib/schemas/source";
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { DEFAULT_HOURS_PER_WEEK, totalHours, weeksLabel } from "@/lib/studyTime";
-import { buildGenerationLogRow, effortOptions, emitGenerationLog, loggedGenerateObject, type GenerationLogContext } from "../logged";
+import { buildGenerationLogRow, effortSettings, emitGenerationLog, loggedGenerateObject, type GenerationLogContext } from "../logged";
 import { reportServiceFailure } from "../serviceEvents";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, RESEARCH_LOOP_EFFORT, type AiModelId, type ReasoningEffort } from "../models";
 import { providerError } from "../providerError";
@@ -310,7 +310,7 @@ export async function runResearchLoop(input: LoopInput): Promise<LoopResult> {
     model: input.model,
     instructions: input.instructions,
     tools,
-    providerOptions: effortOptions(effort),
+    ...effortSettings(effort, input.model),
     stopWhen: isStepCount(caps.steps),
     prepareStep: ({ stepNumber, messages }) => {
       if (!input.notesStep) return {};
