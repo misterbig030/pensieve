@@ -9,7 +9,7 @@ import type { AiModelId } from "@/lib/ai/models";
 import type { JudgeCriterion, Sample } from "./types";
 
 /** Where calibration files are written. */
-const CALIBRATION_DIR = "benchmarks/calibration";
+export const CALIBRATION_DIR = "benchmarks/calibration";
 
 /** A criterion is checked with at least this many owner grades, this many of them agreeing with the judge. */
 const MIN_GRADED = 10;
