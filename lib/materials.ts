@@ -3,7 +3,6 @@ import { budgetFor, cloneTree, daysInWeekOf, fullLabelOf, parentOf, walk, weeksO
 import {
   PRACTICE_FORMATS,
   PRACTICE_REGISTRY,
-  formatHours,
   formatRuns,
   isBlockFormat,
   itemMinutes,
@@ -681,22 +680,35 @@ export function weekPracticeTime(
   return { reading: budgets.reading, practice };
 }
 
-/** A pick on the time card: its hours, or none with `toReading` when it can't be assigned and its time is reading. */
-export type PickHours = ReturnType<typeof formatHours>[number] & { toReading: boolean };
+/** A pick on the time card: its percent of the plan's time, or none with `toReading` when it can't be assigned and its time is reading. */
+export interface PickPercent {
+  format: PracticeFormat;
+  label: string;
+  focus: string;
+  percent: number;
+  toReading: boolean;
+}
 
 /**
- * The time card's hours: reading, and each pick's (`formatHours`). A pick that can't be assigned is drafted as reading
- * (`practiceBudgets`), so its hours count as reading and it has none of its own.
+ * The time card's shares of the plan's time in whole percents that sum to 100: reading, the practice of a split without
+ * picks, and each pick's. A pick that can't be assigned is drafted as reading (`practiceBudgets`), so its share counts
+ * as reading and it has none of its own. Rounded from the exact shares by largest remainder, ties to reading first.
  */
-export function splitHours(split: PlanSplit, totalHours: number, materials: Pick<Material, "id" | "practice" | "minutes">[]): { reading: number; picks: PickHours[] } {
+export function splitPercents(split: PlanSplit, materials: Pick<Material, "id" | "practice" | "minutes">[]): { reading: number; practice: number; picks: PickPercent[] } {
   const assignable = new Map(pickSources(split, materials).map((p) => [p.pick.format, p.assignable]));
-  let reading = Math.round((totalHours * split.readingShare) / 100);
-  const picks = formatHours(split, totalHours).map((p) => {
-    const toReading = assignable.get(p.format) === false;
-    if (toReading) reading += p.hours;
-    return { ...p, hours: toReading ? 0 : p.hours, toReading };
-  });
-  return { reading, picks };
+  const formats = split.formats ?? [];
+  const toReading = formats.map((p) => assignable.get(p.format) === false);
+  // Whole-number weights over 100 × the picks' shares, so `shareOut` rounds exactly: a pick's is its part of the practice.
+  const whole = Math.max(1, formats.reduce((sum, p) => sum + p.share, 0));
+  const weights = formats.map((p) => (100 - split.readingShare) * p.share);
+  const reading = split.readingShare * whole + weights.reduce((sum, w, i) => sum + (toReading[i] ? w : 0), 0);
+  const practice = formats.length > 0 ? 0 : (100 - split.readingShare) * whole;
+  const [readingPercent, practicePercent, ...percents] = shareOut(100, [reading, practice, ...weights.map((w, i) => (toReading[i] ? 0 : w))]);
+  return {
+    reading: readingPercent,
+    practice: practicePercent,
+    picks: formats.map((p, i) => ({ format: p.format, label: PRACTICE_REGISTRY[p.format].label, focus: p.focus, percent: percents[i], toReading: toReading[i] })),
+  };
 }
 
 /**
