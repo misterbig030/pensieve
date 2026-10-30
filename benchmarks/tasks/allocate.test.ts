@@ -226,15 +226,24 @@ describe("allocate code criteria", () => {
     list: { url: `https://${name}.io`, items: Array.from({ length: items }, (_, i) => ({ title: `P${i}`, url: `https://${name}.io/${i}` })) },
   });
 
+  const NEETCODE = material("M3", "NeetCode 150", { kind: "docs", minutes: null, practice: list("neetcode", 3) as Material["practice"] });
+  const WITH_NAMED_LIST: AllocateCtx = { fixture: { ...FIXTURE, input: { ...FIXTURE.input, materials: [...FIXTURE.input.materials, NEETCODE] } }, topic: DRAFT_TOPICS.sde };
+
   it("named-list-kept is met by a kept named list with items", () => {
-    const kept = material("M3", "NeetCode 150", { kind: "docs", minutes: null, practice: list("neetcode", 3) as Material["practice"] });
-    expect(result(output([kept]), "named-list-kept")?.met).toBe(true);
+    expect(result(output([NEETCODE]), "named-list-kept", WITH_NAMED_LIST)?.met).toBe(true);
   });
 
   it("named-list-kept is not met by a named list without items or an unnamed one", () => {
     const empty = material("M3", "NeetCode 150", { kind: "docs", minutes: null, practice: list("neetcode", 0) as Material["practice"] });
     const unnamed = material("M4", "Some problems", { kind: "docs", minutes: null, practice: list("other", 3) as Material["practice"] });
-    expect(result(output([empty, unnamed]), "named-list-kept")?.met).toBe(false);
+    expect(result(output([empty, unnamed]), "named-list-kept", WITH_NAMED_LIST)?.met).toBe(false);
+  });
+
+  it("named-list-kept does not apply when research handed the allocation no named list with items", () => {
+    const unnamed = material("M4", "System design primer", { kind: "repo", minutes: null, practice: list("other", 3) as Material["practice"] });
+    const ctx: AllocateCtx = { fixture: { ...FIXTURE, input: { ...FIXTURE.input, materials: [KLEPPMANN(), unnamed] } }, topic: DRAFT_TOPICS.sde };
+    expect(result(output([KLEPPMANN(), unnamed]), "named-list-kept", ctx)).toBeUndefined();
+    expect(result(output([KLEPPMANN()]), "named-list-kept", WITH_NAMED_LIST)?.met).toBe(false);
   });
 
   const halfPractice = { readingShare: 50, practice: "problem-set", reason: "", formats: [{ format: "problem-set", share: 100 }] } as PlanSplit;

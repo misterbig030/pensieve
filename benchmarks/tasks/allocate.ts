@@ -73,6 +73,8 @@ const backbones = (ctx: AllocateCtx) => ctx.topic?.labels?.backbones ?? [];
 const expectedBooks = (ctx: AllocateCtx) => ctx.topic?.labels?.expectedBooks ?? [];
 const practiceNames = (ctx: AllocateCtx) => ctx.topic?.labels?.practiceNames ?? [];
 const learnerMaterials = (ctx: AllocateCtx) => ctx.fixture.input.materials.filter((m) => m.origin === "learner");
+/** A practice list the topic's labels name, carrying its items. */
+const namedListWithItems = (m: Material, ctx: AllocateCtx) => isNamedList(m, practiceNames(ctx)) && (m.practice?.list?.items.length ?? 0) > 0;
 
 /** The criteria a function decides. */
 const CODE_CRITERIA: CodeCriterion<AllocateOutput, AllocateCtx>[] = [
@@ -132,9 +134,10 @@ const CODE_CRITERIA: CodeCriterion<AllocateOutput, AllocateCtx>[] = [
     weight: 5,
     text: "A practice list the topic's labels name is kept, with its items.",
     grader: "code",
-    applies: (ctx) => practiceNames(ctx).length > 0,
+    // Only when research handed the allocation such a list: otherwise no model could keep one.
+    applies: (ctx) => ctx.fixture.input.materials.some((m) => namedListWithItems(m, ctx)),
     check: (output, ctx) => {
-      const hit = output.materials.find((m) => isNamedList(m, practiceNames(ctx)) && (m.practice?.list?.items.length ?? 0) > 0);
+      const hit = output.materials.find((m) => namedListWithItems(m, ctx));
       return hit ? { met: true, evidence: `"${hit.title}" kept with ${hit.practice?.list?.items.length} items` } : { met: false, evidence: `none of ${practiceNames(ctx).join(", ")} kept with items` };
     },
   },
