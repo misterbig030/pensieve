@@ -138,6 +138,19 @@ describe("fileJudgeCache", () => {
 
   const RESULTS: CriterionResult[] = [{ id: "a", met: true, evidence: "ok", grader: "judge", judge: JUDGE.model }];
 
+  it("scrubs secrets from the lines it appends", () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "gw-secret-123456");
+    try {
+      const path = join(dir, "judge.jsonl");
+      fileJudgeCache(path).set("k", [{ ...RESULTS[0], evidence: "saw gw-secret-123456" }]);
+      const text = readFileSync(path, "utf8");
+      expect(text).not.toContain("gw-secret-123456");
+      expect(fileJudgeCache(path).get("k")?.[0].evidence).toBe("saw [redacted]");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("treats a missing file as an empty cache", () => {
     const cache = fileJudgeCache(join(dir, "none", "judge.jsonl"));
     expect(cache.get("k")).toBeUndefined();

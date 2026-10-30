@@ -7,6 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { scrubSecrets } from "@/evals/draft/record";
 import { buildGenerationLogRow, effortSettings, type ModelCall } from "@/lib/ai/logged";
 import type { CriterionResult, JudgeCriterion, RoleModel, Sample } from "./types";
 
@@ -25,7 +26,7 @@ export interface JudgeCache {
 
 /**
  * A cache in a JSON-lines file. It reads the file on the first `get` or `set` (a missing file is an empty cache) and
- * appends a line for each `set`, creating the folder as needed; a later line for a key wins.
+ * appends a line for each `set` (through `scrubSecrets`), creating the folder as needed; a later line for a key wins.
  */
 export function fileJudgeCache(path: string = CACHE_FILE): JudgeCache {
   let entries: Map<string, CriterionResult[]> | null = null;
@@ -45,7 +46,7 @@ export function fileJudgeCache(path: string = CACHE_FILE): JudgeCache {
     set: (key, results) => {
       load().set(key, results);
       mkdirSync(dirname(path), { recursive: true });
-      appendFileSync(path, `${JSON.stringify({ key, results })}\n`);
+      appendFileSync(path, scrubSecrets(`${JSON.stringify({ key, results })}\n`));
     },
   };
 }

@@ -4,6 +4,7 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { scrubSecrets } from "@/evals/draft/record";
 import { stamp } from "@/evals/draft/run";
 import type { AiModelId } from "@/lib/ai/models";
 import type { JudgeCriterion, Sample } from "./types";
@@ -83,7 +84,7 @@ export function writeCalibration(
   };
   mkdirSync(dir, { recursive: true });
   const path = join(dir, `${task}-${stamp()}.json`);
-  writeFileSync(path, JSON.stringify(file, null, 2) + "\n");
+  writeFileSync(path, scrubSecrets(JSON.stringify(file, null, 2) + "\n"));
   return path;
 }
 

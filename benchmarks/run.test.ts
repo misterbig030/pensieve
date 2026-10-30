@@ -130,8 +130,11 @@ describe("runBenchmark", () => {
 
   it("stops starting samples once the cap is reached and writes the report", async () => {
     const runSample = runner(() => completed(0.3));
-    const { dir } = await runBenchmark({ ...base({ maxUsd: 1 }), concurrency: 1, runSample, judge: judge() });
+    const lines: string[] = [];
+    const { dir } = await runBenchmark({ ...base({ maxUsd: 1, print: (l: string) => lines.push(l) }), concurrency: 1, runSample, judge: judge() });
     expect(runSample).toHaveBeenCalledTimes(4);
+    expect(lines).toContain("4 of 8 samples not started: the spend cap was reached");
+    expect(JSON.parse(readFileSync(join(dir, "run.json"), "utf8")).notStarted).toBe(4);
     expect(readdirSync(join(dir, "samples"))).toHaveLength(4);
     expect(existsSync(join(dir, "report.md"))).toBe(true);
     expect(JSON.parse(readFileSync(join(dir, "run.json"), "utf8")).spentUsd).toBeCloseTo(1.2);
@@ -181,6 +184,24 @@ describe("runBenchmark", () => {
     expect(summaries[0].voids).toBe(1);
   });
 
+  it("skips the second judge for a sample whose primary judge failed", async () => {
+    const judgeFn = vi.fn(async (args: Parameters<typeof judgeDimension>[0]) => {
+      if (args.judge.model === JUDGE.model) throw new Error("gateway down");
+      throw new Error("the second judge must not be asked");
+    }) as unknown as typeof judgeDimension & ReturnType<typeof vi.fn>;
+    const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1 }), runSample: runner(), judge: judgeFn });
+    expect(judgeFn.mock.calls.every(([a]) => a.judge.model === JUDGE.model)).toBe(true);
+    expect(readSamples(dir).every((s) => !s.judged && s.secondJudge === undefined)).toBe(true);
+  });
+
+  it("fails before any call when a calibration file is broken, naming it", async () => {
+    mkdirSync(calibrationDir, { recursive: true });
+    writeFileSync(join(calibrationDir, "allocate-broken.json"), '{ "task": "allocate", ');
+    const runSample = runner();
+    await expect(runBenchmark({ ...base(), runSample, judge: judge() })).rejects.toThrow(/allocate-broken\.json is not valid JSON/);
+    expect(runSample).not.toHaveBeenCalled();
+  });
+
   it("saves a failed sample as judged, with no judge calls", async () => {
     const runSample = runner(() => ({ gate: { status: "failed", reason: "fallback: no time" }, output: OUTPUT, calls: [], costUsd: 0.1, ms: 1 }));
     const judgeFn = judge();
@@ -194,7 +215,7 @@ describe("runBenchmark", () => {
       throw new Error("boom");
     });
     const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1, contestants: [] }), runSample, judge: judge() });
-    expect(readSamples(dir)[0].gate).toEqual({ status: "void", reason: "run threw: boom" });
+    expect(readSamples(dir)[0].gate).toEqual({ status: "void", reason: "harness error: boom" });
   });
 });
 
@@ -257,14 +278,33 @@ describe("rescoreBenchmark", () => {
     expect(readFileSync(join(dir, "report.md"), "utf8")).toContain("# Model benchmark: allocate");
   });
 
-  it("stops asking the judge once its own cap is reached", async () => {
+  it("stops asking the judge once its own cap is reached, keeping the saved judgments", async () => {
     const { cache } = memoryCache();
     const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1 }), runSample: runner(), judge: judge(), cache });
     const expensive = judge(5);
     await rescoreBenchmark(dir, { judge: expensive, cache: memoryCache().cache, maxUsd: 1, concurrency: 1, fixturesRoot, calibrationDir, print: () => {} });
-    // The first call costs 5, over the cap of 1: no second call is made.
+    // The first call costs 5, over the cap of 1: no second call is made, and the other dimensions keep their saved answers.
     expect(expensive).toHaveBeenCalledTimes(1);
-    expect(readSamples(dir).every((s) => !s.judged)).toBe(true);
+    for (const sample of readSamples(dir)) {
+      expect(sample.judged).toBe(true);
+      expect(sample.results.filter((r) => r.grader === "judge")).toHaveLength(8);
+    }
+  });
+
+  it("keeps the saved judge results when a rescore gets no new answer", async () => {
+    const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1 }), runSample: runner(), judge: judge(), cache: memoryCache().cache });
+    const before = readSamples(dir);
+    expect(before.every((s) => s.judged && s.secondJudge)).toBe(true);
+
+    // An empty cache and a judge that cannot answer: nothing new is obtained.
+    const broken = vi.fn(async () => {
+      throw new Error("gateway down");
+    }) as unknown as typeof judgeDimension;
+    await rescoreBenchmark(dir, { judge: broken, cache: memoryCache().cache, maxUsd: 0, fixturesRoot, calibrationDir, print: () => {} });
+    const after = readSamples(dir);
+    expect(after.map((s) => s.judged)).toEqual([true, true]);
+    expect(after.map((s) => s.results)).toEqual(before.map((s) => s.results));
+    expect(after.map((s) => s.secondJudge)).toEqual(before.map((s) => s.secondJudge));
   });
 });
 

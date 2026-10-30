@@ -59,47 +59,92 @@ function writeScrubbed(path: string, text: string): void {
 
 const writeJson = (path: string, value: unknown) => writeScrubbed(path, JSON.stringify(value, null, 2) + "\n");
 
+/** A calibration file as saved; a hand-edit that broke the JSON is an error naming the file. */
+function readCalibrationFile(path: string): CalibrationFile {
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as CalibrationFile;
+  } catch (error) {
+    throw new Error(`Calibration file ${path} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 /** The calibration files for this task in `dir`, and from them which judge criteria the owner has checked. A missing folder means none. */
-function loadChecked(dir: string) {
+function loadChecked(dir: string): Checked {
   const files = existsSync(dir)
     ? readdirSync(dir)
         .filter((name) => name.endsWith(".json"))
-        .map((name) => JSON.parse(readFileSync(join(dir, name), "utf8")) as CalibrationFile)
+        .map((name) => readCalibrationFile(join(dir, name)))
         .filter((file) => file.task === TASK)
     : [];
   return checkedCriteria(files, JUDGE.model, JUDGE_CRITERIA);
 }
 
 type JudgeFn = typeof judgeDimension;
+type Checked = ReturnType<typeof checkedCriteria>;
+
+/** Why judging stopped short: the spend cap was reached, or a judge call failed. */
+type Stop = "cap" | "error" | null;
 
 /**
- * Grades a rendered output on every judge dimension with `judge`, adding each call's cost to the cap. Stops, incomplete,
- * once the cap is reached (checked before each call) or a call throws.
+ * Grades a rendered output on every judge dimension with `judge`, adding each call's cost to the cap. Returns the answers
+ * it got, by dimension, and why it stopped short when it did: the cap was reached (checked before each call) or a call threw.
  */
 async function judgeAll(
   rendered: string,
   model: RoleModel,
   deps: { judge: JudgeFn; cache: JudgeCache; cap: SpendCap; print: (line: string) => void },
-): Promise<{ results: CriterionResult[]; complete: boolean }> {
-  const results: CriterionResult[] = [];
+): Promise<{ fresh: Map<string, CriterionResult[]>; stopped: Stop }> {
+  const fresh = new Map<string, CriterionResult[]>();
   for (const [dimension, criteria] of DIMENSIONS) {
-    if (deps.cap.reached) return { results, complete: false };
+    if (deps.cap.reached) return { fresh, stopped: "cap" };
     try {
       const judged = await deps.judge({ rendered, dimension, criteria, judge: model, cache: deps.cache });
       deps.cap.add(judged.costUsd);
-      results.push(...judged.results);
+      fresh.set(dimension, judged.results);
     } catch (error) {
       deps.print(`${model.model} could not judge ${dimension}: ${error instanceof Error ? error.message : String(error)}`);
-      return { results, complete: false };
+      return { fresh, stopped: "error" };
     }
   }
-  return { results, complete: true };
+  return { fresh, stopped: null };
+}
+
+/**
+ * Judges a completed sample and sets its results and `judged`. Code results are always recomputed. For each dimension a
+ * new answer replaces the saved one; where none was obtained the saved results stay, so a short cap or cache never
+ * destroys an earlier judgment. `judged` is true when every judge criterion has a result, old or new. The second judge
+ * runs when `second` is set and the primary did not fail on an error (a cap stop is left to the second judge's own cap
+ * check); its results replace the saved ones only when every dimension was answered.
+ */
+async function judgeSample(
+  sample: Sample<AllocateOutput>,
+  fixture: AllocateFixture,
+  second: boolean,
+  deps: { judge: JudgeFn; cache: JudgeCache; cap: SpendCap; print: (line: string) => void },
+): Promise<void> {
+  const rendered = renderAllocation(sample.output!, fixture.input);
+  const saved = sample.results.filter((r) => r.grader === "judge");
+  const primary = await judgeAll(rendered, JUDGE, deps);
+  const judgeResults: CriterionResult[] = [];
+  let complete = true;
+  for (const [dimension, criteria] of DIMENSIONS) {
+    const kept = criteria.flatMap((c) => saved.filter((r) => r.id === c.id).slice(0, 1));
+    const results = primary.fresh.get(dimension) ?? kept;
+    judgeResults.push(...results);
+    if (results.length < criteria.length) complete = false;
+  }
+  sample.results = [...codeResults(sample.output!, ctxFor(fixture)), ...judgeResults];
+  sample.judged = complete;
+  if (second && primary.stopped !== "error") {
+    const other = await judgeAll(rendered, SECOND_JUDGE, deps);
+    if (other.fresh.size === DIMENSIONS.size) sample.secondJudge = [...other.fresh.values()].flat();
+  }
 }
 
 /** Everything a finished or rescored round writes after its samples: scores, the report and the chart. */
 function writeOutputs(
   dir: string,
-  args: { samples: Sample[]; contestants: Contestant[]; fixtures: string[]; epochs: number; maxUsd: number; spentUsd: number; margin: number; commit: string; checkedDir: string },
+  args: { samples: Sample[]; contestants: Contestant[]; fixtures: string[]; epochs: number; maxUsd: number; spentUsd: number; margin: number; commit: string; checked: Checked },
 ): ContestantSummary[] {
   const { samples, contestants, margin } = args;
   const summaries = summarize(samples, ALLOCATE_CRITERIA, contestants, margin);
@@ -111,7 +156,7 @@ function writeOutputs(
       summaries,
       samples,
       criteria: ALLOCATE_CRITERIA,
-      checked: loadChecked(args.checkedDir),
+      checked: args.checked,
       run: { commit: args.commit, fixtures: args.fixtures, epochs: args.epochs, capUsd: args.maxUsd, spentUsd: args.spentUsd, judge: JUDGE, secondJudge: SECOND_JUDGE, margin },
     }),
   );
@@ -171,6 +216,8 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
   const contestants = contestantsFor(opts.contestants);
   const fixtures = opts.fixtures.map((id) => loadFixture(id, fixturesRoot));
   if (fixtures.length === 0) throw new Error("No fixtures to run on");
+  // Read before any paid call, so a calibration file broken by hand fails the run now and not after the spend.
+  const checked = loadChecked(calibrationDir);
 
   const renderedChars = fixtures.reduce((sum, f) => sum + renderMaterials(f.input.materials).length, 0) / fixtures.length;
   const estimated: Estimate = estimate({ fixtures, contestants, epochs, judgeDimensions: DIMENSIONS.size, renderedChars });
@@ -183,6 +230,7 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
   const dir = join(opts.outDir ?? RESULTS_DIR, `${stamp(new Date(startedAt))}-${TASK}`);
   const commit = opts.commit ?? gitCommit();
   const cap = new SpendCap(maxUsd);
+  let notStarted = 0;
   const runInfo = () => ({
     task: TASK,
     fixtures: opts.fixtures,
@@ -195,6 +243,7 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
     commit,
     estimate: estimated,
     spentUsd: cap.spentUsd,
+    notStarted,
     startedAt,
   });
   writeJson(join(dir, "run.json"), runInfo());
@@ -206,12 +255,12 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
   const second = secondJudgeSamples(planned.map((p) => ({ ...p, contestant: p.contestant.name, fixture: p.fixture.id })));
   const secondNames = new Set([...second].map(sampleName));
 
-  /** One attempt: a throw is a void sample, since the run itself broke and says nothing about the model. */
+  /** One attempt: a throw is a void sample marked as ours, since the harness broke and that says nothing about the model. */
   const attempt = async (fixture: AllocateFixture, contestant: Contestant) => {
     try {
       return await runSample(fixture, contestant);
     } catch (error) {
-      return { gate: { status: "void" as const, reason: `run threw: ${error instanceof Error ? error.message : String(error)}` }, output: null, calls: [], costUsd: 0, ms: 0 };
+      return { gate: { status: "void" as const, reason: `harness error: ${error instanceof Error ? error.message : String(error)}` }, output: null, calls: [], costUsd: 0, ms: 0 };
     }
   };
 
@@ -226,15 +275,7 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
 
     const sample: Sample<AllocateOutput> = { task: TASK, fixture: fixture.id, contestant: contestant.name, epoch, ...ran, results: [], judged: true };
     if (sample.gate.status === "completed" && sample.output) {
-      const rendered = renderAllocation(sample.output, fixture.input);
-      const deps = { judge, cache, cap, print };
-      const primary = await judgeAll(rendered, JUDGE, deps);
-      sample.results = [...codeResults(sample.output, ctxFor(fixture)), ...primary.results];
-      sample.judged = primary.complete;
-      if (secondNames.has(sampleName(sample))) {
-        const other = await judgeAll(rendered, SECOND_JUDGE, deps);
-        if (other.complete) sample.secondJudge = other.results;
-      }
+      await judgeSample(sample, fixture, secondNames.has(sampleName(sample)), { judge, cache, cap, print });
     }
     writeJson(join(dir, "samples", `${sampleName(sample)}.json`), sample);
     print(sampleLine(sample));
@@ -242,8 +283,10 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
   });
 
   const samples = done.filter((s): s is Sample<AllocateOutput> => s !== null);
+  notStarted = planned.length - samples.length;
+  if (notStarted > 0) print(`${notStarted} of ${planned.length} samples not started: the spend cap was reached`);
   writeJson(join(dir, "run.json"), runInfo());
-  const summaries = writeOutputs(dir, { samples, contestants, fixtures: opts.fixtures, epochs, maxUsd, spentUsd: cap.spentUsd, margin, commit, checkedDir: calibrationDir });
+  const summaries = writeOutputs(dir, { samples, contestants, fixtures: opts.fixtures, epochs, maxUsd, spentUsd: cap.spentUsd, margin, commit, checked });
   print(`Spent ${usd(cap.spentUsd)} of the ${usd(maxUsd)} cap`);
   print(`Report: ${join(dir, "report.md")}`);
   return { dir, summaries };
@@ -301,6 +344,7 @@ export async function rescoreBenchmark(dir: string, deps: RescoreDeps = {}): Pro
   const cache = deps.cache ?? fileJudgeCache();
   const fixturesRoot = deps.fixturesRoot ?? FIXTURES_ROOT;
   const { run, samples } = readSaved(dir);
+  const checked = loadChecked(deps.calibrationDir ?? CALIBRATION_DIR);
   const maxUsd = deps.maxUsd ?? run.maxUsd;
   const cap = new SpendCap(maxUsd);
 
@@ -315,17 +359,7 @@ export async function rescoreBenchmark(dir: string, deps: RescoreDeps = {}): Pro
 
   await mapLimit(samples, deps.concurrency ?? CONCURRENCY, async (sample) => {
     if (sample.gate.status !== "completed" || !sample.output) return;
-    const fixture = fixtures.get(sample.fixture)!;
-    const rendered = renderAllocation(sample.output, fixture.input);
-    const judgeDeps = { judge, cache, cap, print };
-    const primary = await judgeAll(rendered, JUDGE, judgeDeps);
-    sample.results = [...codeResults(sample.output, ctxFor(fixture)), ...primary.results];
-    sample.judged = primary.complete;
-    delete sample.secondJudge;
-    if (secondNames.has(sampleName(sample))) {
-      const other = await judgeAll(rendered, SECOND_JUDGE, judgeDeps);
-      if (other.complete) sample.secondJudge = other.results;
-    }
+    await judgeSample(sample, fixtures.get(sample.fixture)!, secondNames.has(sampleName(sample)), { judge, cache, cap, print });
     writeJson(join(dir, "samples", `${sampleName(sample)}.json`), sample);
   });
 
@@ -338,7 +372,7 @@ export async function rescoreBenchmark(dir: string, deps: RescoreDeps = {}): Pro
     spentUsd: run.spentUsd + cap.spentUsd,
     margin: run.margin,
     commit: run.commit,
-    checkedDir: deps.calibrationDir ?? CALIBRATION_DIR,
+    checked,
   });
   print(`Rescored ${samples.length} samples; judging cost ${usd(cap.spentUsd)}`);
   print(`Report: ${join(dir, "report.md")}`);

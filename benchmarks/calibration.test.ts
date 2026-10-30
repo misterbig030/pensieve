@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { checkedCriteria, pickCalibration, writeCalibration, type CalibrationFile } from "./calibration";
 import type { CriterionResult, JudgeCriterion, Sample } from "./types";
 
@@ -113,6 +113,18 @@ describe("pickCalibration", () => {
 
 describe("writeCalibration", () => {
   const dir = () => mkdtempSync(join(tmpdir(), "calibration-")) + "/nested";
+
+  it("scrubs secrets from what it writes", () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "gw-secret-123456");
+    try {
+      const path = writeCalibration("allocate", [sample("opus", "f1", 1)], () => "plan with gw-secret-123456 in it", [crit("a")], dir());
+      const text = readFileSync(path, "utf8");
+      expect(text).not.toContain("gw-secret-123456");
+      expect(text).toContain("plan with [redacted] in it");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 
   it("writes one item per sample with the judge's grades and no owner grades", () => {
     const d = dir();
