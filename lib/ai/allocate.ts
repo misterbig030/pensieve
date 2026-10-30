@@ -23,6 +23,7 @@ import {
 } from "@/lib/schemas/material";
 import { normalizeSplit, practiceLabelOf, totalHours, type PlanSplit } from "@/lib/studyTime";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
+import { reportServiceFailure } from "./serviceEvents";
 import { ALLOCATE_EFFORT } from "./models";
 import { formatMinutes, practiceTag, sizingSentence } from "./planPrompt";
 import { providerError } from "./providerError";
@@ -721,6 +722,7 @@ export async function allocatePlan(
     return { split, materials, dropped, coverage, costUsd };
   } catch (error) {
     if (input.signal?.aborted) throw error;
+    reportServiceFailure(input.log, error, "allocate", abortSignal);
     if (input.model.keyOwner === "user" && providerError(error)) throw error;
     const { split, materials, dropped, coverage, facts } = fallbackAllocation(input);
     console.error("[draft] allocation failed; code chose the materials and the plan is all reading", facts, error);

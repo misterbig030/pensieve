@@ -21,6 +21,7 @@ import {
   type WorkerSummary,
 } from "./agent";
 import type { ResearchEvent, WorkerDirection } from "./events";
+import { reportServiceFailure } from "../serviceEvents";
 import { RESEARCH_CAPS, ResearchNotes, type ResearchCaps, type SearchProvider, type SourceFetcher } from "./tools";
 import { mapLimit, normalizeCoverage } from "./verify";
 
@@ -297,6 +298,7 @@ export function createWorkersArm(options: WorkersArmOptions): ResearchArm {
           });
         } catch (error) {
           // On the user's own key a provider refusal stops the run; the pipeline lets it through and the guard names it.
+          reportServiceFailure(log, error, "worker", signal);
           if (log?.keyOwner === "user" && providerError(error)) throw error;
           // A failed model call ends this worker like a search outage; what it had done still counts, and the others go on.
           console.error(`[research] ${plan.direction} worker failed`, error);

@@ -4,14 +4,17 @@ import type { ResearchEvent } from "./events";
 import {
   ResearchBudget,
   ResearchNotes,
+  SearchProviderError,
   SourceFetcher,
   createResearchTools,
   createTavilyProvider,
+  reportingSearch,
   type PageFetcher,
   type SearchProvider,
 } from "./tools";
 import { EgressError } from "./egress";
 import type { PageInfo } from "./extract";
+import type { ServiceEvent } from "../serviceEvents";
 
 const page = (url: string, title: string): PageInfo => ({
   finalUrl: url,
@@ -146,6 +149,93 @@ describe("research tools", () => {
     expect(second).toMatchObject({ error: expect.stringMatching(/budget spent/) });
     expect(provider.search).toHaveBeenCalledTimes(1);
     expect(events).toEqual([{ type: "research.search", query: "one", results: 1 }]);
+  });
+
+  it("reports each search: an error as a failure, no results as a success", async () => {
+    const events: ServiceEvent[] = [];
+    const onService = (e: ServiceEvent) => void events.push(e);
+    const failing = reportingSearch(
+      {
+        name: "fake",
+        search: async () => {
+          throw new SearchProviderError("Search returned 429");
+        },
+      },
+      onService,
+    );
+    await expect(failing.search("q", { maxResults: 5 })).rejects.toThrow("Search returned 429");
+    expect(events).toEqual([expect.objectContaining({ type: "service", name: "search", ok: false, final: true, reason: "Search returned 429" })]);
+
+    events.length = 0;
+    const empty = reportingSearch({ name: "fake", search: async () => [] }, onService);
+    expect(await empty.search("q", { maxResults: 5 })).toEqual([]);
+    expect(events).toEqual([expect.objectContaining({ name: "search", ok: true, final: true })]);
+
+    const provider: SearchProvider = { name: "fake", search: async () => [] };
+    expect(reportingSearch(provider, undefined)).toBe(provider);
+  });
+
+  it("reports nothing for a search its caller aborted, and still reports a timeout", async () => {
+    const events: ServiceEvent[] = [];
+    const onService = (e: ServiceEvent) => void events.push(e);
+    const caller = new AbortController();
+    const aborting = reportingSearch(
+      {
+        name: "fake",
+        search: async () => {
+          caller.abort(new Error("clock"));
+          throw new SearchProviderError("This operation was aborted");
+        },
+      },
+      onService,
+    );
+    await expect(aborting.search("q", { signal: caller.signal, maxResults: 5 })).rejects.toThrow();
+    expect(events).toEqual([]);
+
+    const timing = reportingSearch(
+      {
+        name: "fake",
+        search: async () => {
+          throw new SearchProviderError("Search timed out");
+        },
+      },
+      onService,
+    );
+    await expect(timing.search("q", { signal: new AbortController().signal, maxResults: 5 })).rejects.toThrow();
+    expect(events).toEqual([expect.objectContaining({ name: "search", ok: false, final: true, reason: "Search timed out" })]);
+  });
+
+  it("reports nothing for a search our own clock cut short, though the abort is a timeout", async () => {
+    const events: ServiceEvent[] = [];
+    const clock = new AbortController();
+    const cut = reportingSearch(
+      {
+        name: "fake",
+        search: async (_query, { signal }) => {
+          clock.abort(new DOMException("The structure finder's clock ran out", "TimeoutError"));
+          throw signal!.reason;
+        },
+      },
+      (e) => void events.push(e),
+    );
+    await expect(cut.search("q", { signal: clock.signal, maxResults: 5 })).rejects.toThrow();
+    expect(events).toEqual([]);
+  });
+
+  it("reports the searches its tool makes through onService", async () => {
+    const events: ServiceEvent[] = [];
+    const provider: SearchProvider = { name: "fake", search: async () => [] };
+    const tools = createResearchTools({
+      provider,
+      fetcher: new SourceFetcher(),
+      budget: new ResearchBudget({ steps: 12, searches: 1, fetches: 1, wallMs: 60_000 }),
+      notes: new ResearchNotes(),
+      emit: () => {},
+      onSearchError: () => {},
+      onService: (e) => void events.push(e),
+    });
+    await tools.webSearch.execute!({ query: "one" }, execOpts);
+    expect(events).toEqual([expect.objectContaining({ name: "search", ok: true, final: true })]);
   });
 
   it("enforces the fetch cap and emits reading then fetch", async () => {

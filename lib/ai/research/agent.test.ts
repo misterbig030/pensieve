@@ -4,8 +4,9 @@ import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { providerError } from "../providerError";
+import type { ServiceEvent } from "../serviceEvents";
 import type { ModelCall } from "../logged";
-import { bookPageFromNotes, briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, isBookListPage, namedButNotListed, practiceLines, readButNotListed } from "./agent";
+import { runCandidateStep, bookPageFromNotes, briefLines, buildFinalPrompt, buildResearchInstructions, createAgentArm, isBookListPage, namedButNotListed, practiceLines, readButNotListed } from "./agent";
 import type { ResearchEvent } from "./events";
 import { EgressError } from "./egress";
 import type { PageInfo } from "./extract";
@@ -621,6 +622,37 @@ describe("books the notes name", () => {
     expect(bookPageFromNotes(listed, found)).toBe(listed);
     const essay = { ...ddia, kind: "essay" as const };
     expect(bookPageFromNotes(essay, found)).toBe(essay);
+  });
+});
+
+describe("the candidate step's service report", () => {
+  const failure = () => new APICallError({ message: "overloaded", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 529, responseBody: "", isRetryable: false });
+  const step = async (script: (call: number) => unknown) => {
+    let call = 0;
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        const next = script(++call);
+        if (next instanceof Error) throw next;
+        return { content: [{ type: "text", text: JSON.stringify(next) }], finishReason: { unified: "stop", raw: undefined }, usage, warnings: [] };
+      },
+    });
+    const events: ServiceEvent[] = [];
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await runCandidateStep({ model, brief, notes: "notes", facts: [], log: { onService: (e) => void events.push(e) } });
+    errors.mockRestore();
+    return { events: events.filter((e) => e.final), result, calls: call };
+  };
+
+  it("reports nothing when the retry answers", async () => {
+    const { events, result } = await step((call) => (call === 1 ? failure() : LIST));
+    expect(result.list.candidates.length).toBeGreaterThan(0);
+    expect(events).toEqual([]);
+  });
+
+  it("reports once when both attempts fail", async () => {
+    const { events, calls } = await step(() => failure());
+    expect(calls).toBe(2);
+    expect(events).toEqual([expect.objectContaining({ name: "anthropic", ok: false, final: true, where: "candidates", status: 529 })]);
   });
 });
 

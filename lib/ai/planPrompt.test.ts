@@ -576,6 +576,40 @@ describe("listed practice sources in prompts", () => {
   const days = (tree: ReturnType<typeof makeRoot>, parentId: string) =>
     buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "day", spans: [1, 1, 1, 1, 1], weeks: 3, daysPerWeek: 5, hoursPerWeek: 6, split, tree: layout(tree), parentId, unitsAreLeaves: true });
 
+  it("gives days inside a reserved run the run's minutes and the rest of the week to blocks they write", () => {
+    // Run 3 of the SDE eval: 21% reading; problems 56%, design 26%, mock 16%, recall 2%; Week 1 reserves items 1–9.
+    const formats = [
+      { format: "problem-set" as const, share: 56, focus: "patterns", reason: "" },
+      { format: "design-exercise" as const, share: 26, focus: "timed designs", reason: "" },
+      { format: "mock" as const, share: 16, focus: "full loops", reason: "" },
+      { format: "recall" as const, share: 2, focus: "stories", reason: "" },
+    ];
+    const sde = { readingShare: 21, practice: "problems, design, mock and recall", reason: "", formats };
+    const at = (covers: PracticeCover[]) =>
+      buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "day", spans: [1, 1, 1, 1, 1], weeks: 8, daysPerWeek: 5, hoursPerWeek: 6, split: sde, tree: layout(makeRoot([week("w1", { practiceCovers: covers })])), parentId: "w1", unitsAreLeaves: true });
+    const prompt = at([reserve(1, 9)]);
+    expect(prompt).toContain("Practice: the week's time, about 6 h, is about 76 min of reading and, by format:");
+    // Items 1–9 are 195 min; the 36 past the problems' 159-min share come out of design and mock.
+    expect(prompt).toContain('- Problems (format "problem-set"): about 3.3 h this week, the minutes of the items reserved below, aimed at patterns.');
+    expect(prompt).toContain('- Design (format "design-exercise"): about 52 min this week, aimed at timed designs.');
+    expect(prompt).toContain('- Mock (format "mock"): about 31 min this week, aimed at full loops.');
+    expect(prompt).toContain("Design comes in whole blocks of about 50 min: when this week reserves none, write one yourself in about this week's time.");
+    expect(prompt).toContain(
+      "Across the week, each format's minutes add up to about its time: the reserved items take exactly theirs, and Design's and Mock's time is for blocks, written by the days when the week reserves none.",
+    );
+    expect(prompt).not.toContain("a week without one gives its time to them");
+    // Items another week already did are not this week's: Week 2, split by hand, did item 5 (25 min), leaving 170.
+    const doneDay = makeNode({ id: "d5", level: "day", title: "D", summary: "s", len: 1, practice: [item(5)] });
+    const tree = layout(makeRoot([week("w1", { practiceCovers: [reserve(1, 9)] }), week("w2", { manualSplit: true, children: [doneDay] })]));
+    const minus = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "day", spans: [1, 1, 1, 1, 1], weeks: 8, daysPerWeek: 5, hoursPerWeek: 6, split: sde, tree, parentId: "w1", unitsAreLeaves: true });
+    expect(minus).toContain('- Problems (format "problem-set"): about 2.8 h this week, the minutes of the items reserved below, aimed at patterns.');
+    expect(minus).not.toContain("Top K Frequent Elements");
+    // A week that reserves only a source without a list keeps the plan-wide block rule.
+    const unlisted = at([{ format: "problem-set", id: "Q", note: "Graphs" }]);
+    expect(unlisted).toContain("a week without one gives its time to them");
+    expect(unlisted).toContain("over the whole plan");
+  });
+
   it("asks headings which units take a listed source, and leaves its runs to the app", () => {
     const top = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "week", spans: [5, 5, 5], weeks: 3, daysPerWeek: 5, hoursPerWeek: 6, split, unitsAreLeaves: false });
     // The list is shown by group with positions and minutes under its source, never by title; its time is per item.

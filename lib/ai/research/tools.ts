@@ -3,6 +3,7 @@ import { z } from "zod";
 import { describeEgressError, guardedFetch, type GuardedFetchOptions } from "./egress";
 import { extractPage, type PageInfo } from "./extract";
 import type { ResearchEvent } from "./events";
+import { cancelledByCaller, reasonOf, type OnServiceEvent } from "../serviceEvents";
 
 // ---------------------------------------------------------------------------------------------------------------
 // Search
@@ -66,6 +67,31 @@ export function createTavilyProvider(apiKey: string, fetchImpl: typeof fetch = f
           snippet: (r.content ?? "").slice(0, 500),
           publishedDate: r.published_date ?? null,
         }));
+    },
+  };
+}
+
+/**
+ * The provider with each search reported to `onService` as one request to the search service, after it answers or
+ * throws. Without `onService` the provider comes back as it is.
+ */
+export function reportingSearch(provider: SearchProvider, onService: OnServiceEvent | undefined): SearchProvider {
+  if (!onService) return provider;
+  return {
+    name: provider.name,
+    async search(query, options) {
+      const startedAt = performance.now();
+      const ms = () => Math.round(performance.now() - startedAt);
+      try {
+        const results = await provider.search(query, options);
+        onService({ type: "service", name: "search", ok: true, final: true, ms: ms() });
+        return results;
+      } catch (error) {
+        // A search its caller's signal ended (a loop that stopped, our own clock) is not the service failing; the
+        // provider's own request timeout leaves that signal standing, and counts.
+        if (!cancelledByCaller(options.signal)) onService({ type: "service", name: "search", ok: false, final: true, ms: ms(), reason: reasonOf(error) });
+        throw error;
+      }
     },
   };
 }
@@ -264,6 +290,8 @@ export interface ResearchToolsOptions {
   emit: (event: ResearchEvent) => void;
   /** Called when the search API fails; the loop ends early and drafts from what it has. */
   onSearchError: (error: Error) => void;
+  /** Told of each search request, for the draft eval. */
+  onService?: OnServiceEvent;
 }
 
 export const BUDGET_SPENT = "budget spent";
@@ -284,7 +312,8 @@ const drawnByScript = (words: number) =>
   `This page came back nearly empty (${words} words). It may be drawn by script in the browser, which this reader does not run, or it may just be short or have failed to read; either way it says nothing about solutions or size. If it should hold more, look for a readable copy of the same content: the site's GitHub repository or a static page that lists it.`;
 
 export function createResearchTools(opts: ResearchToolsOptions) {
-  const { provider, fetcher, budget, notes, emit } = opts;
+  const { fetcher, budget, notes, emit } = opts;
+  const provider = reportingSearch(opts.provider, opts.onService);
 
   const webSearch = tool({
     description: `Search the web. Returns up to ${SEARCH_RESULTS} results as title, url, snippet and published date — never the page itself. Use fetchSource to read a page.`,

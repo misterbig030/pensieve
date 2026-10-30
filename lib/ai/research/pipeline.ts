@@ -3,6 +3,7 @@ import { isPracticeOnly } from "@/lib/materials";
 import { PRACTICE_REGISTRY } from "@/lib/practice";
 import { clip, type Material, type MaterialPractice, type PracticeList } from "@/lib/schemas/material";
 import type { GenerationLogContext } from "../logged";
+import { reportServiceFailure } from "../serviceEvents";
 import type { AiModelId } from "../models";
 import { providerError } from "../providerError";
 import { briefHours, createAgentArm, type ArmResult, type ResearchArm, type ResearchBrief } from "./agent";
@@ -233,7 +234,7 @@ export function defaultStructureFinder(
 export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGenerator<ResearchEvent, ResearchOutcome> {
   const caps = input.caps ?? capsFor(briefHours(input.brief));
   const fetcher = input.fetcher ?? new SourceFetcher();
-  const books = input.books ?? createOpenLibraryLookup();
+  const books = input.books ?? createOpenLibraryLookup(undefined, { onService: input.log?.onService });
   yield { type: "research.start", caps: { searches: caps.searches, fetches: caps.fetches, steps: caps.steps } };
 
   let arm: ArmResult | null = null;
@@ -246,6 +247,7 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
     } catch (error) {
       // On the user's own key a provider refusal is theirs to hear about: it stops the request (the guard names it).
       // Everything else, a search outage or a model hiccup on the app's key, shortens the list with a notice.
+      reportServiceFailure(input.log, error, "arm", input.signal);
       if (input.log?.keyOwner === "user" && providerError(error)) throw error;
       console.error("[research] arm failed", error);
       arm = null;
@@ -288,6 +290,8 @@ export async function* researchMaterials(input: ResearchMaterialsInput): AsyncGe
               try {
                 return await finder.find(m, structureRole(m), { fetcher, emit, signal, log: input.log });
               } catch (error) {
+                // A finder the stage's end cut off did not fail on Anthropic.
+                reportServiceFailure(input.log, error, "structure", signal);
                 if (input.log?.keyOwner === "user" && providerError(error)) throw error;
                 console.error(`[research] structure finder failed for "${m.title}"`, error);
                 return null;

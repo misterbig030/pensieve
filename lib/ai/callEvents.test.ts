@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { withCallEvents } from "./callEvents";
+import { withCallEvents, type CallEvent } from "./callEvents";
 import type { GenerationLogContext, ModelCall } from "./logged";
+import type { ServiceEvent } from "./serviceEvents";
 
 function call(label: string): ModelCall {
   return {
@@ -52,6 +53,21 @@ describe("withCallEvents", () => {
     ]);
   });
 
+  it("yields the calls queued before a failure, then rethrows it", async () => {
+    async function* failing(log: GenerationLogContext): AsyncGenerator<Ev> {
+      yield { type: "node", n: 1 };
+      log.onCall?.(call("before the error"));
+      throw new Error("boom");
+    }
+    const seen: string[] = [];
+    await expect(
+      (async () => {
+        for await (const e of withCallEvents(true, {}, failing)) seen.push(e.type === "call" ? `call:${e.call.label}` : e.type);
+      })(),
+    ).rejects.toThrow("boom");
+    expect(seen).toEqual(["node", "call:before the error"]);
+  });
+
   it("flushes a call reported after the last event", async () => {
     async function* tail(log: GenerationLogContext): AsyncGenerator<Ev> {
       yield { type: "finish" };
@@ -80,5 +96,37 @@ describe("withCallEvents", () => {
     expect(seen?.userId).toBe("u1");
     expect(seen?.trackId).toBe("t1");
     expect(seen?.onLog).toBe(onLog);
+  });
+
+  it("stamps a service event with when it was queued, not when the stream sends it", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    async function* reporting(log: GenerationLogContext): AsyncGenerator<Ev> {
+      log.onService?.({ type: "service", name: "openlibrary", ok: false, final: true, ms: 3 });
+      now.mockReturnValue(9_000);
+      yield { type: "finish" };
+    }
+    const events = await collect(withCallEvents(true, {}, reporting));
+    expect(events[0]).toMatchObject({ type: "service", name: "openlibrary", at: 1_000 });
+    now.mockRestore();
+  });
+
+  it("streams service events in order beside call events when enabled, and none when disabled", async () => {
+    const service = (ms: number): ServiceEvent => ({ type: "service", name: "anthropic", ok: false, final: false, ms, status: 529 });
+    const onService = vi.fn();
+    async function* reporting(log: GenerationLogContext): AsyncGenerator<Ev> {
+      yield { type: "node", n: 1 };
+      log.onService?.(service(1));
+      log.onCall?.(call("first"));
+      log.onService?.(service(2));
+      yield { type: "finish" };
+      log.onService?.(service(3));
+    }
+    const label = (e: Ev | CallEvent | ServiceEvent) =>
+      e.type === "call" ? `call:${e.call.label}` : e.type === "service" ? `service:${e.ms}` : e.type;
+    const on = await collect(withCallEvents(true, { onService }, reporting));
+    expect(on.map(label)).toEqual(["node", "service:1", "call:first", "service:2", "finish", "service:3"]);
+    expect(onService).toHaveBeenCalledTimes(3);
+    const off = await collect(withCallEvents(false, {}, reporting));
+    expect(off.map(label)).toEqual(["node", "finish"]);
   });
 });

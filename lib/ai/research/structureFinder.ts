@@ -8,7 +8,8 @@ import type { ResearchCounts, ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
 import { listGroups, readItemListAt, type FullReader } from "./itemFinder";
 import type { OutlineHeading, OutlineLink, PageOutline } from "./outline";
-import { SEARCH_RESULTS, type SearchProvider, type SourceFetcher } from "./tools";
+import { SEARCH_RESULTS, reportingSearch, type SearchProvider, type SourceFetcher } from "./tools";
+import { reportServiceFailure } from "../serviceEvents";
 import { checkUnits, citedUnfetched, structureAnswerSchema, type SeenPage, type StructureAnswer, type StructureRole, type UnitsVerdict } from "./units";
 import { mainTitle } from "./verify";
 
@@ -372,8 +373,9 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
       };
 
       const provider = options.provider;
+      const search = provider && reportingSearch(provider, log?.onService);
       const searchable = (material.kind === "book" && !material.toc) || (practiceRole && !material.practice?.list);
-      if (provider && searchable) {
+      if (search && searchable) {
         tools.search = tool({
           description: `Search the web, for a book's table of contents or a practice source's full list. Returns up to ${SEARCH_RESULTS} results as url, title and snippet. At most ${STRUCTURE_SEARCHES} searches.`,
           inputSchema: z.object({ query: z.string().min(1).max(200).describe("A focused search query") }),
@@ -381,7 +383,7 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
             if (counts.searches >= STRUCTURE_SEARCHES) return { error: "no searches left" };
             counts.searches += 1;
             try {
-              const results = await provider.search(query, { signal: abortSignal, maxResults: SEARCH_RESULTS });
+              const results = await search.search(query, { signal: abortSignal, maxResults: SEARCH_RESULTS });
               ctx.emit({ type: "research.search", query, results: results.length });
               return { results: results.map((r) => ({ url: r.url, title: r.title, snippet: r.snippet })) };
             } catch {
@@ -409,6 +411,8 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
               lists.push(read.list);
               return { url: read.list.url, items: read.list.items.length, groups: listGroups(read.list).length };
             } catch (error) {
+              // The item reading runs under the run's signal, not the finder's clock.
+              reportServiceFailure(log, error, "structure", ctx.signal);
               if (log?.keyOwner === "user" && providerError(error)) {
                 refusal = error;
                 stop.abort(error);
@@ -530,6 +534,8 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
         throw refusal;
       }
       if (failure) {
+        // A loop its own clock (or the stage's end) cut short did not fail on Anthropic.
+        reportServiceFailure(log, failure, "structure", signal);
         if (log?.keyOwner === "user" && providerError(failure)) {
           flush(["refused by the provider"]);
           throw failure;

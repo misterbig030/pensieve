@@ -5,6 +5,7 @@ import { PRACTICE_REGISTRY, type PracticeFormatSpec } from "@/lib/practice";
 import type { Coverage, DroppedMaterial, ResearchEvent } from "./events";
 import { signMaterial, signingSecret } from "./signature";
 import type { PageInfo } from "./extract";
+import { reasonOf, type OnServiceEvent } from "../serviceEvents";
 import type { FetchOutcome, SourceFetcher } from "./tools";
 import { parseOpenLibraryToc, withChapterSizes, type OpenLibraryTocEntry } from "./chapters";
 import { openLibraryContact, openLibraryPacer, openLibraryUserAgent, type Pacer } from "./openLibrary";
@@ -312,30 +313,57 @@ export function pickBookMatch(title: string, author: string | null, docs: OpenLi
  * The catalogue lookup. Every request names Pensieve and, when `contact` is set, how to reach its owner, and waits its
  * turn on `pace`: by default the process's shared pacer at the limit the contact earns.
  */
-export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch, options: { contact?: string | null; pace?: Pacer } = {}): BookLookup {
+export function createOpenLibraryLookup(
+  fetchImpl: typeof fetch = fetch,
+  options: { contact?: string | null; pace?: Pacer; onService?: OnServiceEvent } = {},
+): BookLookup {
   const contact = options.contact === undefined ? openLibraryContact() : options.contact;
   const headers = { "user-agent": openLibraryUserAgent(contact) };
   const pace = options.pace ?? openLibraryPacer();
+  // One request to Open Library, paced, its body read as JSON, and reported once: a failure when it throws, answers
+  // with an error status or with a body that cannot be read as the answer `readable` expects. `json` is null then.
+  const request = async (url: string | URL, signal: AbortSignal | undefined, readable: (json: unknown) => boolean): Promise<{ ok: boolean; status: number; json: unknown }> => {
+    await pace();
+    const startedAt = performance.now();
+    const timeout = AbortSignal.timeout(5_000);
+    const report = (event: { ok: boolean; status?: number; reason?: string }) =>
+      options.onService?.({ type: "service", name: "openlibrary", final: true, ms: Math.round(performance.now() - startedAt), ...event });
+    // A request the caller's signal ended (the draft's deadline, our own clocks) is not Open Library failing; the
+    // request's own timeout is.
+    const cancelled = () => signal?.aborted === true && !timeout.aborted;
+    let res: Response;
+    try {
+      res = await fetchImpl(url, { headers, signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+    } catch (error) {
+      if (!cancelled()) report({ ok: false, reason: reasonOf(error) });
+      throw error;
+    }
+    if (!res.ok) {
+      report({ ok: false, status: res.status, reason: `Open Library returned ${res.status}` });
+      return { ok: false, status: res.status, json: null };
+    }
+    const json: unknown = await res.json().catch(() => null);
+    if (json === null || !readable(json)) {
+      if (!cancelled()) report({ ok: false, reason: "unreadable body" });
+      return { ok: true, status: res.status, json: null };
+    }
+    report({ ok: true });
+    return { ok: true, status: res.status, json };
+  };
   const query = async (params: Record<string, string>, signal?: AbortSignal): Promise<OpenLibraryDoc[]> => {
     const url = new URL("https://openlibrary.org/search.json");
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     url.searchParams.set("limit", "5");
     url.searchParams.set("fields", "key,title,author_name,first_publish_year,number_of_pages_median");
-    await pace();
-    const timeout = AbortSignal.timeout(5_000);
-    let res: Response;
+    let answer: Awaited<ReturnType<typeof request>>;
     try {
-      res = await fetchImpl(url, {
-        headers,
-        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-      });
+      answer = await request(url, signal, (json) => Array.isArray((json as { docs?: unknown }).docs));
     } catch (error) {
       throw new BookLookupUnavailable(error instanceof Error ? error.message : "Open Library unreachable");
     }
-    if (!res.ok) throw new BookLookupUnavailable(`Open Library returned ${res.status}`);
-    const json = (await res.json().catch(() => null)) as { docs?: OpenLibraryDoc[] } | null;
-    if (!json || !Array.isArray(json.docs)) throw new BookLookupUnavailable("Open Library returned an unexpected body");
-    return json.docs;
+    if (!answer.ok) throw new BookLookupUnavailable(`Open Library returned ${answer.status}`);
+    if (answer.json === null) throw new BookLookupUnavailable("Open Library returned an unexpected body");
+    return (answer.json as { docs: OpenLibraryDoc[] }).docs;
   };
   return {
     async find(title, author, signal) {
@@ -348,15 +376,11 @@ export function createOpenLibraryLookup(fetchImpl: typeof fetch = fetch, options
     async chapters(match, signal) {
       if (!match.key) return null;
       try {
-        await pace();
-        const timeout = AbortSignal.timeout(5_000);
-        const res = await fetchImpl(`https://openlibrary.org${match.key}/editions.json?limit=50`, {
-          headers,
-          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-        });
-        if (!res.ok) return null;
-        const json = (await res.json().catch(() => null)) as { entries?: OpenLibraryEdition[] } | null;
-        if (!json || !Array.isArray(json.entries)) return null;
+        const { json: body } = await request(`https://openlibrary.org${match.key}/editions.json?limit=50`, signal, (json) =>
+          Array.isArray((json as { entries?: unknown }).entries),
+        );
+        if (body === null) return null;
+        const json = body as { entries: OpenLibraryEdition[] };
         // An edition whose title matches the work's is in the work's language; a translation's longer list loses to it.
         let best: { toc: ChapterList; sameTitle: boolean } | null = null;
         for (const edition of json.entries) {

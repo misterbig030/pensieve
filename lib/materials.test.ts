@@ -25,6 +25,9 @@ import {
   noSourceFacts,
   pickSources,
   practiceBudgets,
+  reservedRunMinutes,
+  reservedRuns,
+  weekPracticeTime,
   practiceRowKey,
   sizeChapterRows,
   tierMinutes,
@@ -1554,3 +1557,120 @@ describe("plainAliases", () => {
     expect(plainUnitText(node, materials, aliases)).toBe(0);
   });
 });
+
+describe("a week's practice time inside its reservation", () => {
+  // Run 3 of the SDE eval: 6 h a week over 5 days, 21% reading; problems 56%, design 26%, mock 16%, recall 2%.
+  const split = {
+    readingShare: 21,
+    practice: "problems, design, mock and recall",
+    reason: "",
+    formats: [
+      { format: "problem-set" as const, share: 56, focus: "patterns", reason: "" },
+      { format: "design-exercise" as const, share: 26, focus: "timed designs", reason: "" },
+      { format: "mock" as const, share: 16, focus: "full loops", reason: "" },
+      { format: "recall" as const, share: 2, focus: "stories", reason: "" },
+    ],
+  };
+  const materials = [{ id: "R1" }, { id: "R2" }, { id: "L", practice: LISTED_PROBLEMS }, { id: "U", practice: { format: "problem-set" as const, items: 50, perItemMinutes: 10, minutes: null, answers: true } }];
+  const budgets = practiceBudgets(split, 360, materials);
+  const reserving = (practiceCovers: PracticeCover[]) => makeNode({ id: "w1", level: "week", title: "W", summary: "s", len: 5, practiceCovers });
+
+  it("counts the minutes of the listed items a week reserves, and nothing for a source without a list", () => {
+    expect(budgets).toEqual({ reading: 76, practice: { "problem-set": 159, "design-exercise": 74, mock: 45, recall: 6 } });
+    // Items 1–9: three easy at 15 and six medium at 25.
+    expect(reservedRunMinutes(reserving([{ format: "problem-set", id: "L", note: null, itemFrom: 1, itemTo: 9 }]), "problem-set", materials)).toBe(195);
+    // A reservation without a range is not sized here: the share stands (the checks report it as unsized).
+    expect(reservedRunMinutes(reserving([{ format: "problem-set", id: "L", note: null }]), "problem-set", materials)).toBeUndefined();
+    // Overlapping reservations of one source count each item once: 1–4 and 3–6 are items 1–6.
+    const twice = reserving([
+      { format: "problem-set", id: "L", note: null, itemFrom: 1, itemTo: 4 },
+      { format: "problem-set", id: "L", note: null, itemFrom: 3, itemTo: 6 },
+      { format: "problem-set", id: "L", note: null },
+    ]);
+    expect(reservedRunMinutes(twice, "problem-set", materials)).toBe(3 * 15 + 3 * 25);
+    expect(reservedRunMinutes(reserving([{ format: "problem-set", id: "U", note: null }]), "problem-set", materials)).toBeUndefined();
+    expect(reservedRunMinutes(reserving([]), "problem-set", materials)).toBeUndefined();
+    expect(reservedRunMinutes(null, "problem-set", materials)).toBeUndefined();
+  });
+
+  it("holds a listed format to its run and moves the difference to the blocks the days write", () => {
+    // Run 3's Week 1: items 1–9 are 195 min against a 159-min share; the 36 extra come out of design and mock, 74:45.
+    expect(weekPracticeTime(budgets, { "problem-set": 195 })).toEqual({ reading: 76, practice: { "problem-set": 195, "design-exercise": 52, mock: 31, recall: 6 } });
+    // A run of 100 frees 59 min for design and mock.
+    expect(weekPracticeTime(budgets, { "problem-set": 100 })).toEqual({ reading: 76, practice: { "problem-set": 100, "design-exercise": 111, mock: 67, recall: 6 } });
+    // The week's minutes stay whole either way.
+    for (const run of [100, 195, 300]) {
+      const t = weekPracticeTime(budgets, { "problem-set": run });
+      expect(t.reading + Object.values(t.practice).reduce((a, b) => a + b, 0)).toBe(run > 278 ? 76 + run + 6 : 360);
+    }
+    // Without a run nothing moves.
+    expect(weekPracticeTime(budgets, {})).toEqual(budgets);
+  });
+
+  it("holds a block format with a listed run to its run too, and moves the difference to the other blocks", () => {
+    // Problems 1–4 (100 min) and design 1–3 (150 min): the 59 + −76 = −17 net comes out of mock alone.
+    expect(weekPracticeTime(budgets, { "problem-set": 100, "design-exercise": 150 })).toEqual({ reading: 76, practice: { "problem-set": 100, "design-exercise": 150, mock: 28, recall: 6 } });
+    // A week reserving only one 50-min design question: the 24 it frees go to mock, the one block without a run.
+    expect(weekPracticeTime(budgets, { "design-exercise": 50 })).toEqual({ reading: 76, practice: { "problem-set": 159, "design-exercise": 50, mock: 69, recall: 6 } });
+    // With every block held to a run, what is freed goes to reading.
+    expect(weekPracticeTime(budgets, { "design-exercise": 50, mock: 45 })).toEqual({ reading: 100, practice: { "problem-set": 159, "design-exercise": 50, mock: 45, recall: 6 } });
+  });
+
+  it("leaves out the items a unit outside the week already did", () => {
+    // Week 1 reserves items 1–9; Week 2, split by hand, already did item 5 (25 min).
+    const done = makeNode({ id: "d", level: "day", title: "D", summary: "s", len: 1, practice: [{ format: "problem-set", id: "L", task: "Top K Frequent Elements", done: "solved", minutes: 25, generated: false, itemFrom: 5, itemTo: 5 }] });
+    const w1 = makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 5, practiceCovers: [{ format: "problem-set", id: "L", note: null, itemFrom: 1, itemTo: 9 }] });
+    const w2 = makeNode({ id: "w2", level: "week", title: "W2", summary: "s", len: 5, manualSplit: true, children: [done] });
+    const root = layout(makeRoot([w1, w2]));
+    expect(reservedRuns(root.children![0], materials, root)).toEqual({ "problem-set": 170 });
+    expect(reservedRuns(root.children![0], materials)).toEqual({ "problem-set": 195 });
+  });
+
+  it("gives what a run frees to reading when no block can take it", () => {
+    const perItem = { ...split, formats: [split.formats[0], { ...split.formats[3], share: 44 }] };
+    const plain = practiceBudgets(perItem, 360, materials);
+    expect(plain).toEqual({ reading: 76, practice: { "problem-set": 159, recall: 125 } });
+    expect(weekPracticeTime(plain, { "problem-set": 100 })).toEqual({ reading: 135, practice: { "problem-set": 100, recall: 125 } });
+  });
+
+  describe("held by the week's checks", () => {
+    const item = (n: number): PracticeRef => {
+      const it = PROBLEM_ITEMS[n - 1];
+      return { format: "problem-set", id: "L", task: it.title, done: "solved", minutes: itemMinutes("problem-set", it), generated: false, itemFrom: n, itemTo: n };
+    };
+    const design: PracticeRef = { format: "design-exercise", id: null, task: "Design a URL shortener", done: "covers the rubric", minutes: 50, generated: true };
+    const read = (id: string, minutes: number): MaterialRef => ({ id, tier: "must", minutes, note: null });
+    const week = (days: { materials?: MaterialRef[]; practice?: PracticeRef[] }[]) => {
+      const children = days.map((d, i) => makeNode({ id: `d${i + 1}`, level: "day", title: `D${i + 1}`, summary: "s", len: 1, ...d }));
+      const w1 = makeNode({ id: "w1", level: "week", title: "W", summary: "s", len: 5, children, practiceCovers: [{ format: "problem-set", id: "L", note: null, itemFrom: 1, itemTo: 9 }] });
+      const root = layout(makeRoot([w1]));
+      return levelChecks({ root, nodes: w1.children!, leaves: true, top: false, materials, unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split });
+    };
+
+    it("does not call a week's problems short once it does every item it reserved", () => {
+      // Run 3's Week 1 as drafted: all nine items, 76 min of reading and 6 of recall, no design or mock: 274 of 360 min.
+      const out = week([
+        { materials: [read("R1", 30)], practice: [item(1), item(2)] },
+        { materials: [read("R2", 46)], practice: [item(3)] },
+        { practice: [item(4), item(5)] },
+        { practice: [item(6), item(7)] },
+        { practice: [item(8), item(9)] },
+      ]);
+      expect(out.breaches).toEqual([]);
+      expect(out.facts.filter((f) => f.includes("short"))).toEqual(["Week 1 practice short: Design 0 of about 52 min, Mock 0 of about 31 min"]);
+    });
+
+    it("passes a week whose days write a design block in the time its run leaves", () => {
+      const out = week([
+        { materials: [read("R1", 30)], practice: [item(1), item(2)] },
+        { materials: [read("R2", 46)], practice: [item(3)] },
+        { practice: [item(4), item(5)] },
+        { practice: [item(6), item(7), item(8)] },
+        { practice: [item(9), design] },
+      ]);
+      expect(out.breaches).toEqual([]);
+      expect(out.facts.filter((f) => f.includes("Problems"))).toEqual([]);
+    });
+  });
+});
+

@@ -15,6 +15,7 @@ import {
   type PracticeListSource,
 } from "@/lib/schemas/material";
 import { loggedGenerateObject, type GenerationLogContext } from "../logged";
+import { reportServiceFailure } from "../serviceEvents";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, type AiModelId, type ReasoningEffort } from "../models";
 import { providerError } from "../providerError";
 import { applyMapping, fieldMappingSchema, parseDataFile, sampleDataFile, type DataFile, type FieldMapping } from "./dataFile";
@@ -361,6 +362,7 @@ function modelAsker(
 ) {
   return async <T,>(schema: z.ZodType<T>, prompt: string, label: string, ms: number, check: (answer: T) => string[]): Promise<T | null> => {
     const signal = ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
+    let failure: unknown = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const { object, costUsd } = await loggedGenerateObject(
@@ -379,11 +381,17 @@ function modelAsker(
         addCost(costUsd);
         return object;
       } catch (error) {
-        if (signal.aborted) break;
-        if (ctx.log?.keyOwner === "user" && providerError(error)) throw error;
+        if (signal.aborted) return null;
+        if (ctx.log?.keyOwner === "user" && providerError(error)) {
+          reportServiceFailure(ctx.log, error, "items", signal);
+          throw error;
+        }
+        failure = error;
         console.error(`[research] ${label} failed (attempt ${attempt})`, error);
       }
     }
+    // Both attempts failed: one gave-up report, not one per attempt.
+    reportServiceFailure(ctx.log, failure, "items", signal);
     return null;
   };
 }

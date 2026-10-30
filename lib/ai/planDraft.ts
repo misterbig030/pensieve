@@ -35,6 +35,7 @@ import type { Material } from "@/lib/schemas/material";
 import { unitListSchema, type UnitDraft } from "@/lib/schemas/plan";
 import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, type GenerationLogContext } from "./logged";
+import { reportServiceFailure } from "./serviceEvents";
 import { allocatePlan } from "./allocate";
 import { DEFAULT_ALLOCATE_MODEL, DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
 import { providerError } from "./providerError";
@@ -245,6 +246,8 @@ interface DraftLevelInput {
   tree?: PlanNode;
   parentId?: string;
   log?: GenerationLogContext;
+  /** The signal the level's first call runs under; the request's with the draft's deadline when omitted. */
+  signal?: AbortSignal;
 }
 
 /** The level's final nodes placed in a copy of the tree, so checks can name them by label. */
@@ -343,7 +346,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   const prompt = buildUnitsPrompt(promptInput);
   const base = { expected: n, check, model: ctx.outlineModel, log: input.log };
   let costUsd = 0;
-  for await (const event of streamUnits({ ...base, prompt, label, signal: within(ctx.signal, timeLeft(ctx.deadline)) })) {
+  for await (const event of streamUnits({ ...base, prompt, label, signal: input.signal ?? within(ctx.signal, timeLeft(ctx.deadline)) })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
       const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split);
@@ -365,8 +368,9 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   } else if (breaches.length > 0) {
     attempt = 2;
     const corrections = [RETRY_HEADER(n), ...breaches.map((b) => `- ${b.text}`)].join("\n");
+    const signal = within(ctx.signal, left);
     try {
-      for await (const event of streamUnits({ ...base, prompt: `${prompt}\n${corrections}`, label: `${label} (retry)`, silent: true, signal: within(ctx.signal, left) })) {
+      for await (const event of streamUnits({ ...base, prompt: `${prompt}\n${corrections}`, label: `${label} (retry)`, silent: true, signal })) {
         if (event.type === "done") {
           costUsd += event.costUsd;
         }
@@ -375,6 +379,8 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       // A request that went away stops here. On the user's own key a provider refusal is theirs to hear about;
       // otherwise (the deadline included) the first answer stands, pruned.
       if (ctx.signal?.aborted) throw error;
+      // A retry the draft's deadline cut short did not fail on Anthropic.
+      reportServiceFailure(input.log, error, "outline retry", signal);
       if (ctx.outlineModel.keyOwner === "user" && providerError(error)) throw error;
       console.error(`[draft] retry failed for ${label}`, error);
       dropBreaches(final, breaches);
@@ -459,8 +465,9 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
     const level = childLevel(parent.level)!;
     const spans = childSpans(parent, input.daysPerWeek);
     const kids: PlanNode[] = [];
+    const signal = within(input.signal, left);
     try {
-      for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: parent.id, log: input.log })) {
+      for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: parent.id, log: input.log, signal })) {
         if (event.type === "node") {
           kids.push(event.node);
           parent.children = kids;
@@ -475,6 +482,8 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
     } catch (error) {
       // Past the deadline the unit stays a heading, its streamed children dropped; any other failure is the draft's.
       if (input.signal?.aborted || input.deadline === undefined || Date.now() < input.deadline) throw error;
+      // A level the draft's deadline cut off did not fail on Anthropic.
+      reportServiceFailure(input.log, error, "outline level", signal);
       console.error(`[draft] out of time planning ${parent.title}; it stays a heading`, error);
       parent.children = null;
       layout(root);
