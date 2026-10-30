@@ -460,6 +460,35 @@ describe("the allocation's backbone, coverage and fallback", () => {
     expect(call.providerOptions?.anthropic?.effort).toBe("high");
   });
 
+  it("runs at the effort it is given", async () => {
+    respond(draft({ parts: sixWhole }));
+    await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5"), effort: "medium" });
+    const call = mockedGenerateObject.mock.calls[0][0] as { providerOptions?: { anthropic?: { effort?: string } } };
+    expect(call.providerOptions?.anthropic?.effort).toBe("medium");
+  });
+
+  it("says it did not fall back on a usable answer", async () => {
+    respond(draft({ parts: sixWhole }));
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.fallback).toBe(false);
+  });
+
+  it("says it fell back when the call fails", async () => {
+    mockedGenerateObject.mockRejectedValueOnce(new Error("No object generated: response did not match schema."));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.fallback).toBe(true);
+    error.mockRestore();
+  });
+
+  it("says it fell back with too little time", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5"), timeoutMs: 1000 });
+    expect(out.fallback).toBe(true);
+    expect(mockedGenerateObject).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
   it("shows the model each book's evidence and asks for a backbone and coverage", () => {
     const prompt = buildAllocationPrompt(six);
     const line = (id: string) => prompt.split("\n").find((l) => l.startsWith(`${id} `))!;

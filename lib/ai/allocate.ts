@@ -24,7 +24,7 @@ import {
 import { normalizeSplit, practiceLabelOf, totalHours, type PlanSplit } from "@/lib/studyTime";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { reportServiceFailure } from "./serviceEvents";
-import { ALLOCATE_EFFORT } from "./models";
+import { ALLOCATE_EFFORT, type ReasoningEffort } from "./models";
 import { formatMinutes, practiceTag, sizingSentence } from "./planPrompt";
 import { providerError } from "./providerError";
 import type { Coverage, DroppedMaterial } from "./research/events";
@@ -683,7 +683,8 @@ export const MIN_ALLOCATE_MS = 15_000;
  * Asks the allocate model, after research, for the backbone, which part of each material the plan uses, how the
  * practice time is shared and what the plan covers, then applies it in code (`applyAllocation`). A call that fails
  * leaves the choice to code (`fallbackAllocation`) and makes the plan all reading, so the draft goes on; but a refusal
- * on the learner's own key is theirs to hear about, and a request that has gone away stops here.
+ * on the learner's own key is theirs to hear about, and a request that has gone away stops here. `fallback` says code
+ * allocated, for too little time or a failed call, so a caller can tell the model's own allocation from the code's.
  */
 export async function allocatePlan(
   input: AllocationInput & {
@@ -692,12 +693,14 @@ export async function allocatePlan(
     signal?: AbortSignal;
     /** The draft's time for the call; past it code allocates. Too little to be worth a call: code allocates at once. */
     timeoutMs?: number;
+    /** The reasoning effort of the call; the draft's own is `ALLOCATE_EFFORT`. */
+    effort?: ReasoningEffort;
   },
-): Promise<{ split: PlanSplit; materials: Material[]; dropped: DroppedMaterial[]; coverage: Coverage | null; costUsd: number }> {
+): Promise<{ split: PlanSplit; materials: Material[]; dropped: DroppedMaterial[]; coverage: Coverage | null; costUsd: number; fallback: boolean }> {
   if (input.timeoutMs !== undefined && input.timeoutMs < MIN_ALLOCATE_MS) {
     const { split, materials, dropped, coverage, facts } = fallbackAllocation(input);
     console.error("[draft] no time left to allocate; code chose the materials and the plan is all reading", facts);
-    return { split, materials, dropped, coverage, costUsd: 0 };
+    return { split, materials, dropped, coverage, costUsd: 0, fallback: true };
   }
   const timeout = input.timeoutMs !== undefined ? AbortSignal.timeout(input.timeoutMs) : null;
   const abortSignal = timeout && input.signal ? AbortSignal.any([input.signal, timeout]) : (timeout ?? input.signal);
@@ -710,7 +713,7 @@ export async function allocatePlan(
         schema: allocationDraftSchema,
         prompt: buildAllocationPrompt(input),
         label: "Allocate",
-        effort: ALLOCATE_EFFORT,
+        effort: input.effort ?? ALLOCATE_EFFORT,
         check: (draft) => applyAllocation(draft, input).facts,
         abortSignal,
         // One retry at most: a second Opus attempt at high effort costs the time the outline needs.
@@ -719,13 +722,13 @@ export async function allocatePlan(
       { ...input.log, caller: "outline" },
     );
     const { split, materials, dropped, coverage } = applyAllocation(object, input);
-    return { split, materials, dropped, coverage, costUsd };
+    return { split, materials, dropped, coverage, costUsd, fallback: false };
   } catch (error) {
     if (input.signal?.aborted) throw error;
     reportServiceFailure(input.log, error, "allocate", abortSignal);
     if (input.model.keyOwner === "user" && providerError(error)) throw error;
     const { split, materials, dropped, coverage, facts } = fallbackAllocation(input);
     console.error("[draft] allocation failed; code chose the materials and the plan is all reading", facts, error);
-    return { split, materials, dropped, coverage, costUsd: 0 };
+    return { split, materials, dropped, coverage, costUsd: 0, fallback: true };
   }
 }
