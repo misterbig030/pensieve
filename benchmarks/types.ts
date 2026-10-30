@@ -58,6 +58,8 @@ export interface Sample<O = unknown> {
   output: O | null;
   calls: ModelCall[];
   costUsd: number;
+  /** The part of `costUsd` that is an estimate, set when the allocate call ended without usage (a timeout, an error with none) and so reported no cost. */
+  estimatedCostUsd?: number;
   ms: number;
   /** Code results always; judge results once judged. */
   results: CriterionResult[];

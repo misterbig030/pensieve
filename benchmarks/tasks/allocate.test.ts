@@ -8,7 +8,7 @@ import { DRAFT_TOPICS } from "@/evals/draft/topics";
 import { BASELINE } from "../contestants";
 import type { AllocateFixture } from "../fixtures";
 import type { Contestant } from "../types";
-import { AVAILABLE_MODELS } from "@/lib/ai/models";
+import { AVAILABLE_MODELS, estimateCostUsd } from "@/lib/ai/models";
 import { ALLOCATE_CRITERIA, codeResults, renderAllocation, runAllocateSample, voidReason, type AllocateCtx, type AllocateOutput } from "./allocate";
 
 function material(id: string, title: string, extra: Partial<Material> = {}): Material {
@@ -41,9 +41,9 @@ const KLEPPMANN = () => material("M1", "Designing Data-Intensive Applications", 
 
 const CALL = { label: "Allocate", costUsd: 0.25, latencyMs: 5 } as ModelCall;
 
-function allocation(extra: { fallback?: boolean; fallbackReason?: string; events?: ServiceEvent[] } = {}): typeof allocatePlan {
+function allocation(extra: { fallback?: boolean; fallbackReason?: string; events?: ServiceEvent[]; noCall?: boolean } = {}): typeof allocatePlan {
   return vi.fn(async (input) => {
-    input.log?.onCall?.(CALL);
+    if (!extra.noCall) input.log?.onCall?.(CALL);
     for (const event of extra.events ?? []) input.log?.onService?.(event);
     const fallback = extra.fallback ?? false;
     return {
@@ -105,6 +105,42 @@ describe("runAllocateSample", () => {
   it("does not void our own timeout", async () => {
     const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, events: [failure({ reason: "The operation was aborted due to timeout" })] }) });
     expect(sample.gate.status).toBe("failed");
+  });
+
+  describe("a call that ended without usage", () => {
+    const WITH_TOKENS: AllocateFixture = { ...FIXTURE, baseline: { inputTokens: 20_000, outputTokens: 4_000, ms: 1 } };
+    const flash: Contestant = { name: "flash", roles: { allocate: { model: "google/gemini-3-flash", effort: "medium" } } };
+    const timedOut = [failure({ reason: "The operation was aborted due to timeout" })];
+
+    it("is charged the fixture's baseline tokens at the contestant's allocate model", async () => {
+      const sample = await runAllocateSample(WITH_TOKENS, flash, { allocate: allocation({ fallback: true, noCall: true, events: timedOut }) });
+      const estimate = estimateCostUsd("google/gemini-3-flash", { inputTokens: 20_000, outputTokens: 4_000 });
+      expect(estimate).toBeGreaterThan(0);
+      expect(sample.estimatedCostUsd).toBeCloseTo(estimate);
+      expect(sample.costUsd).toBeCloseTo(estimate);
+      expect(sample.gate.status).toBe("failed");
+    });
+
+    it("is not estimated when a call was reported, or when the model's own answer stands", async () => {
+      // A call reported with usage is the real cost; only a fallback with no Allocate call is estimated.
+      const reported = await runAllocateSample(WITH_TOKENS, flash, { allocate: allocation({ fallback: true }) });
+      expect(reported.estimatedCostUsd).toBeUndefined();
+      expect(reported.costUsd).toBe(0.25);
+      const completed = await runAllocateSample(WITH_TOKENS, flash, { allocate: allocation({ noCall: true }) });
+      expect(completed.estimatedCostUsd).toBeUndefined();
+      expect(completed.costUsd).toBe(0);
+    });
+
+    it("costs nothing to estimate without baseline tokens, and records no estimate", async () => {
+      const sample = await runAllocateSample(FIXTURE, flash, { allocate: allocation({ fallback: true, noCall: true, events: timedOut }) });
+      expect(sample.costUsd).toBe(0);
+      expect(sample.estimatedCostUsd).toBeUndefined();
+    });
+
+    it("prices a contestant that leaves out the role at the baseline's allocate model", async () => {
+      const sample = await runAllocateSample(WITH_TOKENS, { name: "bare", roles: {} }, { allocate: allocation({ fallback: true, noCall: true, events: timedOut }) });
+      expect(sample.estimatedCostUsd).toBeCloseTo(estimateCostUsd(BASELINE.roles.allocate!.model, { inputTokens: 20_000, outputTokens: 4_000 }));
+    });
   });
 
   it("passes the contestant's model and effort, and the app's time limit", async () => {

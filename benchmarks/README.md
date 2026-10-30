@@ -53,7 +53,7 @@ scored, and the unjudged ones can be judged later with `--rescore`.
 | File | Contents |
 |---|---|
 | `run.json` | task, fixtures, contestants with their models and effort, epochs, cap, margin, judge models, commit, estimate, spend, start time |
-| `samples/<contestant>-<fixture>-<epoch>.json` | the sample: gate result, output, the contestant's model calls, cost, time, each criterion's result with evidence or the judge's reason, whether it was judged, the second judge's results when it had them |
+| `samples/<contestant>-<fixture>-<epoch>.json` | the sample: gate result, output, the contestant's model calls, cost (with `estimatedCostUsd` when the call ended without usage and the cost is the fixture's baseline tokens at the contestant's price), time, each criterion's result with evidence or the judge's reason, whether it was judged, the second judge's results when it had them |
 | `scores.json` | the per-contestant summaries and verdicts the report is drawn from |
 | `report.md` | the comparison, score by group, criteria, samples and a link to the chart |
 | `chart.svg` | score against cost per sample |

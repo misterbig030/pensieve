@@ -280,7 +280,8 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
       ran = await attempt(fixture, contestant);
       cap.add(ran.costUsd);
       // The sample is the final attempt, but it was paid for twice: keep the first attempt's calls and cost with it.
-      ran = { ...ran, calls: [...first.calls, ...ran.calls], costUsd: first.costUsd + ran.costUsd };
+      const estimatedCostUsd = (first.estimatedCostUsd ?? 0) + (ran.estimatedCostUsd ?? 0);
+      ran = { ...ran, calls: [...first.calls, ...ran.calls], costUsd: first.costUsd + ran.costUsd, ...(estimatedCostUsd > 0 ? { estimatedCostUsd } : {}) };
     }
 
     const sample: Sample<AllocateOutput> = { task: TASK, fixture: fixture.id, contestant: contestant.name, epoch, ...ran, results: [], judged: true };
@@ -295,6 +296,8 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
   const samples = done.filter((s): s is Sample<AllocateOutput> => s !== null);
   notStarted = planned.length - samples.length;
   if (notStarted > 0) print(`${notStarted} of ${planned.length} samples not started: the spend cap was reached`);
+  const withEstimate = samples.filter((s) => s.estimatedCostUsd !== undefined).length;
+  if (withEstimate > 0) print(`${withEstimate} of ${samples.length} samples carry an estimated cost: the call ended without usage`);
   writeJson(join(dir, "run.json"), runInfo());
   const summaries = writeOutputs(dir, { samples, contestants, fixtures: opts.fixtures, epochs, maxUsd, spentUsd: cap.spentUsd, margin, commit, checked });
   print(`Spent ${usd(cap.spentUsd)} of the ${usd(maxUsd)} cap`);

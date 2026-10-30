@@ -348,8 +348,9 @@ export function renderReport(args: {
     const score = sampleScore(s, criteria);
     const gate = s.gate.status === "completed" ? "completed" : `${s.gate.status}: ${s.gate.reason}`;
     const shown = score === null ? "n/a" : num(score) + (s.judged ? allJudged : "");
+    const estimated = s.estimatedCostUsd ? ` (includes ${usd(s.estimatedCostUsd)} estimated: the call ended without usage)` : "";
     out.push(
-      `- [${s.contestant} / ${s.fixture} / ${s.epoch}](${sampleFile(s)}): score ${shown}${s.judged ? "" : " (not judged)"}, ${gate}, ${usd(s.costUsd)}, ${seconds(s.ms)}`,
+      `- [${s.contestant} / ${s.fixture} / ${s.epoch}](${sampleFile(s)}): score ${shown}${s.judged ? "" : " (not judged)"}, ${gate}, ${usd(s.costUsd)}${estimated}, ${seconds(s.ms)}`,
     );
   }
   if (sorted.length === 0) out.push("No samples.");

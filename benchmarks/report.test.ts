@@ -248,6 +248,14 @@ describe("renderReport", () => {
     expect(report).toContain("cheap / f2 / 2: gateway timeout");
   });
 
+  it("notes on a sample line the cost that is an estimate", () => {
+    const estimated = [...samples, sample("cheap", "f2", 2, [], { gate: { status: "failed", reason: "fallback: timeout" }, costUsd: 0.0312, estimatedCostUsd: 0.0212, results: [] })];
+    const lines = render(estimated, checkedAll).split("\n");
+    const line = lines.find((l) => l.includes("(samples/cheap-f2-2.json)"))!;
+    expect(line).toContain("$0.0312 (includes $0.0212 estimated: the call ended without usage)");
+    expect(lines.find((l) => l.includes("(samples/cheap-f1-1.json)"))).not.toContain("estimated");
+  });
+
   it("lists judge disagreements", () => {
     const disagree = [
       sample("baseline", "f1", 1, ALL, { secondJudge: [result("clear", false, "judge"), result("deep", true, "judge")] }),

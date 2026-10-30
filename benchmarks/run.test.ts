@@ -181,6 +181,36 @@ describe("runBenchmark", () => {
     expect(JSON.parse(readFileSync(join(dir, "run.json"), "utf8")).spentUsd).toBeCloseTo(0.3);
   });
 
+  it("keeps both attempts' estimated costs on a re-run sample, and counts the cap on them", async () => {
+    let calls = 0;
+    const runSample = runner(() =>
+      ++calls === 1
+        ? { gate: { status: "void", reason: "gateway 503" }, output: null, calls: [], costUsd: 0.2, estimatedCostUsd: 0.2, ms: 1 }
+        : { gate: { status: "failed", reason: "fallback: timeout" }, output: OUTPUT, calls: [], costUsd: 0.1, estimatedCostUsd: 0.1, ms: 1 },
+    );
+    const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1, contestants: [] }), runSample, judge: judge() });
+    const [sample] = readSamples(dir);
+    expect(sample.costUsd).toBeCloseTo(0.3);
+    expect(sample.estimatedCostUsd).toBeCloseTo(0.3);
+    expect(JSON.parse(readFileSync(join(dir, "run.json"), "utf8")).spentUsd).toBeCloseTo(0.3);
+  });
+
+  it("says at the end how many samples carried an estimated cost", async () => {
+    let n = 0;
+    const runSample = runner(() => ({ ...completed(0.1), ...(++n % 4 === 0 ? { estimatedCostUsd: 0.05 } : {}) }));
+    const lines: string[] = [];
+    const { dir } = await runBenchmark({ ...base({ print: (l: string) => lines.push(l) }), concurrency: 1, runSample, judge: judge() });
+    expect(lines).toContain("2 of 8 samples carry an estimated cost: the call ended without usage");
+    expect(lines.indexOf("2 of 8 samples carry an estimated cost: the call ended without usage")).toBeLessThan(lines.findIndex((l) => l.startsWith("Spent ")));
+    expect(readSamples(dir).filter((s) => s.estimatedCostUsd !== undefined)).toHaveLength(2);
+  });
+
+  it("says nothing about estimates when no sample carried one", async () => {
+    const lines: string[] = [];
+    await runBenchmark({ ...base({ print: (l: string) => lines.push(l) }), runSample: runner(), judge: judge() });
+    expect(lines.some((l) => l.includes("estimated"))).toBe(false);
+  });
+
   it("reads the judge cache before any call and says how many lines it skipped", async () => {
     const order: string[] = [];
     const cache: JudgeCache = { get: () => undefined, set: () => {}, load: () => (order.push("load"), { skippedLines: 2 }) };

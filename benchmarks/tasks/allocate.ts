@@ -4,6 +4,7 @@
  */
 import { allocatePlan, type AllocationInput } from "@/lib/ai/allocate";
 import type { ModelCall } from "@/lib/ai/logged";
+import { estimateCostUsd } from "@/lib/ai/models";
 import { ALLOCATE_TIMEOUT_MS } from "@/lib/ai/planDraft";
 import { renderMaterials } from "@/lib/ai/planPrompt";
 import type { Coverage, DroppedMaterial } from "@/lib/ai/research/events";
@@ -224,13 +225,13 @@ export function codeResults(output: AllocateOutput, ctx: AllocateCtx): Criterion
 /**
  * Runs the allocation once on the fixture's input with the contestant's allocate model and effort, under the app's own
  * time limit. A fallback is the code's allocation, not the model's: void when the outside service caused it, failed
- * otherwise.
+ * otherwise. A fallback whose call reported no usage is charged an estimate (`estimatedCostUsd`), so it is not free.
  */
 export async function runAllocateSample(
   fixture: AllocateFixture,
   contestant: Contestant,
   deps: { allocate?: typeof allocatePlan } = {},
-): Promise<Pick<Sample<AllocateOutput>, "gate" | "output" | "calls" | "costUsd" | "ms">> {
+): Promise<Pick<Sample<AllocateOutput>, "gate" | "output" | "calls" | "costUsd" | "estimatedCostUsd" | "ms">> {
   const allocate = deps.allocate ?? allocatePlan;
   const roleModel = contestant.roles.allocate ?? BASELINE.roles.allocate!;
   const calls: ModelCall[] = [];
@@ -244,14 +245,20 @@ export async function runAllocateSample(
     log: { onCall: (call) => calls.push(call), onService: (event) => events.push(event) },
   });
   const ms = Math.round(performance.now() - startedAt);
-  const costUsd = calls.reduce((sum, call) => sum + call.costUsd, 0);
   const output: AllocateOutput = { split, materials, dropped, coverage };
 
   let gate: Gate = { status: "completed" };
+  // A call that ends without usage (our own timeout, an error that carries none) reports no cost, so a slow contestant
+  // would look free: charge what the fixture's own call used, at this contestant's price.
+  let estimatedCostUsd = 0;
   if (fallback) {
     const outside = voidReason(events);
     const lastFailure = events.filter((e) => !e.ok && e.final).at(-1);
     gate = outside !== null ? { status: "void", reason: outside } : { status: "failed", reason: `fallback: ${lastFailure?.reason ?? fallbackReason ?? "no time"}` };
+    if (!calls.some((call) => call.label === "Allocate") && fixture.baseline) {
+      estimatedCostUsd = estimateCostUsd(roleModel.model, fixture.baseline);
+    }
   }
-  return { gate, output, calls, costUsd, ms };
+  const costUsd = calls.reduce((sum, call) => sum + call.costUsd, 0) + estimatedCostUsd;
+  return { gate, output, calls, costUsd, ...(estimatedCostUsd > 0 ? { estimatedCostUsd } : {}), ms };
 }
