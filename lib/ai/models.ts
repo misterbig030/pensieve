@@ -2,6 +2,7 @@
 export const AVAILABLE_MODELS = [
   // Anthropic
   { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5（Anthropic，便宜）", pricing: { input: 1, output: 5 } },
+  { id: "anthropic/claude-haiku-5.5", label: "Claude Haiku 5.5（Anthropic，便宜）", pricing: { input: 0.1, output: 0.5 } },
   { id: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5（Anthropic，均衡）", pricing: { input: 2, output: 10 } },
   { id: "anthropic/claude-sonnet-5.5", label: "Claude Sonnet 5.5（Anthropic，推荐，均衡，更快）", pricing: { input: 2, output: 10 } },
   { id: "anthropic/claude-opus-5", label: "Claude Opus 5（Anthropic）", pricing: { input: 5, output: 25 } },
@@ -10,16 +11,23 @@ export const AVAILABLE_MODELS = [
   { id: "google/gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite（Google，便宜）", pricing: { input: 0.25, output: 1.5 } },
   { id: "google/gemini-3-flash", label: "Gemini 3 Flash（Google，均衡）", pricing: { input: 0.5, output: 3 } },
   { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro（Google，最强）", pricing: { input: 2, output: 12 } },
+  { id: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash（Google，均衡）", pricing: { input: 0.75, output: 3.75 } },
+  { id: "google/gemini-4-argon", label: "Gemini 4 Argon（Google）", pricing: { input: 2, output: 10 } },
   // OpenAI
   { id: "openai/gpt-5.4-nano", label: "GPT-5.4 Nano（OpenAI，便宜）", pricing: { input: 0.2, output: 1.25 } },
   { id: "openai/gpt-5.4-mini", label: "GPT-5.4 Mini（OpenAI，均衡）", pricing: { input: 0.75, output: 4.5 } },
   { id: "openai/gpt-5.4", label: "GPT-5.4（OpenAI，最强）", pricing: { input: 2.5, output: 15 } },
+  { id: "openai/gpt-6-luna", label: "GPT-6 Luna（OpenAI，便宜）", pricing: { input: 0.1, output: 0.5 } },
+  { id: "openai/gpt-6.1-terra", label: "GPT-6.1 Terra（OpenAI，均衡）", pricing: { input: 1, output: 5 } },
+  { id: "openai/gpt-6.1-sol", label: "GPT-6.1 Sol（OpenAI）", pricing: { input: 2, output: 10 } },
+  // DeepSeek
+  { id: "deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro（DeepSeek，便宜）", pricing: { input: 0.66, output: 1.98 } },
 ] as const;
 
 export type AiModelId = (typeof AVAILABLE_MODELS)[number]["id"];
 
 /** The providers the model list knows, as the prefix of each model id ("anthropic/claude-sonnet-5.5"). */
-export const MODEL_PROVIDERS = ["anthropic", "google", "openai"] as const;
+export const MODEL_PROVIDERS = ["anthropic", "google", "openai", "deepseek"] as const;
 export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
 
 /** The provider a gateway model id belongs to: the part before the slash. */

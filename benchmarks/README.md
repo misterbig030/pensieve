@@ -30,8 +30,9 @@ writes the database.
 npx tsx benchmarks/run.ts --capture evals/results/draft-<ts>-sde-1 evals/results/draft-<ts>-sde-2
 
 # Run a round. The baseline is always included. Defaults: --epochs 3, --max-usd 10, --margin 0.05.
-npx tsx benchmarks/run.ts --task allocate --fixtures sde-1,sde-2,sde-3 --contestants gemini-3-flash,gpt-5.4-mini
-npx tsx benchmarks/run.ts --task allocate --fixtures sde-1,sde-2,sde-3 --contestants gpt-5.4-mini --epochs 5 --max-usd 20
+# Round 1 screens every proposed candidate on one fixture; round 2 confirms the top three on all of them.
+npx tsx benchmarks/run.ts --task allocate --fixtures sde-1 --epochs 2 --contestants sonnet-5.5,gpt-6.1-sol,gemini-4-argon,gpt-6.1-terra,gemini-3.8-flash,deepseek-v4-pro,haiku-5.5,gpt-6-luna
+npx tsx benchmarks/run.ts --task allocate --fixtures sde-1,sde-2,sde-3 --contestants <top three> --max-usd 15
 
 # Score a saved round again after the criteria or judge changed, and judge what a cap left unjudged.
 # Asks the judge only what the cache (benchmarks/cache/judge.jsonl) lacks; contestants are not called.

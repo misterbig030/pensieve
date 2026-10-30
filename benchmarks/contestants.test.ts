@@ -7,6 +7,7 @@ import {
   DEFAULT_RESEARCH_MODEL,
   OUTLINE_EFFORT,
   RESEARCH_LOOP_EFFORT,
+  estimateCostUsd,
   type AiModelId,
 } from "@/lib/ai/models";
 import { assertPriced, BASELINE, CONTESTANTS, contestantsFor } from "./contestants";
@@ -24,12 +25,32 @@ describe("BASELINE", () => {
 
 describe("CONTESTANTS", () => {
   it("gives each rival its model in every role at the baseline's effort for that role", () => {
-    expect(Object.keys(CONTESTANTS)).toEqual(["baseline", "sonnet-5.5", "haiku-4.5", "gemini-3-flash", "gemini-3.1-pro", "gpt-5.4-mini", "gpt-5.4"]);
+    expect(Object.keys(CONTESTANTS)).toEqual([
+      "baseline",
+      "sonnet-5.5",
+      "haiku-4.5",
+      "gemini-3-flash",
+      "gemini-3.1-pro",
+      "gpt-5.4-mini",
+      "gpt-5.4",
+      "gpt-6.1-sol",
+      "gemini-4-argon",
+      "gpt-6.1-terra",
+      "gemini-3.8-flash",
+      "deepseek-v4-pro",
+      "haiku-5.5",
+      "gpt-6-luna",
+    ]);
     expect(CONTESTANTS["gemini-3.1-pro"].roles).toEqual({
       allocate: { model: "google/gemini-3.1-pro-preview", effort: ALLOCATE_EFFORT },
       outline: { model: "google/gemini-3.1-pro-preview", effort: OUTLINE_EFFORT },
       research: { model: "google/gemini-3.1-pro-preview", effort: RESEARCH_LOOP_EFFORT },
     });
+  });
+
+  it("runs DeepSeek V4 Pro at its gateway price, $0.66 in and $1.98 out per million", () => {
+    expect(CONTESTANTS["deepseek-v4-pro"].roles.allocate).toEqual({ model: "deepseek/deepseek-v4-pro", effort: ALLOCATE_EFFORT });
+    expect(estimateCostUsd("deepseek/deepseek-v4-pro", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(2.64, 5);
   });
 
   it("only uses priced models", () => {
