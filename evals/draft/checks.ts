@@ -6,6 +6,7 @@
 import { DEFAULT_HOURS_PER_WEEK, ROOT_ID, walk, type PlanNode } from "@/lib/planTree";
 import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { hostOf, type Material, type PracticeRef } from "@/lib/schemas/material";
+import type { PlanSplit } from "@/lib/studyTime";
 import type { RunRecord, TimedEvent } from "./record";
 import type { DraftTopic } from "./topics";
 
@@ -82,18 +83,18 @@ function containsWords(haystack: string, needle: string): boolean {
  * Whether the title is the label's book: its main title starts with the label's ("System Design Interview, Volume 2"
  * is Alex Xu's; "Machine Learning System Design Interview" only contains its words and is another book).
  */
-function titleMatches(label: string, title: string): boolean {
+export function titleMatches(label: string, title: string): boolean {
   const needle = normalTitle(label);
   return needle !== "" && `${normalTitle(title)} `.startsWith(`${needle} `);
 }
 
 /** A labelled book is a book: an essay titled "System design interview questions in 2026" is not Alex Xu's. */
-function bookMatches(label: string, m: Material): boolean {
+export function bookMatches(label: string, m: Material): boolean {
   return m.kind === "book" && titleMatches(label, m.title);
 }
 
 /** The label author's surname is in the material's author; a material with no author is not held against it. */
-function authorMatches(label: string, author: string | null): boolean {
+export function authorMatches(label: string, author: string | null): boolean {
   if (!author) return true;
   return containsWords(plain(author), plain(label).split(" ").at(-1) ?? "");
 }
@@ -127,7 +128,7 @@ function practiceMinutes(m: Material): number {
   return p.minutes ?? (p.items ?? 0) * (p.perItemMinutes ?? 0);
 }
 
-function servedMinutes(materials: Material[], format: PracticeFormat): number {
+export function servedMinutes(materials: Material[], format: PracticeFormat): number {
   return materials.filter((m) => m.practice?.format === format).reduce((sum, m) => sum + practiceMinutes(m), 0);
 }
 
@@ -203,7 +204,7 @@ function wasRead(url: string, events: TimedEvent[]): boolean {
 }
 
 /** Whether a practice source is one of the named lists, by title, address, list address or item links. */
-function isNamedList(m: Material, names: string[]): boolean {
+export function isNamedList(m: Material, names: string[]): boolean {
   const compact = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
   const list = m.practice?.list;
   const haystacks = [m.title, m.url, list?.url ?? "", ...(list?.items.map((i) => i.url ?? "") ?? [])].map(compact);
@@ -349,29 +350,42 @@ function requestOf(record: RunRecord, topic: DraftTopic): DraftTopic["request"] 
   return record.meta.request ?? topic.request;
 }
 
+/**
+ * What a split's practice share asks of the materials: the picked formats that cannot be generated and have no serving
+ * material (`unserved`), the served ones that get under half their share of minutes (`short`), and a note for each of
+ * the rest.
+ */
+export function practiceTimeFindings(
+  split: PlanSplit,
+  materials: Material[],
+  { weeks, hoursPerWeek = DEFAULT_HOURS_PER_WEEK }: { weeks: number; hoursPerWeek?: number },
+): { unserved: string[]; short: string[]; notes: string[] } {
+  const practice = (hoursPerWeek * weeks * 60 * (100 - split.readingShare)) / 100;
+  const unserved: string[] = [];
+  const short: string[] = [];
+  const notes: string[] = [];
+  for (const pick of split.formats ?? []) {
+    if (pick.share <= 0) continue;
+    const share = Math.round((practice * pick.share) / 100);
+    const serving = materials.filter((m) => m.practice?.format === pick.format);
+    const served = servedMinutes(materials, pick.format);
+    if (serving.length === 0) {
+      if (PRACTICE_REGISTRY[pick.format].generated === "never") unserved.push(`${pick.format}: ${pick.share}% of practice (${share} min) and no material serves it`);
+      else notes.push(`${pick.format}: generated (${pick.share}%)`);
+    } else if (served < share / 2) {
+      short.push(`${pick.format}: materials give ${served} min against a share of ${share} min (${pick.share}%)`);
+    } else notes.push(`${pick.format}: ${served} of ${share} min from ${serving.map((m) => m.id).join(", ")}`);
+  }
+  return { unserved, short, notes };
+}
+
 /** 5. Every picked format that needs a source has one, and served formats get at least half their share of practice time. */
 function checkPracticeTime(record: RunRecord, topic: DraftTopic): Verdict {
   const name = "Practice time served";
   const split = record.split;
   if (!split) return { id: 5, name, status: "n/a", evidence: ["no split in the record"] };
-  const { hoursPerWeek = DEFAULT_HOURS_PER_WEEK, weeks } = requestOf(record, topic);
-  const practice = (hoursPerWeek * weeks * 60 * (100 - split.readingShare)) / 100;
-  const allocated = record.materials.allocated ?? [];
-  const failures: string[] = [];
-  const notes: string[] = [];
-  for (const pick of split.formats ?? []) {
-    if (pick.share <= 0) continue;
-    const share = Math.round((practice * pick.share) / 100);
-    const serving = allocated.filter((m) => m.practice?.format === pick.format);
-    const served = servedMinutes(allocated, pick.format);
-    if (serving.length === 0) {
-      if (PRACTICE_REGISTRY[pick.format].generated === "never") failures.push(`${pick.format}: ${pick.share}% of practice (${share} min) and no material serves it`);
-      else notes.push(`${pick.format}: generated (${pick.share}%)`);
-    } else if (served < share / 2) {
-      failures.push(`${pick.format}: materials give ${served} min against a share of ${share} min (${pick.share}%)`);
-    } else notes.push(`${pick.format}: ${served} of ${share} min from ${serving.map((m) => m.id).join(", ")}`);
-  }
-  return verdict(5, name, failures, notes);
+  const { unserved, short, notes } = practiceTimeFindings(split, record.materials.allocated ?? [], requestOf(record, topic));
+  return verdict(5, name, [...unserved, ...short], notes);
 }
 
 /** Every piece of text a plan node shows, with where it is. */
