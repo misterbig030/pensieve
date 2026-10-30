@@ -123,17 +123,6 @@ const CODE_CRITERIA: CodeCriterion<AllocateOutput, AllocateCtx>[] = [
     },
   },
   {
-    id: "formats-served",
-    group: "practice",
-    weight: 3,
-    text: "Every practice format the split picks that cannot be generated has a material that serves it.",
-    grader: "code",
-    check: (output, ctx) => {
-      const { unserved } = practiceTimeFindings(output.split, output.materials, ctx.fixture.input);
-      return { met: unserved.length === 0, evidence: unserved.length === 0 ? "every picked format served or generated" : unserved.join("; ") };
-    },
-  },
-  {
     id: "format-minutes",
     group: "practice",
     weight: 4,
@@ -142,18 +131,6 @@ const CODE_CRITERIA: CodeCriterion<AllocateOutput, AllocateCtx>[] = [
     check: (output, ctx) => {
       const { short } = practiceTimeFindings(output.split, output.materials, ctx.fixture.input);
       return { met: short.length === 0, evidence: short.length === 0 ? "every served format has its minutes" : short.join("; ") };
-    },
-  },
-  {
-    id: "fits-hours",
-    group: "structure",
-    weight: 3,
-    text: "The reading fits the time the split gives it, within a fifth.",
-    grader: "code",
-    check: (output, ctx) => {
-      const limit = Math.round((1.2 * planMinutes(ctx) * output.split.readingShare) / 100);
-      const minutes = readingMinutes(output);
-      return { met: minutes <= limit, evidence: `${minutes} min of reading against a limit of ${limit} min` };
     },
   },
   {

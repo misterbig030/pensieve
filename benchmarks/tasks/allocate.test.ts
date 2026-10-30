@@ -201,31 +201,12 @@ describe("allocate code criteria", () => {
     expect(result(output([empty, unnamed]), "named-list-kept")?.met).toBe(false);
   });
 
-  it("formats-served is met unless a picked format has no material and cannot be generated", () => {
-    const served = output([KLEPPMANN()], { split: { readingShare: 100, practice: "p", reason: "", formats: [] } });
-    expect(result(served, "formats-served")?.met).toBe(true);
-    const unserved = output([KLEPPMANN()], { split: { readingShare: 50, practice: "problem-set", reason: "", formats: [{ format: "problem-set", share: 100 }] } as PlanSplit });
-    expect(result(unserved, "formats-served")).toMatchObject({ met: false, evidence: expect.stringContaining("problem-set") });
-  });
-
   it("format-minutes is met unless a served format gets under half its share", () => {
     const split = { readingShare: 50, practice: "problem-set", reason: "", formats: [{ format: "problem-set", share: 100 }] } as PlanSplit;
     const small = material("M3", "NeetCode 150", { minutes: null, practice: { ...list("neetcode", 3), minutes: 100 } as Material["practice"] });
     const big = material("M3", "NeetCode 150", { minutes: null, practice: { ...list("neetcode", 3), minutes: 1200 } as Material["practice"] });
     expect(result(output([KLEPPMANN(), small], { split }), "format-minutes")?.met).toBe(false);
     expect(result(output([KLEPPMANN(), big], { split }), "format-minutes")?.met).toBe(true);
-  });
-
-  it("fits-hours is met when the reading stays within 1.2 times its share of the plan", () => {
-    // Reading share 50% of 2880 minutes is 1440; 1.2 times is 1728.
-    const split = { ...ALL_READING, readingShare: 50 };
-    expect(result(output([material("M1", "A", { minutes: 1700 })], { split }), "fits-hours")).toMatchObject({ met: true, evidence: expect.stringContaining("1728") });
-    expect(result(output([material("M1", "A", { minutes: 1800 })], { split }), "fits-hours")?.met).toBe(false);
-  });
-
-  it("fits-hours leaves practice-only materials out of the reading", () => {
-    const practiceOnly = material("M3", "NeetCode 150", { minutes: null, practice: { format: "problem-set", answers: true, minutes: 9000, list: null } as Material["practice"] });
-    expect(result(output([material("M1", "A", { minutes: 1000 }), practiceOnly]), "fits-hours")?.met).toBe(true);
   });
 
   it("overfull is met when the reading exceeds 1.5 times all the plan's minutes", () => {
@@ -245,11 +226,11 @@ describe("allocate code criteria", () => {
     expect(ids).not.toContain("backbone-labelled");
     expect(ids).not.toContain("expected-books");
     expect(ids).not.toContain("named-list-kept");
-    expect(ids).toEqual(expect.arrayContaining(["backbone-chosen", "formats-served", "format-minutes", "fits-hours", "overfull", "coverage-stated"]));
+    expect(ids).toEqual(expect.arrayContaining(["backbone-chosen", "format-minutes", "overfull", "coverage-stated"]));
   });
 
   it("holds the code criteria first, then the judge criteria", () => {
-    const codeIds = ["backbone-labelled", "backbone-chosen", "expected-books", "learner-dropped", "named-list-kept", "formats-served", "format-minutes", "fits-hours", "overfull", "coverage-stated"];
+    const codeIds = ["backbone-labelled", "backbone-chosen", "expected-books", "learner-dropped", "named-list-kept", "format-minutes", "overfull", "coverage-stated"];
     expect(ALLOCATE_CRITERIA.filter((c) => c.grader === "code").map((c) => c.id)).toEqual(codeIds);
     expect(ALLOCATE_CRITERIA.slice(0, codeIds.length).every((c) => c.grader === "code")).toBe(true);
     const judged = ALLOCATE_CRITERIA.filter((c) => c.grader === "judge");
@@ -264,6 +245,13 @@ describe("allocate code criteria", () => {
       ["src-better-dropped", "fidelity", -2],
     ]);
     expect(judged.every((c) => c.group === "quality")).toBe(true);
+  });
+
+  it("leaves out criteria the allocation's own code makes true by construction", () => {
+    // applyAllocation drops a pick nothing serves and works the reading share from the kept reading itself.
+    const ids = ALLOCATE_CRITERIA.map((c) => c.id);
+    expect(ids).not.toContain("formats-served");
+    expect(ids).not.toContain("fits-hours");
   });
 
   it("gives every criterion a distinct id", () => {

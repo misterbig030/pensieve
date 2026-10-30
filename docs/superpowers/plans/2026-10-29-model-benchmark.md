@@ -343,9 +343,7 @@ export function codeResults(output: AllocateOutput, ctx: AllocateCtx): Criterion
 | `expected-books` | materials | +2 | ≥ 2 of the label's expected books are kept, by `titleMatches` (applies with labels) |
 | `learner-dropped` | materials | −10 | met when an `origin: "learner"` input material is missing from the kept list (applies when the input has one) |
 | `named-list-kept` | practice | +5 | a kept material `isNamedList(labels.practiceNames)` and has `practice.list.items.length > 0` (applies with labels) |
-| `formats-served` | practice | +3 | `practiceTimeFindings(...).unserved` is empty |
 | `format-minutes` | practice | +4 | `practiceTimeFindings(...).short` is empty |
-| `fits-hours` | structure | +3 | kept reading minutes ≤ 1.2 × plan minutes × `readingShare` ÷ 100 (reading = materials that are not practice-only, `isPracticeOnly`) |
 | `overfull` | structure | −5 | met when kept reading minutes > 1.5 × all plan minutes |
 | `coverage-stated` | structure | +1 | `coverage` has at least one covered area |
 
