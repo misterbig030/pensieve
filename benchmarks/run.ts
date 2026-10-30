@@ -346,7 +346,8 @@ export interface RescoreDeps {
 /**
  * Scores a saved round again with the current criteria. Code results are recomputed from each completed sample's saved
  * output; judge results are asked again through the cache, so only what the cache lacks is paid for, within a fresh cap.
- * Rewrites the samples, `scores.json`, `report.md` and `chart.svg`; no contestant is called.
+ * Rewrites the samples, `scores.json`, `report.md` and `chart.svg`, and adds the judging spend to `run.json`'s; no
+ * contestant is called.
  */
 export async function rescoreBenchmark(dir: string, deps: RescoreDeps = {}): Promise<{ dir: string; summaries: ContestantSummary[] }> {
   const print = deps.print ?? console.log;
@@ -374,13 +375,17 @@ export async function rescoreBenchmark(dir: string, deps: RescoreDeps = {}): Pro
     writeJson(join(dir, "samples", `${sampleName(sample)}.json`), sample);
   });
 
+  // The round's total spend goes back into run.json, so a second rescore starts from it and no judging is lost.
+  const spentUsd = run.spentUsd + cap.spentUsd;
+  writeJson(join(dir, "run.json"), { ...run, spentUsd });
+
   const summaries = writeOutputs(dir, {
     samples,
     contestants: run.contestants,
     fixtures: run.fixtures,
     epochs: run.epochs,
     maxUsd: run.maxUsd,
-    spentUsd: run.spentUsd + cap.spentUsd,
+    spentUsd,
     margin: run.margin,
     commit: run.commit,
     checked,

@@ -332,6 +332,28 @@ describe("rescoreBenchmark", () => {
     }
   });
 
+  it("adds each rescore's judge spend to the run's, in run.json and the report", async () => {
+    const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1 }), runSample: runner(() => completed(0.3)), judge: judge(), cache: memoryCache().cache });
+    const spentAt = () => (JSON.parse(readFileSync(join(dir, "run.json"), "utf8")) as { spentUsd: number }).spentUsd;
+    const before = spentAt();
+    expect(before).toBeCloseTo(0.6);
+
+    // Each rescore has an empty cache, so every judge call is paid for again.
+    const first = judge(0.1);
+    await rescoreBenchmark(dir, { judge: first, cache: memoryCache().cache, fixturesRoot, calibrationDir, print: () => {} });
+    const afterFirst = before + first.mock.calls.length * 0.1;
+    expect(first.mock.calls.length).toBeGreaterThan(0);
+    expect(spentAt()).toBeCloseTo(afterFirst);
+
+    const second = judge(0.1);
+    await rescoreBenchmark(dir, { judge: second, cache: memoryCache().cache, fixturesRoot, calibrationDir, print: () => {} });
+    const total = afterFirst + second.mock.calls.length * 0.1;
+    expect(spentAt()).toBeCloseTo(total);
+    expect(readFileSync(join(dir, "report.md"), "utf8")).toContain(`Spend: $${total.toFixed(2)} of the`);
+    // The rest of run.json is as the run wrote it.
+    expect(JSON.parse(readFileSync(join(dir, "run.json"), "utf8"))).toMatchObject({ task: "allocate", epochs: 1, maxUsd: 100, judge: JUDGE, startedAt: "2026-10-29T10:00:00.000Z" });
+  });
+
   it("keeps the saved judge results when a rescore gets no new answer", async () => {
     const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1 }), runSample: runner(), judge: judge(), cache: memoryCache().cache });
     const before = readSamples(dir);
