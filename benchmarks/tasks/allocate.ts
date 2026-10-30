@@ -259,7 +259,7 @@ export async function runAllocateSample(
   const calls: ModelCall[] = [];
   const events: ServiceEvent[] = [];
   const startedAt = performance.now();
-  const { split, materials, dropped, coverage, fallback } = await allocate({
+  const { split, materials, dropped, coverage, fallback, fallbackReason } = await allocate({
     ...fixture.input,
     model: appModel(roleModel.model),
     effort: roleModel.effort,
@@ -274,7 +274,7 @@ export async function runAllocateSample(
   if (fallback) {
     const outside = voidReason(events);
     const lastFailure = events.filter((e) => !e.ok && e.final).at(-1);
-    gate = outside !== null ? { status: "void", reason: outside } : { status: "failed", reason: `fallback: ${lastFailure?.reason ?? "no time"}` };
+    gate = outside !== null ? { status: "void", reason: outside } : { status: "failed", reason: `fallback: ${lastFailure?.reason ?? fallbackReason ?? "no time"}` };
   }
   return { gate, output, calls, costUsd, ms };
 }

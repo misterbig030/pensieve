@@ -146,6 +146,43 @@ describe("loggedGenerateObject", () => {
     });
   });
 
+  it("hands a failed call that carries usage to onCall with its cost and the error message, then rethrows", async () => {
+    const usage = { inputTokens: 1_000, outputTokens: 500, totalTokens: 1_500 };
+    mockedGenerateObject.mockRejectedValue(
+      Object.assign(new Error("No object generated: response did not match schema."), { usage, finishReason: "length" }),
+    );
+    const calls: ModelCall[] = [];
+    const rows: GenerationLogRow[] = [];
+    await expect(
+      loggedGenerateObject(
+        { model: "anthropic/claude-haiku-4.5", schema, prompt: "hi", label: "Allocate" },
+        { caller: "outline", onCall: (call) => void calls.push(call), onLog: (row) => void rows.push(row) },
+      ),
+    ).rejects.toThrow("No object generated");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      label: "Allocate",
+      prompt: "hi",
+      response: "No object generated: response did not match schema.",
+      finishReason: "length",
+      inputTokens: 1_000,
+      outputTokens: 500,
+      costUsd: estimateCostUsd("anthropic/claude-haiku-4.5", { inputTokens: 1_000, outputTokens: 500 }),
+    });
+    expect(calls[0].costUsd).toBeGreaterThan(0);
+    // The app's own log is unchanged: a failed call is still not written to generation_log.
+    expect(rows).toEqual([]);
+  });
+
+  it("reports nothing for a failure that carries no usage (a timeout, a refused request)", async () => {
+    mockedGenerateObject.mockRejectedValue(new Error("The operation was aborted due to timeout"));
+    const onCall = vi.fn();
+    await expect(
+      loggedGenerateObject({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi" }, { caller: "outline", onCall }),
+    ).rejects.toThrow("aborted");
+    expect(onCall).not.toHaveBeenCalled();
+  });
+
   it("labels the call by its caller when no label is given", async () => {
     mockedGenerateObject.mockResolvedValue(mockResult());
     const onCall = vi.fn();

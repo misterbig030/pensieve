@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { generateObject } from "ai";
+import type { ModelCall } from "@/lib/ai/logged";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 import { calibrateBenchmark, captureFixtures, rescoreBenchmark, runBenchmark } from "./run";
@@ -163,15 +164,44 @@ describe("runBenchmark", () => {
     expect(sample.secondJudge).toBeUndefined();
   });
 
-  it("re-runs a void sample once and saves the final attempt, counting both costs", async () => {
+  it("re-runs a void sample once and saves the final attempt's outcome with both attempts' calls and costs", async () => {
     let calls = 0;
-    const runSample = runner(() => (++calls === 1 ? { gate: { status: "void", reason: "gateway 503" }, output: null, calls: [], costUsd: 0.2, ms: 1 } : completed(0.1)));
+    const firstCall = { label: "first", costUsd: 0.2 } as ModelCall;
+    const secondCall = { label: "second", costUsd: 0.1 } as ModelCall;
+    const runSample = runner(() =>
+      ++calls === 1 ? { gate: { status: "void", reason: "gateway 503" }, output: null, calls: [firstCall], costUsd: 0.2, ms: 1 } : { ...completed(0.1), calls: [secondCall] },
+    );
     const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1, contestants: [] }), runSample, judge: judge() });
     expect(runSample).toHaveBeenCalledTimes(2);
     const [sample] = readSamples(dir);
     expect(sample.gate).toEqual({ status: "completed" });
-    expect(sample.costUsd).toBe(0.1);
+    expect(sample.calls.map((c) => c.label)).toEqual(["first", "second"]);
+    expect(sample.costUsd).toBeCloseTo(0.3);
+    expect(sample.ms).toBe(14_000);
     expect(JSON.parse(readFileSync(join(dir, "run.json"), "utf8")).spentUsd).toBeCloseTo(0.3);
+  });
+
+  it("reads the judge cache before any call and says how many lines it skipped", async () => {
+    const order: string[] = [];
+    const cache: JudgeCache = { get: () => undefined, set: () => {}, load: () => (order.push("load"), { skippedLines: 2 }) };
+    const lines: string[] = [];
+    const runSample = runner(() => (order.push("run"), completed()));
+    await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1, print: (l: string) => lines.push(l) }), runSample, judge: judge(), cache });
+    expect(order[0]).toBe("load");
+    expect(lines.some((l) => /skipped 2 unreadable lines/.test(l))).toBe(true);
+  });
+
+  it("fails before any call when the judge cache cannot be read", async () => {
+    const cache: JudgeCache = {
+      get: () => undefined,
+      set: () => {},
+      load: () => {
+        throw new Error("EISDIR: illegal operation on a directory");
+      },
+    };
+    const runSample = runner();
+    await expect(runBenchmark({ ...base(), runSample, judge: judge(), cache })).rejects.toThrow(/EISDIR/);
+    expect(runSample).not.toHaveBeenCalled();
   });
 
   it("keeps a sample void when the re-run is void too, and does not judge it", async () => {
@@ -263,6 +293,17 @@ describe("rescoreBenchmark", () => {
     store.delete([...store.keys()][0]);
     await rescoreBenchmark(dir, { judge: judgeFn, cache, fixturesRoot, calibrationDir, print: () => {} });
     expect(generate.mock.calls.length).toBe(asked + 1);
+  });
+
+  it("reads the judge cache before any judge call and says how many lines it skipped", async () => {
+    const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1 }), runSample: runner(), judge: judge(), cache: memoryCache().cache });
+    const order: string[] = [];
+    const cache: JudgeCache = { get: () => undefined, set: () => {}, load: () => (order.push("load"), { skippedLines: 3 }) };
+    const spy = vi.fn(async (args: Parameters<typeof judgeDimension>[0]) => (order.push("judge"), judge()(args)));
+    const lines: string[] = [];
+    await rescoreBenchmark(dir, { judge: spy as unknown as typeof judgeDimension, cache, fixturesRoot, calibrationDir, print: (l) => lines.push(l) });
+    expect(order[0]).toBe("load");
+    expect(lines.some((l) => /skipped 3 unreadable lines/.test(l))).toBe(true);
   });
 
   it("judges the samples a cap left unjudged and rewrites the report", async () => {

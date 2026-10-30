@@ -1,9 +1,9 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { generateObject } from "ai";
-import { JUDGE, SECOND_JUDGE, fileJudgeCache, judgeDimension, judgeKey, secondJudgeSamples, type JudgeCache } from "./judge";
+import { JUDGE, JUDGE_INSTRUCTIONS, JUDGE_TIMEOUT_MS, SECOND_JUDGE, fileJudgeCache, judgeDimension, judgeKey, secondJudgeSamples, type JudgeCache } from "./judge";
 import type { CriterionResult, JudgeCriterion } from "./types";
 
 function criterion(id: string, text = `${id} text`): JudgeCriterion {
@@ -104,6 +104,46 @@ describe("judgeDimension", () => {
     expect(results[1]).toEqual({ id: "b", met: false, evidence: "judge gave no verdict", grader: "judge", judge: JUDGE.model });
   });
 
+  it("does not cache an answer in which a criterion got no verdict, so a rescore asks again", async () => {
+    const cache = memoryCache();
+    const partial = fakeGenerate([{ id: "a", met: true, reason: "ok" }]);
+    await judgeDimension(args(partial, cache));
+    const again = fakeGenerate([
+      { id: "a", met: true, reason: "ok" },
+      { id: "b", met: true, reason: "ok" },
+    ]);
+    const { results } = await judgeDimension(args(again, cache));
+    expect(again).toHaveBeenCalledTimes(1);
+    expect(results[1]).toMatchObject({ id: "b", met: true });
+    // A complete answer is cached as before.
+    const third = fakeGenerate([]);
+    await judgeDimension(args(third, cache));
+    expect(third).not.toHaveBeenCalled();
+  });
+
+  it("gives the call a 120 s abort timeout", async () => {
+    expect(JUDGE_TIMEOUT_MS).toBe(120_000);
+    const signal = new AbortController().signal;
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(signal);
+    try {
+      const generate = fakeGenerate([]);
+      await judgeDimension(args(generate));
+      expect(timeout).toHaveBeenCalledWith(JUDGE_TIMEOUT_MS);
+      expect(generate.mock.calls[0][0].abortSignal).toBe(signal);
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
+  it("lets a timed-out call surface as an error and caches nothing", async () => {
+    const cache = memoryCache();
+    const generate = vi.fn(async () => {
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    }) as unknown as ReturnType<typeof fakeGenerate>;
+    await expect(judgeDimension(args(generate, cache))).rejects.toThrow(/timeout/);
+    expect(cache.get(judgeKey("THE OUTPUT", "coverage", CRITERIA, JUDGE))).toBeUndefined();
+  });
+
   it("makes no call on a cache hit", async () => {
     const cache = memoryCache();
     const first = fakeGenerate([
@@ -128,6 +168,17 @@ describe("judgeDimension", () => {
     expect(judgeKey("out", "coverage", CRITERIA, { ...JUDGE, effort: "low" })).not.toBe(base);
     expect(judgeKey("other", "coverage", CRITERIA, JUDGE)).not.toBe(base);
     expect(judgeKey("out", "fit", CRITERIA, JUDGE)).not.toBe(base);
+  });
+
+  it("keys the cache on the judge's instructions, so editing the prompt reuses no stale answer", async () => {
+    const base = judgeKey("out", "coverage", CRITERIA, JUDGE);
+    expect(judgeKey("out", "coverage", CRITERIA, JUDGE, JUDGE_INSTRUCTIONS)).toBe(base);
+    expect(judgeKey("out", "coverage", CRITERIA, JUDGE, `${JUDGE_INSTRUCTIONS}\nBe strict.`)).not.toBe(base);
+    // The instructions the key hashes are the ones the judge is sent.
+    const generate = fakeGenerate([]);
+    await judgeDimension({ rendered: "THE OUTPUT", dimension: "coverage", criteria: CRITERIA, judge: JUDGE, cache: memoryCache(), generate: asGenerate(generate) });
+    const sent = (generate.mock.calls[0][0] as { messages: { content: { text: string }[] }[] }).messages[0].content[1].text;
+    expect(sent.startsWith(JUDGE_INSTRUCTIONS)).toBe(true);
   });
 });
 
@@ -175,6 +226,36 @@ describe("fileJudgeCache", () => {
     expect(existsSync(path)).toBe(false);
     fileJudgeCache(path).set("late", RESULTS);
     expect(cache.get("late")).toEqual(RESULTS);
+  });
+
+  it("skips a truncated or corrupt line, counts it, and keeps the lines around it", () => {
+    const path = join(dir, "judge.jsonl");
+    const good = (key: string) => JSON.stringify({ key, results: RESULTS });
+    writeFileSync(path, [good("k1"), '{"key":"half","resu', "not json at all", "null", '{"key":"no-results"}', good("k2")].join("\n") + "\n");
+    const cache = fileJudgeCache(path);
+    expect(cache.load()).toEqual({ skippedLines: 4 });
+    expect(cache.get("k1")).toEqual(RESULTS);
+    expect(cache.get("k2")).toEqual(RESULTS);
+    expect(cache.get("half")).toBeUndefined();
+    expect(cache.get("no-results")).toBeUndefined();
+  });
+
+  it("loads eagerly on request, and reports no skipped lines for a missing or clean file", () => {
+    const path = join(dir, "judge.jsonl");
+    expect(fileJudgeCache(path).load()).toEqual({ skippedLines: 0 });
+    fileJudgeCache(path).set("k", RESULTS);
+    expect(fileJudgeCache(path).load()).toEqual({ skippedLines: 0 });
+  });
+
+  it("starts a new line after a last line that was cut off, so the next entry is not glued to it", () => {
+    const path = join(dir, "judge.jsonl");
+    writeFileSync(path, `${JSON.stringify({ key: "k1", results: RESULTS })}\n{"key":"cut","res`);
+    const cache = fileJudgeCache(path);
+    cache.set("k2", RESULTS);
+    const reread = fileJudgeCache(path);
+    expect(reread.load()).toEqual({ skippedLines: 1 });
+    expect(reread.get("k1")).toEqual(RESULTS);
+    expect(reread.get("k2")).toEqual(RESULTS);
   });
 
   it("keeps what the file already held when a set comes before any get", () => {

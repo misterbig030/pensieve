@@ -1,6 +1,6 @@
 import { codeOnlyScore, groupScores, sampleScore, type ScoredCriterion } from "./score";
 import { pairedDelta, passHatK, paretoFrontier, qualityInterval, verdictOf, type Interval } from "./stats";
-import type { Contestant, Criterion, Role, RoleModel, Sample } from "./types";
+import type { Contestant, Role, RoleModel, Sample } from "./types";
 
 /** Everything the report says about one contestant. Intervals can be unbounded when a mean rests on one value. */
 export interface ContestantSummary {
@@ -86,23 +86,22 @@ function judgeDependence(own: Sample[], baseline: Sample[], criteria: ScoredCrit
  */
 export function summarize(
   samples: Sample[],
-  criteria: Criterion<any, any>[],
+  criteria: ScoredCriterion[],
   contestants: Contestant[],
   margin: number,
 ): ContestantSummary[] {
   if (contestants.length === 0) return [];
-  const scored: ScoredCriterion[] = criteria;
   const baselineName = (contestants.find((c) => c.name === "baseline") ?? contestants[0]).name;
   const live = (name: string) => samples.filter((s) => s.contestant === name && s.gate.status !== "void");
   const qualityOf = (list: Sample[]) =>
     byFixture(
       list.filter((s) => s.judged),
-      (s) => sampleScore(s, scored),
+      (s) => sampleScore(s, criteria),
     );
   const baselineSamples = live(baselineName);
   const baselineQuality = qualityOf(baselineSamples);
   const baselineCost = costOf(baselineSamples);
-  const groupKeys = Object.keys(groupScores({ gate: { status: "completed" }, results: [] }, scored));
+  const groupKeys = Object.keys(groupScores({ gate: { status: "completed" }, results: [] }, criteria));
   /** A group scored in part by a judge counts only the judged samples. */
   const judgedKey = (key: string) =>
     key.startsWith("quality.") || criteria.some((c) => c.group === key && c.grader === "judge");
@@ -110,20 +109,20 @@ export function summarize(
   return contestants.map((contestant): ContestantSummary => {
     const own = live(contestant.name);
     const quality = qualityInterval(qualityOf(own));
-    const codeOnly = qualityInterval(byFixture(own, (s) => codeOnlyScore(s, scored)));
+    const codeOnly = qualityInterval(byFixture(own, (s) => codeOnlyScore(s, criteria)));
     const completion = own.length > 0 ? own.filter((s) => s.gate.status === "completed").length / own.length : null;
     const costUsd = costOf(own);
 
     const passes = new Map<string, { n: number; c: number }>();
     for (const s of own) {
       const entry = passes.get(s.fixture) ?? { n: 0, c: 0 };
-      const score = sampleScore(s, scored);
+      const score = sampleScore(s, criteria);
       entry.n++;
       if (s.gate.status === "completed" && score !== null && score >= PASS_SCORE) entry.c++;
       passes.set(s.fixture, entry);
     }
 
-    const perSample = own.map((s) => ({ judged: s.judged, scores: groupScores(s, scored) }));
+    const perSample = own.map((s) => ({ judged: s.judged, scores: groupScores(s, criteria) }));
     const groups: Record<string, number | null> = {};
     for (const key of groupKeys) {
       const values = perSample.filter((s) => s.judged || !judgedKey(key)).map((s) => s.scores[key]);
@@ -143,7 +142,7 @@ export function summarize(
 
     const isBaseline = contestant.name === baselineName;
     const delta = isBaseline ? null : pairedDelta(qualityOf(own), baselineQuality);
-    const judgeDependent = isBaseline ? false : judgeDependence(own, baselineSamples, scored, margin);
+    const judgeDependent = isBaseline ? false : judgeDependence(own, baselineSamples, criteria, margin);
     const verdict = isBaseline
       ? "baseline"
       : verdictOf({ delta, completion, costUsd, baselineCostUsd: baselineCost, margin, judgeDependent });
@@ -199,13 +198,16 @@ const table = (header: string[], rows: string[][]) =>
   [row(header), row(header.map(() => "---")), ...rows.map(row)].join("\n");
 const UNCHECKED = " (unchecked)";
 
-/** How many more epochs would settle an inconclusive contestant, or null when that cannot be said. */
-function epochsToSettle(summary: ContestantSummary, margin: number): number | null {
+/**
+ * How many more samples would settle an inconclusive contestant, or null when that cannot be said. The delta's n counts
+ * epochs of the one fixture, or the fixtures themselves when there are several, so the advice names which.
+ */
+function moreToSettle(summary: ContestantSummary, margin: number): { count: number; unit: "epochs" | "fixtures" } | null {
   const d = summary.delta;
   if (summary.verdict !== "inconclusive" || !d || !(d.mean > -margin)) return null;
   const halfWidth = (d.high - d.low) / 2;
-  const more = Math.ceil(d.n * (halfWidth / (d.mean + margin)) ** 2 - d.n);
-  return Number.isFinite(more) && more > 0 ? more : null;
+  const count = Math.ceil(d.n * (halfWidth / (d.mean + margin)) ** 2 - d.n);
+  return Number.isFinite(count) && count > 0 ? { count, unit: d.oneFixture ? "epochs" : "fixtures" } : null;
 }
 
 /** The sample file the report links, relative to the report. */
@@ -217,7 +219,7 @@ export function renderReport(args: {
   task: string;
   summaries: ContestantSummary[];
   samples: Sample[];
-  criteria: Criterion<any, any>[];
+  criteria: ScoredCriterion[];
   checked: Checked;
   run: {
     commit: string;
@@ -233,7 +235,7 @@ export function renderReport(args: {
 }): string {
   const { task, summaries, samples, criteria, checked, run } = args;
   const margin = run.margin ?? DEFAULT_MARGIN;
-  const judgeIds = (filter: (c: Criterion<any, any>) => boolean = () => true) =>
+  const judgeIds = (filter: (c: ScoredCriterion) => boolean = () => true) =>
     criteria.filter((c) => c.grader === "judge" && filter(c)).map((c) => c.id);
   /** The label for a judged number resting on these judge criteria: set when any of them is not checked. */
   const label = (ids: string[]) => (ids.some((id) => !checked.get(id)?.checked) ? UNCHECKED : "");
@@ -279,11 +281,11 @@ export function renderReport(args: {
     out.push(`*one fixture: the interval measures run-to-run spread only* (${oneFixture.join(", ")})`, "");
   }
   const notes = summaries.flatMap((s) => {
-    const more = epochsToSettle(s, margin);
+    const more = moreToSettle(s, margin);
     return [
       ...(s.voids > 0 ? [`- ${s.name}: ${s.voids} void sample${s.voids === 1 ? "" : "s"} left out`] : []),
       ...(s.unjudged > 0 ? [`- ${s.name}: ${s.unjudged} sample${s.unjudged === 1 ? "" : "s"} not judged yet`] : []),
-      ...(more !== null ? [`- ${s.name}: about ${more} more epochs would settle it`] : []),
+      ...(more !== null ? [`- ${s.name}: about ${more.count} more ${more.unit} would settle it`] : []),
     ];
   });
   if (notes.length > 0) out.push(...notes, "");
@@ -372,7 +374,15 @@ export function renderReport(args: {
   out.push(...(disagreements.length > 0 ? disagreements : ["None."]), "");
 
   // 5. Chart
-  out.push("## 5. Score vs cost", "", "![Score vs cost](chart.svg)", "");
+  const frontier = frontierPoints(chartPoints(summaries)).map((p) => p.name);
+  out.push(
+    "## 5. Score vs cost",
+    "",
+    `Pareto frontier: ${frontier.join(", ") || "none"}`,
+    "",
+    "![Score vs cost](chart.svg)",
+    "",
+  );
   return out.join("\n");
 }
 
@@ -380,6 +390,27 @@ export function renderReport(args: {
 
 const escapeXml = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+interface ChartPoint {
+  name: string;
+  quality: number;
+  costUsd: number;
+}
+
+/** The contestants with a quality score and a cost to plot: the chart's dots and the frontier's candidates. */
+function chartPoints(summaries: ContestantSummary[]): ChartPoint[] {
+  return summaries.flatMap((s) =>
+    s.quality && Number.isFinite(s.quality.mean) && Number.isFinite(s.costUsd)
+      ? [{ name: s.name, quality: s.quality.mean, costUsd: s.costUsd }]
+      : [],
+  );
+}
+
+/** The points no other point beats, cheapest first. */
+function frontierPoints(points: ChartPoint[]): ChartPoint[] {
+  const names = new Set(paretoFrontier(points));
+  return points.filter((p) => names.has(p.name)).sort((a, b) => a.costUsd - b.costUsd);
+}
 
 /** A self-contained SVG: cost per sample across, quality up, one labelled dot per contestant, the Pareto frontier joined. */
 export function renderChart(summaries: ContestantSummary[]): string {
@@ -389,21 +420,14 @@ export function renderChart(summaries: ContestantSummary[]): string {
   const right = 28;
   const top = 20;
   const bottom = 52;
-  const points = summaries.flatMap((s) =>
-    s.quality && Number.isFinite(s.quality.mean) && Number.isFinite(s.costUsd)
-      ? [{ name: s.name, quality: s.quality.mean, costUsd: s.costUsd }]
-      : [],
-  );
+  const points = chartPoints(summaries);
   const maxCost = Math.max(...points.map((p) => p.costUsd), 0) || 1;
   const yMin = Math.min(0, ...points.map((p) => p.quality));
   const yMax = Math.max(1, ...points.map((p) => p.quality));
   const x = (cost: number) => left + (cost / maxCost) * (W - left - right) * 0.94;
   const y = (quality: number) => top + (1 - (quality - yMin) / (yMax - yMin)) * (H - top - bottom);
-  const frontier = new Set(paretoFrontier(points));
-  const line = points
-    .filter((p) => frontier.has(p.name))
-    .sort((a, b) => a.costUsd - b.costUsd)
-    .map((p) => `${x(p.costUsd).toFixed(1)},${y(p.quality).toFixed(1)}`);
+  const frontier = new Set(frontierPoints(points).map((p) => p.name));
+  const line = frontierPoints(points).map((p) => `${x(p.costUsd).toFixed(1)},${y(p.quality).toFixed(1)}`);
 
   const parts: string[] = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="sans-serif" font-size="12">`,

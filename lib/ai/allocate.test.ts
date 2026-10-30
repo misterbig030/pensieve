@@ -471,13 +471,23 @@ describe("the allocation's backbone, coverage and fallback", () => {
     respond(draft({ parts: sixWhole }));
     const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
     expect(out.fallback).toBe(false);
+    expect(out.fallbackReason).toBeNull();
   });
 
-  it("says it fell back when the call fails", async () => {
+  it("says it fell back when the call fails, and why", async () => {
     mockedGenerateObject.mockRejectedValueOnce(new Error("No object generated: response did not match schema."));
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
     expect(out.fallback).toBe(true);
+    expect(out.fallbackReason).toBe("No object generated: response did not match schema.");
+    error.mockRestore();
+  });
+
+  it("trims the reason a failed call gives to 200 characters", async () => {
+    mockedGenerateObject.mockRejectedValueOnce(new Error("x".repeat(500)));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.fallbackReason).toBe("x".repeat(200));
     error.mockRestore();
   });
 
@@ -485,6 +495,7 @@ describe("the allocation's backbone, coverage and fallback", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5"), timeoutMs: 1000 });
     expect(out.fallback).toBe(true);
+    expect(out.fallbackReason).toBe("no time");
     expect(mockedGenerateObject).not.toHaveBeenCalled();
     error.mockRestore();
   });

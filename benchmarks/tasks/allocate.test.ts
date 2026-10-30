@@ -41,11 +41,20 @@ const KLEPPMANN = () => material("M1", "Designing Data-Intensive Applications", 
 
 const CALL = { label: "Allocate", costUsd: 0.25, latencyMs: 5 } as ModelCall;
 
-function allocation(extra: { fallback?: boolean; events?: ServiceEvent[] } = {}): typeof allocatePlan {
+function allocation(extra: { fallback?: boolean; fallbackReason?: string; events?: ServiceEvent[] } = {}): typeof allocatePlan {
   return vi.fn(async (input) => {
     input.log?.onCall?.(CALL);
     for (const event of extra.events ?? []) input.log?.onService?.(event);
-    return { split: ALL_READING, materials: [KLEPPMANN()], dropped: [], coverage: null, costUsd: 0.25, fallback: extra.fallback ?? false };
+    const fallback = extra.fallback ?? false;
+    return {
+      split: ALL_READING,
+      materials: [KLEPPMANN()],
+      dropped: [],
+      coverage: null,
+      costUsd: 0.25,
+      fallback,
+      fallbackReason: fallback ? (extra.fallbackReason ?? "no time") : null,
+    };
   });
 }
 
@@ -66,6 +75,12 @@ describe("runAllocateSample", () => {
   it("fails the gate on a fallback with no outside cause", async () => {
     const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true }) });
     expect(sample.gate).toEqual({ status: "failed", reason: "fallback: no time" });
+  });
+
+  it("names the allocation's own reason when no service event explains the fallback", async () => {
+    const reason = "No object generated: response did not match schema.";
+    const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, fallbackReason: reason }) });
+    expect(sample.gate).toEqual({ status: "failed", reason: `fallback: ${reason}` });
   });
 
   it("names the last service reason on a failed gate", async () => {

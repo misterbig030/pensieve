@@ -79,6 +79,12 @@ function loadChecked(dir: string): Checked {
   return checkedCriteria(files, JUDGE.model, JUDGE_CRITERIA);
 }
 
+/** Reads the judge cache now, so a problem with it shows before any paid call, and says how many stored lines were unreadable. */
+function loadCache(cache: JudgeCache, print: (line: string) => void): void {
+  const skipped = cache.load?.().skippedLines ?? 0;
+  if (skipped > 0) print(`Judge cache: skipped ${skipped} unreadable line${skipped === 1 ? "" : "s"}; those answers will be asked again`);
+}
+
 type JudgeFn = typeof judgeDimension;
 type Checked = ReturnType<typeof checkedCriteria>;
 
@@ -199,7 +205,7 @@ export interface RunOptions {
 
 /**
  * Runs every contestant over every fixture for `epochs` epochs, judges and scores the samples, and writes the run folder.
- * Throws before any call when a contestant is unknown or the estimate is over the cap. Once the real spend passes the cap
+ * Throws before any call when a contestant is unknown, the judge cache cannot be read or the estimate is over the cap. Once the real spend passes the cap
  * no new sample starts and no more judge calls are made; samples never started are not saved, and finished ones left
  * unjudged are saved with `judged: false` for `--rescore`.
  */
@@ -218,6 +224,7 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
   if (fixtures.length === 0) throw new Error("No fixtures to run on");
   // Read before any paid call, so a calibration file broken by hand fails the run now and not after the spend.
   const checked = loadChecked(calibrationDir);
+  loadCache(cache, print);
 
   const renderedChars = fixtures.reduce((sum, f) => sum + renderMaterials(f.input.materials).length, 0) / fixtures.length;
   const estimated: Estimate = estimate({ fixtures, contestants, epochs, judgeDimensions: DIMENSIONS.size, renderedChars });
@@ -269,8 +276,11 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
     let ran = await attempt(fixture, contestant);
     cap.add(ran.costUsd);
     if (ran.gate.status === "void" && !cap.reached) {
+      const first = ran;
       ran = await attempt(fixture, contestant);
       cap.add(ran.costUsd);
+      // The sample is the final attempt, but it was paid for twice: keep the first attempt's calls and cost with it.
+      ran = { ...ran, calls: [...first.calls, ...ran.calls], costUsd: first.costUsd + ran.costUsd };
     }
 
     const sample: Sample<AllocateOutput> = { task: TASK, fixture: fixture.id, contestant: contestant.name, epoch, ...ran, results: [], judged: true };
@@ -345,6 +355,7 @@ export async function rescoreBenchmark(dir: string, deps: RescoreDeps = {}): Pro
   const fixturesRoot = deps.fixturesRoot ?? FIXTURES_ROOT;
   const { run, samples } = readSaved(dir);
   const checked = loadChecked(deps.calibrationDir ?? CALIBRATION_DIR);
+  loadCache(cache, print);
   const maxUsd = deps.maxUsd ?? run.maxUsd;
   const cap = new SpendCap(maxUsd);
 

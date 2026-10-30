@@ -145,6 +145,36 @@ export async function emitGenerationLog(onLog: OnGenerationLog | undefined, row:
 }
 
 /**
+ * Hands a failed call to `meta.onCall` when the error carries usage, as the AI SDK's `NoObjectGeneratedError` does for an
+ * answer that did not fit the schema: the model was paid for, so the call shows with its cost and the error as its
+ * response. A failure with no usage (a timeout, a refused request) is not reported, and nothing is written to `onLog`.
+ */
+function reportFailedCall<T>(opts: LoggedGenerateObjectOptions<T>, meta: GenerationLogMeta, error: unknown, latencyMs: number): void {
+  if (!meta.onCall || typeof error !== "object" || error === null) return;
+  const { usage, finishReason, message } = error as { usage?: LanguageModelUsage; finishReason?: string; message?: unknown };
+  if (typeof usage !== "object" || usage === null) return;
+  const row = buildGenerationLogRow({
+    caller: meta.caller,
+    model: opts.model,
+    usage,
+    latencyMs,
+    effort: opts.effort ?? null,
+    keyOwner: opts.keyOwner ?? meta.keyOwner,
+    trackId: meta.trackId,
+    userId: meta.userId,
+  });
+  meta.onCall({
+    ...row,
+    label: opts.label ?? meta.caller,
+    system: null,
+    prompt: opts.prompt,
+    response: typeof message === "string" ? message : String(error),
+    finishReason: finishReason ?? null,
+    facts: [...(opts.facts ?? []), "the call failed"],
+  });
+}
+
+/**
  * Wraps `generateObject`: times the call, computes list-price cost, and hands a normalized row to `meta.onLog`.
  * A failing `onLog` is reported and swallowed so telemetry never breaks a user-facing generation.
  */
@@ -153,14 +183,21 @@ export async function loggedGenerateObject<T>(
   meta: GenerationLogMeta,
 ): Promise<LoggedGenerateObjectResult<T>> {
   const startedAt = performance.now();
-  const { object, usage, finishReason } = await generateObject({
-    model: opts.languageModel ?? opts.model,
-    schema: opts.schema,
-    prompt: opts.prompt,
-    ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
-    ...(opts.maxRetries !== undefined ? { maxRetries: opts.maxRetries } : {}),
-    ...(opts.effort ? effortSettings(opts.effort, opts.model) : {}),
-  });
+  let generated: Awaited<ReturnType<typeof generateObject>>;
+  try {
+    generated = await generateObject({
+      model: opts.languageModel ?? opts.model,
+      schema: opts.schema,
+      prompt: opts.prompt,
+      ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
+      ...(opts.maxRetries !== undefined ? { maxRetries: opts.maxRetries } : {}),
+      ...(opts.effort ? effortSettings(opts.effort, opts.model) : {}),
+    });
+  } catch (error) {
+    reportFailedCall(opts, meta, error, Math.round(performance.now() - startedAt));
+    throw error;
+  }
+  const { object, usage, finishReason } = generated;
   const latencyMs = Math.round(performance.now() - startedAt);
   const row = buildGenerationLogRow({
     caller: meta.caller,

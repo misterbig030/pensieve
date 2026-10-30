@@ -18,42 +18,86 @@ export const SECOND_JUDGE: RoleModel = { model: "openai/gpt-5.4", effort: "high"
 /** Where judgments are kept between runs: one JSON line per judged dimension. */
 const CACHE_FILE = "benchmarks/cache/judge.jsonl";
 
+/** How long one judge call may take before it is aborted, so a hung call cannot stall the run. */
+export const JUDGE_TIMEOUT_MS = 120_000;
+
 /** Judgments by key; a miss is `undefined`. */
 export interface JudgeCache {
   get(key: string): CriterionResult[] | undefined;
   set(key: string, results: CriterionResult[]): void;
+  /** Reads what is kept now instead of on first use, and says how many stored lines could not be read. Optional: a cache in memory has nothing to read. */
+  load?(): { skippedLines: number };
+}
+
+/** A stored line as `{ key, results }`, or null when it is not one. */
+function parseLine(line: string): { key: string; results: CriterionResult[] } | null {
+  try {
+    const entry = JSON.parse(line) as { key?: unknown; results?: unknown } | null;
+    return typeof entry?.key === "string" && Array.isArray(entry.results) ? { key: entry.key, results: entry.results as CriterionResult[] } : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * A cache in a JSON-lines file. It reads the file on the first `get` or `set` (a missing file is an empty cache) and
- * appends a line for each `set` (through `scrubSecrets`), creating the folder as needed; a later line for a key wins.
+ * A cache in a JSON-lines file. It reads the file on the first `get`, `set` or `load` (a missing file is an empty cache)
+ * and appends a line for each `set` (through `scrubSecrets`), creating the folder as needed; a later line for a key wins.
+ * A line that cannot be read (a write cut short, a hand-edit) is skipped and counted, not fatal; `load` reports the count.
  */
-export function fileJudgeCache(path: string = CACHE_FILE): JudgeCache {
+export function fileJudgeCache(path: string = CACHE_FILE): JudgeCache & { load(): { skippedLines: number } } {
   let entries: Map<string, CriterionResult[]> | null = null;
-  const load = () => {
+  let skippedLines = 0;
+  let endsMidLine = false;
+  const read = () => {
     if (entries) return entries;
     entries = new Map();
     if (!existsSync(path)) return entries;
-    for (const line of readFileSync(path, "utf8").split("\n")) {
+    const text = readFileSync(path, "utf8");
+    endsMidLine = text.length > 0 && !text.endsWith("\n");
+    for (const line of text.split("\n")) {
       if (!line.trim()) continue;
-      const { key, results } = JSON.parse(line) as { key: string; results: CriterionResult[] };
-      entries.set(key, results);
+      const entry = parseLine(line);
+      if (entry) entries.set(entry.key, entry.results);
+      else skippedLines++;
     }
     return entries;
   };
   return {
-    get: (key) => load().get(key),
+    get: (key) => read().get(key),
     set: (key, results) => {
-      load().set(key, results);
+      read().set(key, results);
       mkdirSync(dirname(path), { recursive: true });
-      appendFileSync(path, scrubSecrets(`${JSON.stringify({ key, results })}\n`));
+      // A last line cut short has no newline; without one the new entry would join it and be lost with it.
+      appendFileSync(path, scrubSecrets(`${endsMidLine ? "\n" : ""}${JSON.stringify({ key, results })}\n`));
+      endsMidLine = false;
+    },
+    load: () => {
+      read();
+      return { skippedLines };
     },
   };
 }
 
-/** The cache key: a hash of the rendered output, the dimension, each criterion's id and text, and the judge's model and effort. */
-export function judgeKey(rendered: string, dimension: string, criteria: JudgeCriterion[], judge: RoleModel): string {
-  const parts = [rendered, dimension, criteria.map((c) => ({ id: c.id, text: c.text })), judge.model, judge.effort];
+/** The fixed instructions the judge is sent after the rendered output; the cache key hashes them, so editing them reuses no old answer. */
+export const JUDGE_INSTRUCTIONS = [
+  "You are grading the allocation of a study plan, shown above: how the learner's time is split and which materials were kept.",
+  "Judge each criterion on its own, from the allocation alone, and say why in one sentence.",
+  'A criterion that describes a harm (something the plan should not do) is "met" when the harm is present.',
+  "Answer for every id given, once each.",
+].join("\n");
+
+/**
+ * The cache key: a hash of the rendered output, the dimension, each criterion's id and text, the judge's model and
+ * effort, and the instructions the judge is sent.
+ */
+export function judgeKey(
+  rendered: string,
+  dimension: string,
+  criteria: JudgeCriterion[],
+  judge: RoleModel,
+  instructions: string = JUDGE_INSTRUCTIONS,
+): string {
+  const parts = [rendered, dimension, criteria.map((c) => ({ id: c.id, text: c.text })), judge.model, judge.effort, instructions];
   return createHash("sha256").update(JSON.stringify(parts)).digest("hex");
 }
 
@@ -69,20 +113,13 @@ const verdictsSchema = z.object({
 
 /** The instructions and criteria that follow the rendered output. Weights are never shown to the judge. */
 function criteriaPrompt(criteria: JudgeCriterion[]): string {
-  return [
-    "You are grading the allocation of a study plan, shown above: how the learner's time is split and which materials were kept.",
-    "Judge each criterion on its own, from the allocation alone, and say why in one sentence.",
-    'A criterion that describes a harm (something the plan should not do) is "met" when the harm is present.',
-    "Answer for every id given, once each.",
-    "",
-    "Criteria:",
-    ...criteria.map((c) => `- ${c.id}: ${c.text}`),
-  ].join("\n");
+  return [JUDGE_INSTRUCTIONS, "", "Criteria:", ...criteria.map((c) => `- ${c.id}: ${c.text}`)].join("\n");
 }
 
 /**
- * Grades one dimension's criteria in a single call. A cache hit makes no call and costs nothing. An id the judge made up
- * is ignored, a repeated id keeps its first verdict, and a criterion it skipped is not met.
+ * Grades one dimension's criteria in a single call, aborted after `JUDGE_TIMEOUT_MS` (the abort is an error the caller
+ * handles; nothing is cached). A cache hit makes no call and costs nothing. An id the judge made up is ignored, a
+ * repeated id keeps its first verdict, and a criterion it skipped is not met; such an answer is returned but not cached.
  */
 export async function judgeDimension(args: {
   rendered: string;
@@ -113,6 +150,7 @@ export async function judgeDimension(args: {
       },
     ],
     ...effortSettings(judge.effort, judge.model),
+    abortSignal: AbortSignal.timeout(JUDGE_TIMEOUT_MS),
   });
   const latencyMs = Math.round(performance.now() - startedAt);
 
@@ -122,7 +160,8 @@ export async function judgeDimension(args: {
     const v = verdicts.get(c.id);
     return { id: c.id, met: v?.met ?? false, evidence: v ? v.reason : "judge gave no verdict", grader: "judge", judge: judge.model };
   });
-  cache.set(key, results);
+  // An answer with a skipped criterion is not kept, so a rescore asks again instead of reusing the gap.
+  if (criteria.every((c) => verdicts.has(c.id))) cache.set(key, results);
 
   const row = buildGenerationLogRow({ caller: "judge", model: judge.model, usage, latencyMs, effort: judge.effort });
   const call: ModelCall = {

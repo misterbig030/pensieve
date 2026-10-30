@@ -198,6 +198,20 @@ describe("renderReport", () => {
     expect(report).toContain("![Score vs cost](chart.svg)");
   });
 
+  it("names the Pareto frontier in section 5, cheapest first", () => {
+    const trade = [
+      sample("baseline", "f1", 1, ALL, { costUsd: 0.1 }),
+      sample("cheap", "f1", 1, ["has-plan", "clear"], { costUsd: 0.01 }),
+    ];
+    const report = render(trade, checkedAll);
+    expect(report.slice(report.indexOf("## 5. Score vs cost"))).toContain("Pareto frontier: cheap, baseline");
+    // A contestant that is no worse and cheaper leaves the baseline off it.
+    const dominated = [sample("baseline", "f1", 1, ["has-plan"], { costUsd: 0.1 }), sample("cheap", "f1", 1, ALL, { costUsd: 0.01 })];
+    expect(render(dominated, checkedAll)).toContain("Pareto frontier: cheap\n");
+    // With no scored contestant there is none to name.
+    expect(render([], checkedAll)).toContain("Pareto frontier: none");
+  });
+
   it("lists negative-weight criteria that were met before the others in section 3", () => {
     const harmed = [
       sample("baseline", "f1", 1, ALL),
@@ -236,7 +250,22 @@ describe("renderReport", () => {
     expect(render(samples, checkedAll)).not.toContain("one fixture: the interval measures run-to-run spread only");
   });
 
-  it("advises how many more epochs would settle an inconclusive contestant", () => {
+  it("advises how many more epochs would settle an inconclusive contestant on one fixture", () => {
+    // One fixture: the baseline always scores 1; cheap scores 2/3, 1 and 1/3. Delta -1/3, half-width t(2) · sqrt(1/27) = 0.828.
+    // With margin 0.6 the advice is ceil(3 · (0.828 / (0.6 - 1/3))² - 3) = 26 epochs.
+    const one = [
+      ...[1, 2, 3].map((e) => sample("baseline", "f1", e, ALL, { costUsd: 0.1 })),
+      sample("cheap", "f1", 1, ["has-plan", "clear", "deep", "no-dup"], { costUsd: 0.01 }),
+      sample("cheap", "f1", 2, ALL, { costUsd: 0.01 }),
+      sample("cheap", "f1", 3, ["has-plan"], { costUsd: 0.01 }),
+    ];
+    const summaries = summarize(one, criteria, contestants, 0.6);
+    expect(summaries[1].verdict).toBe("inconclusive");
+    const report = renderReport({ task: "allocate", summaries, samples: one, criteria, checked: checkedAll, run: { ...run, margin: 0.6 } });
+    expect(report).toContain("- cheap: about 26 more epochs would settle it");
+  });
+
+  it("advises how many more fixtures would settle an inconclusive contestant on several", () => {
     // Three fixtures, cheap a little below the baseline on two of them and level on one: delta -0.05, wide interval.
     const mixed = ["f1", "f2", "f3"].flatMap((f, i) => [
       sample("baseline", f, 1, ALL, { costUsd: 0.1 }),
@@ -245,7 +274,9 @@ describe("renderReport", () => {
     const summaries = summarize(mixed, criteria, contestants, 0.5);
     expect(summaries[1].verdict).toBe("inconclusive");
     const report = renderReport({ task: "allocate", summaries, samples: mixed, criteria, checked: checkedAll, run: { ...run, margin: 0.5 } });
-    expect(report).toMatch(/cheap: about \d+ more epochs would settle it/);
+    // Deltas 0, -1/3, -1/3: mean -2/9, half-width 0.478; with margin 0.5, ceil(3 · (0.478 / (0.5 - 2/9))² - 3) = 6, counted in fixtures.
+    expect(report).toContain("- cheap: about 6 more fixtures would settle it");
+    expect(report).not.toContain("more epochs");
   });
 
   it("shows completion 0 and n/a for an all-void contestant, with no NaN", () => {
