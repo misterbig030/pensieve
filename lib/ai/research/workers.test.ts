@@ -55,6 +55,7 @@ function directedModel(scripts: Partial<Record<WorkerDirection, Script>>, finals
   const answers = [...finals];
   const calls: LanguageModelV4CallOptions[] = [];
   const model = new MockLanguageModelV4({
+    modelId: "claude-sonnet-5-5",
     doGenerate: async (options) => {
       calls.push(options);
       if (options.responseFormat?.type === "json") {

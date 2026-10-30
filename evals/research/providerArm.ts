@@ -1,6 +1,6 @@
 import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
 import { ToolLoopAgent, isStepCount, type LanguageModel } from "ai";
-import { buildGenerationLogRow, effortOptions, emitGenerationLog, loggedGenerateObject } from "@/lib/ai/logged";
+import { buildGenerationLogRow, effortSettings, emitGenerationLog, loggedGenerateObject } from "@/lib/ai/logged";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, RESEARCH_LOOP_EFFORT } from "@/lib/ai/models";
 import {
   briefLines,
@@ -78,7 +78,7 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
     const agent = new ToolLoopAgent({
       model,
       instructions,
-      providerOptions: effortOptions(RESEARCH_LOOP_EFFORT),
+      ...effortSettings(RESEARCH_LOOP_EFFORT, model),
       tools: {
         web_search: provider.tools.webSearch_20260209({ maxUses: caps.searches }),
         web_fetch: provider.tools.webFetch_20260209({ maxUses: caps.fetches, maxContentTokens: 4000 }),

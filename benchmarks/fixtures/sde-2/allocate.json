@@ -1,0 +1,2839 @@
+{
+  "id": "sde-2",
+  "topic": "sde",
+  "sourceRun": "draft-2026-10-30T20-43-29-737Z-sde-1",
+  "commit": "ee5c43b",
+  "input": {
+    "topic": "Senior software engineer interview preparation",
+    "weeks": 8,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6,
+    "materials": [
+      {
+        "id": "M1",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Martin Kleppmann",
+        "year": 2017,
+        "why": "Core backbone for the system design concepts senior interviews probe: reliability, scaling, consistency, data systems.",
+        "recommendedBy": [
+          "https://javarevisited.wordpress.com/2025/11/17/ive-read-20-books-on-system-design-interviews-here-are-my-top-5-recommendations-for-2026",
+          "https://designgurus.io/blog/what-to-read-after-designing-data-intensive-applications"
+        ],
+        "url": "https://dataintensive.net",
+        "title": "Designing Data-Intensive Applications",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:43:39.945Z",
+        "fetchedTitle": "Designing Data-Intensive Applications (DDIA) — an O’Reilly book by Martin Kleppmann (The Wild Boar Book)",
+        "sig": "xkqSqVVRi-7lXejNWZ4wyb40ZsRvFxtVyxeaX7t0alk",
+        "minutes": 1545,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 1545,
+        "hub": false,
+        "toc": null,
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ]
+      },
+      {
+        "id": "M2",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Alex Xu",
+        "year": 2020,
+        "why": "Interview-method companion with a 4-step framework and worked questions; Vol. 2 covers harder senior problems.",
+        "recommendedBy": [
+          "https://javarevisited.wordpress.com/2025/11/17/ive-read-20-books-on-system-design-interviews-here-are-my-top-5-recommendations-for-2026"
+        ],
+        "url": "https://openlibrary.org/works/OL21947791W",
+        "title": "System Design Interview – An Insider's Guide",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:44:13.960Z",
+        "fetchedTitle": "System Design Interview - an Insider's Guide",
+        "sig": "IwuvFQq1MwYVKxGAkgx4iITe72bMqk2TQTaeSUtnAzU",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "toc": null,
+        "practice": {
+          "format": "design-exercise",
+          "items": 16,
+          "perItemMinutes": null,
+          "minutes": 50,
+          "answers": true
+        },
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ],
+        "note": "The Open Library page has only catalog metadata. It has no table of contents or exercise sets, so there are no practice units to place."
+      },
+      {
+        "id": "M3",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Michael Nygard",
+        "year": 2007,
+        "why": "Stability patterns and failure cascades, mapping onto senior failure-handling questions.",
+        "recommendedBy": [
+          "https://designgurus.io/blog/what-to-read-after-designing-data-intensive-applications"
+        ],
+        "url": "https://openlibrary.org/works/OL8848832W",
+        "title": "Release It!",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:44:13.960Z",
+        "fetchedTitle": "Release It!",
+        "sig": "l6XOL_gTNijUurMBzb-LVDmiD3Ek5xM7rWEOhtfP8GU",
+        "minutes": 875,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ],
+        "note": "The Open Library pages for Release It! have no table of contents. The Pragmatic Bookshelf page has a \"Contents & Extracts\" section, but the tools returned only its word count, not the chapter titles. I could not verify any chapter titles, so I list no units. Searches suggest the book is organised i…"
+      },
+      {
+        "id": "M4",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Alex Petrov",
+        "year": 2019,
+        "why": "Follow-up for distributed systems and storage depth beyond DDIA.",
+        "recommendedBy": [
+          "https://designgurus.io/blog/what-to-read-after-designing-data-intensive-applications"
+        ],
+        "url": "https://openlibrary.org/works/OL21360140W",
+        "title": "Database Internals",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:44:13.960Z",
+        "fetchedTitle": "Database Internals",
+        "sig": "l4NDeFrjzEb_dzff4P9PbPgkv7b9hLx3Htsfx8eJqpo",
+        "minutes": 700,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": {
+          "source": "page",
+          "url": "https://www.databass.dev",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": null,
+              "title": "Taxonomy and Terminology",
+              "page": null,
+              "minutes": 88,
+              "sections": [],
+              "url": null,
+              "group": "What’s Inside"
+            },
+            {
+              "n": null,
+              "title": "In-Place Update Storage Engines",
+              "page": null,
+              "minutes": 88,
+              "sections": [],
+              "url": null,
+              "group": "What’s Inside"
+            },
+            {
+              "n": null,
+              "title": "Auxiliary Structures",
+              "page": null,
+              "minutes": 88,
+              "sections": [],
+              "url": null,
+              "group": "What’s Inside"
+            },
+            {
+              "n": null,
+              "title": "Log-Structured Storage",
+              "page": null,
+              "minutes": 88,
+              "sections": [],
+              "url": null,
+              "group": "What’s Inside"
+            },
+            {
+              "n": null,
+              "title": "Problems with Distributed Systems",
+              "page": null,
+              "minutes": 88,
+              "sections": [],
+              "url": null,
+              "group": "What’s Inside"
+            },
+            {
+              "n": null,
+              "title": "Consistency Models",
+              "page": null,
+              "minutes": 88,
+              "sections": [],
+              "url": null,
+              "group": "What’s Inside"
+            },
+            {
+              "n": null,
+              "title": "Leader Election and Failure Detection",
+              "page": null,
+              "minutes": 88,
+              "sections": [],
+              "url": null,
+              "group": "What’s Inside"
+            },
+            {
+              "n": null,
+              "title": "Broadcast and Consensus",
+              "page": null,
+              "minutes": 84,
+              "sections": [],
+              "url": null,
+              "group": "What’s Inside"
+            }
+          ]
+        },
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ],
+        "note": "The book has two parts, Storage Engines and Distributed Systems. The chapter list page (O'Reilly) returned 403, so these units are the eight topic sections from the official site's \"What's Inside\" overview, not the 14 chapters. It is best for storage and distributed-systems depth after DDIA."
+      },
+      {
+        "id": "M5",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Gayle Laakmann McDowell",
+        "year": 2010,
+        "why": "Classic coding-interview book with problems and solutions; some sources call it dated.",
+        "recommendedBy": [
+          "https://facebook.com/groups/604728486272187/posts/5700536686691316"
+        ],
+        "url": "https://openlibrary.org/works/OL16816263W",
+        "title": "Cracking the Coding Interview",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:44:13.960Z",
+        "fetchedTitle": "Cracking The Coding Interview",
+        "sig": "j2QephHO4GzfDfNqNiAdegQf6ygF9G8xFnqnPrgxLFs",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "toc": {
+          "source": "catalogue",
+          "url": "https://openlibrary.org/books/OL25442597M",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": 1,
+              "title": "Arrays and Strings",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 2,
+              "title": "Linked Lists",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 3,
+              "title": "Stacks and Queues",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 4,
+              "title": "Trees and Graphs",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 5,
+              "title": "Bit Manipulation",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 6,
+              "title": "Brain Teasers",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 7,
+              "title": "Mathematics and Probability",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 8,
+              "title": "Object-Orented Design",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 9,
+              "title": "Recursion and Dynamic Programming",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 10,
+              "title": "Scalability and Memoty Limits",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 11,
+              "title": "Sorting and Searching",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 12,
+              "title": "Testing",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 13,
+              "title": "C and C++",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 14,
+              "title": "Java",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 15,
+              "title": "Databases",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 16,
+              "title": "Threads and Lock",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 17,
+              "title": "Moderate",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": 18,
+              "title": "Hard",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            }
+          ]
+        },
+        "practice": {
+          "format": "problem-set",
+          "items": null,
+          "perItemMinutes": 10,
+          "minutes": null,
+          "answers": true
+        },
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ],
+        "note": "The Open Library page is only a catalogue record. It has no table of contents and no list of problems, so I found no units to place."
+      },
+      {
+        "id": "M6",
+        "origin": "research",
+        "type": "link",
+        "kind": "repo",
+        "author": "Donne Martin",
+        "year": null,
+        "why": "Free system design foundation with 8 worked design questions, OO questions, Anki decks and estimation appendix.",
+        "recommendedBy": [
+          "https://reddit.com/r/cscareerquestions/comments/ufhjjk/what_are_the_best_resources_to_study_system_design"
+        ],
+        "url": "https://github.com/donnemartin/system-design-primer",
+        "title": "GitHub - donnemartin/system-design-primer: Learn how to design large-scale systems. Prep for the system design interview. Includes Anki flashcards.",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:43:35.496Z",
+        "fetchedTitle": "GitHub - donnemartin/system-design-primer: Learn how to design large-scale systems. Prep for the system design interview. Includes Anki flashcards. · GitHub",
+        "sig": "Qwyiqn3SxZsDY3zZ3iKObrC8I9rLDzPfPryPYtTlB04",
+        "minutes": 300,
+        "minutesBasis": "estimated",
+        "uses": null,
+        "pageMinutes": 49,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "design-exercise",
+          "items": 14,
+          "perItemMinutes": null,
+          "minutes": 50,
+          "answers": true
+        },
+        "foundBy": [
+          "canonical",
+          "practice"
+        ]
+      },
+      {
+        "id": "M7",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": "Erik Demaine, Jason Ku, Justin Solomon",
+        "year": 2020,
+        "why": "Rigorous algorithms and data structures lectures for refreshing fundamentals behind coding rounds.",
+        "recommendedBy": [],
+        "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020",
+        "title": "Introduction to Algorithms | Electrical Engineering and Computer Science | MIT OpenCourseWare",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:43:34.780Z",
+        "fetchedTitle": "Introduction to Algorithms | Electrical Engineering and Computer Science | MIT OpenCourseWare",
+        "sig": "CepOtgfBQLhtzafrZCFvsvqaxWQ4cdYQfQ3zBdEm2JU",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 2,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M8",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": null,
+        "year": null,
+        "why": "Topic-grouped coding problem list (150 core plus 100 more) with video explanations for coding rounds.",
+        "recommendedBy": [],
+        "url": "https://neetcode.io/practice/practice/neetcode250",
+        "title": "NeetCode 250 - Complete Beginner Study Plan",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:43:36.682Z",
+        "fetchedTitle": "NeetCode 250 - Complete Beginner Study Plan",
+        "sig": "bRhDTjgGTzeh2VUEPPBAyGFLtCHD2ZPYWPm1-Libtuc",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 1,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "problem-set",
+          "items": 250,
+          "perItemMinutes": 10,
+          "minutes": 2500,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Concatenation of Array",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Contains Duplicate",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Anagram",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Two Sum",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Common Prefix",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Group Anagrams",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Remove Element",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Majority Element",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design HashSet",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design HashMap",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sort an Array",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sort Colors",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Top K Frequent Elements",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Encode and Decode Strings",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Range Sum Query 2D Immutable",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Product of Array Except Self",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Sudoku",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Consecutive Sequence",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Best Time to Buy And Sell Stock II",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Majority Element II",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Subarray Sum Equals K",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "First Missing Positive",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse String",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Palindrome",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Palindrome II",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Strings Alternately",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Sorted Array",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Remove Duplicates From Sorted Array",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Two Sum II Input Array Is Sorted",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "3Sum",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "4Sum",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Rotate Array",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Container With Most Water",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Boats to Save People",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Trapping Rain Water",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Contains Duplicate II",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Best Time to Buy And Sell Stock",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Substring Without Repeating Characters",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Repeating Character Replacement",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Permutation In String",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Minimum Size Subarray Sum",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find K Closest Elements",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Minimum Window Substring",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sliding Window Maximum",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Baseball Game",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Parentheses",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Implement Stack Using Queues",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Implement Queue using Stacks",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Min Stack",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Evaluate Reverse Polish Notation",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Generate Parentheses",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Asteroid Collision",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Daily Temperatures",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Online Stock Span",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Car Fleet",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Simplify Path",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Decode String",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Frequency Stack",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Largest Rectangle In Histogram",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Search",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Search Insert Position",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Guess Number Higher Or Lower",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sqrt(x)",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Search a 2D Matrix",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Koko Eating Bananas",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Capacity to Ship Packages Within D Days",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find Minimum In Rotated Sorted Array",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Search In Rotated Sorted Array",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Search In Rotated Sorted Array II",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Time Based Key Value Store",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Split Array Largest Sum",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Median of Two Sorted Arrays",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find in Mountain Array",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Linked List",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Two Sorted Lists",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Linked List Cycle",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reorder List",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Remove Nth Node From End of List",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Copy List With Random Pointer",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Add Two Numbers",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find The Duplicate Number",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Linked List II",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design Circular Queue",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "LRU Cache",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "LFU Cache",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge K Sorted Lists",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Nodes In K Group",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Inorder Traversal",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Preorder Traversal",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Postorder Traversal",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Invert Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Depth of Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Diameter of Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Balanced Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Same Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Subtree of Another Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lowest Common Ancestor of a Binary Search Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Insert into a Binary Search Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Delete Node in a BST",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Level Order Traversal",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Right Side View",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Construct Quad Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Count Good Nodes In Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Validate Binary Search Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Kth Smallest Element In a Bst",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Construct Binary Tree From Preorder And Inorder Traversal",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "House Robber III",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Delete Leaves With a Given Value",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Maximum Path Sum",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Serialize And Deserialize Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Kth Largest Element In a Stream",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Last Stone Weight",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "K Closest Points to Origin",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Kth Largest Element In An Array",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Task Scheduler",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design Twitter",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Single Threaded CPU",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reorganize String",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Happy String",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Car Pooling",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find Median From Data Stream",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "IPO",
+                "number": null,
+                "group": "Heap / Priority Queue",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sum of All Subsets XOR Total",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Subsets",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Combination Sum",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Combination Sum II",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Combinations",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Permutations",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Subsets II",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Permutations II",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Search",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Palindrome Partitioning",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Letter Combinations of a Phone Number",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Matchsticks to Square",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Partition to K Equal Sum Subsets",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "N Queens",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "N Queens II",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Break II",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Implement Trie Prefix Tree",
+                "number": null,
+                "group": "Tries",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design Add And Search Words Data Structure",
+                "number": null,
+                "group": "Tries",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Extra Characters in a String",
+                "number": null,
+                "group": "Tries",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Search II",
+                "number": null,
+                "group": "Tries",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Island Perimeter",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Verifying An Alien Dictionary",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find the Town Judge",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Number of Islands",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Max Area of Island",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Clone Graph",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Walls And Gates",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Rotting Oranges",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Pacific Atlantic Water Flow",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Surrounded Regions",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Open The Lock",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Course Schedule",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Course Schedule II",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Graph Valid Tree",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Course Schedule IV",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Number of Connected Components In An Undirected Graph",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Redundant Connection",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Accounts Merge",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Evaluate Division",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Minimum Height Trees",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Ladder",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Path with Minimum Effort",
+                "number": null,
+                "group": "Advanced Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Network Delay Time",
+                "number": null,
+                "group": "Advanced Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reconstruct Itinerary",
+                "number": null,
+                "group": "Advanced Graphs",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Min Cost to Connect All Points",
+                "number": null,
+                "group": "Advanced Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Swim In Rising Water",
+                "number": null,
+                "group": "Advanced Graphs",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Alien Dictionary",
+                "number": null,
+                "group": "Advanced Graphs",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Cheapest Flights Within K Stops",
+                "number": null,
+                "group": "Advanced Graphs",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find Critical and Pseudo Critical Edges in Minimum Spanning Tree",
+                "number": null,
+                "group": "Advanced Graphs",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Build a Matrix With Conditions",
+                "number": null,
+                "group": "Advanced Graphs",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Greatest Common Divisor Traversal",
+                "number": null,
+                "group": "Advanced Graphs",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Climbing Stairs",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Min Cost Climbing Stairs",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "N-th Tribonacci Number",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "House Robber",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "House Robber II",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Palindromic Substring",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Palindromic Substrings",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Decode Ways",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Coin Change",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Product Subarray",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Break",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Increasing Subsequence",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Partition Equal Subset Sum",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Combination Sum IV",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Perfect Squares",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Integer Break",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Stone Game III",
+                "number": null,
+                "group": "1-D Dynamic Programming",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Unique Paths",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Unique Paths II",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Minimum Path Sum",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Common Subsequence",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Last Stone Weight II",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Best Time to Buy And Sell Stock With Cooldown",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Coin Change II",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Target Sum",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Interleaving String",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Stone Game",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Stone Game II",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Increasing Path In a Matrix",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Distinct Subsequences",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Edit Distance",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Burst Balloons",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Regular Expression Matching",
+                "number": null,
+                "group": "2-D Dynamic Programming",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lemonade Change",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Subarray",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Sum Circular Subarray",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Turbulent Subarray",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Jump Game",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Jump Game II",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Jump Game VII",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Gas Station",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Hand of Straights",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Dota2 Senate",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Triplets to Form Target Triplet",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Partition Labels",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Parenthesis String",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Candy",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Insert Interval",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Intervals",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Non Overlapping Intervals",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Meeting Rooms",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Meeting Rooms II",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Meeting Rooms III",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Minimum Interval to Include Each Query",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "hard",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Excel Sheet Column Title",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Greatest Common Divisor of Strings",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Insert Greatest Common Divisors in Linked List",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Transpose Matrix",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Rotate Image",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Spiral Matrix",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Set Matrix Zeroes",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Happy Number",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Plus One",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Roman to Integer",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Pow(x, n)",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Multiply Strings",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Detect Squares",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Single Number",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Number of 1 Bits",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Counting Bits",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Add Binary",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Bits",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Missing Number",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sum of Two Integers",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Integer",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Bitwise AND of Numbers Range",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Minimum Array End",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "medium",
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "file",
+            "url": "https://raw.githubusercontent.com/ascherj/neetcode-250-guide/main/neetcode_250_complete.json"
+          },
+          "totalItems": 250
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "250 problems in 18 topic groups (Arrays & Hashing through Bit Manipulation); best for pattern-based coding interview practice. Groups given as units because the full list exceeds 40."
+      },
+      {
+        "id": "M9",
+        "origin": "research",
+        "type": "link",
+        "kind": "docs",
+        "author": "Yangshun Tay",
+        "year": null,
+        "why": "Question bank of 30 common behavioral questions plus per-company lists to rehearse stories against.",
+        "recommendedBy": [],
+        "url": "https://techinterviewhandbook.org/behavioral-interview-questions",
+        "title": "The 30 most common Software Engineer behavioral interview questions | Tech Interview Handbook",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:43:36.899Z",
+        "fetchedTitle": "The 30 most common Software Engineer behavioral interview questions | Tech Interview Handbook",
+        "sig": "t7A9vVhnBAWvpJHb0krdutHBOnM-WZX78qcmTCSWEqg",
+        "minutes": 9,
+        "minutesBasis": "estimated",
+        "uses": null,
+        "pageMinutes": 7,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "practice"
+        ]
+      },
+      {
+        "id": "M10",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": "mockingly.ai",
+        "year": 2026,
+        "why": "AI interviewer for solo mock system design rounds with follow-ups and feedback.",
+        "recommendedBy": [],
+        "url": "https://mockingly.ai",
+        "title": "Practice System Design Interviews Online with AI | mockingly.ai",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:43:37.678Z",
+        "fetchedTitle": "Practice System Design Interviews Online with AI | mockingly.ai",
+        "sig": "Vr3_6NhUH9vdLnxfVygb1TgVVMH_2kQHf_r12Rs8OXQ",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 5,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "mock",
+          "items": null,
+          "perItemMinutes": null,
+          "minutes": 75,
+          "answers": true
+        },
+        "foundBy": [
+          "practice"
+        ]
+      },
+      {
+        "id": "M11",
+        "origin": "research",
+        "type": "link",
+        "kind": "essay",
+        "author": "Swizec Teller",
+        "year": 2026,
+        "why": "Shows what interviewers now look for with AI allowed: pushback, assumptions and operational concerns.",
+        "recommendedBy": [],
+        "url": "https://swizec.com/blog/software-engineer-interviews-for-the-age-of-ai",
+        "title": "Software engineer interviews for the age of AI",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:43:34.688Z",
+        "fetchedTitle": "Software engineer interviews for the age of AI | Swizec Teller",
+        "sig": "E2nBHEHmWgz5ZDw0yCNuh4C2pA-8OfNcGTACJb3FCyg",
+        "minutes": 4,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 4,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "current"
+        ]
+      },
+      {
+        "id": "M12",
+        "origin": "research",
+        "type": "link",
+        "kind": "essay",
+        "author": "Vinit Shahdeo",
+        "year": 2026,
+        "why": "First-hand account of AI-assisted coding interviews from both sides of the table.",
+        "recommendedBy": [],
+        "url": "https://vinitshahdeo.substack.com/p/ai-assisted-coding-interviews-what-it-means-to-be-an-engineer",
+        "title": "The Future of Hiring: AI-Assisted Coding Interviews Are Changing What It Means to Be an Engineer",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:43:34.797Z",
+        "fetchedTitle": "The Future of Hiring: AI-Assisted Coding Interviews Are Changing What It Means to Be an Engineer",
+        "sig": "wJ_b2jDjdaYwL2nXVi_z556ZzZxlRq19NAVJR2PH9ik",
+        "minutes": 19,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 19,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "current"
+        ]
+      }
+    ]
+  },
+  "baseline": {
+    "inputTokens": 6585,
+    "outputTokens": 2964,
+    "ms": 37680
+  }
+}

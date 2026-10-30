@@ -5,9 +5,22 @@ import { estimateCostUsd, type AiModelId, type KeyOwner, type ReasoningEffort } 
 
 export type { GenerationCaller };
 
-/** The provider options that set Anthropic's reasoning effort on one call. Other providers ignore the key. */
-export function effortOptions(effort: ReasoningEffort): { anthropic: { effort: ReasoningEffort } } {
-  return { anthropic: { effort } };
+/** Whether a model is Anthropic's: a gateway id ("anthropic/claude-opus-5.5"), or an API id on a user's own key ("claude-sonnet-5-5"). */
+export function isAnthropicModel(model: AiModelId | LanguageModel): boolean {
+  const id = typeof model === "string" ? model : model.modelId;
+  return id.startsWith("anthropic/") || id.startsWith("claude-");
+}
+
+/**
+ * The call settings that set reasoning effort on one call. Anthropic models get their own provider option, as they
+ * always have; every other provider gets the AI SDK's portable `reasoning` setting, which the Anthropic key would ignore
+ * and those providers would otherwise never see.
+ */
+export function effortSettings(
+  effort: ReasoningEffort,
+  model: AiModelId | LanguageModel,
+): { providerOptions: { anthropic: { effort: ReasoningEffort } } } | { reasoning: ReasoningEffort } {
+  return isAnthropicModel(model) ? { providerOptions: { anthropic: { effort } } } : { reasoning: effort };
 }
 
 /** One normalized `generation_log` row, ready to insert. Kept free of DB types so the eval harness can collect them in memory. */
@@ -78,7 +91,7 @@ export interface LoggedGenerateObjectOptions<T> {
   abortSignal?: AbortSignal;
   /** Retries on a failed request; the AI SDK's default (2) when omitted. */
   maxRetries?: number;
-  /** Anthropic reasoning effort for this call, sent as a provider option and recorded on the row. Omitted: the model's default. */
+  /** Reasoning effort for this call, sent the way the model's provider takes it and recorded on the row. Omitted: the model's default. */
   effort?: ReasoningEffort;
   /** Who pays for this call when it differs from the context (a resolved model carries its own). */
   keyOwner?: KeyOwner;
@@ -132,6 +145,36 @@ export async function emitGenerationLog(onLog: OnGenerationLog | undefined, row:
 }
 
 /**
+ * Hands a failed call to `meta.onCall` when the error carries usage, as the AI SDK's `NoObjectGeneratedError` does for an
+ * answer that did not fit the schema: the model was paid for, so the call shows with its cost and the error as its
+ * response. A failure with no usage (a timeout, a refused request) is not reported, and nothing is written to `onLog`.
+ */
+function reportFailedCall<T>(opts: LoggedGenerateObjectOptions<T>, meta: GenerationLogMeta, error: unknown, latencyMs: number): void {
+  if (!meta.onCall || typeof error !== "object" || error === null) return;
+  const { usage, finishReason, message } = error as { usage?: LanguageModelUsage; finishReason?: string; message?: unknown };
+  if (typeof usage !== "object" || usage === null) return;
+  const row = buildGenerationLogRow({
+    caller: meta.caller,
+    model: opts.model,
+    usage,
+    latencyMs,
+    effort: opts.effort ?? null,
+    keyOwner: opts.keyOwner ?? meta.keyOwner,
+    trackId: meta.trackId,
+    userId: meta.userId,
+  });
+  meta.onCall({
+    ...row,
+    label: opts.label ?? meta.caller,
+    system: null,
+    prompt: opts.prompt,
+    response: typeof message === "string" ? message : String(error),
+    finishReason: finishReason ?? null,
+    facts: [...(opts.facts ?? []), "the call failed"],
+  });
+}
+
+/**
  * Wraps `generateObject`: times the call, computes list-price cost, and hands a normalized row to `meta.onLog`.
  * A failing `onLog` is reported and swallowed so telemetry never breaks a user-facing generation.
  */
@@ -140,14 +183,21 @@ export async function loggedGenerateObject<T>(
   meta: GenerationLogMeta,
 ): Promise<LoggedGenerateObjectResult<T>> {
   const startedAt = performance.now();
-  const { object, usage, finishReason } = await generateObject({
-    model: opts.languageModel ?? opts.model,
-    schema: opts.schema,
-    prompt: opts.prompt,
-    ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
-    ...(opts.maxRetries !== undefined ? { maxRetries: opts.maxRetries } : {}),
-    ...(opts.effort ? { providerOptions: effortOptions(opts.effort) } : {}),
-  });
+  let generated: Awaited<ReturnType<typeof generateObject>>;
+  try {
+    generated = await generateObject({
+      model: opts.languageModel ?? opts.model,
+      schema: opts.schema,
+      prompt: opts.prompt,
+      ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
+      ...(opts.maxRetries !== undefined ? { maxRetries: opts.maxRetries } : {}),
+      ...(opts.effort ? effortSettings(opts.effort, opts.model) : {}),
+    });
+  } catch (error) {
+    reportFailedCall(opts, meta, error, Math.round(performance.now() - startedAt));
+    throw error;
+  }
+  const { object, usage, finishReason } = generated;
   const latencyMs = Math.round(performance.now() - startedAt);
   const row = buildGenerationLogRow({
     caller: meta.caller,

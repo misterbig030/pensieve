@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { Chapter, Material, PracticeItem } from "@/lib/schemas/material";
-import { checkRun, resourceKey, type Verdict } from "./checks";
+import { checkRun, practiceTimeFindings, resourceKey, type Verdict } from "./checks";
 import type { RunRecord, TimedEvent } from "./record";
 import { DRAFT_TOPICS, type DraftTopic } from "./topics";
 
@@ -113,6 +113,30 @@ function verdict(r: RunRecord, id: Verdict["id"], topic: DraftTopic = SDE): Verd
 function event(e: Record<string, unknown>): TimedEvent {
   return { t: 0, ...e } as TimedEvent;
 }
+
+describe("practiceTimeFindings", () => {
+  const split = { readingShare: 0, practice: "problems", formats: [{ format: "problem-set" as const, share: 60, focus: "patterns", reason: "" }], reason: "" };
+  const request = { weeks: 1, hoursPerWeek: 10 };
+
+  it("reports a served format under half its share as short", () => {
+    const served = material("M3", "Problems", { practice: { format: "problem-set", items: null, perItemMinutes: null, minutes: 10, answers: true, list: null } });
+    const found = practiceTimeFindings(split, [served], request);
+    expect(found.unserved).toEqual([]);
+    expect(found.short).toEqual(["problem-set: materials give 10 min against a share of 360 min (60%)"]);
+  });
+
+  it("reports a format that cannot be generated and has no serving material as unserved", () => {
+    const found = practiceTimeFindings(split, [], request);
+    expect(found.unserved).toEqual(["problem-set: 60% of practice (360 min) and no material serves it"]);
+    expect(found.short).toEqual([]);
+  });
+
+  it("notes a served format that gets its share", () => {
+    const served = material("M3", "Problems", { practice: { format: "problem-set", items: null, perItemMinutes: null, minutes: 300, answers: true, list: null } });
+    const found = practiceTimeFindings(split, [served], request);
+    expect(found).toEqual({ unserved: [], short: [], notes: ["problem-set: 300 of 360 min from M3"] });
+  });
+});
 
 describe("resourceKey", () => {
   it("gives a chapter the same key written either way", () => {
