@@ -237,24 +237,42 @@ describe("allocate code criteria", () => {
     expect(result(output([empty, unnamed]), "named-list-kept")?.met).toBe(false);
   });
 
+  const halfPractice = { readingShare: 50, practice: "problem-set", reason: "", formats: [{ format: "problem-set", share: 100 }] } as PlanSplit;
+  const neetcode = (minutes: number) => material("M3", "NeetCode 150", { minutes: null, practice: { ...list("neetcode", 3), minutes } as Material["practice"] });
+
   it("format-minutes is met unless a served format gets under half its share", () => {
-    const split = { readingShare: 50, practice: "problem-set", reason: "", formats: [{ format: "problem-set", share: 100 }] } as PlanSplit;
-    const small = material("M3", "NeetCode 150", { minutes: null, practice: { ...list("neetcode", 3), minutes: 100 } as Material["practice"] });
-    const big = material("M3", "NeetCode 150", { minutes: null, practice: { ...list("neetcode", 3), minutes: 1200 } as Material["practice"] });
-    expect(result(output([KLEPPMANN(), small], { split }), "format-minutes")?.met).toBe(false);
-    expect(result(output([KLEPPMANN(), big], { split }), "format-minutes")?.met).toBe(true);
+    // Half of 2880 minutes is practice, all of it problems: a share of 1440, so under 720 is short.
+    expect(result(output([KLEPPMANN(), neetcode(100)], { split: halfPractice }), "format-minutes")?.met).toBe(false);
+    expect(result(output([KLEPPMANN(), neetcode(1200)], { split: halfPractice }), "format-minutes")?.met).toBe(true);
   });
 
-  it("overfull is met when the reading exceeds 1.5 times all the plan's minutes", () => {
-    // 1.5 times 2880 is 4320.
-    expect(result(output([material("M1", "A", { minutes: 4400 })]), "overfull")?.met).toBe(true);
-    expect(result(output([material("M1", "A", { minutes: 4300 })]), "overfull")?.met).toBe(false);
+  it("format-minutes is not met by a plan that keeps no time for practice", () => {
+    expect(result(output([KLEPPMANN()]), "format-minutes")).toMatchObject({ met: false, evidence: "no practice time" });
+    // A pick with no time: the reading took all of it.
+    const crowdedOut = { ...halfPractice, readingShare: 100 } as PlanSplit;
+    expect(result(output([KLEPPMANN(), neetcode(1200)], { split: crowdedOut }), "format-minutes")?.met).toBe(false);
   });
 
-  it("coverage-stated is met with at least one covered area", () => {
-    expect(result(output([KLEPPMANN()], { coverage: { covered: ["Databases"], open: [] } }), "coverage-stated")?.met).toBe(true);
+  it("overfull is met when the reading and practice together take over 1.1 times the plan's minutes", () => {
+    // 1.1 times 2880 is 3168.
+    expect(result(output([material("M1", "A", { minutes: 3200 })]), "overfull")?.met).toBe(true);
+    expect(result(output([material("M1", "A", { minutes: 3100 })]), "overfull")?.met).toBe(false);
+    // 2000 of reading fits; with 1200 of problems it does not.
+    expect(result(output([material("M1", "A", { minutes: 2000 }), neetcode(1200)]), "overfull")).toMatchObject({ met: true, evidence: "2000 min of reading and 1200 min of practice against 3168 min" });
+    expect(result(output([material("M1", "A", { minutes: 2000 }), neetcode(1000)]), "overfull")?.met).toBe(false);
+  });
+
+  it("coverage-stated is met with two covered areas that are not the topic itself", () => {
+    const coverage = (covered: string[]) => output([KLEPPMANN()], { coverage: { covered, open: [] } });
+    expect(result(coverage(["Databases", "Algorithms"]), "coverage-stated")?.met).toBe(true);
+    expect(result(coverage(["Databases"]), "coverage-stated")?.met).toBe(false);
+    expect(result(coverage(["Databases", "Senior software engineer interview preparation."]), "coverage-stated")?.met).toBe(false);
     expect(result(output([KLEPPMANN()], { coverage: { covered: [], open: ["Databases"] } }), "coverage-stated")?.met).toBe(false);
     expect(result(output([KLEPPMANN()]), "coverage-stated")?.met).toBe(false);
+  });
+
+  it("cov-claims asks for a stated coverage, so an empty one does not pass by default", () => {
+    expect(ALLOCATE_CRITERIA.find((c) => c.id === "cov-claims")?.text).toMatch(/names the areas it covers/);
   });
 
   it("leaves out label criteria for a topic without labels", () => {

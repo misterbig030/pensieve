@@ -14,7 +14,7 @@ import { isPracticeOnly } from "@/lib/materials";
 import { PRACTICE_REGISTRY } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
 import { totalHours, type PlanSplit } from "@/lib/studyTime";
-import { authorMatches, bookMatches, isNamedList, practiceTimeFindings, titleMatches } from "@/evals/draft/checks";
+import { authorMatches, bookMatches, isNamedList, practiceTimeFindings, servedMinutes, titleMatches } from "@/evals/draft/checks";
 import type { DraftTopic } from "@/evals/draft/topics";
 import { BASELINE } from "../contestants";
 import type { AllocateFixture } from "../fixtures";
@@ -51,6 +51,21 @@ function planMinutes({ fixture }: AllocateCtx): number {
 function readingMinutes(output: AllocateOutput): number {
   return output.materials.filter((m) => !isPracticeOnly(m)).reduce((sum, m) => sum + (m.minutes ?? 0), 0);
 }
+
+/** Minutes of doing the kept practice sources give, every format together. */
+function practiceMinutes(output: AllocateOutput): number {
+  const formats = new Set(output.materials.flatMap((m) => (m.practice ? [m.practice.format] : [])));
+  return [...formats].reduce((sum, format) => sum + servedMinutes(output.materials, format), 0);
+}
+
+/** How much over the plan's whole time the kept reading and practice may run before the plan is overfull: room for estimates. */
+const OVERFULL_SLACK = 1.1;
+
+/** At least this many covered areas: the allocation is asked for the topic's main areas, so one is not a statement. */
+const MIN_COVERED = 2;
+
+/** Lower case, words only, for telling an area from the topic. */
+const plainWords = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 const describeBook = (m: Material) => `"${m.title}" by ${m.author ?? "no author"}`;
 
@@ -127,9 +142,12 @@ const CODE_CRITERIA: CodeCriterion<AllocateOutput, AllocateCtx>[] = [
     id: "format-minutes",
     group: "practice",
     weight: 4,
-    text: "Each practice format with a serving material gets at least half its share of the practice time.",
+    text: "The plan keeps time for practice, and each practice format with a serving material gets at least half its share of it.",
     grader: "code",
     check: (output, ctx) => {
+      // With no practice time every share is 0 minutes, which any format meets: that is not a pass.
+      const practising = output.split.readingShare < 100 && (output.split.formats ?? []).some((p) => p.share > 0);
+      if (!practising) return { met: false, evidence: "no practice time" };
       const { short } = practiceTimeFindings(output.split, output.materials, ctx.fixture.input);
       return { met: short.length === 0, evidence: short.length === 0 ? "every served format has its minutes" : short.join("; ") };
     },
@@ -138,23 +156,29 @@ const CODE_CRITERIA: CodeCriterion<AllocateOutput, AllocateCtx>[] = [
     id: "overfull",
     group: "structure",
     weight: -5,
-    text: "The reading is more than one and a half times all the plan's time.",
+    text: "The kept reading and practice together take more than 1.1 times the plan's whole time.",
     grader: "code",
     check: (output, ctx) => {
-      const limit = Math.round(1.5 * planMinutes(ctx));
-      const minutes = readingMinutes(output);
-      return { met: minutes > limit, evidence: `${minutes} min of reading against ${limit} min` };
+      const limit = Math.round(OVERFULL_SLACK * planMinutes(ctx));
+      const reading = readingMinutes(output);
+      const practice = practiceMinutes(output);
+      return { met: reading + practice > limit, evidence: `${reading} min of reading and ${practice} min of practice against ${limit} min` };
     },
   },
   {
     id: "coverage-stated",
     group: "structure",
     weight: 1,
-    text: "The plan states at least one area it covers.",
+    text: "The plan names at least two areas it covers, none of them the topic itself.",
     grader: "code",
-    check: (output) => {
+    check: (output, ctx) => {
       const covered = output.coverage?.covered ?? [];
-      return { met: covered.length > 0, evidence: covered.length > 0 ? `covers ${covered.join("; ")}` : "no covered area stated" };
+      if (covered.length === 0) return { met: false, evidence: "no covered area stated" };
+      const topic = plainWords(ctx.fixture.input.topic);
+      const restated = covered.filter((area) => plainWords(area) === topic);
+      const named = covered.length - restated.length;
+      const evidence = `covers ${covered.join("; ")}${restated.length > 0 ? ` (the topic itself: ${restated.join("; ")})` : ""}`;
+      return { met: named >= MIN_COVERED, evidence };
     },
   },
 ];
@@ -164,7 +188,7 @@ const CODE_CRITERIA: CodeCriterion<AllocateOutput, AllocateCtx>[] = [
  * dimension belongs to the outline task). A first draft, for the owner's review.
  */
 const JUDGE_CRITERIA: JudgeCriterion[] = [
-  { id: "cov-claims", dimension: "coverage", weight: 3, text: "The kept materials teach every area the coverage lists as covered." },
+  { id: "cov-claims", dimension: "coverage", weight: 3, text: "The coverage names the areas it covers, and the kept materials teach every one of them." },
   {
     id: "cov-core",
     dimension: "coverage",
