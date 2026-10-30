@@ -8,7 +8,8 @@ import { DRAFT_TOPICS } from "@/evals/draft/topics";
 import { BASELINE } from "../contestants";
 import type { AllocateFixture } from "../fixtures";
 import type { Contestant } from "../types";
-import { ALLOCATE_CRITERIA, codeResults, runAllocateSample, voidReason, type AllocateCtx, type AllocateOutput } from "./allocate";
+import { AVAILABLE_MODELS } from "@/lib/ai/models";
+import { ALLOCATE_CRITERIA, codeResults, renderAllocation, runAllocateSample, voidReason, type AllocateCtx, type AllocateOutput } from "./allocate";
 
 function material(id: string, title: string, extra: Partial<Material> = {}): Material {
   return { id, origin: "research", type: "link", kind: "book", url: `https://x/${id}`, title, author: null, year: null, why: null, backbone: false, verifiedAt: null, fetchedTitle: null, recommendedBy: [], sig: null, minutes: 60, ...extra } as Material;
@@ -225,10 +226,75 @@ describe("allocate code criteria", () => {
     expect(ids).toEqual(expect.arrayContaining(["backbone-chosen", "formats-served", "format-minutes", "fits-hours", "overfull", "coverage-stated"]));
   });
 
-  it("holds code criteria only, each with an id, a group and a weight", () => {
-    expect(ALLOCATE_CRITERIA.map((c) => c.id)).toEqual([
-      "backbone-labelled", "backbone-chosen", "expected-books", "learner-dropped", "named-list-kept", "formats-served", "format-minutes", "fits-hours", "overfull", "coverage-stated",
+  it("holds the code criteria first, then the judge criteria", () => {
+    const codeIds = ["backbone-labelled", "backbone-chosen", "expected-books", "learner-dropped", "named-list-kept", "formats-served", "format-minutes", "fits-hours", "overfull", "coverage-stated"];
+    expect(ALLOCATE_CRITERIA.filter((c) => c.grader === "code").map((c) => c.id)).toEqual(codeIds);
+    expect(ALLOCATE_CRITERIA.slice(0, codeIds.length).every((c) => c.grader === "code")).toBe(true);
+    const judged = ALLOCATE_CRITERIA.filter((c) => c.grader === "judge");
+    expect(judged.map((c) => [c.id, c.dimension, c.weight])).toEqual([
+      ["cov-claims", "coverage", 3],
+      ["cov-core", "coverage", 3],
+      ["cov-open-honest", "coverage", 1],
+      ["fit-share", "fit", 3],
+      ["fit-formats", "fit", 3],
+      ["src-proportion", "fidelity", 3],
+      ["src-offtopic", "fidelity", -5],
+      ["src-better-dropped", "fidelity", -2],
     ]);
-    expect(ALLOCATE_CRITERIA.every((c) => c.grader === "code")).toBe(true);
+    expect(judged.every((c) => c.group === "quality")).toBe(true);
+  });
+
+  it("gives every criterion a distinct id", () => {
+    const ids = ALLOCATE_CRITERIA.map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("renderAllocation", () => {
+  const split: PlanSplit = {
+    readingShare: 60,
+    practice: "problems and mocks",
+    reason: "Interviews are won by practice.",
+    formats: [
+      { format: "problem-set", share: 70, focus: "data structures", reason: "Many small problems." },
+      { format: "mock", share: 30, focus: "whole interviews", reason: "Pressure." },
+    ],
+  };
+  const rendered = renderAllocation(
+    output([KLEPPMANN()], {
+      split,
+      dropped: [{ title: "A blog post", reason: "Covered by the book" }],
+      coverage: { covered: ["Databases"], open: ["Networking"] },
+    }),
+    { ...FIXTURE.input, instructions: "Focus on system design" },
+  );
+
+  it("states the request, the split, the kept and dropped materials and the coverage", () => {
+    expect(rendered).toContain("Senior software engineer interview preparation");
+    expect(rendered).toContain("Focus on system design");
+    expect(rendered).toContain("8 weeks");
+    expect(rendered).toContain("6 hours a week");
+    expect(rendered).toContain("60%");
+    expect(rendered).toContain("Interviews are won by practice.");
+    expect(rendered).toContain("Problems");
+    expect(rendered).toContain("data structures");
+    expect(rendered).toContain("Designing Data-Intensive Applications");
+    expect(rendered).toContain("A blog post");
+    expect(rendered).toContain("Covered by the book");
+    expect(rendered).toContain("Databases");
+    expect(rendered).toContain("Networking");
+  });
+
+  it("renders no model name", () => {
+    for (const { id } of AVAILABLE_MODELS) {
+      expect(rendered).not.toContain(id);
+      expect(rendered).not.toContain(id.split("/")[1]);
+    }
+  });
+
+  it("says so when nothing was dropped or no coverage was stated", () => {
+    const plain = renderAllocation(output([KLEPPMANN()]), FIXTURE.input);
+    expect(plain).toMatch(/dropped[^\n]*\n\s*none/i);
+    expect(plain).toMatch(/coverage[^\n]*\n\s*none stated/i);
   });
 });

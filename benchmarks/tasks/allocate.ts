@@ -2,20 +2,22 @@
  * The allocate task: one sample runs the app's own allocation step on a frozen fixture with a contestant's model and
  * effort, decides whether the sample counts, and checks what the model kept against the criteria code can decide.
  */
-import { allocatePlan } from "@/lib/ai/allocate";
+import { allocatePlan, type AllocationInput } from "@/lib/ai/allocate";
 import type { ModelCall } from "@/lib/ai/logged";
 import { ALLOCATE_TIMEOUT_MS } from "@/lib/ai/planDraft";
+import { renderMaterials } from "@/lib/ai/planPrompt";
 import type { Coverage, DroppedMaterial } from "@/lib/ai/research/events";
 import { appModel } from "@/lib/ai/resolve";
 import type { ServiceEvent } from "@/lib/ai/serviceEvents";
 import { isPracticeOnly } from "@/lib/materials";
+import { PRACTICE_REGISTRY } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
 import { totalHours, type PlanSplit } from "@/lib/studyTime";
 import { authorMatches, bookMatches, isNamedList, practiceTimeFindings, titleMatches } from "@/evals/draft/checks";
 import type { DraftTopic } from "@/evals/draft/topics";
 import { BASELINE } from "../contestants";
 import type { AllocateFixture } from "../fixtures";
-import type { Contestant, Criterion, CriterionResult, Gate, Sample } from "../types";
+import type { CodeCriterion, Contestant, Criterion, CriterionResult, Gate, JudgeCriterion, Sample } from "../types";
 
 export type AllocateOutput = { split: PlanSplit; materials: Material[]; dropped: DroppedMaterial[]; coverage: Coverage | null };
 
@@ -56,8 +58,8 @@ const expectedBooks = (ctx: AllocateCtx) => ctx.topic?.labels?.expectedBooks ?? 
 const practiceNames = (ctx: AllocateCtx) => ctx.topic?.labels?.practiceNames ?? [];
 const learnerMaterials = (ctx: AllocateCtx) => ctx.fixture.input.materials.filter((m) => m.origin === "learner");
 
-/** The code criteria; the judge criteria are appended to this list by the judging task. */
-export const ALLOCATE_CRITERIA: Criterion<AllocateOutput, AllocateCtx>[] = [
+/** The criteria a function decides. */
+const CODE_CRITERIA: CodeCriterion<AllocateOutput, AllocateCtx>[] = [
   {
     id: "backbone-labelled",
     group: "materials",
@@ -178,6 +180,60 @@ export const ALLOCATE_CRITERIA: Criterion<AllocateOutput, AllocateCtx>[] = [
     },
   },
 ];
+
+/**
+ * The criteria a judge decides, from the rubric's coverage, fit and fidelity dimensions (the rubric's plan-leaf
+ * dimension belongs to the outline task). A first draft, for the owner's review.
+ */
+const JUDGE_CRITERIA: JudgeCriterion[] = [
+  { id: "cov-claims", dimension: "coverage", weight: 3, text: "The kept materials teach every area the coverage lists as covered." },
+  {
+    id: "cov-core",
+    dimension: "coverage",
+    weight: 3,
+    text: "The kept materials cover the topic's core areas for a learner at this level; nothing a subject expert would call essential is missing without being listed as open.",
+  },
+  { id: "cov-open-honest", dimension: "coverage", weight: 1, text: "Every area listed as open is really not covered by a kept material." },
+  { id: "fit-share", dimension: "fit", weight: 3, text: "The reading share suits the kind of topic and the learner's instructions." },
+  { id: "fit-formats", dimension: "fit", weight: 3, text: "The practice formats are the right kind of work for this topic." },
+  { id: "src-proportion", dimension: "fidelity", weight: 3, text: "Each kept material's minutes are in proportion to how much of the topic it covers." },
+  { id: "src-offtopic", dimension: "fidelity", weight: -5, text: "A kept material is off the topic." },
+  { id: "src-better-dropped", dimension: "fidelity", weight: -2, text: "A dropped material is clearly better for a purpose than the kept material that serves it." },
+].map((c) => ({ ...c, group: "quality" as const, grader: "judge" as const }));
+
+/** Every allocate criterion: the ones code decides, then the ones the judge does. */
+export const ALLOCATE_CRITERIA: Criterion<AllocateOutput, AllocateCtx>[] = [...CODE_CRITERIA, ...JUDGE_CRITERIA];
+
+/**
+ * The allocation as the judge reads it: the request, the split, the kept materials, the dropped ones with their reasons
+ * and the coverage. It names no model, so the judge cannot tell who wrote it.
+ */
+export function renderAllocation(output: AllocateOutput, input: AllocationInput): string {
+  const { split, materials, dropped, coverage } = output;
+  const formats = (split.formats ?? []).map((p) => `- ${PRACTICE_REGISTRY[p.format].label}, ${p.share}% of the practice time, aimed at ${p.focus}. ${p.reason}`.trim());
+  const hours = `${input.hoursPerWeek} hour${input.hoursPerWeek === 1 ? "" : "s"} a week`;
+  return [
+    "The request",
+    `Topic: ${input.topic}`,
+    `Learner's instructions: ${input.instructions?.trim() || "none"}`,
+    `Time: ${input.weeks} weeks, ${input.daysPerWeek} study days a week, about ${hours}`,
+    "",
+    "How the time is split",
+    `Reading or watching the materials: ${split.readingShare}%`,
+    `Practice: ${split.practice}`,
+    ...(formats.length > 0 ? ["Practice formats:", ...formats] : []),
+    `Why: ${split.reason || "none given"}`,
+    "",
+    "Kept materials",
+    materials.length > 0 ? renderMaterials(materials) : "none",
+    "",
+    "Dropped materials",
+    ...(dropped.length > 0 ? dropped.map((d) => `- "${d.title}": ${d.reason}`) : ["none"]),
+    "",
+    "Coverage",
+    ...(coverage ? [`Covered: ${coverage.covered.join("; ") || "none"}`, `Open: ${coverage.open.join("; ") || "none"}`] : ["none stated"]),
+  ].join("\n");
+}
 
 /** The results of the code criteria that apply to this fixture, each with what it found. */
 export function codeResults(output: AllocateOutput, ctx: AllocateCtx): CriterionResult[] {
