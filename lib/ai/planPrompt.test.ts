@@ -598,6 +598,12 @@ describe("listed practice sources in prompts", () => {
       "Across the week, each format's minutes add up to about its time: the reserved items take exactly theirs, and Design's and Mock's time is for blocks, written by the days when the week reserves none.",
     );
     expect(prompt).not.toContain("a week without one gives its time to them");
+    // Items another week already did are not this week's: Week 2, split by hand, did item 5 (25 min), leaving 170.
+    const doneDay = makeNode({ id: "d5", level: "day", title: "D", summary: "s", len: 1, practice: [item(5)] });
+    const tree = layout(makeRoot([week("w1", { practiceCovers: [reserve(1, 9)] }), week("w2", { manualSplit: true, children: [doneDay] })]));
+    const minus = buildUnitsPrompt({ topic: "Interviews", materials, granularity: "day", level: "day", spans: [1, 1, 1, 1, 1], weeks: 8, daysPerWeek: 5, hoursPerWeek: 6, split: sde, tree, parentId: "w1", unitsAreLeaves: true });
+    expect(minus).toContain('- Problems (format "problem-set"): about 2.8 h this week, the minutes of the items reserved below, aimed at patterns.');
+    expect(minus).not.toContain("Top K Frequent Elements");
     // A week that reserves only a source without a list keeps the plan-wide block rule.
     const unlisted = at([{ format: "problem-set", id: "Q", note: "Graphs" }]);
     expect(unlisted).toContain("a week without one gives its time to them");

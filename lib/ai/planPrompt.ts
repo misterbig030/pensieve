@@ -563,7 +563,7 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
   // Days inside a week that reserves listed runs do exactly those items: what a run frees or takes is block time,
   // for blocks the days write themselves when the week reserves none (`weekPracticeTime`, as the checks hold it).
-  const runs = days ? reservedRuns(parent, input.materials) : {};
+  const runs = days ? reservedRuns(parent, input.materials, input.tree, (id) => takenPositions(input, id)) : {};
   const held = Object.keys(runs).length > 0;
   const budgets = held ? weekPracticeTime(weekBudgetsOf(input), runs) : weekBudgetsOf(input);
   const week = budgetFor(1, input.hoursPerWeek) * 60;

@@ -26,6 +26,7 @@ import {
   pickSources,
   practiceBudgets,
   reservedRunMinutes,
+  reservedRuns,
   weekPracticeTime,
   practiceRowKey,
   sizeChapterRows,
@@ -1578,7 +1579,15 @@ describe("a week's practice time inside its reservation", () => {
     expect(budgets).toEqual({ reading: 76, practice: { "problem-set": 159, "design-exercise": 74, mock: 45, recall: 6 } });
     // Items 1–9: three easy at 15 and six medium at 25.
     expect(reservedRunMinutes(reserving([{ format: "problem-set", id: "L", note: null, itemFrom: 1, itemTo: 9 }]), "problem-set", materials)).toBe(195);
-    expect(reservedRunMinutes(reserving([{ format: "problem-set", id: "L", note: null }]), "problem-set", materials)).toBe(495);
+    // A reservation without a range is not sized here: the share stands (the checks report it as unsized).
+    expect(reservedRunMinutes(reserving([{ format: "problem-set", id: "L", note: null }]), "problem-set", materials)).toBeUndefined();
+    // Overlapping reservations of one source count each item once: 1–4 and 3–6 are items 1–6.
+    const twice = reserving([
+      { format: "problem-set", id: "L", note: null, itemFrom: 1, itemTo: 4 },
+      { format: "problem-set", id: "L", note: null, itemFrom: 3, itemTo: 6 },
+      { format: "problem-set", id: "L", note: null },
+    ]);
+    expect(reservedRunMinutes(twice, "problem-set", materials)).toBe(3 * 15 + 3 * 25);
     expect(reservedRunMinutes(reserving([{ format: "problem-set", id: "U", note: null }]), "problem-set", materials)).toBeUndefined();
     expect(reservedRunMinutes(reserving([]), "problem-set", materials)).toBeUndefined();
     expect(reservedRunMinutes(null, "problem-set", materials)).toBeUndefined();
@@ -1596,6 +1605,25 @@ describe("a week's practice time inside its reservation", () => {
     }
     // Without a run nothing moves.
     expect(weekPracticeTime(budgets, {})).toEqual(budgets);
+  });
+
+  it("holds a block format with a listed run to its run too, and moves the difference to the other blocks", () => {
+    // Problems 1–4 (100 min) and design 1–3 (150 min): the 59 + −76 = −17 net comes out of mock alone.
+    expect(weekPracticeTime(budgets, { "problem-set": 100, "design-exercise": 150 })).toEqual({ reading: 76, practice: { "problem-set": 100, "design-exercise": 150, mock: 28, recall: 6 } });
+    // A week reserving only one 50-min design question: the 24 it frees go to mock, the one block without a run.
+    expect(weekPracticeTime(budgets, { "design-exercise": 50 })).toEqual({ reading: 76, practice: { "problem-set": 159, "design-exercise": 50, mock: 69, recall: 6 } });
+    // With every block held to a run, what is freed goes to reading.
+    expect(weekPracticeTime(budgets, { "design-exercise": 50, mock: 45 })).toEqual({ reading: 100, practice: { "problem-set": 159, "design-exercise": 50, mock: 45, recall: 6 } });
+  });
+
+  it("leaves out the items a unit outside the week already did", () => {
+    // Week 1 reserves items 1–9; Week 2, split by hand, already did item 5 (25 min).
+    const done = makeNode({ id: "d", level: "day", title: "D", summary: "s", len: 1, practice: [{ format: "problem-set", id: "L", task: "Top K Frequent Elements", done: "solved", minutes: 25, generated: false, itemFrom: 5, itemTo: 5 }] });
+    const w1 = makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 5, practiceCovers: [{ format: "problem-set", id: "L", note: null, itemFrom: 1, itemTo: 9 }] });
+    const w2 = makeNode({ id: "w2", level: "week", title: "W2", summary: "s", len: 5, manualSplit: true, children: [done] });
+    const root = layout(makeRoot([w1, w2]));
+    expect(reservedRuns(root.children![0], materials, root)).toEqual({ "problem-set": 170 });
+    expect(reservedRuns(root.children![0], materials)).toEqual({ "problem-set": 195 });
   });
 
   it("gives what a run frees to reading when no block can take it", () => {

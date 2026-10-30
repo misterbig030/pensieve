@@ -583,41 +583,74 @@ export function practiceBudgets(
 }
 
 /**
- * The doing minutes of the listed items a heading reserves for one format: what its units have of that format to do.
- * Undefined when it reserves no run of a listed source of that format, so the format's share of the week stands.
+ * The doing minutes of the listed items a heading reserves for one format, less those `done` says a unit outside it
+ * already did: what its units have of that format to do. Only reservations with a run of items count, and an item two
+ * of them hold counts once. Undefined when it reserves no such run, so the format's share of the week stands (a
+ * reservation without a run is reported as unsized by the checks).
  */
 export function reservedRunMinutes(
   parent: PlanNode | null | undefined,
   format: PracticeFormat,
   materials: Pick<Material, "id" | "practice">[],
+  done: (id: string) => Set<number> = () => new Set(),
 ): number | undefined {
-  let total: number | undefined;
+  const positions = new Map<string, Set<number>>();
   for (const c of parent?.practiceCovers ?? []) {
-    if (c.format !== format || c.id === null) continue;
-    const list = materials.find((m) => m.id === c.id)?.practice?.list;
-    if (!list) continue;
+    if (c.format !== format || c.id === null || !materials.find((m) => m.id === c.id)?.practice?.list) continue;
     const run = itemPositions(c);
-    const positions = run.length > 0 ? run : list.items.map((_, i) => i + 1);
-    total = (total ?? 0) + positions.reduce((sum, n) => sum + (list.items[n - 1] ? itemMinutes(format, list.items[n - 1]) : 0), 0);
+    if (run.length === 0) continue;
+    const held = positions.get(c.id) ?? new Set<number>();
+    for (const n of run) held.add(n);
+    positions.set(c.id, held);
+  }
+  if (positions.size === 0) return undefined;
+  let total = 0;
+  for (const [id, held] of positions) {
+    const list = materials.find((m) => m.id === id)!.practice!.list!;
+    const taken = done(id);
+    for (const n of held) if (list.items[n - 1] && !taken.has(n)) total += itemMinutes(format, list.items[n - 1]);
   }
   return total;
 }
 
-/** `reservedRunMinutes` for every format a heading reserves a listed run of. */
-export function reservedRuns(parent: PlanNode | null | undefined, materials: Pick<Material, "id" | "practice">[]): Partial<Record<PracticeFormat, number>> {
+/** Positions of a listed source that practice rows outside `parent`'s units already did. */
+export function doneOutside(root: PlanNode | null | undefined, parent: PlanNode | null | undefined, id: string): Set<number> {
+  const inside = new Set<string>();
+  if (parent) walk(parent, (n) => void inside.add(n.id));
+  const out = new Set<number>();
+  if (root) {
+    walk(root, (n) => {
+      if (inside.has(n.id)) return;
+      for (const r of n.practice ?? []) if (r.id === id && r.itemFrom) out.add(r.itemFrom);
+    });
+  }
+  return out;
+}
+
+/**
+ * `reservedRunMinutes` for every format a heading reserves a listed run of. Items are left out as done when a unit
+ * outside the heading did them: by `done` when given, else by `doneOutside` over `root`.
+ */
+export function reservedRuns(
+  parent: PlanNode | null | undefined,
+  materials: Pick<Material, "id" | "practice">[],
+  root?: PlanNode | null,
+  done: (id: string) => Set<number> = (id) => doneOutside(root, parent, id),
+): Partial<Record<PracticeFormat, number>> {
   const runs: Partial<Record<PracticeFormat, number>> = {};
   for (const f of PRACTICE_FORMATS) {
-    const minutes = reservedRunMinutes(parent, f, materials);
+    const minutes = reservedRunMinutes(parent, f, materials, done);
     if (minutes !== undefined) runs[f] = minutes;
   }
   return runs;
 }
 
 /**
- * A week's practice minutes by format once its listed runs are known (`reservedRunMinutes`). A listed format gets its
- * run exactly: its units can take no other items. What that frees against the format's share goes to the block
- * formats the units can write themselves (a design prompt with a rubric, a mock), by their shares, and to reading
- * when there are none; a run past its share takes the excess from the blocks, none below 0.
+ * A week's practice minutes by format once its listed runs are known (`reservedRuns`). A format with a run gets it
+ * exactly, a block format too: its units can take no other items. What that frees against the formats' shares goes to
+ * the block formats without a run that the units can write themselves (a design prompt with a rubric, a mock), by
+ * their shares, and to reading when there are none; a run past its share takes the excess from those blocks, none
+ * below 0. Where they all have no time yet, they share it equally.
  */
 export function weekPracticeTime(
   budgets: { reading: number; practice: Partial<Record<PracticeFormat, number>> },
@@ -627,22 +660,24 @@ export function weekPracticeTime(
   let spare = 0;
   for (const f of PRACTICE_FORMATS) {
     const run = runs[f];
-    if (run === undefined || practice[f] === undefined || isBlockFormat(f)) continue;
+    if (run === undefined || practice[f] === undefined) continue;
     spare += practice[f]! - run;
     practice[f] = run;
   }
   if (spare === 0) return { reading: budgets.reading, practice };
-  const blocks = PRACTICE_FORMATS.filter((f) => practice[f] !== undefined && isBlockFormat(f));
+  const free = PRACTICE_FORMATS.filter((f) => practice[f] !== undefined && runs[f] === undefined && isBlockFormat(f));
+  const weights = (fs: PracticeFormat[]) => (fs.some((f) => practice[f]! > 0) ? fs.map((f) => practice[f]!) : fs.map(() => 1));
   if (spare > 0) {
-    const written = blocks.filter((f) => PRACTICE_REGISTRY[f].generated !== "never");
+    const written = free.filter((f) => PRACTICE_REGISTRY[f].generated !== "never");
     if (written.length === 0) return { reading: budgets.reading + spare, practice };
-    const shares = shareOut(spare, written.map((f) => practice[f]!));
+    const shares = shareOut(spare, weights(written));
     written.forEach((f, i) => (practice[f] = practice[f]! + shares[i]));
     return { reading: budgets.reading, practice };
   }
-  const held = blocks.reduce((sum, f) => sum + practice[f]!, 0);
-  const cut = shareOut(Math.min(-spare, held), blocks.map((f) => practice[f]!));
-  blocks.forEach((f, i) => (practice[f] = practice[f]! - cut[i]));
+  const held = free.reduce((sum, f) => sum + practice[f]!, 0);
+  if (held === 0) return { reading: budgets.reading, practice };
+  const cut = shareOut(Math.min(-spare, held), free.map((f) => practice[f]!));
+  free.forEach((f, i) => (practice[f] = practice[f]! - cut[i]));
   return { reading: budgets.reading, practice };
 }
 
@@ -1187,7 +1222,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
    */
   const weekRule = (units: PlanNode[], index: number, unit: string, weekMinutes: number) => {
     const plain = practiceBudgets(input.split, weekMinutes, input.materials);
-    const runs = units[0]?.level === "day" ? reservedRuns(parentNode, input.materials) : {};
+    const runs = units[0]?.level === "day" ? reservedRuns(parentNode, input.materials, input.root) : {};
     const held = Object.keys(runs).length > 0;
     const budgets = held ? weekPracticeTime(plain, runs) : plain;
     let must = 0;
