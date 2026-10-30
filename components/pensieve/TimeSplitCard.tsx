@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DaysPerWeekPicker } from "@/components/pensieve/DaysPerWeekPicker";
-import { splitHours } from "@/lib/materials";
+import { splitPercents } from "@/lib/materials";
 import { capitalize } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, SPLIT_SET_BY_LEARNER, clampHours, presetFor, shareAdjustable, totalHours, type PlanSplit } from "@/lib/studyTime";
@@ -41,7 +41,7 @@ export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, materia
   const total = totalHours(weeks, hoursPerWeek);
   const preset = presetFor(hoursPerWeek);
   const editable = !!onChangeHours || !!onChangeDays || !!onChangeSplit;
-  const { reading, picks } = split ? splitHours(split, total, materials) : { reading: 0, picks: [] };
+  const { reading, practice, picks } = split ? splitPercents(split, materials) : { reading: 0, practice: 0, picks: [] };
   // A pick drafted as reading widens the reading bar by its share of the practice time.
   const practiceShare = (share: number) => ((100 - (split?.readingShare ?? 0)) * share) / 100;
   const toReading = new Set(picks.filter((p) => p.toReading).map((p) => p.format));
@@ -90,7 +90,7 @@ export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, materia
           <div className="flex flex-wrap gap-x-[18px] gap-y-1 text-[12.5px]">
             <span className="inline-flex items-center gap-1.5">
               <span className="block size-2.5 rounded-[3px] bg-accent-700" />
-              Reading and watching · about {reading} h
+              Reading and watching · {reading}%
             </span>
             {picks.length > 0
               ? picks.map((p, i) =>
@@ -98,19 +98,19 @@ export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, materia
                     <span key={p.format} className="text-muted-foreground">
                       {p.label} · no source found, so its time is reading
                     </span>
-                  ) : p.hours > 0 ? (
+                  ) : p.percent > 0 ? (
                     <span key={p.format} className="inline-flex items-center gap-1.5">
                       <span className={cn("block size-2.5 shrink-0 rounded-[3px]", PICK_SHADES[i % PICK_SHADES.length])} />
                       <span>
-                        {p.label} · about {p.hours} h <span className="text-muted-foreground">— {p.focus}</span>
+                        {p.label} · {p.percent}% <span className="text-muted-foreground">— {p.focus}</span>
                       </span>
                     </span>
                   ) : null,
                 )
-              : total - reading > 0 && (
+              : practice > 0 && (
                   <span className="inline-flex items-center gap-1.5">
                     <span className="block size-2.5 rounded-[3px] bg-accent-2-700" />
-                    {capitalize(split.practice)} · about {total - reading} h
+                    {capitalize(split.practice)} · {practice}%
                   </span>
                 )}
           </div>

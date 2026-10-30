@@ -76,7 +76,7 @@ export default async function TrackDetailPage({ params }: { params: Promise<{ id
       </div>
       {materials.length > 0 && (
         <div className="mb-6">
-          <MaterialsList topic={track.title} materials={materials} initialShown={4} />
+          <MaterialsList topic={track.title} materials={materials} initialShown={4} foldKey={`pensieve:materials-seen:${track.id}`} />
         </div>
       )}
       <TrackPlan trackId={track.id} root={root} granularity={track.granularity} materials={materials} hoursPerWeek={track.hoursPerWeek} daysPerWeek={track.daysPerWeek} />
