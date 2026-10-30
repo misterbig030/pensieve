@@ -118,6 +118,19 @@ describe("summarize", () => {
     expect(summarize([sample("baseline", "f1", 1, ALL)], criteria, contestants, 0.05)[0].passHat3).toBeNull();
   });
 
+  it("leaves unjudged samples out of pass^3, since their code-only score is not the sample's score", () => {
+    const codeOnly = [result("has-plan", true, "code"), result("no-dup", false, "code")];
+    const unjudged = (e: number) => sample("cheap", "f1", e, ["has-plan"], { judged: false, results: codeOnly });
+    // Three unjudged samples with a high code-only score: nothing to count, so no pass^3.
+    expect(summarize([sample("baseline", "f1", 1, ALL), unjudged(1), unjudged(2), unjudged(3)], criteria, contestants, 0.05)[1].passHat3).toBeNull();
+    // Two judged passes and an unjudged one: the unjudged one is not a third trial.
+    const two = [sample("baseline", "f1", 1, ALL), sample("cheap", "f1", 1, ALL), sample("cheap", "f1", 2, ALL), unjudged(3)];
+    expect(summarize(two, criteria, contestants, 0.05)[1].passHat3).toBeNull();
+    // A failed gate is saved judged and scores 0, so it still counts against pass^3.
+    const failed = sample("cheap", "f1", 3, [], { gate: { status: "failed", reason: "x" } });
+    expect(summarize([sample("baseline", "f1", 1, ALL), sample("cheap", "f1", 1, ALL), sample("cheap", "f1", 2, ALL), failed], criteria, contestants, 0.05)[1].passHat3).toBe(0);
+  });
+
   it("qualifies a cheaper contestant that matches the baseline across fixtures", () => {
     const samples = ["f1", "f2", "f3"].flatMap((f) => [
       sample("baseline", f, 1, ALL, { costUsd: 0.1 }),

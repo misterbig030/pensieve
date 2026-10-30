@@ -22,7 +22,7 @@ export interface ContestantSummary {
   judgeDependent: boolean;
 }
 
-/** A sample counts as passing for pass^k at this score or above, as long as its gate completed. */
+/** A judged sample counts as passing for pass^k at this score or above, as long as its gate completed. */
 const PASS_SCORE = 0.7;
 const PASS_K = 3;
 /** The margin used in the "more epochs" advice when the run does not say which one it used. */
@@ -114,7 +114,8 @@ export function summarize(
     const costUsd = costOf(own);
 
     const passes = new Map<string, { n: number; c: number }>();
-    for (const s of own) {
+    // Only judged samples are trials: an unjudged one has a code-only score, which is not the score pass^3 is about.
+    for (const s of own.filter((s) => s.judged)) {
       const entry = passes.get(s.fixture) ?? { n: 0, c: 0 };
       const score = sampleScore(s, criteria);
       entry.n++;
