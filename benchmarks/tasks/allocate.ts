@@ -281,7 +281,10 @@ export async function runAllocateSample(
   if (fallback) {
     const outside = voidReason(events);
     const lastFailure = events.filter((e) => !e.ok && e.final).at(-1);
-    gate = outside !== null ? { status: "void", reason: outside } : { status: "failed", reason: `fallback: ${lastFailure?.reason ?? fallbackReason ?? "no time"}` };
+    const cause = lastFailure?.reason ?? fallbackReason ?? "no time";
+    // Our limit can land while the SDK waits to retry ("Delay was aborted"): name the limit, keep the message.
+    const why = TIMEOUT_REASON.test(cause) ? `timed out after ${ALLOCATE_TIMEOUT_MS / 1000} s (${cause})` : cause;
+    gate = outside !== null ? { status: "void", reason: outside } : { status: "failed", reason: `fallback: ${why}` };
     if (!calls.some((call) => call.label === "Allocate") && fixture.baseline) {
       estimatedCostUsd = estimateCostUsd(roleModel.model, fixture.baseline);
     }

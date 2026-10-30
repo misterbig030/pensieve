@@ -93,7 +93,13 @@ describe("runAllocateSample", () => {
   it("names the last service reason on a failed gate", async () => {
     const events = [failure({ status: 400, reason: "first" }), failure({ reason: "the request timed out", where: "allocate" })];
     const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, events }) });
-    expect(sample.gate).toEqual({ status: "failed", reason: "fallback: the request timed out" });
+    expect(sample.gate).toEqual({ status: "failed", reason: "fallback: timed out after 90 s (the request timed out)" });
+  });
+
+  it("says a call cut off by the app's time limit timed out, whatever the SDK's message", async () => {
+    // The abort can land while the SDK waits to retry, which it reports as "Delay was aborted".
+    const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, fallbackReason: "Delay was aborted" }) });
+    expect(sample.gate).toEqual({ status: "failed", reason: "fallback: timed out after 90 s (Delay was aborted)" });
   });
 
   it("voids a fallback the gateway caused (503)", async () => {

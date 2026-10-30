@@ -7,6 +7,7 @@ import {
   OUTLINE_EFFORT,
   RESEARCH_LOOP_EFFORT,
   type AiModelId,
+  type ReasoningEffort,
 } from "@/lib/ai/models";
 import type { Contestant, Role, RoleModel } from "./types";
 
@@ -33,6 +34,16 @@ function allRoles(name: string, model: AiModelId): Contestant {
   return { name, roles };
 }
 
+/**
+ * The model at one effort in every role, named "<name>@<effort>". Providers spend "high" very differently: Gemini and
+ * DeepSeek wrote over 11k reasoning tokens for an allocation Opus did in under 3k, past the app's time limit.
+ */
+function atEffort(name: string, model: AiModelId, effort: ReasoningEffort): Contestant {
+  const roles: Partial<Record<Role, RoleModel>> = {};
+  for (const role of ROLES) roles[role] = { model, effort };
+  return { name: `${name}@${effort}`, roles };
+}
+
 export const CONTESTANTS: Record<string, Contestant> = {
   baseline: BASELINE,
   "sonnet-5.5": allRoles("sonnet-5.5", "anthropic/claude-sonnet-5.5"),
@@ -49,6 +60,13 @@ export const CONTESTANTS: Record<string, Contestant> = {
   "deepseek-v4-pro": allRoles("deepseek-v4-pro", "deepseek/deepseek-v4-pro"),
   "haiku-5.5": allRoles("haiku-5.5", "anthropic/claude-haiku-5.5"),
   "gpt-6-luna": allRoles("gpt-6-luna", "openai/gpt-6-luna"),
+  // The candidates that ran out of time at the baseline's effort in round 1 (2026-10-30), at lower effort.
+  "gemini-4-argon@medium": atEffort("gemini-4-argon", "google/gemini-4-argon", "medium"),
+  "gemini-4-argon@low": atEffort("gemini-4-argon", "google/gemini-4-argon", "low"),
+  "gemini-3.8-flash@medium": atEffort("gemini-3.8-flash", "google/gemini-3.8-flash", "medium"),
+  "gemini-3.8-flash@low": atEffort("gemini-3.8-flash", "google/gemini-3.8-flash", "low"),
+  "deepseek-v4-pro@medium": atEffort("deepseek-v4-pro", "deepseek/deepseek-v4-pro", "medium"),
+  "deepseek-v4-pro@low": atEffort("deepseek-v4-pro", "deepseek/deepseek-v4-pro", "low"),
 };
 
 /** Throws when a contestant uses a model the price list lacks, since its cost could not be reported. */

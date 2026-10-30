@@ -40,7 +40,24 @@ describe("CONTESTANTS", () => {
       "deepseek-v4-pro",
       "haiku-5.5",
       "gpt-6-luna",
+      "gemini-4-argon@medium",
+      "gemini-4-argon@low",
+      "gemini-3.8-flash@medium",
+      "gemini-3.8-flash@low",
+      "deepseek-v4-pro@medium",
+      "deepseek-v4-pro@low",
     ]);
+  });
+
+  it("runs an effort variant at its own effort in every role", () => {
+    expect(CONTESTANTS["gemini-3.8-flash@low"]).toEqual({
+      name: "gemini-3.8-flash@low",
+      roles: {
+        allocate: { model: "google/gemini-3.8-flash", effort: "low" },
+        outline: { model: "google/gemini-3.8-flash", effort: "low" },
+        research: { model: "google/gemini-3.8-flash", effort: "low" },
+      },
+    });
     expect(CONTESTANTS["gemini-3.1-pro"].roles).toEqual({
       allocate: { model: "google/gemini-3.1-pro-preview", effort: ALLOCATE_EFFORT },
       outline: { model: "google/gemini-3.1-pro-preview", effort: OUTLINE_EFFORT },
