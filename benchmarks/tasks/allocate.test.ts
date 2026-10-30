@@ -83,6 +83,13 @@ describe("runAllocateSample", () => {
     expect(sample.gate).toEqual({ status: "failed", reason: `fallback: ${reason}` });
   });
 
+  it("fails the gate on a fallback the code made of an unusable answer", async () => {
+    for (const reason of ["no researched material mentioned", "no valid split from the allocation"]) {
+      const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, fallbackReason: reason }) });
+      expect(sample.gate).toEqual({ status: "failed", reason: `fallback: ${reason}` });
+    }
+  });
+
   it("names the last service reason on a failed gate", async () => {
     const events = [failure({ status: 400, reason: "first" }), failure({ reason: "the request timed out", where: "allocate" })];
     const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, events }) });

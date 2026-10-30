@@ -483,6 +483,35 @@ describe("the allocation's backbone, coverage and fallback", () => {
     error.mockRestore();
   });
 
+  it("says it fell back, and why, when the answer mentions no researched material", async () => {
+    respond(draft({ parts: [] }));
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.fallback).toBe(true);
+    expect(out.fallbackReason).toBe("no researched material mentioned");
+    // What the draft uses is the fallback's own, unchanged.
+    const expected = fallbackAllocation(six);
+    expect(out.materials).toEqual(expected.materials);
+    expect(out.dropped).toEqual(expected.dropped);
+    expect(out.split).toEqual(ALL_READING);
+    expect(out.coverage).toBeNull();
+  });
+
+  it("says it fell back, and why, when the answer gives no valid split", async () => {
+    // A plan with no readable length: the reading share is not a number, so no split comes out of the answer.
+    const zero: AllocationInput = { ...six, weeks: Number.NaN, materials: [material({ id: "M1", title: "Unsized" })] };
+    expect(applyAllocation(draft({ parts: [{ id: "M1" }] }), zero).fallbackReason).toBe("no valid split from the allocation");
+    respond(draft({ parts: [{ id: "M1" }] }));
+    const out = await allocatePlan({ ...zero, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.fallback).toBe(true);
+    expect(out.fallbackReason).toBe("no valid split from the allocation");
+    expect(out.split).toEqual(ALL_READING);
+  });
+
+  it("gives a usable answer no fallback reason", () => {
+    expect(applyAllocation(draft({ parts: sixWhole }), six).fallbackReason).toBeNull();
+    expect(fallbackAllocation(six).fallbackReason).toBeNull();
+  });
+
   it("trims the reason a failed call gives to 200 characters", async () => {
     mockedGenerateObject.mockRejectedValueOnce(new Error("x".repeat(500)));
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
