@@ -482,18 +482,29 @@ const SPLIT_CHOICES = Array.from({ length: MAX_DAYS_PER_WEEK }, (_, i) => i + 1)
  * "Split into [5 ▾] days". The words split the week into the learner's usual number of days; the number is a chip
  * that opens 1–7 days with the time each comes to, for a week that should have a different number.
  */
-export function SplitControl({ usual, hoursPerWeek, onSplit }: { usual: number; hoursPerWeek?: number; onSplit: (days: number) => void }) {
-  const words = "text-[11.5px] text-accent-700 underline underline-offset-2 hover:text-accent-800";
+export function SplitControl({
+  usual,
+  hoursPerWeek,
+  onSplit,
+  disabled = false,
+}: {
+  usual: number;
+  hoursPerWeek?: number;
+  onSplit: (days: number) => void;
+  disabled?: boolean;
+}) {
+  const words = "text-[11.5px] text-accent-700 underline underline-offset-2 hover:text-accent-800 disabled:pointer-events-none disabled:opacity-50";
   const perDay = (n: number) => (n === usual ? "usual" : hoursPerWeek === undefined ? null : `${formatDayTime(dayMinutes(hoursPerWeek, n))} a day`);
   return (
     <span className="inline-flex items-center gap-1">
-      <button type="button" className={words} onClick={() => onSplit(usual)}>
+      <button type="button" className={words} onClick={() => onSplit(usual)} disabled={disabled}>
         Split into
       </button>
       <Menu.Root>
         <Menu.Trigger
+          disabled={disabled}
           aria-label={`Split into ${usual} days, or choose another number`}
-          className="inline-flex h-[18px] items-center gap-0.5 rounded-full bg-accent-100 px-1.5 text-[11.5px] font-semibold text-accent-800 transition-colors hover:bg-accent-200 data-popup-open:bg-accent-200"
+          className="inline-flex h-[18px] items-center gap-0.5 rounded-full bg-accent-100 px-1.5 text-[11.5px] font-semibold text-accent-800 transition-colors hover:bg-accent-200 data-popup-open:bg-accent-200 data-disabled:pointer-events-none data-disabled:opacity-50"
         >
           {usual}
           <ChevronDown className="size-2.5 opacity-70" strokeWidth={3} />
@@ -521,7 +532,7 @@ export function SplitControl({ usual, hoursPerWeek, onSplit }: { usual: number; 
           </Menu.Positioner>
         </Menu.Portal>
       </Menu.Root>
-      <button type="button" className={words} onClick={() => onSplit(usual)}>
+      <button type="button" className={words} onClick={() => onSplit(usual)} disabled={disabled}>
         days
       </button>
     </span>

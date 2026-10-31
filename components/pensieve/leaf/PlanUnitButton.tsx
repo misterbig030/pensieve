@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react";
 import { expandNodeAction } from "@/app/tracks/[id]/actions";
 import { pushModelCalls } from "@/lib/modelCalls";
+import { usePlanningLock } from "@/lib/planningLock";
 import { Button } from "@/components/ui/button";
 import { SplitControl } from "@/components/pensieve/PlanTree";
 import { ActionError } from "./ActionError";
 
 /**
  * Plans one unit from the day pane: plans a heading, or splits a week into the learner's usual number of days or
- * another they pick. The page refreshes with the result.
+ * another they pick. The page refreshes with the result. It waits while the outline is planning.
  */
 export function PlanUnitButton({
   trackId,
@@ -28,8 +29,10 @@ export function PlanUnitButton({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<{ message: string; settingsLink: boolean } | null>(null);
+  const blocked = usePlanningLock(pending);
 
   function plan(splitDays?: number) {
+    if (pending || blocked) return;
     setError(null);
     startTransition(async () => {
       try {
@@ -48,10 +51,10 @@ export function PlanUnitButton({
         pending ? (
           <span className="text-[12.5px] text-muted-foreground">Splitting…</span>
         ) : (
-          <SplitControl usual={daysPerWeek} hoursPerWeek={hoursPerWeek} onSplit={plan} />
+          <SplitControl usual={daysPerWeek} hoursPerWeek={hoursPerWeek} onSplit={plan} disabled={blocked} />
         )
       ) : (
-        <Button onClick={() => plan()} disabled={pending}>
+        <Button onClick={() => plan()} disabled={pending || blocked}>
           {pending ? "Planning…" : label}
         </Button>
       )}

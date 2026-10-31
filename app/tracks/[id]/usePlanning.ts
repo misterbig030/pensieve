@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { PendingSlots } from "@/components/pensieve/PlanTree";
 import { pushModelCalls } from "@/lib/modelCalls";
+import { usePlanningLock } from "@/lib/planningLock";
 import { childLevel, childSpans, findNode, nextPlanningStep, planningStepsLeft, type Granularity, type PlanNode } from "@/lib/planTree";
 import { expandNodeAction } from "./actions";
 
@@ -29,11 +30,14 @@ export function usePlanning({ trackId, root, granularity, daysPerWeek }: { track
   const lastStep = useRef<string | null>(null);
 
   const stepsLeft = planningStepsLeft(root, daysPerWeek);
+  const planning = planAll !== null && (stepsLeft > 0 || isPending);
+  /** The day pane is planning a unit: nothing here starts until it lands. */
+  const blocked = usePlanningLock(isPending || planning);
 
   const run = useCallback(
     (nodeId: string, reason: "expand" | "split", splitDays?: number) => {
       const node = findNode(root, nodeId);
-      if (!node || isPending) return;
+      if (!node || isPending || blocked) return;
       const below = childLevel(node.level);
       if (!below) return;
       const groups = reason === "expand" && below !== "day" && !(below === "week" && granularity === "week");
@@ -61,13 +65,12 @@ export function usePlanning({ trackId, root, granularity, daysPerWeek }: { track
         }
       });
     },
-    [root, isPending, granularity, daysPerWeek, trackId],
+    [root, isPending, blocked, granularity, daysPerWeek, trackId],
   );
 
   // Planning everything is a run of single steps. Each step saves itself and the page refreshes with the new rows, and
   // the next step is read off the refreshed tree; while a step is under way it is still the tree's next step, so that
   // is also the label shown. A step is not repeated in the moment between the action's return and the refresh.
-  const planning = planAll !== null && (stepsLeft > 0 || isPending);
   const nextStep = planning ? nextPlanningStep(root, granularity) : null;
   useEffect(() => {
     if (!planning || isPending || !nextStep || lastStep.current === nextStep.nodeId) return;
@@ -84,7 +87,8 @@ export function usePlanning({ trackId, root, granularity, daysPerWeek }: { track
   return {
     run,
     pending,
-    isPending,
+    /** A step under way here, or a unit the day pane is planning. */
+    isPending: isPending || blocked,
     error,
     errorLink,
     lastCost,
