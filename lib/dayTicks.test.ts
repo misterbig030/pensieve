@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { doneCount, readTicks, taskTicked, ticksKey, toggleStep, toggleTask, writeTicks } from "./dayTicks";
+import { doneCount, readTicks, stepTicked, taskTicked, ticksKey, toggleStep, toggleTask, writeTicks } from "./dayTicks";
 
 const steps = ["read:a@0", "read:a@1"];
 const stepsOf = (id: string) => (id === "read:a" ? steps : []);
@@ -8,7 +8,6 @@ describe("ticks", () => {
   it("ticks a task with steps once all its steps are", () => {
     expect(taskTicked("read:a", steps, new Set(["read:a@0"]))).toBe(false);
     expect(taskTicked("read:a", steps, new Set(steps))).toBe(true);
-    expect(taskTicked("read:a", steps, new Set(["read:a"]))).toBe(false);
   });
 
   it("ticks a task without steps on its own", () => {
@@ -23,9 +22,22 @@ describe("ticks", () => {
     expect([...off]).toEqual([]);
   });
 
+  it("keeps a task ticked before its lesson had steps ticked, steps and all", () => {
+    const before = new Set(["read:a"]);
+    expect(taskTicked("read:a", steps, before)).toBe(true);
+    expect(stepTicked(before, "read:a", "read:a@1")).toBe(true);
+    expect(doneCount(["read:a"], stepsOf, before)).toBe(1);
+  });
+
+  it("unticking one step of a task ticked whole keeps its other steps", () => {
+    const after = toggleStep(new Set(["read:a"]), "read:a@1", "read:a", steps);
+    expect([...after].sort()).toEqual(["read:a@0"]);
+    expect(taskTicked("read:a", steps, after)).toBe(false);
+  });
+
   it("toggles one step", () => {
-    expect([...toggleStep(new Set(), "read:a@1")]).toEqual(["read:a@1"]);
-    expect([...toggleStep(new Set(["read:a@1"]), "read:a@1")]).toEqual([]);
+    expect([...toggleStep(new Set(), "read:a@1", "read:a", steps)]).toEqual(["read:a@1"]);
+    expect([...toggleStep(new Set(["read:a@1"]), "read:a@1", "read:a", steps)]).toEqual([]);
   });
 
   it("counts done tasks, not steps", () => {

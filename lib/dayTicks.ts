@@ -3,9 +3,17 @@
  * never progress; Mark complete and logged sessions are.
  */
 
-/** A task with steps is done once every step is; a task without steps is done when ticked itself. */
+/**
+ * A task is done when ticked itself or, when the lesson has steps for it, once every step is. A task ticked before its
+ * lesson was written stays done once the lesson gives it steps.
+ */
 export function taskTicked(taskId: string, stepKeys: string[], ticks: ReadonlySet<string>): boolean {
-  return stepKeys.length > 0 ? stepKeys.every((k) => ticks.has(k)) : ticks.has(taskId);
+  return ticks.has(taskId) || (stepKeys.length > 0 && stepKeys.every((k) => ticks.has(k)));
+}
+
+/** A step is done when ticked itself or when its whole task is. */
+export function stepTicked(ticks: ReadonlySet<string>, taskId: string, key: string): boolean {
+  return ticks.has(taskId) || ticks.has(key);
 }
 
 /** Ticking a task ticks all its steps; unticking it clears them. */
@@ -17,9 +25,14 @@ export function toggleTask(ticks: ReadonlySet<string>, taskId: string, stepKeys:
   return next;
 }
 
-export function toggleStep(ticks: ReadonlySet<string>, key: string): Set<string> {
+/** Ticks or unticks one step. Unticking a step of a task ticked whole keeps its other steps ticked. */
+export function toggleStep(ticks: ReadonlySet<string>, key: string, taskId: string, stepKeys: string[]): Set<string> {
   const next = new Set(ticks);
-  if (next.has(key)) next.delete(key);
+  if (next.has(taskId)) {
+    next.delete(taskId);
+    for (const k of stepKeys) next.add(k);
+    next.delete(key);
+  } else if (next.has(key)) next.delete(key);
   else next.add(key);
   return next;
 }

@@ -148,7 +148,7 @@ export function LeafView({
         markdown={content.contentMarkdown}
         tasks={tasks}
         ticks={ticks}
-        onToggleStep={(key) => setTicks(toggleStep(ticks, key))}
+        onToggleStep={(key, taskId) => setTicks(toggleStep(ticks, key, taskId, stepKeysOf(taskId)))}
         onRewrite={handleGenerate}
         rewriting={isPending}
       />

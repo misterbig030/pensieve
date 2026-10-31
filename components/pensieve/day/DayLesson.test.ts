@@ -45,6 +45,10 @@ describe("DayLesson", () => {
     expect(html).not.toContain("tasks changed");
   });
 
+  it("shows the steps of a task ticked before the lesson was written as ticked", () => {
+    expect(lesson(stepped, ["read:aie#4"])).toMatch(/aria-checked="true" aria-label="Step 2"/);
+  });
+
   it("renders a step whose task is gone without a link, and shows the tasks-changed note", () => {
     const html = lesson(stepped.replace("read:aie#4", "read:aie#9"));
     expect(html).not.toContain('href="https://book.example/ch9"');

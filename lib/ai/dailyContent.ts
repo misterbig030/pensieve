@@ -148,7 +148,7 @@ export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): st
   if (input.practice && input.practice.length > 0) parts.push(...practiceSection(input.practice, steps));
   if (steps) {
     parts.push(
-      `Each task above has a label in square brackets, like [T1]. Write the lesson as a walk-through of these tasks in this order. Each time the learner should go and do part of a task, write a step: a fenced code block with the info string "${STEP_FENCE}" (\`\`\`${STEP_FENCE}), whose first line is "task: " and the one task's label, whose second line is "minutes: " and your estimate for that step, and whose other lines say in one or two sentences of markdown exactly what to do. A task may have several steps, such as the first half of a chapter and then the second. Write your explanation between the steps as ordinary markdown.`,
+      `Each task above has a label in square brackets, like [T1]. Write the lesson as a walk-through of these tasks in this order. Each time the learner should go and do part of a task, write a step: a fenced code block with the info string "${STEP_FENCE}" (\`\`\`${STEP_FENCE}), at the top level of the lesson, never inside a list, whose first line names the one task by its label without brackets, as in "task: T1", whose second line is your estimate for that step, as in "minutes: 25", and whose other lines say in one or two sentences of markdown exactly what to do. A task may have several steps, such as the first half of a chapter and then the second. Write your explanation between the steps as ordinary markdown.`,
     );
   }
 

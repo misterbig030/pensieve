@@ -2,6 +2,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LessonMarkdown } from "@/components/pensieve/LessonMarkdown";
 import type { DayTask } from "@/lib/dayTasks";
+import { stepTicked } from "@/lib/dayTicks";
 import { hasStaleSteps, splitLesson, stepKey } from "@/lib/lessonSteps";
 import { StepCard } from "./StepCard";
 
@@ -20,7 +21,8 @@ export function DayLesson({
   markdown: string;
   tasks: DayTask[];
   ticks: ReadonlySet<string>;
-  onToggleStep(key: string): void;
+  /** A step's tick key and its task's id. */
+  onToggleStep(key: string, taskId: string): void;
   onRewrite(): void;
   rewriting: boolean;
 }) {
@@ -50,8 +52,8 @@ export function DayLesson({
               minutes={part.minutes}
               body={part.body}
               task={task}
-              ticked={key !== null && ticks.has(key)}
-              onToggle={() => key && onToggleStep(key)}
+              ticked={task !== null && key !== null && stepTicked(ticks, task.id, key)}
+              onToggle={() => task && key && onToggleStep(key, task.id)}
             />
           );
         })}

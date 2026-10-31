@@ -57,6 +57,18 @@ describe("splitLesson", () => {
     expect(step).toMatchObject({ kind: "step", taskId: null, body: "Do something." });
   });
 
+  it("keeps a code block inside a step in the step", () => {
+    const parts = splitLesson(["```step", "task: T1", "Answer these.", "```answers", "1. yes", "```", "```", "", "Outro para"].join("\n"));
+    expect(parts).toHaveLength(2);
+    expect(parts[0]).toMatchObject({ kind: "step", body: "Answer these.\n```answers\n1. yes\n```" });
+    expect(parts[1]).toEqual({ kind: "text", markdown: "\n\nOutro para" });
+  });
+
+  it("does not take a step fence inside another code block for a step", () => {
+    const markdown = "```markdown\n```step\ntask: T1\n```\n```";
+    expect(splitLesson(markdown)).toEqual([{ kind: "text", markdown }]);
+  });
+
   it("leaves answers fences inside text parts", () => {
     const parts = splitLesson("Q?\n\n```answers\nA.\n```\n\n```step\ntask: T1\nGo.\n```");
     expect(parts[0]).toEqual({ kind: "text", markdown: "Q?\n\n```answers\nA.\n```\n\n" });
@@ -72,6 +84,17 @@ describe("resolveStepTokens", () => {
   it("rewrites step labels to task ids, ignoring case, and empties unknown labels", () => {
     const out = resolveStepTokens("```step\ntask: T1\nGo.\n```\n\n```step\ntask: t2\nGo.\n```\n\n```step\ntask: T9\nGo.\n```", ids);
     expect(out).toBe("```step\ntask: read:aie#3\nGo.\n```\n\n```step\ntask: practice:problem-set#nc#4\nGo.\n```\n\n```step\ntask:\nGo.\n```");
+  });
+
+  it("resolves a label written with brackets, bold or a note", () => {
+    for (const label of ["[T1]", "**T1**", "T1 (AI Engineering)", "[t1]"]) {
+      expect(resolveStepTokens(`\`\`\`step\ntask: ${label}\nGo.\n\`\`\``, ids)).toBe("```step\ntask: read:aie#3\nGo.\n```");
+    }
+  });
+
+  it("only rewrites the step's own task line, not one in its text or a code block inside it", () => {
+    const markdown = "```step\nminutes: 5\nGo.\ntask: T1\n```\n\n```step\ntask: T2\n```text\ntask: T1\n```\n```";
+    expect(resolveStepTokens(markdown, ids)).toBe("```step\nminutes: 5\nGo.\ntask: T1\n```\n\n```step\ntask: practice:problem-set#nc#4\n```text\ntask: T1\n```\n```");
   });
 
   it("does not touch task: lines outside step fences", () => {
