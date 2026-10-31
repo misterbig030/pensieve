@@ -185,8 +185,11 @@ async function LeafPane({ trackId, root, node, currentLeafId, materials, hoursPe
   );
 }
 
-/** The right side of the plan tab: the row picked in the outline. */
+/**
+ * The right side of the plan tab: the row picked in the outline. Keyed by the row, so a button still pending or showing
+ * an error on one row doesn't follow the learner to the next.
+ */
 export async function DayPane(props: Props) {
   const { node } = props;
-  return node.children === null && !isHeading(node) ? <LeafPane {...props} /> : <UnitPane {...props} />;
+  return node.children === null && !isHeading(node) ? <LeafPane key={node.id} {...props} /> : <UnitPane key={node.id} {...props} />;
 }

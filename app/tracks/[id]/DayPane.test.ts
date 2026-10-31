@@ -8,7 +8,7 @@ import { sampleDayPlan } from "@/lib/testPlans";
 vi.mock("@/lib/db/planQueries", () => ({ getLeafWithContent: vi.fn() }));
 vi.mock("@/app/tracks/[id]/actions", () => ({ expandNodeAction: vi.fn(), markCompleteAction: vi.fn() }));
 
-const { UnitPane } = await import("./DayPane");
+const { DayPane, UnitPane } = await import("./DayPane");
 
 function render(root: PlanNode, id: string): string {
   const node = root.children!.find((n) => n.id === id)!;
@@ -28,5 +28,16 @@ describe("UnitPane", () => {
     const html = render(sampleDayPlan(), "w2");
     expect(html).toContain('href="?day=b1"');
     expect(html).toContain('href="?day=b3"');
+  });
+});
+
+describe("DayPane", () => {
+  it("keys the pane by its row, so a button's pending state or error stays with the row it was clicked on", async () => {
+    const root = sampleDayPlan();
+    const props = { trackId: "t", root, currentLeafId: null, materials: AIE_MATERIALS, hoursPerWeek: 6, daysPerWeek: 7, userId: "u" };
+    for (const id of ["w2", "b1"]) {
+      const node = id === "w2" ? root.children!.find((n) => n.id === id)! : root.children!.flatMap((n) => n.children ?? []).find((n) => n.id === id)!;
+      expect((await DayPane({ ...props, node }))?.key).toBe(id);
+    }
   });
 });
