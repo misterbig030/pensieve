@@ -1,3 +1,5 @@
+"use client";
+
 import { Check } from "lucide-react";
 import { MaterialsList, checkedLine, materialGroups, materialTotals } from "@/components/pensieve/MaterialsList";
 import { approxDuration } from "@/lib/researchProgress";
@@ -22,8 +24,10 @@ export function MaterialsTab({ topic, materials }: { topic: string; materials: M
   const kinds = groups.filter((g) => g.label !== "Backbone");
   const most = Math.max(1, ...kinds.map((g) => g.count));
   return (
-    <div className="grid grid-cols-[minmax(0,820px)_320px] items-start gap-8 max-[900px]:grid-cols-1">
-      <MaterialsList bare topic={topic} materials={materials} initialShown={Infinity} />
+    <div className="grid grid-cols-[minmax(0,1fr)_320px] items-start gap-8 max-[900px]:grid-cols-1">
+      <div className="@container min-w-0">
+        <MaterialsList bare topic={topic} materials={materials} initialShown={Infinity} />
+      </div>
       <aside className="sticky top-0 flex flex-col gap-3.5 max-[900px]:static max-[900px]:order-first">
         <section className={panel}>
           <h4 className={caption}>{materials.length} materials</h4>

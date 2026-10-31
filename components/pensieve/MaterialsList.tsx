@@ -137,15 +137,18 @@ export function MaterialsList(props: MaterialsListProps) {
         <span className="text-[13px] text-muted-foreground">No backbone: units draw on the materials below directly.</span>
       )}
 
-      <div className="flex flex-col gap-0.5">
+      {/* Bare, the list flows into columns as its container widens, so rows never run the width of a wide screen. */}
+      <div className={props.bare ? "block gap-x-8 @min-[1000px]:columns-2 @min-[1600px]:columns-3" : "flex flex-col gap-0.5"}>
         {shown.map((m, i) => (
           <div key={m.id} className="contents">
             {(i === 0 || groupLabel(shown[i - 1]) !== groupLabel(m)) && (
-              <span id={groupAnchor(groupLabel(m))} className="scroll-mt-4 px-1 pt-1.5 pb-1 text-[11px] tracking-wide text-muted-foreground uppercase">
+              <span id={groupAnchor(groupLabel(m))} className="block scroll-mt-4 break-after-avoid px-1 pt-1.5 pb-1 text-[11px] tracking-wide text-muted-foreground uppercase">
                 {groupLabel(m)}
               </span>
             )}
-            <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
+            <div className="break-inside-avoid">
+              <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
+            </div>
           </div>
         ))}
       </div>

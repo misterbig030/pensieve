@@ -15,11 +15,12 @@ export type ActivityRow = CheckInRow & { studyHours: number };
 export function ActivityTab({ rows, createdAt, today, studied, finish }: { rows: ActivityRow[]; createdAt: Date; today: Date; studied: number; finish: Date | null }) {
   const dates = studyDates(rows);
   return (
-    <div className="grid grid-cols-[minmax(0,820px)_320px] items-start gap-8 max-[900px]:grid-cols-1">
+    <div className="grid grid-cols-[minmax(0,1fr)_320px] items-start gap-8 max-[900px]:grid-cols-1">
       {rows.length === 0 ? (
         <p className="py-10 text-center text-[14px] text-muted-foreground">No check-ins yet. Finished days and logged sessions show up here.</p>
       ) : (
-        <div className="flex flex-col gap-6">
+        // Weeks sit side by side as the width allows, newest first, so a wide screen is not one narrow column.
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(420px,1fr))] items-start gap-6 max-[640px]:grid-cols-1">
           {byWeek(rows).map((group) => (
             <section key={group.start.toISOString()}>
               <h3 className="mb-2 flex items-baseline text-[12px] font-semibold tracking-[.04em] text-foreground/45 uppercase">
