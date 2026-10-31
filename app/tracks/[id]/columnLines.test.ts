@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
 import type { Material } from "@/lib/schemas/material";
-import { checkedShort, columnTotals } from "./materialsColumn";
+import { checkedShort, columnTotals } from "./columnLines";
 
 const base = AIE_MATERIALS[0];
 const reading = (minutes: number | null, extra: Partial<Material> = {}): Material => ({ ...base, minutes, practice: undefined, ...extra });
