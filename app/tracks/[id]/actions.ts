@@ -58,7 +58,7 @@ export async function confirmRevisionAction(input: {
   const fresh = await getTrackDetail(input.trackId, userId);
   await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title, fresh!.track.daysPerWeek));
   revalidatePath(`/tracks/${input.trackId}`);
-  revalidatePath("/dashboard");
+  revalidatePath("/");
   redirect(`/tracks/${input.trackId}`);
 }
 
@@ -139,7 +139,7 @@ export async function markCompleteAction(nodeId: string): Promise<void> {
   const { trackId } = await markLeafComplete(nodeId, userId);
   revalidatePath(`/tracks/${trackId}`);
   revalidatePath(`/tracks/${trackId}/nodes/${nodeId}`);
-  revalidatePath("/dashboard");
+  revalidatePath("/");
 }
 
 const hoursSchema = z.number().min(0.25).max(24);
@@ -150,5 +150,5 @@ export async function logSessionAction(nodeId: string, hours: number): Promise<v
   const { trackId } = await logSession(nodeId, userId, hoursSchema.parse(hours));
   revalidatePath(`/tracks/${trackId}`);
   revalidatePath(`/tracks/${trackId}/nodes/${nodeId}`);
-  revalidatePath("/dashboard");
+  revalidatePath("/");
 }

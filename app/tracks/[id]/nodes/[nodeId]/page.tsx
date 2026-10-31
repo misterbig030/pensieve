@@ -50,7 +50,7 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
       : trackSources.filter((s) => s.type === "youtube").map((s) => ({ title: s.title, url: s.url }));
 
   return (
-    <PageShell>
+    <PageShell className="mx-auto max-w-[960px]">
       <div className="mx-auto max-w-[640px] space-y-5">
         <div className="text-[13px] text-foreground/60">
           <Link href={`/tracks/${id}`} className="hover:text-primary">

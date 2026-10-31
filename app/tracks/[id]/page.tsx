@@ -53,10 +53,10 @@ export default async function TrackDetailPage({ params }: { params: Promise<{ id
   const summary = track.summary ?? summarizePlan(root, track.title, track.daysPerWeek);
 
   return (
-    <PageShell>
+    <PageShell className="mx-auto max-w-[960px]">
       <div className="text-[13px] text-foreground/60">
-        <Link href="/dashboard" className="hover:text-primary">
-          ← Dashboard
+        <Link href="/" className="hover:text-primary">
+          ← Tracks
         </Link>
       </div>
       <div className="flex items-start justify-between gap-4 pt-2 pb-4">

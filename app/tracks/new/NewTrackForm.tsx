@@ -38,8 +38,8 @@ export function NewTrackForm() {
         hoursPerWeek={brief.hoursPerWeek || DEFAULT_HOURS_PER_WEEK}
         instructions={instructions}
         sources={brief.sources}
-        backHref="/dashboard"
-        backLabel="Dashboard"
+        backHref="/"
+        backLabel="Tracks"
         heading={`Here's the plan for "${topic}"`}
         subtext="Skim the plan, expand what you want to see, then confirm — or talk it over on the right."
         onConfirm={(tree, summary, materials, time) =>

@@ -14,7 +14,7 @@ export default async function AdjustTrackPage({ params }: { params: Promise<{ id
   if (!detail) notFound();
 
   return (
-    <PageShell wide>
+    <PageShell className="mx-auto max-w-[1280px]">
       <AdjustPlan
         trackId={id}
         trackTitle={detail.track.title}
