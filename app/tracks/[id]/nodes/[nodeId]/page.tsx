@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
-import { budgetMinutes } from "@/lib/materials";
 import { ChevronRight } from "lucide-react";
-import { budgetFor, currentLeaf, daysInWeekOf, fullLabelOf, neighbours, type PlanNode } from "@/lib/planTree";
+import { budgetFor, currentLeaf, fullLabelOf, neighbours, type PlanNode } from "@/lib/planTree";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { LeafView, type LeafLink } from "./LeafView";
 import { loadDay } from "./loadDay";
@@ -15,12 +14,11 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
   const { id, nodeId } = await params;
   const day = await loadDay(id, nodeId, userId);
   if (!day) notFound();
-  const { detail, leaf, node, trackSources, readRows, practiceRows } = day;
+  const { detail, leaf, node, trackSources, readRows, tasks } = day;
 
   const kicker = fullLabelOf(detail.root, node);
   const isWeek = node.level !== "day";
   const hours = detail.track.hoursPerWeek;
-  const days = daysInWeekOf(detail.root, node, detail.track.daysPerWeek);
   const sessions = leaf.sessions.filter((s) => s.hours !== null);
   // The lesson's videos are the leaf's own when it has a Read table; older plans fall back to every video on the track.
   const youtubeSources =
@@ -75,8 +73,7 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
         }
         youtubeSources={youtubeSources}
         readRows={readRows}
-        practiceRows={practiceRows}
-        budgetMinutes={budgetMinutes({ level: node.level, budgetHours: isWeek ? (node.budgetHours ?? budgetFor(1, hours)) : null }, hours, days)}
+        tasks={tasks}
         isCompleted={node.status === "completed"}
       />
     </PageShell>

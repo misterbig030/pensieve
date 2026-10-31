@@ -12,12 +12,14 @@ export function MarkCompleteButton({
   completed,
   onDone,
   label = "Mark complete",
+  variant = "default",
   className,
 }: {
   nodeId: string;
   completed: boolean;
   onDone?: () => void;
   label?: string;
+  variant?: "default" | "outline";
   className?: string;
 }) {
   const router = useRouter();
@@ -40,7 +42,7 @@ export function MarkCompleteButton({
 
   return (
     <>
-      <Button onClick={markComplete} disabled={pending || completed} className={className}>
+      <Button onClick={markComplete} disabled={pending || completed} variant={variant} className={className}>
         {completed ? "Completed" : label}
       </Button>
       {error && <ActionError message={error} />}

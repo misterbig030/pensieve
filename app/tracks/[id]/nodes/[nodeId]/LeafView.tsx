@@ -4,15 +4,19 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { RefreshCw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LessonMarkdown } from "@/components/pensieve/LessonMarkdown";
-import type { PracticeRow, ReadRow } from "@/components/pensieve/ReadTable";
+import type { ReadRow } from "@/components/pensieve/ReadTable";
+import { DayLesson } from "@/components/pensieve/day/DayLesson";
+import { LessonIntro } from "@/components/pensieve/day/LessonIntro";
+import { TaskColumn } from "@/components/pensieve/day/TaskColumn";
+import { useDayTicks } from "@/components/pensieve/day/useDayTicks";
 import { ActionError } from "@/components/pensieve/leaf/ActionError";
 import { LogSessionForm } from "@/components/pensieve/leaf/LogSessionForm";
 import { MarkCompleteButton } from "@/components/pensieve/leaf/MarkCompleteButton";
-import { RailChecklist } from "@/components/pensieve/leaf/RailChecklist";
+import { LESSON_TASK, lessonMinutes, type DayTask } from "@/lib/dayTasks";
+import { doneCount, toggleStep, toggleTask } from "@/lib/dayTicks";
 import { formatCostUsd } from "@/lib/formatCost";
+import { splitLesson, stepKey } from "@/lib/lessonSteps";
 import { pushModelCalls } from "@/lib/modelCalls";
-import { formatDayTime } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 import { generateLeafContentAction } from "./actions";
 
@@ -21,7 +25,7 @@ interface Source {
   title: string | null;
 }
 
-/** A neighbouring day or week in the rail: where it goes, its label and its title. */
+/** A neighbouring day or week: where it goes, its label and its title. */
 export interface LeafLink {
   href: string;
   label: string;
@@ -42,18 +46,19 @@ interface Props {
   initialContent: { contentMarkdown: string; citations: { title: string; url: string }[] } | null;
   youtubeSources: Source[];
   isCompleted: boolean;
-  /** The leaf's Read table; empty for plans saved before materials were assigned. */
+  /** The leaf's Read table, for "Where these come from"; empty for plans saved before materials were assigned. */
   readRows: ReadRow[];
-  practiceRows: PracticeRow[];
-  budgetMinutes: number;
+  /** What is assigned: the Read rows, then the Do rows. */
+  tasks: DayTask[];
   prev: LeafLink | null;
   next: LeafLink | null;
 }
 
-function RailHeading({ children }: { children: ReactNode }) {
-  return <h4 className="mb-1.5 text-[11px] font-semibold tracking-[.04em] text-foreground/45 uppercase">{children}</h4>;
+function SectionHeading({ children }: { children: ReactNode }) {
+  return <h2 className="mb-1.5 font-sans text-[11px] font-semibold tracking-[.04em] text-foreground/45 uppercase">{children}</h2>;
 }
 
+/** The day page: the day's tasks in a column that stays put, and beside it the lesson that walks through them. */
 export function LeafView({
   trackId,
   nodeId,
@@ -66,8 +71,7 @@ export function LeafView({
   youtubeSources,
   isCompleted,
   readRows,
-  practiceRows,
-  budgetMinutes,
+  tasks,
   prev,
   next,
 }: Props) {
@@ -79,8 +83,19 @@ export function LeafView({
   /** True when the error is a refused user key, so the message links to Settings. */
   const [errorLink, setErrorLink] = useState(false);
   const [costUsd, setCostUsd] = useState<number | null>(null);
+  const { ticks, set: setTicks } = useDayTicks(nodeId);
 
   const isWeek = unit === "week";
+
+  // Each task's steps in the lesson, by tick key: a task with steps is done once they all are.
+  const stepKeys = new Map<string, string[]>();
+  for (const part of content ? splitLesson(content.contentMarkdown) : []) {
+    if (part.kind !== "step" || !part.taskId) continue;
+    stepKeys.set(part.taskId, [...(stepKeys.get(part.taskId) ?? []), stepKey(part.taskId, part.nth)]);
+  }
+  const stepKeysOf = (id: string) => stepKeys.get(id) ?? [];
+  const taskIds = [...tasks.map((t) => t.id), ...(content ? [LESSON_TASK] : [])];
+  const allDone = taskIds.length > 0 && doneCount(taskIds, stepKeysOf, ticks) === taskIds.length;
 
   async function handleGenerate() {
     setIsPending(true);
@@ -107,9 +122,14 @@ export function LeafView({
 
   const main = content ? (
     <>
-      <div className="space-y-4">
-        <LessonMarkdown>{content.contentMarkdown}</LessonMarkdown>
-      </div>
+      <DayLesson
+        markdown={content.contentMarkdown}
+        tasks={tasks}
+        ticks={ticks}
+        onToggleStep={(key) => setTicks(toggleStep(ticks, key))}
+        onRewrite={handleGenerate}
+        rewriting={isPending}
+      />
       {youtubeSources.length > 0 && (
         <div>
           <p className="mb-2.5 text-[11px] tracking-wide text-muted-foreground uppercase">Related video</p>
@@ -126,87 +146,77 @@ export function LeafView({
           </div>
         </div>
       )}
-      {costUsd !== null && <p className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(costUsd)}</p>}
+      {content.citations.length > 0 && (
+        <section>
+          <SectionHeading>Sources</SectionHeading>
+          <ul className="flex flex-col gap-1 text-[13px] leading-snug">
+            {content.citations.map((c) => (
+              <li key={c.url}>
+                <a href={c.url} target="_blank" rel="noreferrer" className="text-foreground/75 hover:text-accent-700 hover:underline">
+                  {c.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={handleGenerate} disabled={isPending}>
+          <RefreshCw />
+          {isPending ? "Rewriting…" : "Rewrite this lesson"}
+        </Button>
+        {costUsd !== null && <span className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(costUsd)}</span>}
+      </div>
       {error && <ActionError message={error} settingsLink={errorLink} />}
       {provenance}
     </>
   ) : (
     <>
-      <div className="elev-sm flex flex-col items-center gap-3.5 rounded-[32px] bg-secondary px-6 py-12 text-center">
-        <div className="size-11 rounded-full bg-accent-100" />
-        <h3 className="m-0">{isWeek ? "This week's material isn't written yet" : "Today's lesson isn't written yet"}</h3>
-        <p className="m-0 max-w-[38ch] text-muted-foreground">
-          {readRows.length > 0
-            ? `Written from the ${readRows.length === 1 ? "material" : `${readRows.length} materials`} in the list beside it, and citing only ${readRows.length === 1 ? "it" : "them"}. Generate it when you start.`
-            : "Generate it now — Pensieve will pull in your sources and cite what it uses."}
-        </p>
-        <Button onClick={handleGenerate} disabled={isPending}>
-          {isWeek ? "Generate this week's material" : "Generate today's lesson"}
-        </Button>
-        {error && <ActionError message={error} settingsLink={errorLink} />}
-      </div>
+      <LessonIntro unit={unit} tasks={tasks} pending={isPending} error={error} errorLink={errorLink} onWrite={handleGenerate} />
       {provenance}
     </>
   );
 
   return (
-    <div className="grid min-h-[calc(100vh-60px)] grid-cols-[minmax(0,1fr)_300px] max-[900px]:grid-cols-1">
-      <div className="min-w-0 px-8 pt-6 pb-24 max-[640px]:px-4">
-        <div className="flex max-w-[680px] flex-col gap-5 pl-[clamp(0px,6vw,96px)] max-[900px]:pl-0">
-          {header}
-          {main}
-        </div>
-      </div>
-
-      <aside className="flex flex-col gap-5 border-l border-border bg-[color-mix(in_srgb,var(--secondary)_45%,var(--background))] px-6 pt-6 pb-10 max-[900px]:border-t max-[900px]:border-l-0">
-        <section>
-          <RailHeading>
-            {isWeek ? "This week" : "Today"} · {formatDayTime(budgetMinutes)}
-          </RailHeading>
-          <RailChecklist readRows={readRows} practiceRows={practiceRows} />
-        </section>
-
-        {isWeek && (
-          <LogSessionForm nodeId={nodeId} budgetHours={budgetHours} sessions={sessions} onLogged={(hours) => setSessions((s) => [...s, { hours }])} />
-        )}
-        {content && (
+    <div className="grid min-h-[calc(100vh-60px)] grid-cols-[360px_minmax(0,1fr)] max-[900px]:grid-cols-1">
+      <aside
+        aria-label={isWeek ? "This week's tasks" : "Today's tasks"}
+        className="sticky top-[60px] flex h-[calc(100vh-60px)] flex-col gap-3 overflow-y-auto border-r border-border bg-[color-mix(in_srgb,var(--card)_45%,var(--background))] pt-5 pr-[22px] pb-5 pl-8 max-[900px]:static max-[900px]:h-auto max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:px-4"
+      >
+        <TaskColumn
+          unit={unit}
+          tasks={tasks}
+          lessonMinutes={content ? lessonMinutes(content.contentMarkdown) : null}
+          ticks={ticks}
+          stepKeysOf={stepKeysOf}
+          onToggleTask={(id) => setTicks(toggleTask(ticks, id, stepKeysOf(id)))}
+        >
+          {isWeek && (
+            <LogSessionForm nodeId={nodeId} budgetHours={budgetHours} sessions={sessions} onLogged={(hours) => setSessions((s) => [...s, { hours }])} />
+          )}
           <MarkCompleteButton
             nodeId={nodeId}
             completed={completed}
             onDone={() => setCompleted(true)}
             label={`Mark ${unitLabel} complete`}
+            variant={allDone ? "default" : "outline"}
             className="h-10 w-full justify-center"
           />
-        )}
-
-        {content && content.citations.length > 0 && (
-          <section>
-            <RailHeading>Sources</RailHeading>
-            <ul className="flex flex-col gap-1 text-[12.5px] leading-snug">
-              {content.citations.map((c) => (
-                <li key={c.url}>
-                  <a href={c.url} target="_blank" rel="noreferrer" className="text-foreground/75 hover:text-accent-700 hover:underline">
-                    {c.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {(prev || next) && (
-          <nav aria-label="Other days" className="mt-auto flex gap-2 max-[900px]:mt-0">
-            {prev ? <DayLink link={prev} direction="prev" /> : <span className="flex-1" />}
-            {next ? <DayLink link={next} direction="next" /> : <span className="flex-1" />}
-          </nav>
-        )}
-        {content && (
-          <Button variant="ghost" size="sm" className="justify-center" onClick={handleGenerate} disabled={isPending}>
-            <RefreshCw />
-            Rewrite this lesson
-          </Button>
-        )}
+          {(prev || next) && (
+            <nav aria-label="Other days" className="flex gap-2">
+              {prev ? <DayLink link={prev} direction="prev" /> : <span className="flex-1" />}
+              {next ? <DayLink link={next} direction="next" /> : <span className="flex-1" />}
+            </nav>
+          )}
+        </TaskColumn>
       </aside>
+
+      <div className="min-w-0 px-10 pt-5 pb-24 max-[640px]:px-4">
+        <div className="mx-auto flex max-w-[700px] flex-col gap-5">
+          {header}
+          {main}
+        </div>
+      </div>
     </div>
   );
 }
