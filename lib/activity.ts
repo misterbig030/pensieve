@@ -101,8 +101,8 @@ export interface CalendarWeek {
 }
 
 /**
- * A track's study days on the calendar: from the week it was created, or `weeks - 1` weeks before this one if later,
- * to this week, oldest first. A day with a check-in is studied and names what was done.
+ * A track's study days on the calendar: the last `weeks` weeks to this one, oldest first, so the grid keeps its shape for
+ * a new track. Days before the track was created are blank; a day with a check-in is studied and names what was done.
  */
 export function studyCalendar(rows: { completedAt: Date; nodeTitle: string }[], start: Date, today: Date, weeks = 12): CalendarWeek[] {
   const titles = new Map<string, string[]>();
@@ -113,9 +113,8 @@ export function studyCalendar(rows: { completedAt: Date; nodeTitle: string }[], 
   const todayKey = dayKey(today);
   const startKey = dayKey(start);
   const last = weekStart(today).getTime();
-  const first = Math.max(weekStart(start).getTime(), last - (weeks - 1) * 7 * DAY_MS);
-  const count = Math.round((last - first) / (7 * DAY_MS)) + 1;
-  return Array.from({ length: count }, (_, w) => {
+  const first = last - (weeks - 1) * 7 * DAY_MS;
+  return Array.from({ length: weeks }, (_, w) => {
     const monday = new Date(first + w * 7 * DAY_MS);
     const days = Array.from({ length: 7 }, (_, d): CalendarDay => {
       const date = new Date(monday.getTime() + d * DAY_MS);
@@ -126,6 +125,16 @@ export function studyCalendar(rows: { completedAt: Date; nodeTitle: string }[], 
     });
     return { monday, days };
   });
+}
+
+// Three letters each; en-GB writes September as "Sept", too wide for a column.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** The columns that start a month on the calendar, with its short name: the first column, then each Monday in a new month. */
+export function monthLabels(weeks: CalendarWeek[]): { index: number; label: string }[] {
+  return weeks.flatMap((w, index) =>
+    index === 0 || w.monday.getUTCMonth() !== weeks[index - 1].monday.getUTCMonth() ? [{ index, label: MONTHS[w.monday.getUTCMonth()] }] : [],
+  );
 }
 
 /** How many distinct UTC dates have a check-in. */

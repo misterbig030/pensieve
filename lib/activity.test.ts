@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byWeek, heatmapWeeks, hoursText, monthTotals, relativeDay, shortDate, studyCalendar, studyDates, thisWeekKeys, weekStart, weekTotal, weekdayDate } from "./activity";
+import { byWeek, heatmapWeeks, hoursText, monthLabels, monthTotals, relativeDay, shortDate, studyCalendar, studyDates, thisWeekKeys, weekStart, weekTotal, weekdayDate } from "./activity";
 
 const today = new Date("2026-10-30T12:00:00Z"); // a Friday
 
@@ -89,11 +89,13 @@ describe("studyCalendar", () => {
   const saturday = new Date("2026-10-31T12:00:00Z");
   const row = (iso: string, nodeTitle = "A day") => ({ completedAt: new Date(iso), nodeTitle });
 
-  it("starts at the track's week and blanks the days before it", () => {
+  it("always shows 12 weeks, blank before the track", () => {
     const weeks = studyCalendar([], new Date("2026-10-29T09:00:00Z"), saturday);
-    expect(weeks).toHaveLength(1);
-    expect(weeks[0].days.map((d) => d.state)).toEqual(["before", "before", "before", "empty", "empty", "empty", "future"]);
-    expect(weeks[0].days.map((d) => d.today)).toEqual([false, false, false, false, false, true, false]);
+    expect(weeks).toHaveLength(12);
+    expect(weeks[0].monday.toISOString()).toBe("2026-08-10T00:00:00.000Z");
+    expect(weeks.slice(0, 11).every((w) => w.days.every((d) => d.state === "before"))).toBe(true);
+    expect(weeks[11].days.map((d) => d.state)).toEqual(["before", "before", "before", "empty", "empty", "empty", "future"]);
+    expect(weeks[11].days.map((d) => d.today)).toEqual([false, false, false, false, false, true, false]);
   });
 
   it("shows at most the last 12 weeks", () => {
@@ -105,7 +107,18 @@ describe("studyCalendar", () => {
 
   it("fills a date once and names every check-in on it", () => {
     const weeks = studyCalendar([row("2026-10-30T18:00:00Z", "Second"), row("2026-10-30T08:00:00Z", "First")], new Date("2026-10-26T09:00:00Z"), saturday);
-    expect(weeks[0].days[4]).toMatchObject({ key: "2026-10-30", state: "studied", titles: ["First", "Second"] });
+    expect(weeks[11].days[4]).toMatchObject({ key: "2026-10-30", state: "studied", titles: ["First", "Second"] });
+  });
+});
+
+describe("monthLabels", () => {
+  it("names the first column and each new month", () => {
+    const weeks = studyCalendar([], new Date("2026-06-01T09:00:00Z"), new Date("2026-10-31T12:00:00Z"));
+    expect(monthLabels(weeks)).toEqual([
+      { index: 0, label: "Aug" },
+      { index: 4, label: "Sep" },
+      { index: 8, label: "Oct" },
+    ]);
   });
 });
 
