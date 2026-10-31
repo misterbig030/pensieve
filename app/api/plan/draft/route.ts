@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { isAdminUserId } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
+import { creditRefusal } from "@/lib/ai/creditGate";
 import { draftRequestBodySchema, researchedDraftInput } from "@/lib/ai/draftRequest";
 import { DRAFT_BUDGET_MS, streamResearchedPlanDraft } from "@/lib/ai/planDraft";
 import { insertGenerationLog } from "@/lib/db/generationLog";
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
   const body = parsed.data;
   const debug = body.debug === true && isAdminUserId(userId);
   const models = await resolveModels(userId);
+  // A new draft is checked against the month's free credits; the draft gets the whole set, so every role counts.
+  const refused = await creditRefusal(userId, [models.outline, models.content, models.chat, models.research, models.allocate]);
+  if (refused) return refused;
   const deadline = Date.now() + DRAFT_BUDGET_MS;
 
   return ndjsonResponse(

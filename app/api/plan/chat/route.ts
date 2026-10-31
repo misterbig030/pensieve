@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { isAdminUserId } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
+import { creditRefusal } from "@/lib/ai/creditGate";
 import { runPlanChat } from "@/lib/ai/planChat";
 import { db } from "@/lib/db/client";
 import { insertGenerationLog } from "@/lib/db/generationLog";
@@ -58,6 +59,9 @@ export async function POST(request: Request) {
   const daysPerWeek = body.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK;
   const debug = body.debug === true && isAdminUserId(userId);
   const models = await resolveModels(userId);
+  // A chat turn is checked against the month's free credits: the chat model, and the outline model its revision uses.
+  const refused = await creditRefusal(userId, [models.chat, models.outline]);
+  if (refused) return refused;
   return ndjsonResponse(
     withCallEvents(debug, { userId, trackId: body.trackId, onLog: insertGenerationLog, keyOwner: models.chat.keyOwner }, (log) =>
       guardUserKey(
