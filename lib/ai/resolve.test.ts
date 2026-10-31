@@ -7,7 +7,7 @@ import { AVAILABLE_MODELS, providerOf } from "./models";
 vi.mock("@/lib/db/userApiKeys", () => ({ getUserApiKeys: vi.fn() }));
 
 import { getUserApiKeys } from "@/lib/db/userApiKeys";
-import { ANTHROPIC_API_IDS, DEFAULT_MODEL_IDS, appModel, resolveModels, resolveWith } from "./resolve";
+import { ANTHROPIC_API_IDS, DEFAULT_MODEL_IDS, appModel, keyCoversAll, resolveModels, resolveWith } from "./resolve";
 
 const mockedKeys = vi.mocked(getUserApiKeys);
 const SECRET = randomBytes(32).toString("base64");
@@ -74,5 +74,13 @@ describe("resolveModels", () => {
     expect(mockedKeys).toHaveBeenCalledTimes(2);
     const typeCheck: LanguageModel | string = second.research.model;
     void typeCheck;
+  });
+});
+
+describe("keyCoversAll", () => {
+  it("is true only when every role's provider has a usable stored key", () => {
+    expect(keyCoversAll(["anthropic"])).toBe(true); // every default today is Anthropic
+    expect(keyCoversAll([])).toBe(false);
+    expect(keyCoversAll(["anthropic"], ["anthropic/claude-sonnet-5.5", "google/gemini-3-flash"])).toBe(false);
   });
 });

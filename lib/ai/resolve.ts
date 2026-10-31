@@ -86,6 +86,18 @@ export function resolveWith(
   };
 }
 
+/** Whether stored keys for these providers would put every role on the user's own key: `resolveWith`'s rule, no decryption. */
+export function keyCoversAll(
+  storedProviders: readonly ModelProvider[],
+  roles: readonly AiModelId[] = Object.values(DEFAULT_MODEL_IDS),
+  registry: Partial<Record<ModelProvider, DirectProvider>> = DIRECT_PROVIDERS,
+): boolean {
+  return roles.every((id) => {
+    const provider = providerOf(id);
+    return storedProviders.includes(provider) && !!registry[provider]?.apiIds[id];
+  });
+}
+
 export interface ResolvedModels extends ModelSet {
   /** Providers whose stored key has a refusal on record, so a success can clear it with one conditional write. */
   keyErrors: Partial<Record<ModelProvider, boolean>>;
