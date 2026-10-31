@@ -5,14 +5,13 @@ import { ChevronRight } from "lucide-react";
 import { getTrackDetail } from "@/lib/db/queries";
 import { getTrackCheckIns } from "@/lib/db/activity";
 import { summarizePlan } from "@/lib/planSummary";
-import { currentLeaf, doneDays, resolveSelected, walk, weeksOf } from "@/lib/planTree";
+import { currentLeaf, doneDays, resolveSelected, walk } from "@/lib/planTree";
 import { dayStrip, finishDate, plannedHours, studyEvents } from "@/lib/trackProgress";
 import { MaterialsList } from "@/components/pensieve/MaterialsList";
-import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { DayStrip } from "@/components/pensieve/DayStrip";
-import { TimeSplitCard } from "@/components/pensieve/TimeSplitCard";
 import { ActivityTab } from "./ActivityTab";
+import { PlanGlance } from "./PlanGlance";
 import { TrackHeader } from "./TrackHeader";
 import { DayPane } from "./DayPane";
 import { PlanOutline } from "./PlanOutline";
@@ -53,6 +52,7 @@ export default async function TrackDetailPage({
   const selected = resolveSelected(root, day);
   const summary = track.summary ?? summarizePlan(root, track.title, track.daysPerWeek);
   const studied = studyEvents(root, checkInRows, track.hoursPerWeek, track.daysPerWeek).reduce((sum, e) => sum + e.hours, 0);
+  const planned = halfHours(plannedHours(root, track.hoursPerWeek, track.daysPerWeek));
   const pace = `${track.granularity === "day" ? "Daily" : "Weekly"} · ${track.daysPerWeek} days a week · ${track.hoursPerWeek} h a week`;
 
   return (
@@ -71,7 +71,7 @@ export default async function TrackDetailPage({
           done={doneDays(root)}
           total={root.len}
           studied={halfHours(studied)}
-          planned={halfHours(plannedHours(root, track.hoursPerWeek, track.daysPerWeek))}
+          planned={planned}
           finish={finishDate(root, track.daysPerWeek, new Date())}
           adjustHref={`/tracks/${track.id}/adjust`}
         />
@@ -80,6 +80,7 @@ export default async function TrackDetailPage({
       </div>
 
       <div className="pt-6">
+        {active === "plan" && <PlanGlance summary={summary} totalHours={planned} split={track.split} materials={materials} />}
         {active === "plan" && (
           <div className="grid grid-cols-[440px_minmax(0,1fr)] max-[1100px]:grid-cols-[340px_minmax(0,1fr)] max-[900px]:grid-cols-1">
             <div className="border-r border-border pr-4 max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:pr-0 max-[900px]:pb-4">
@@ -112,12 +113,6 @@ export default async function TrackDetailPage({
           ) : (
             <p className="py-10 text-center text-[14px] text-muted-foreground">This track has no materials.</p>
           ))}
-        {active === "about" && (
-          <div className="grid grid-cols-2 items-start gap-6 max-[900px]:grid-cols-1">
-            <PlanSummaryCard summary={summary} />
-            <TimeSplitCard weeks={weeksOf(root, root, track.daysPerWeek)} hoursPerWeek={track.hoursPerWeek} daysPerWeek={track.daysPerWeek} split={track.split} materials={materials} />
-          </div>
-        )}
         {active === "activity" && <ActivityTab rows={checkInRows} />}
       </div>
     </PageShell>

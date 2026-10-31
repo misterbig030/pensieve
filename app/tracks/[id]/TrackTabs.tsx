@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export type TrackTab = "plan" | "materials" | "activity" | "about";
+export type TrackTab = "plan" | "materials" | "activity";
 
-export const TRACK_TABS: readonly TrackTab[] = ["plan", "materials", "activity", "about"];
+export const TRACK_TABS: readonly TrackTab[] = ["plan", "materials", "activity"];
 
-const LABEL: Record<TrackTab, string> = { plan: "Plan", materials: "Materials", activity: "Activity", about: "About" };
+const LABEL: Record<TrackTab, string> = { plan: "Plan", materials: "Materials", activity: "Activity" };
 
 /** The plan page's sections, kept in `?tab=` (Plan has no param). */
 export function TrackTabs({ trackId, active, materialsCount }: { trackId: string; active: TrackTab; materialsCount: number }) {
