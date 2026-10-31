@@ -2,8 +2,9 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "./client";
 import { tracks, sources, planNodes, checkIns, type NewSource, type Source } from "./schema";
 import { getTrackNodeMaterials, getTrackNodePractice, insertPlanTree, rowsToTree } from "./planQueries";
+import { getUserCheckIns, type CheckInRow } from "./activity";
 import { numberedToc, remapTreeRefs } from "@/lib/materials";
-import { doneDays, type Granularity, type PlanNode } from "@/lib/planTree";
+import { type Granularity, type PlanNode } from "@/lib/planTree";
 import { clip, type Material } from "@/lib/schemas/material";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, clampHours, type PlanSplit } from "@/lib/studyTime";
 
@@ -16,35 +17,27 @@ export async function getTracksForUser(userId: string) {
 
 export interface DashboardTrack {
   track: Awaited<ReturnType<typeof getTracksForUser>>[number];
-  total: number;
-  done: number;
-  checkInDates: Date[];
+  root: PlanNode;
+  /** The track's check-ins, newest first. */
+  checkIns: CheckInRow[];
 }
 
-/** Batches per-track progress and check-in dates for the dashboard, avoiding an N+1 query per track. */
+/** Batches every track's plan tree and check-ins for the home page, avoiding an N+1 query per track. */
 export async function getDashboardTracksForUser(userId: string): Promise<DashboardTrack[]> {
   const userTracks = await getTracksForUser(userId);
   if (userTracks.length === 0) return [];
 
   const trackIds = userTracks.map((t) => t.id);
+  const [nodeRows, checkInRows] = await Promise.all([
+    db.query.planNodes.findMany({ where: inArray(planNodes.trackId, trackIds) }),
+    getUserCheckIns(userId),
+  ]);
 
-  const nodeRows = await db.query.planNodes.findMany({ where: inArray(planNodes.trackId, trackIds) });
-
-  const checkInRows = await db
-    .select({ trackId: planNodes.trackId, completedAt: checkIns.completedAt })
-    .from(checkIns)
-    .innerJoin(planNodes, eq(checkIns.nodeId, planNodes.id))
-    .where(inArray(planNodes.trackId, trackIds));
-
-  return userTracks.map((track) => {
-    const root = rowsToTree(nodeRows.filter((n) => n.trackId === track.id));
-    return {
-      track,
-      total: root.len,
-      done: doneDays(root),
-      checkInDates: checkInRows.filter((c) => c.trackId === track.id).map((c) => c.completedAt),
-    };
-  });
+  return userTracks.map((track) => ({
+    track,
+    root: rowsToTree(nodeRows.filter((n) => n.trackId === track.id)),
+    checkIns: checkInRows.filter((c) => c.trackId === track.id),
+  }));
 }
 
 export async function getTrackDetail(trackId: string, userId: string) {
@@ -136,16 +129,6 @@ export async function getCheckInDatesForUser(userId: string): Promise<Date[]> {
     .innerJoin(planNodes, eq(checkIns.nodeId, planNodes.id))
     .innerJoin(tracks, eq(planNodes.trackId, tracks.id))
     .where(eq(tracks.userId, userId));
-  return rows.map((r) => r.completedAt);
-}
-
-export async function getCheckInDatesForTrack(trackId: string, userId: string): Promise<Date[]> {
-  const rows = await db
-    .select({ completedAt: checkIns.completedAt })
-    .from(checkIns)
-    .innerJoin(planNodes, eq(checkIns.nodeId, planNodes.id))
-    .innerJoin(tracks, eq(planNodes.trackId, tracks.id))
-    .where(and(eq(planNodes.trackId, trackId), eq(tracks.userId, userId)));
   return rows.map((r) => r.completedAt);
 }
 

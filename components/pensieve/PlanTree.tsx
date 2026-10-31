@@ -17,6 +17,7 @@ import {
   childLevel,
   budgetFor,
   doneDays,
+  isHeading,
   isLocked,
   labelOf,
   MAX_DAYS_PER_WEEK,
@@ -70,11 +71,6 @@ function gridClass(children: PlanNode[], pending?: PendingSlots): string {
   // Planned weeks show their whole Read list, which needs the full width.
   if (weeks && children.some((c) => (c.materials?.length ?? 0) > 0)) return "grid-cols-[minmax(0,1fr)] gap-2.5";
   return weeks ? "grid-cols-[repeat(auto-fill,minmax(215px,1fr))] gap-2.5" : "grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2.5";
-}
-
-/** Whether a childless node is a heading (to be planned later) rather than a leaf the learner works at. */
-function isHeading(node: PlanNode): boolean {
-  return node.children === null && node.level !== "day" && node.budgetHours === null;
 }
 
 export function PlanTree(props: PlanTreeProps) {
@@ -486,7 +482,7 @@ const SPLIT_CHOICES = Array.from({ length: MAX_DAYS_PER_WEEK }, (_, i) => i + 1)
  * "Split into [5 ▾] days". The words split the week into the learner's usual number of days; the number is a chip
  * that opens 1–7 days with the time each comes to, for a week that should have a different number.
  */
-function SplitControl({ usual, hoursPerWeek, onSplit }: { usual: number; hoursPerWeek?: number; onSplit: (days: number) => void }) {
+export function SplitControl({ usual, hoursPerWeek, onSplit }: { usual: number; hoursPerWeek?: number; onSplit: (days: number) => void }) {
   const words = "text-[11.5px] text-accent-700 underline underline-offset-2 hover:text-accent-800";
   const perDay = (n: number) => (n === usual ? "usual" : hoursPerWeek === undefined ? null : `${formatDayTime(dayMinutes(hoursPerWeek, n))} a day`);
   return (
