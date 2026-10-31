@@ -32,6 +32,8 @@ export interface PracticeRow {
   generated: boolean;
   /** The item of the source's list this row is, when it names one; null for any other practice row. */
   item: PracticeItem | null;
+  /** 1-based position of the row's item in its source's list; null without one. */
+  itemFrom: number | null;
   /** Unique within a node. */
   key: string;
 }
@@ -60,7 +62,7 @@ export function practiceRowsFor(refs: PracticeRef[] | undefined, byId: ReadonlyM
   return (refs ?? []).flatMap((r, i) => {
     const material = r.id === null ? null : (byId.get(r.id) ?? null);
     if (r.id !== null && !material) return [];
-    return [{ format: r.format, label: PRACTICE_REGISTRY[r.format].label, task: r.task, done: r.done, minutes: r.minutes, material, generated: r.generated, item: itemOf(r, material), key: `${r.format}#${r.id ?? "generated"}#${i}` }];
+    return [{ format: r.format, label: PRACTICE_REGISTRY[r.format].label, task: r.task, done: r.done, minutes: r.minutes, material, generated: r.generated, item: itemOf(r, material), itemFrom: r.itemFrom ?? null, key: `${r.format}#${r.id ?? "generated"}#${i}` }];
   });
 }
 
