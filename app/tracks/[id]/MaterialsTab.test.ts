@@ -40,6 +40,13 @@ describe("MaterialsTab", () => {
     expect(html).toMatch(new RegExp(`Books</span>.*?>${books.count}<`));
   });
 
+  it("says how many materials the totals leave out for having no size", () => {
+    const unsized: Material = { ...book, id: "U", title: "Unsized", backbone: false, minutes: undefined, practice: undefined };
+    const html = renderToStaticMarkup(createElement(MaterialsTab, { topic: "AI engineering", materials: [...materials, unsized] }));
+    expect(html).toContain("Not counting 1 with no size");
+    expect(render()).not.toContain("with no size");
+  });
+
   it("doesn't repeat the list's heading", () => {
     const html = render();
     expect(html).not.toContain("materials-h");

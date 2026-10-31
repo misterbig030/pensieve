@@ -59,7 +59,7 @@ unknown tab does today. The time split's editing controls are untouched; only th
 ## Materials tab (M1)
 
 **Layout.** Two columns:
-- **Left:** the materials list, about 820 px at most, with its groups as today.
+- **Left:** the materials list, filling the width up to the right column, with its groups as today. On a wide screen its rows flow into two or three columns.
 - **Right:** a 320 px column that stays in place while the list scrolls.
 
 **The right column has three panels.**
@@ -79,7 +79,7 @@ where the list is used while drafting a track. *(My call.)*
 ## Activity tab (A1 with A2's grid)
 
 **Layout.** Two columns:
-- **Left (about 820 px at most):** check-ins grouped by calendar week as today, newest first. Each week heading gets
+- **Left (filling the width up to the right column):** check-ins grouped by calendar week as today, newest first, as cards that sit side by side on a wide screen. Each week heading gets
   the week's total on the right, such as "2 days · 2.5 h" or "3 sessions · 4 h". Hours count as the header's studied
   hours do: a finished day counts its share of the week's hours, and a session counts its logged hours. *(My calls:)*
   - "days" counts finished days, meaning check-ins with no hours, and "sessions" counts logged sessions.

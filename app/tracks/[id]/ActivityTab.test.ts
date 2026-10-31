@@ -34,6 +34,12 @@ describe("ActivityTab", () => {
     expect(html).toContain("Your study days");
   });
 
+  it("lets the keyboard reach each studied date and reads out what was done", () => {
+    const html = render({ rows: [...rows, row("2026-10-30T15:00:00Z", "Caching Basics", 1, 1)] });
+    expect(html).toMatch(/data-state="studied"[^>]*tabindex="0"[^>]*role="img"[^>]*aria-label="Fri 30 Oct\nThe Senior Loop and Scaling Basics\nCaching Basics"/);
+    expect(html).not.toMatch(/data-state="empty"[^>]*tabindex/);
+  });
+
   it("shows hours, dates studied and the estimated finish under the grid", () => {
     const html = render();
     expect(html).toContain("2.5 h studied · on 2 days");

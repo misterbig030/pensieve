@@ -80,7 +80,8 @@ export function relativeDay(d: Date, today: Date): string {
 
 /** Hours as a figure: whole hours as they are, the rest to one decimal. */
 export function hoursText(hours: number): string {
-  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+  const tenths = Math.round(hours * 10) / 10;
+  return Number.isInteger(tenths) ? String(tenths) : tenths.toFixed(1);
 }
 
 export interface CalendarDay {

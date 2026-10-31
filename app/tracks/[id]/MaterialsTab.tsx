@@ -23,6 +23,7 @@ export function MaterialsTab({ topic, materials }: { topic: string; materials: M
   const groups = materialGroups(materials);
   const kinds = groups.filter((g) => g.label !== "Backbone");
   const most = Math.max(1, ...kinds.map((g) => g.count));
+  const unsized = materials.filter((m) => !m.minutes && !m.practice?.minutes).length;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_320px] items-start gap-8 max-[900px]:grid-cols-1">
       <div className="@container min-w-0">
@@ -35,6 +36,7 @@ export function MaterialsTab({ topic, materials }: { topic: string; materials: M
             {readingMinutes > 0 && <Figure value={approxDuration(readingMinutes).replace("≈ ", "")} label="of reading" />}
             {practiceMinutes > 0 && <Figure value={approxDuration(practiceMinutes).replace("≈ ", "")} label="of practice" />}
           </div>
+          {unsized > 0 && <p className="m-0 text-[12px] text-muted-foreground">Not counting {unsized} with no size</p>}
           <ul className="flex flex-col gap-1.5 text-[12.5px]">
             {kinds.map((g) => (
               <li key={g.anchor} className="flex items-center gap-2">

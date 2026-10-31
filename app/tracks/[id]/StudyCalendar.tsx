@@ -31,15 +31,26 @@ export function StudyCalendar({ weeks }: { weeks: CalendarWeek[] }) {
       {weeks.map((week) => (
         <div key={week.monday.toISOString()} className="contents">
           <span className="whitespace-nowrap">{week.monday.toLocaleDateString("en-GB", MONDAY)}</span>
-          {week.days.map((day) => (
-            <span
-              key={day.key}
-              data-state={day.state}
-              data-today={day.today || undefined}
-              title={day.state === "before" || day.state === "future" ? undefined : label(day)}
-              className={cn("block aspect-square rounded-[4px]", STATE[day.state], day.today && "ring-2 ring-primary ring-offset-1 ring-offset-neutral-100")}
-            />
-          ))}
+          {week.days.map((day) => {
+            const studied = day.state === "studied";
+            return (
+              <span
+                key={day.key}
+                data-state={day.state}
+                data-today={day.today || undefined}
+                title={day.state === "before" || day.state === "future" ? undefined : label(day)}
+                // Studied dates take focus so the keyboard and screen readers get what was done, not only the mouse.
+                tabIndex={studied ? 0 : undefined}
+                role={studied ? "img" : undefined}
+                aria-label={studied ? label(day) : undefined}
+                className={cn(
+                  "block aspect-square rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-accent-2-700",
+                  STATE[day.state],
+                  day.today && "ring-2 ring-primary ring-offset-1 ring-offset-neutral-100",
+                )}
+              />
+            );
+          })}
         </div>
       ))}
     </div>

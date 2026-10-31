@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byWeek, heatmapWeeks, monthTotals, relativeDay, shortDate, studyCalendar, studyDates, thisWeekKeys, weekStart, weekTotal, weekdayDate } from "./activity";
+import { byWeek, heatmapWeeks, hoursText, monthTotals, relativeDay, shortDate, studyCalendar, studyDates, thisWeekKeys, weekStart, weekTotal, weekdayDate } from "./activity";
 
 const today = new Date("2026-10-30T12:00:00Z"); // a Friday
 
@@ -122,5 +122,14 @@ describe("weekTotal", () => {
     expect(weekTotal([{ hours: 1 }, { hours: 2 }, { hours: 1 }], 4)).toBe("3 sessions · 4 h");
     expect(weekTotal([{ hours: null }, { hours: 1 }, { hours: 2 }], 4)).toBe("1 day · 2 sessions · 4 h");
     expect(weekTotal([{ hours: 1.25 }], 1.25)).toBe("1 session · 1.3 h");
+  });
+});
+
+describe("hoursText", () => {
+  it("rounds sums to a tenth and drops a trailing .0", () => {
+    expect(hoursText(7.000000000000001)).toBe("7");
+    expect(hoursText(1.983)).toBe("2");
+    expect(hoursText(2.5)).toBe("2.5");
+    expect(hoursText(1.25)).toBe("1.3");
   });
 });
