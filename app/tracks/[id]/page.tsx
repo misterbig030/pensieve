@@ -51,7 +51,10 @@ export default async function TrackDetailPage({
   const current = currentLeaf(root);
   const selected = resolveSelected(root, day);
   const summary = track.summary ?? summarizePlan(root, track.title, track.daysPerWeek);
-  const studied = studyEvents(root, checkInRows, track.hoursPerWeek, track.daysPerWeek).reduce((sum, e) => sum + e.hours, 0);
+  const events = studyEvents(root, checkInRows, track.hoursPerWeek, track.daysPerWeek);
+  const studied = events.reduce((sum, e) => sum + e.hours, 0);
+  const today = new Date();
+  const finish = finishDate(root, track.daysPerWeek, today);
   const planned = halfHours(plannedHours(root, track.hoursPerWeek, track.daysPerWeek));
   const pace = `${track.granularity === "day" ? "Daily" : "Weekly"} · ${track.daysPerWeek} days a week · ${track.hoursPerWeek} h a week`;
 
@@ -72,7 +75,7 @@ export default async function TrackDetailPage({
           total={root.len}
           studied={halfHours(studied)}
           planned={planned}
-          finish={finishDate(root, track.daysPerWeek, new Date())}
+          finish={finish}
           adjustHref={`/tracks/${track.id}/adjust`}
         />
         <DayStrip cells={dayStrip(root, track.granularity, track.daysPerWeek)} />
@@ -113,7 +116,15 @@ export default async function TrackDetailPage({
           ) : (
             <p className="py-10 text-center text-[14px] text-muted-foreground">This track has no materials.</p>
           ))}
-        {active === "activity" && <ActivityTab rows={checkInRows} />}
+        {active === "activity" && (
+          <ActivityTab
+            rows={checkInRows.map((row, i) => ({ ...row, studyHours: events[i].hours }))}
+            createdAt={track.createdAt}
+            today={today}
+            studied={halfHours(studied)}
+            finish={finish}
+          />
+        )}
       </div>
     </PageShell>
   );
