@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { ChevronRight, Lock, MessageCircle, PencilLine, Send, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { hasUserTurn, undoableChangeId, type ChatMessage } from "@/lib/planChat";
@@ -34,6 +34,8 @@ interface ConversationRailProps {
   onInputChange: (value: string) => void;
   onSend: () => void;
   onUndo: (messageId: string) => void;
+  /** Shown after the last message, such as the out-of-credits alert for a refused turn. */
+  notice?: ReactNode;
 }
 
 export function ConversationRail({
@@ -49,6 +51,7 @@ export function ConversationRail({
   onInputChange,
   onSend,
   onUndo,
+  notice,
 }: ConversationRailProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const undoId = undoableChangeId(messages);
@@ -58,7 +61,7 @@ export function ConversationRail({
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, notice]);
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -137,6 +140,7 @@ export function ConversationRail({
           {messages.map((m) => (
             <MessageView key={m.id} message={m} canUndo={m.id === undoId} onUndo={onUndo} />
           ))}
+          {notice}
         </div>
 
         {showSuggestions && suggestions.length > 0 && (
