@@ -101,6 +101,9 @@ function UnitRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx
   const busy = planning.isPending || planning.planning;
   const splittable = !hasChildren && !heading && node.level === "week" && !node.sessions && !done;
   const label = labelOf(ctx.root, node);
+  const selected = node.id === ctx.selectedId;
+  // Inline actions show on the selected row, and on hover or focus elsewhere, so a column of them doesn't crowd the titles.
+  const actionClass = cn(!selected && "opacity-0 group-hover:opacity-100 focus-visible:opacity-100");
 
   let right: ReactNode = null;
   if (heading) right = "not planned";
@@ -111,7 +114,7 @@ function UnitRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx
   return (
     <>
       <div
-        className={cn(rowClass, "hover:bg-neutral-100/70", node.id === ctx.selectedId && selectedClass, heading && "text-muted-foreground")}
+        className={cn(rowClass, "group hover:bg-neutral-100/70", selected && selectedClass, heading && "text-muted-foreground")}
         style={{ paddingLeft: 12 + depth * 16 }}
       >
         <span className={cn("w-[52px] shrink-0 font-heading text-[11px]", heading ? "text-muted-foreground" : "text-accent-700")}>{label}</span>
@@ -119,18 +122,18 @@ function UnitRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx
           href={`?day=${node.id}`}
           scroll={false}
           onClick={() => ctx.reveal(node.id)}
-          aria-current={node.id === ctx.selectedId ? "true" : undefined}
+          aria-current={selected ? "true" : undefined}
           className={cn("min-w-0 flex-1 truncate", heading ? "font-medium" : "font-semibold")}
         >
           {node.title}
         </Link>
         {heading && !busy && (
-          <Button size="xs" variant="outline" onClick={() => planning.run(node.id, "expand")}>
+          <Button size="xs" variant="outline" className={actionClass} onClick={() => planning.run(node.id, "expand")}>
             Plan {label}
           </Button>
         )}
         {splittable && !busy && (
-          <Button size="xs" variant="outline" onClick={() => planning.run(node.id, "split")}>
+          <Button size="xs" variant="outline" className={actionClass} onClick={() => planning.run(node.id, "split")}>
             Split into days
           </Button>
         )}
