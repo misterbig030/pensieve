@@ -44,7 +44,8 @@ the About tab uses today.
 - **The bar.** A thin stacked bar: reading first, then each practice format. The shares and labels are the same as
   the About tab's card shows today, from `track.split`. The colours are the shades that card already uses.
 - **The legend.** One line under the bar, wrapping if needed: a swatch, a short label, and the percent.
-- **Whose call.** Beside the heading: "The plan's call", or "Set by you" when the learner set it.
+- **Whose call.** Beside the heading: "The plan's call", or "Your call" when the learner set it. These are the words the split card in Adjust plan
+  already uses.
 - **Why.** "Why" opens the split's reason in a small popover. When there is no reason, there is no "Why".
 - **Old splits.** A split from before practice formats existed shows reading and its one practice label.
 
