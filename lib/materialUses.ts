@@ -88,7 +88,7 @@ export function materialPlacement(root: PlanNode, materials: Material[], selecte
     const before = all.filter((u) => !inside.has(u.node.id) && !above.has(u.node.id) && u.node.end < selected.start).sort((a, b) => b.node.end - a.node.end);
     const reserved = all.filter((u) => above.has(u.node.id));
     if (mine.length > 0) {
-      used.push({ material, part: partOf(mine), at: Math.min(...mine.map((u) => u.node.start)), i });
+      used.push({ material, part: partOf(mine, material), at: Math.min(...mine.map((u) => u.node.start)), i });
     } else if (after.length > 0) {
       const places = [...new Set(after.map((u) => place(u.node)))];
       later.push({ material, place: `${places.length > 1 ? "from " : ""}${places[0]}`, at: after[0].node.start, i });
@@ -111,12 +111,16 @@ export function materialPlacement(root: PlanNode, materials: Material[], selecte
   };
 }
 
-/** "ch. 1–2, 5 · items 3–8": the chapters and item runs a unit's rows name. */
-function partOf(uses: Use[]): string {
+/**
+ * "ch. 1–2, 5 · items 3–8": the chapters and item runs a unit's rows name. A ref's chapter is its place in the book's
+ * list, so runs are found over places and each end is printed by the book's own number, as the pane prints it.
+ */
+function partOf(uses: Use[], material: Material): string {
+  const number = (c: number) => material.toc?.chapters[c - 1]?.n ?? c;
   const chapters = [...new Set(uses.flatMap((u) => (u.chapter ? [u.chapter] : [])))].sort((a, b) => a - b);
   const items = mergeRuns(uses.flatMap((u) => (u.items ? [u.items] : [])));
   return [
-    chapters.length > 0 && `ch. ${runs(chapters.map((c) => [c, c] as [number, number])).join(", ")}`,
+    chapters.length > 0 && `ch. ${runs(chapters.map((c) => [c, c] as [number, number]), number).join(", ")}`,
     items.length > 0 && `${items.length === 1 && items[0][0] === items[0][1] ? "item" : "items"} ${runs(items).join(", ")}`,
   ]
     .filter(Boolean)
@@ -134,6 +138,6 @@ function mergeRuns(list: [number, number][]): [number, number][] {
   return out;
 }
 
-function runs(list: [number, number][]): string[] {
-  return mergeRuns(list).map(([from, to]) => (from === to ? String(from) : `${from}–${to}`));
+function runs(list: [number, number][], number: (n: number) => number = (n) => n): string[] {
+  return mergeRuns(list).map(([from, to]) => (from === to ? String(number(from)) : `${number(from)}–${number(to)}`));
 }

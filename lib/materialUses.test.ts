@@ -67,6 +67,23 @@ describe("materialPlacement", () => {
     expect(used.map((u) => u.part)).toEqual(["ch. 1–2", "items 3–8", ""]);
   });
 
+  it("prints chapters by the book's own numbers, not their place in its list", () => {
+    const toc = {
+      source: "model",
+      url: "https://example.com",
+      printPages: false,
+      end: null,
+      chapters: [
+        { n: null, title: "Preface", page: null, minutes: null },
+        { n: 1, title: "Foundations", page: null, minutes: null },
+        { n: 2, title: "Storage", page: null, minutes: null },
+      ],
+    } as unknown as Material["toc"];
+    const withToc = [{ ...materials[0], toc }, ...materials.slice(1)];
+    const root = makeRoot([week("w1", [day("w1d1", { materials: [read("A", 2)] }), day("w1d2", { materials: [read("A", 3)] })])]);
+    expect(materialPlacement(root, withToc, node(root, "w1")).used[0].part).toBe("ch. 1–2");
+  });
+
   it("names the next use after the selected unit for a material used before and after it", () => {
     const root = weekPlan();
     const { later } = materialPlacement(root, materials, node(root, "w2"));

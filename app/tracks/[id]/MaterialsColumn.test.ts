@@ -38,6 +38,12 @@ describe("MaterialsColumn", () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*title="Nothing in Week 2 uses a material yet"|<button[^>]*title="Nothing in Week 2 uses a material yet"[^>]*disabled=""/);
   });
 
+  it("puts the part or place first, so a long size cannot cut it off", () => {
+    const html = render();
+    expect(html).toMatch(/>ch\. 1–2 · Backbone/);
+    expect(html).toMatch(/>from Week 3 · Book/);
+  });
+
   it("marks materials the plan does not use", () => {
     expect(render()).toContain("Not in the plan yet");
   });

@@ -27,10 +27,10 @@ function kindName(m: Material): string {
   return m.kind.charAt(0).toUpperCase() + m.kind.slice(1);
 }
 
-/** "Book · ≈ 4 h 10 · ch. 1–2": what it is, how big, and the part or place. */
+/** "ch. 1–2 · Book · ≈ 4 h 10": the part or place first, the reason the column exists, then what it is and how big. */
 function rowLine(m: Material, note: string): string {
   const size = m.minutes ? approxDuration(m.minutes) : m.practice ? practiceTag(m.practice) : null;
-  return [m.backbone ? "Backbone" : kindName(m), size, note].filter(Boolean).join(" · ");
+  return [note, m.backbone ? "Backbone" : kindName(m), size].filter(Boolean).join(" · ");
 }
 
 /** The whole list by kind, the backbone first, as the materials list groups it. */
@@ -163,7 +163,7 @@ function MaterialRow({ row, open, onToggle }: { row: Row; open: boolean; onToggl
         </span>
         <span className="min-w-0 flex-1">
           <b className="block truncate text-[12.5px] font-semibold">{m.title}</b>
-          <small className="block truncate text-[11px] text-muted-foreground">{rowLine(m, row.note)}</small>
+          <small className={cn("block text-[11px] text-muted-foreground", !open && "truncate")}>{rowLine(m, row.note)}</small>
         </span>
       </button>
       {open && (
