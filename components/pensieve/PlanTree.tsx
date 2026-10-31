@@ -17,6 +17,7 @@ import {
   childLevel,
   budgetFor,
   doneDays,
+  isHeading,
   isLocked,
   labelOf,
   MAX_DAYS_PER_WEEK,
@@ -70,11 +71,6 @@ function gridClass(children: PlanNode[], pending?: PendingSlots): string {
   // Planned weeks show their whole Read list, which needs the full width.
   if (weeks && children.some((c) => (c.materials?.length ?? 0) > 0)) return "grid-cols-[minmax(0,1fr)] gap-2.5";
   return weeks ? "grid-cols-[repeat(auto-fill,minmax(215px,1fr))] gap-2.5" : "grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2.5";
-}
-
-/** Whether a childless node is a heading (to be planned later) rather than a leaf the learner works at. */
-function isHeading(node: PlanNode): boolean {
-  return node.children === null && node.level !== "day" && node.budgetHours === null;
 }
 
 export function PlanTree(props: PlanTreeProps) {
