@@ -1,4 +1,5 @@
 import { itemLabel, rowHref, type PracticeRow, type ReadRow } from "@/components/pensieve/ReadTable";
+import type { LessonMaterial, LessonPractice } from "@/lib/ai/dailyContent";
 import { shortTitle } from "@/lib/shortTitle";
 
 /**
@@ -69,4 +70,21 @@ export function lessonPreview(tasks: DayTask[]): string[] {
 export function lessonMinutes(markdown: string): number {
   const words = markdown.split(/\s+/).filter(Boolean).length;
   return Math.max(5, Math.round(words / 200 / 5) * 5);
+}
+
+/** The day's tasks as the lesson writer's Read and Do lists, each carrying its label and id. */
+export function lessonInputs(tasks: DayTask[]): { materials: LessonMaterial[]; practice: LessonPractice[] } {
+  const materials: LessonMaterial[] = [];
+  const practice: LessonPractice[] = [];
+  for (const task of tasks) {
+    const step = { token: task.token, id: task.id };
+    if (task.kind === "read") {
+      const { material, tier, minutes, note, chapter, activity } = task.row;
+      materials.push({ title: material.title, url: material.url, type: material.type, kind: material.kind, tier, minutes, note, chapter, activity, step });
+    } else {
+      const { format, label, task: text, done, minutes, material, generated } = task.row;
+      practice.push({ format, label, task: text, done, minutes, source: material ? { title: material.title, url: material.url } : null, generated, step });
+    }
+  }
+  return { materials, practice };
 }

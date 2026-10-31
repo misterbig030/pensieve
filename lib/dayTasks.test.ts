@@ -3,7 +3,7 @@ import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
 import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
 import type { Material, PracticeItem, PracticeRef } from "@/lib/schemas/material";
 import { practiceRowsFor, type ReadRow } from "@/components/pensieve/ReadTable";
-import { dayTasks, lessonMinutes, lessonPreview, taskHref, taskTitle } from "./dayTasks";
+import { dayTasks, lessonInputs, lessonMinutes, lessonPreview, taskHref, taskTitle } from "./dayTasks";
 
 const book: Material = { ...AIE_MATERIALS.find((m) => m.id === "aie")!, url: "https://book.example/" };
 const chapterRow: ReadRow = {
@@ -81,6 +81,30 @@ describe("dayTasks", () => {
       "Read AI Engineering, ch. 3",
       "Review AI Engineering, ch. 3",
       "Problems: 49. Group Anagrams",
+    ]);
+  });
+});
+
+describe("lessonInputs", () => {
+  it("turns tasks into the generator's materials and practice, each with its token and id", () => {
+    const { materials, practice } = lessonInputs(dayTasks([chapterRow], practiceRowsFor([anagrams, summary], byId)));
+    expect(materials).toEqual([
+      {
+        title: book.title,
+        url: book.url,
+        type: book.type,
+        kind: book.kind,
+        tier: "must",
+        minutes: 40,
+        note: "sections 3.1–3.3",
+        chapter: chapterRow.chapter,
+        activity: "read",
+        step: { token: "T1", id: "read:aie#3" },
+      },
+    ]);
+    expect(practice).toEqual([
+      { format: "problem-set", label: "Problems", task: "NeetCode 150 · problem", done: "solved without hints", minutes: 25, source: { title: "NeetCode 150", url: bank.url }, generated: false, step: { token: "T2", id: "practice:problem-set#nc#4" } },
+      { format: "recall", label: "Recall", task: "Write a summary of chapter 3", done: "a page of notes", minutes: 15, source: null, generated: true, step: { token: "T3", id: "practice:recall#generated#write-a-summary-of-chapter-3" } },
     ]);
   });
 });

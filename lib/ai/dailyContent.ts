@@ -1,4 +1,5 @@
-import { ANSWERS_FENCE, dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
+import { ANSWERS_FENCE, STEP_FENCE, dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
+import { resolveStepTokens } from "@/lib/lessonSteps";
 import type { Chapter, MaterialKind, MaterialTier, RefActivity } from "@/lib/schemas/material";
 import type { PracticeFormat } from "@/lib/practice";
 import type { SourceType } from "@/lib/schemas/source";
@@ -21,6 +22,14 @@ export interface LessonMaterial {
   chapter?: Pick<Chapter, "n" | "title" | "sections"> | null;
   /** "review" revisits something an earlier unit read. */
   activity?: RefActivity;
+  /** The day task this row is: the label the writer sees and the id its steps are stored under. */
+  step?: LessonStep;
+}
+
+/** A task's label in the prompt ("T1") and the task id a step naming it is stored with. */
+export interface LessonStep {
+  token: string;
+  id: string;
 }
 
 /** One row of the unit's Do table, as the lesson prompt sees it. */
@@ -35,6 +44,7 @@ export interface LessonPractice {
   /** The material the row is from; for a generated recall row, the reading it is made from; null for any other generated row. */
   source: { title: string; url: string } | null;
   generated: boolean;
+  step?: LessonStep;
 }
 
 interface BuildDailyContentPromptInput {
@@ -62,19 +72,26 @@ function row(m: LessonMaterial): string {
     part = `${review ? "review of " : ""}${m.chapter.n !== null ? `ch. ${m.chapter.n} ` : ""}"${m.chapter.title}"${sections ? ` · sections: ${sections}` : ""}`;
   } else if (review) part = "review";
   const meta = [m.tier, m.minutes ? `${m.minutes} min` : null, m.chapter ? null : m.note].filter(Boolean).join(", ");
-  return `- ${m.title} (${m.url})${part ? ` — ${part}` : ""}${meta ? ` — ${meta}` : ""}`;
+  return `- ${label(m)}${m.title} (${m.url})${part ? ` — ${part}` : ""}${meta ? ` — ${meta}` : ""}`;
 }
 
 /** `- Problems: Do problems 1-10 (60 min) — done when: … — source: Problem list (url)`, or `— generated` when no source stands behind it. */
 function practiceRow(p: LessonPractice): string {
   const origin = p.source ? (p.generated ? `generated from the reading: ${p.source.title} (${p.source.url})` : `source: ${p.source.title} (${p.source.url})`) : "generated";
-  return `- ${p.label}: ${p.task} (${p.minutes} min) — done when: ${p.done} — ${origin}`;
+  return `- ${label(p)}${p.label}: ${p.task} (${p.minutes} min) — done when: ${p.done} — ${origin}`;
+}
+
+/** `[T1] ` before a task's row in steps mode, nothing otherwise. */
+function label(row: { step?: LessonStep }): string {
+  return row.step ? `[${row.step.token}] ` : "";
 }
 
 /** The practice section of the prompt: the tasks, and what the lesson writes for them. */
-function practiceSection(practice: LessonPractice[]): string[] {
+function practiceSection(practice: LessonPractice[], steps: boolean): string[] {
   const parts = [
-    `This unit's practice. End the lesson with a section on how to do and check each task: how to set it up, how to work through it, and how the learner knows it is done, by its "done when" line. Explain the tasks; do not just repeat the list. Link a task's source where it helps, but cite none of these sources in "citations":`,
+    steps
+      ? `This unit's practice. Give each task at least one step, and around its steps explain how to set it up, how to work through it, and how the learner knows it is done, by its "done when" line. Link a task's source where it helps, but cite none of these sources in "citations":`
+      : `This unit's practice. End the lesson with a section on how to do and check each task: how to set it up, how to work through it, and how the learner knows it is done, by its "done when" line. Explain the tasks; do not just repeat the list. Link a task's source where it helps, but cite none of these sources in "citations":`,
     ...practice.map(practiceRow),
   ];
   if (practice.some((p) => p.generated && p.format === "recall")) {
@@ -124,10 +141,16 @@ export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): st
     parts.push(
       `The learner also referenced these materials (a local file or a free-text note) — you cannot access their contents, so use them only as context for what to emphasize, not as a citable source:`,
     );
-    for (const s of other) parts.push(`- ${s.title ?? s.url}`);
+    for (const s of other) parts.push(`- ${label(s)}${s.title ?? s.url}`);
   }
 
-  if (input.practice && input.practice.length > 0) parts.push(...practiceSection(input.practice));
+  const steps = [...input.materials, ...(input.practice ?? [])].some((row) => row.step);
+  if (input.practice && input.practice.length > 0) parts.push(...practiceSection(input.practice, steps));
+  if (steps) {
+    parts.push(
+      `Each task above has a label in square brackets, like [T1]. Write the lesson as a walk-through of these tasks in this order. Each time the learner should go and do part of a task, write a step: a fenced code block with the info string "${STEP_FENCE}" (\`\`\`${STEP_FENCE}), whose first line is "task: " and the one task's label, whose second line is "minutes: " and your estimate for that step, and whose other lines say in one or two sentences of markdown exactly what to do. A task may have several steps, such as the first half of a chapter and then the second. Write your explanation between the steps as ordinary markdown.`,
+    );
+  }
 
   parts.push(
     readable.length + videos.length > 0
@@ -203,5 +226,8 @@ export async function generateDailyContent(
     { ...input.log, caller: "daily" },
   );
   const { citations, dropped } = enforceCitations(object.citations, input.materials);
-  return { content: { ...object, citations }, costUsd, droppedCitations: dropped };
+  // The writer names tasks by their labels; the lesson is stored with task ids, which survive a plan revision.
+  const ids = new Map([...input.materials, ...(input.practice ?? [])].flatMap((row) => (row.step ? [[row.step.token, row.step.id] as const] : [])));
+  const contentMarkdown = ids.size > 0 ? resolveStepTokens(object.contentMarkdown, ids) : object.contentMarkdown;
+  return { content: { ...object, contentMarkdown, citations }, costUsd, droppedCitations: dropped };
 }
