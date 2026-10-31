@@ -683,12 +683,13 @@ export function weekPracticeTime(
 }
 
 /**
- * A week's time fitted to its `days` days of `dayBudget` minutes each. With `wholeBlocks` (days inside a week that reserves
- * listed runs, `weekPracticeTime`), each block format without a run gets whole blocks of `blockMinutes`, as many as
- * its minutes round to and the days have room for beside reading and the other formats (the format furthest past its
- * minutes gives one up first): `blocks` counts them, and what they leave of their minutes goes to reading. Past the
- * days' total, reading gives back that gain first, then the per-item formats without a run, by their minutes, then
- * reading itself; the formats with a run are the items the week reserved, so they stay whole.
+ * A week's time fitted to its `days` days of `dayBudget` minutes each, so its figures never ask for more than the days
+ * hold. With `wholeBlocks` (days inside a week that reserves listed runs, `weekPracticeTime`), each block format
+ * without a run gets at most the whole blocks of `blockMinutes` its minutes round to and the days have room for beside
+ * reading and the other formats (the format furthest past its minutes gives one up first); `blocks` counts them. What
+ * the days still have goes to the formats they write themselves without a run, by their minutes, else to reading, so
+ * the days are filled. Past the days' total, reading and the per-item formats without a run give way by their minutes;
+ * the formats with a run are the items the week reserved, so they stay whole.
  */
 export function fitWeekToDays(
   budgets: { reading: number; practice: Partial<Record<PracticeFormat, number>> },
@@ -711,19 +712,21 @@ export function fitWeekToDays(
     const f = free.filter((f) => blocks[f]! > 0).reduce((a, b) => (past(b) > past(a) ? b : a));
     blocks[f] = blocks[f]! - 1;
   }
-  const gain = Math.max(0, sum(free) - placed());
   for (const f of free) practice[f] = blocks[f]! * size(f);
-  let reading = budgets.reading + gain;
-  let excess = reading + sum(formats) - dayBudget * days;
-  if (excess <= 0) return { reading, practice, blocks };
-  const back = Math.min(excess, gain);
-  reading -= back;
-  excess -= back;
-  const flexible = formats.filter((f) => runs[f] === undefined && !isBlockFormat(f));
-  const cut = shareOut(Math.min(excess, sum(flexible)), flexible.map((f) => practice[f]!));
-  flexible.forEach((f, i) => (practice[f] = practice[f]! - cut[i]));
-  excess -= cut.reduce((total, n) => total + n, 0);
-  return { reading: Math.max(0, reading - excess), practice, blocks };
+  const left = room - placed();
+  const loose = formats.filter((f) => runs[f] === undefined && !isBlockFormat(f));
+  let reading = budgets.reading;
+  if (left > 0 && wholeBlocks) {
+    const written = loose.filter((f) => PRACTICE_REGISTRY[f].generated !== "never");
+    if (written.length === 0) return { reading: reading + left, practice, blocks };
+    const weights = written.some((f) => practice[f]! > 0) ? written.map((f) => practice[f]!) : written.map(() => 1);
+    shareOut(left, weights).forEach((n, i) => (practice[written[i]] = practice[written[i]]! + n));
+  } else if (left < 0) {
+    const cut = shareOut(Math.min(-left, reading + sum(loose)), [reading, ...loose.map((f) => practice[f]!)]);
+    reading -= cut[0];
+    loose.forEach((f, i) => (practice[f] = practice[f]! - cut[i + 1]));
+  }
+  return { reading, practice, blocks };
 }
 
 /** A pick on the time card: its hours, or none with `toReading` when it can't be assigned and its time is reading. */

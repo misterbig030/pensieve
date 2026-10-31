@@ -568,7 +568,7 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const held = Object.keys(runs).length > 0;
   const daysInWeek = days ? input.spans.length : input.daysPerWeek;
   const day = leafBudgetMinutes("day", daysInWeek, input.hoursPerWeek);
-  // A week's days hold only their own minutes, in whole blocks where they write them (`fitWeekToDays`).
+  // A week's figures never ask for more than its days hold; blocks the days write are a most, not a target (`fitWeekToDays`).
   const budgets = days
     ? fitWeekToDays(held ? weekPracticeTime(weekBudgetsOf(input), runs) : weekBudgetsOf(input), runs, day, daysInWeek, held)
     : { ...weekBudgetsOf(input), blocks: {} as Partial<Record<PracticeFormat, number>> };
@@ -590,8 +590,8 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     let sizing = sizingSentence(p.pick.format);
     if (held && runs[p.pick.format] !== undefined) time += ", the minutes of the items reserved below";
     if (count !== undefined) {
-      time = `${count} block${count === 1 ? "" : "s"} of about ${size} min this week`;
-      sizing = `${spec.label} comes in whole blocks: when this week reserves none, write each yourself.`;
+      time = `up to ${count} block${count === 1 ? "" : "s"} of about ${size} min this week`;
+      sizing = `${spec.label} comes in whole blocks: when this week reserves none, write each yourself, or fewer when the days are full.`;
     } else if (isBlockFormat(p.pick.format)) {
       const total = planBlocks[p.pick.format] ?? 0;
       const placed = input.tree && parent ? placedMinutes(input.tree, p.pick.format, parent.start - 1) : 0;
@@ -619,7 +619,7 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     blocks.length === 0
       ? ""
       : held
-        ? `: the reserved items take exactly theirs, and ${blocks.join(" and ")} time is for blocks, written by the days when the week reserves none`
+        ? `: the reserved items take exactly theirs, and ${blocks.join(" and ")} time is at most its blocks, written by the days when the week reserves none`
         : `, except ${blocks.join(" and ")}: a week that holds a block takes its minutes from the other formats, and a week without one gives its time to them`;
   lines.push(`${days ? "Across the week" : "Within each week"}, each format's minutes add up to about its time${except}. Place a task longer than half a day's budget (about ${formatMinutes(half)}) on a day of its own.`);
   return lines.join("\n");
