@@ -204,23 +204,28 @@ export const GENERATION_CALLERS = ["outline", "outline_revision", "daily", "judg
 export type GenerationCaller = (typeof GENERATION_CALLERS)[number];
 
 /** One row per model call. Written by the app's server actions; read by cost reporting and the eval harness. */
-export const generationLog = pgTable("generation_log", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  caller: text("caller", { enum: GENERATION_CALLERS }).notNull(),
-  model: text("model").notNull(),
-  effort: text("effort"), // null until the effort axis is wired (W4 Task 4 / W5)
-  inputTokens: integer("input_tokens"),
-  outputTokens: integer("output_tokens"),
-  cacheReadTokens: integer("cache_read_tokens"), // usage.inputTokenDetails.cacheReadTokens
-  reasoningTokens: integer("reasoning_tokens"), // usage.outputTokenDetails.reasoningTokens
-  costUsd: doublePrecision("cost_usd").notNull(),
-  latencyMs: integer("latency_ms").notNull(),
-  trackId: uuid("track_id"), // nullable: draft outlines have no track yet
-  userId: text("user_id"), // nullable: eval-harness rows have no user
-  /** Who paid: the app's gateway key, or the user's own key (see user_api_keys). */
-  keyOwner: text("key_owner", { enum: KEY_OWNERS }).notNull().default("app"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const generationLog = pgTable(
+  "generation_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caller: text("caller", { enum: GENERATION_CALLERS }).notNull(),
+    model: text("model").notNull(),
+    effort: text("effort"), // null until the effort axis is wired (W4 Task 4 / W5)
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    cacheReadTokens: integer("cache_read_tokens"), // usage.inputTokenDetails.cacheReadTokens
+    reasoningTokens: integer("reasoning_tokens"), // usage.outputTokenDetails.reasoningTokens
+    costUsd: doublePrecision("cost_usd").notNull(),
+    latencyMs: integer("latency_ms").notNull(),
+    trackId: uuid("track_id"), // nullable: draft outlines have no track yet
+    userId: text("user_id"), // nullable: eval-harness rows have no user
+    /** Who paid: the app's gateway key, or the user's own key (see user_api_keys). */
+    keyOwner: text("key_owner", { enum: KEY_OWNERS }).notNull().default("app"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  // A user's spend this month, summed on every draft, chat turn and page with the credits pill (lib/db/credits.ts).
+  (t) => [index("generation_log_user_created_idx").on(t.userId, t.createdAt)],
+);
 
 /** A user's own API key for one provider, so their usage is billed to them. One row per user and provider. */
 export const userApiKeys = pgTable(
