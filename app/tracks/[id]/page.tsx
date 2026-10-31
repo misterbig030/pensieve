@@ -7,7 +7,7 @@ import { getTrackCheckIns } from "@/lib/db/activity";
 import { summarizePlan } from "@/lib/planSummary";
 import { currentLeaf, doneDays, resolveSelected, walk } from "@/lib/planTree";
 import { dayStrip, finishDate, plannedHours, studyEvents } from "@/lib/trackProgress";
-import { MaterialsList } from "@/components/pensieve/MaterialsList";
+import { MaterialsTab } from "./MaterialsTab";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { DayStrip } from "@/components/pensieve/DayStrip";
 import { ActivityTab } from "./ActivityTab";
@@ -109,7 +109,7 @@ export default async function TrackDetailPage({
         )}
         {active === "materials" &&
           (materials.length > 0 ? (
-            <MaterialsList topic={track.title} materials={materials} initialShown={12} />
+            <MaterialsTab topic={track.title} materials={materials} />
           ) : (
             <p className="py-10 text-center text-[14px] text-muted-foreground">This track has no materials.</p>
           ))}
