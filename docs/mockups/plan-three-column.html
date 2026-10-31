@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan page three-column mocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Geist+Mono&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5ead8; --fg: #201e1d; --card: #ebddc5; --primary: #c67139; --on-primary: #f5ead8;
+  --muted: color-mix(in srgb, #201e1d 55%, transparent);
+  --faint: color-mix(in srgb, #201e1d 38%, transparent);
+  --line: color-mix(in srgb, #201e1d 12%, transparent);
+  --a100: #fff2eb; --a200: #ffe1d0; --a300: #ffc6a5; --a500: #d67f48; --a700: #9a5022;
+  --g100: #f0fae1; --g200: #e1eecc; --g500: #8fa073; --g600: #728157; --g800: #3d472b;
+  --n100: #f9f4ed; --n200: #eee7db; --n300: #dcd3c4; --n400: #c0b6a5; --n800: #474238;
+  --sh-sm: 0 1px 2px color-mix(in srgb, #2e2b25 14%, transparent);
+  --sh-lg: 0 12px 32px color-mix(in srgb, #2e2b25 22%, transparent);
+  --s1: #9a5022; --s2: #556140; --s3: #8fa073; --s4: #c0cf9f; --s5: #e1eecc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Figtree, system-ui, sans-serif; background: #d9ccb6; color: var(--fg); padding: 32px 24px 64px; font-size: 13px; }
+.page-title { font-family: Caprasimo, serif; font-weight: 400; font-size: 28px; max-width: 1440px; margin: 0 auto 6px; }
+.page-sub { max-width: 1440px; margin: 0 auto 8px; color: var(--n800); font-size: 15px; }
+.label { max-width: 1440px; margin: 44px auto 12px; display: flex; flex-direction: column; gap: 4px; }
+.label b { font-family: Caprasimo, serif; font-weight: 400; font-size: 20px; }
+.label span { color: var(--n800); font-size: 14px; max-width: 900px; }
+.window { width: 1440px; margin: 0 auto; border-radius: 14px; overflow: hidden; background: var(--bg); box-shadow: var(--sh-lg); }
+.muted { color: var(--muted); } .faint { color: var(--faint); }
+
+/* app chrome */
+.topbar { height: 52px; display: flex; align-items: center; gap: 22px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+.topbar .brand { display: flex; align-items: center; gap: 8px; font-family: Caprasimo, serif; font-size: 16px; }
+.topbar .brand i { width: 22px; height: 22px; border-radius: 50%; background: var(--primary); }
+.topbar .t { font-size: 13px; font-weight: 500; color: var(--muted); }
+.topbar .t.on { color: var(--fg); font-weight: 600; }
+.topbar .av { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; background: var(--primary); }
+.shell { padding: 18px 24px 28px; }
+.crumb { font-size: 12px; color: var(--muted); margin-bottom: 8px; } .crumb b { color: var(--fg); }
+.head { display: flex; align-items: flex-start; gap: 24px; }
+.head h1 { font-family: Caprasimo, serif; font-weight: 400; font-size: 24px; }
+.head .pace { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.stats { margin-left: auto; display: flex; gap: 22px; align-items: center; }
+.stats div { text-align: center; } .stats b { font-family: Caprasimo, serif; font-weight: 400; font-size: 17px; display: block; } .stats small { font-size: 10.5px; color: var(--muted); }
+.adjust { height: 28px; padding: 0 12px; border-radius: 999px; background: var(--card); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; }
+.strip { display: flex; gap: 3px; margin-top: 12px; }
+.strip i { flex: 1; height: 7px; border-radius: 3px; background: var(--n300); }
+.strip i.c { background: var(--primary); } .strip i.w { margin-left: 6px; }
+.tabs { display: flex; gap: 22px; margin-top: 14px; border-bottom: 1px solid var(--line); }
+.tabs span { padding: 8px 0 9px; font-size: 13px; color: var(--muted); }
+.tabs span.on { color: var(--fg); font-weight: 600; box-shadow: inset 0 -2px 0 var(--primary); }
+.body { padding-top: 20px; }
+
+/* glance band */
+.split { display: flex; height: 8px; border-radius: 999px; overflow: hidden; gap: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 8px; height: 8px; border-radius: 2px; }
+.sw1 { background: var(--s1); } .sw2 { background: var(--s2); } .sw3 { background: var(--s3); } .sw4 { background: var(--s4); } .sw5 { background: var(--s5); }
+.cap { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+.more { color: var(--primary); font-weight: 600; font-size: 12px; }
+.glance { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 24px; align-items: start; padding: 14px 18px; border-radius: 18px; background: var(--n100); box-shadow: var(--sh-sm); margin-bottom: 18px; }
+.glance .sum { font-size: 13px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.glance .col { display: flex; flex-direction: column; gap: 7px; }
+
+/* outline + pane */
+.plan { display: grid; grid-template-columns: 330px minmax(0, 1fr); }
+.outline { border-right: 1px solid var(--line); padding-right: 14px; display: flex; flex-direction: column; gap: 2px; }
+.row { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 10px; font-size: 13px; }
+.row .lb { width: 48px; flex: none; font-family: Caprasimo, serif; font-size: 11px; color: var(--a700); }
+.row .tt { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .r { font-size: 11.5px; color: var(--muted); }
+.row.sel { background: var(--n100); box-shadow: var(--sh-sm); }
+.row.day { padding-left: 26px; } .row.day .tt { font-weight: 500; }
+.pane { padding-left: 26px; display: flex; flex-direction: column; gap: 12px; }
+.pane .kick { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--a700); font-weight: 600; }
+.pane h2 { font-family: Caprasimo, serif; font-weight: 400; font-size: 21px; }
+.pane p { font-size: 13px; color: var(--n800); line-height: 1.5; }
+.mat { display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; }
+.mat div { display: flex; gap: 8px; align-items: center; } .mat i { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid var(--n400); flex: none; }
+.lesson { margin-top: 4px; border: 1px dashed var(--n400); border-radius: 16px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--muted); }
+.btn { margin-left: auto; display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--primary); color: var(--on-primary); white-space: nowrap; }
+
+/* three columns */
+.three { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+.page3 { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
+
+/* materials rail */
+.rail { background: var(--n100); border-radius: 18px; box-shadow: var(--sh-sm); display: flex; flex-direction: column; overflow: hidden; }
+.rail .top { padding: 13px 16px 11px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.rail .top .hd { display: flex; align-items: baseline; gap: 8px; }
+.rail .top .hd b { font-family: Caprasimo, serif; font-weight: 400; font-size: 17px; }
+.rail .top .tot { font-size: 12px; color: var(--muted); }
+.filter { display: flex; gap: 6px; margin-top: 2px; }
+.filter span { height: 24px; padding: 0 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; background: var(--n200); color: var(--muted); }
+.filter span.on { background: var(--fg); color: var(--bg); }
+.rail .scroll { padding: 6px 8px 10px; display: flex; flex-direction: column; }
+.rail .gl { margin: 10px 8px 4px; }
+.mi { display: flex; gap: 10px; padding: 7px 8px; border-radius: 10px; align-items: flex-start; }
+.mi .ic { width: 26px; height: 26px; border-radius: 7px; background: var(--card); flex: none; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.mi .ic.bb { background: var(--g800); color: var(--g100); }
+.mi .m { flex: 1; min-width: 0; }
+.mi .m b { display: block; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mi .m small { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+.mi.wk { background: var(--a100); box-shadow: inset 2px 0 0 var(--primary); }
+.mi.wk .m small em { font-style: normal; color: var(--a700); font-weight: 600; }
+.mi.dim { opacity: .55; }
+.rail .foot { padding: 9px 16px 12px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
+/* T3: band and date grid on top, plan and materials under */
+.t3 { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px 24px; align-items: stretch; }
+.t3 .glance { margin-bottom: 0; align-self: stretch; }
+.t3 .rail { align-self: start; }
+.cal { background: var(--n100); border-radius: 18px; box-shadow: var(--sh-sm); padding: 12px 16px 13px; display: flex; flex-direction: column; gap: 8px; }
+.cal .hd { display: flex; align-items: baseline; } .cal .hd a { margin-left: auto; }
+.cal .bodyc { display: flex; gap: 16px; align-items: flex-end; }
+.cg { display: grid; grid-template-columns: 12px repeat(12, 12px); grid-template-rows: 12px repeat(7, 12px); gap: 3px; font-size: 9px; color: var(--faint); line-height: 12px; }
+.cg i { border-radius: 3px; background: var(--n200); }
+.cg i.s { background: var(--g500); } .cg i.b { background: transparent; } .cg i.f { background: transparent; box-shadow: inset 0 0 0 1px var(--n300); }
+.cg i.t { box-shadow: 0 0 0 2px var(--n100), 0 0 0 3.5px var(--primary); }
+.cg .ml { grid-column: span 4; white-space: nowrap; }
+.cnum { display: flex; flex-direction: column; gap: 7px; font-size: 11.5px; color: var(--muted); }
+.cnum b { display: block; font-family: Caprasimo, serif; font-weight: 400; font-size: 18px; color: var(--fg); line-height: 1.1; }
+/* T4: the date grid rises beside the header */
+.t4 { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px 24px; }
+.t4 .lefttop { min-width: 0; }
+.t4 .glance { margin: 18px 0 0; }
+.t4 .cal { gap: 12px; padding: 14px 16px; }
+.t4 .rail { align-self: start; }
+.cg.lg { grid-template-columns: 18px repeat(12, 18px); grid-template-rows: 14px repeat(7, 18px); gap: 4px; font-size: 10px; line-height: 14px; }
+.cg.lg i { border-radius: 4px; }
+.cg.lg span:not(.ml) { line-height: 18px; }
+.cnum.row { flex-direction: row; gap: 22px; }
+.note { max-width: 1440px; margin: 10px auto 0; font-size: 13px; color: var(--n800); }
+</style>
+</head>
+<body>
+<h1 class="page-title">Plan page in three columns: outline, pane, materials</h1>
+<p class="page-sub">The Materials tab goes away, and the materials sit in a column on the right of the Plan tab. Materials the selected week uses are lit up, so the pane and the list point at the same things. Two ways to place it.</p>
+
+<!-- ============ T1 ============ -->
+<div class="label"><b>T1 · Materials column beside the outline and pane, under the band</b><span>The summary band spans the whole width. Under it: the outline, the pane, then the materials column. The column stays in place as the outline scrolls. The selected week's materials are highlighted and come first.</span></div>
+<div class="window">
+  <div class="topbar"><span class="brand"><i></i>Pensieve</span><span class="t on">Tracks</span><span class="t">Explore</span><span class="t">Journey</span><span class="av"></span></div>
+  <div class="shell">
+    <div class="crumb">Your tracks › <b>Senior software engineer interview preparation</b></div>
+    <div class="head"><div><h1>Senior software engineer interview preparation</h1><div class="pace">Daily · 5 days a week · 6 h a week</div></div>
+      <div class="stats"><div><b>2 / 40</b><small>days done</small></div><div><b>2.5 h</b><small>of 48 h</small></div><div><b>Dec 26</b><small>finish</small></div><span class="adjust">Adjust plan</span></div></div>
+    <div class="strip"><i class="c"></i><i class="c"></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i></div>
+    <div class="tabs"><span class="on">Plan</span><span>Activity</span></div>
+    <div class="body">
+      <div class="glance">
+        <div class="col"><span class="cap">The plan</span>
+          <p class="sum">8 weeks, usually 5 study days a week: from Interview Landscape and Scaling Basics, through the system design framework, replication, partitioning and worked designs, to Video Platform, Tech Leadership and Full Mocks.</p></div>
+        <div class="col"><div style="display:flex;align-items:baseline;gap:8px"><span class="cap">How the 48 h split</span><span class="faint" style="font-size:11.5px;margin-left:auto">The plan's call · <span class="more">Why</span></span></div>
+          <div class="split"><i class="sw1" style="width:35%"></i><i class="sw2" style="width:29%"></i><i class="sw3" style="width:19%"></i><i class="sw4" style="width:10%"></i><i class="sw5" style="width:7%"></i></div>
+          <div class="legend"><span><i class="sw1"></i>Reading <b>35%</b></span><span><i class="sw2"></i>Problems <b>29%</b></span><span><i class="sw3"></i>Design <b>19%</b></span><span><i class="sw4"></i>Mock <b>10%</b></span><span><i class="sw5"></i>Recall <b>7%</b></span></div></div>
+      </div>
+      <div class="three">
+        <div class="plan">
+          <div class="outline">
+            <div class="row sel"><span class="lb">Week 1</span><span class="tt">Interview Landscape and Scaling Basics</span><span class="r">2 of 5</span></div>
+            <div class="row day"><span class="tt">The Senior Loop and Scaling Basics</span><span class="r">done</span></div>
+            <div class="row day"><span class="tt">Back-of-the-Envelope Estimation</span><span class="r">done</span></div>
+            <div class="row day"><span class="tt">Arrays and Hashing Patterns</span><span class="r">today</span></div>
+            <div class="row day"><span class="tt">Load Balancers and Caching</span></div>
+            <div class="row day"><span class="tt">Two Pointers and Review</span></div>
+            <div class="row"><span class="lb">Week 2</span><span class="tt">Design Framework and First Design</span><span class="r">not planned</span></div>
+            <div class="row"><span class="lb">Week 3</span><span class="tt">Distributed Building Blocks</span><span class="r">not planned</span></div>
+            <div class="row"><span class="lb">Week 4</span><span class="tt">Replication in Depth</span><span class="r">not planned</span></div>
+            <div class="row"><span class="lb">Week 5</span><span class="tt">Partitioning in Depth</span><span class="r">not planned</span></div>
+            <div class="row"><span class="lb">Week 6</span><span class="tt">Worked Designs: Shortener, Crawler…</span><span class="r">not planned</span></div>
+          </div>
+          <div class="pane"><span class="kick">Week 1 · 2 of 5 days done</span><h2>Interview Landscape and Scaling Basics</h2>
+            <p>Sets the foundation with how senior interviews run today, how systems scale from one server to millions of users, and quick estimation, alongside first array and hashing coding patterns.</p>
+            <div class="mat"><div><i></i>System Design Interview — ch. 1–2</div><div><i></i>Technical Interview Guide for Busy Engineers</div><div><i></i>Senior Software Engineer Interviews in 2026</div><div><i></i>NeetCode · Arrays &amp; Hashing, Two Pointers</div></div>
+            <div class="lesson">Next up: Arrays and Hashing Patterns.<span class="btn">Open day 3</span></div>
+          </div>
+        </div>
+        <aside class="rail">
+          <div class="top"><div class="hd"><b>Materials</b><span class="faint" style="font-size:12px">13</span></div>
+            <span class="tot">≈ 17 h of reading · 22 h of practice · all checked</span>
+            <div class="filter"><span class="on">Week 1</span><span>All</span></div></div>
+          <div class="scroll">
+            <span class="cap gl">Used in Week 1</span>
+            <div class="mi wk"><span class="ic bb">▤</span><div class="m"><b>System Design Interview – An Insider's Guide</b><small>Backbone · <em>ch. 1–2 this week</em></small></div></div>
+            <div class="mi wk"><span class="ic">‹›</span><div class="m"><b>Technical Interview Guide for Busy Engineers</b><small>Guide · ≈ 50 min</small></div></div>
+            <div class="mi wk"><span class="ic">‹›</span><div class="m"><b>Senior Software Engineer Interviews in 2026</b><small>Essay · ≈ 15 min</small></div></div>
+            <div class="mi wk"><span class="ic">✎</span><div class="m"><b>NeetCode 150</b><small>Practice · <em>Arrays &amp; Hashing, Two Pointers</em></small></div></div>
+            <span class="cap gl">Later in the plan</span>
+            <div class="mi dim"><span class="ic">▤</span><div class="m"><b>Designing Data-Intensive Applications</b><small>Book · ≈ 4 h 10 · from Week 3</small></div></div>
+            <div class="mi dim"><span class="ic">▤</span><div class="m"><b>The Manager's Path</b><small>Book · ≈ 1 h 10 · Week 7</small></div></div>
+            <div class="mi dim"><span class="ic">‹›</span><div class="m"><b>System Design Interview Guide for Senior Engineers</b><small>Guide · ≈ 30 min · Week 2</small></div></div>
+            <div class="mi dim"><span class="ic">▶</span><div class="m"><b>Distributed Systems in One Lesson</b><small>Video · ≈ 1 h · Week 3</small></div></div>
+            <div class="mi dim"><span class="ic">✎</span><div class="m"><b>Cracking the Coding Interview</b><small>Practice · from Week 2</small></div></div>
+          </div>
+          <div class="foot">+ 4 more · <span class="more">Show all 13</span></div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ T2 ============ -->
+<div class="label"><b>T2 · Materials column down the whole right side, from the title</b><span>The column starts level with the track title and runs the full height. The header, strip, tabs, band, outline and pane all share the left part. The band gets narrower, and the pane drops its own materials checklist since the column already lights up the week's ones. More room for materials; less for the pane.</span></div>
+<div class="window">
+  <div class="topbar"><span class="brand"><i></i>Pensieve</span><span class="t on">Tracks</span><span class="t">Explore</span><span class="t">Journey</span><span class="av"></span></div>
+  <div class="shell page3">
+    <div>
+      <div class="crumb">Your tracks › <b>Senior software engineer interview preparation</b></div>
+      <div class="head"><div><h1>Senior software engineer interview preparation</h1><div class="pace">Daily · 5 days a week · 6 h a week</div></div>
+        <div class="stats"><div><b>2 / 40</b><small>days done</small></div><div><b>2.5 h</b><small>of 48 h</small></div><div><b>Dec 26</b><small>finish</small></div><span class="adjust">Adjust plan</span></div></div>
+      <div class="strip"><i class="c"></i><i class="c"></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i></div>
+      <div class="tabs"><span class="on">Plan</span><span>Activity</span></div>
+      <div class="body">
+        <div class="glance" style="grid-template-columns:minmax(0,1fr) 360px">
+          <div class="col"><span class="cap">The plan</span>
+            <p class="sum">8 weeks, usually 5 study days a week: from Interview Landscape and Scaling Basics, through the system design framework, replication, partitioning and worked designs, to Video Platform, Tech Leadership and Full Mocks.</p></div>
+          <div class="col"><div style="display:flex;align-items:baseline;gap:8px"><span class="cap">How the 48 h split</span><span class="more" style="margin-left:auto">Why</span></div>
+            <div class="split"><i class="sw1" style="width:35%"></i><i class="sw2" style="width:29%"></i><i class="sw3" style="width:19%"></i><i class="sw4" style="width:10%"></i><i class="sw5" style="width:7%"></i></div>
+            <div class="legend" style="font-size:11.5px;gap:3px 10px"><span><i class="sw1"></i>Reading 35%</span><span><i class="sw2"></i>Problems 29%</span><span><i class="sw3"></i>Design 19%</span><span><i class="sw4"></i>Mock 10%</span><span><i class="sw5"></i>Recall 7%</span></div></div>
+        </div>
+        <div class="plan" style="grid-template-columns:310px minmax(0,1fr)">
+          <div class="outline">
+            <div class="row sel"><span class="lb">Week 1</span><span class="tt">Interview Landscape and Scaling Basics</span><span class="r">2 of 5</span></div>
+            <div class="row day"><span class="tt">The Senior Loop and Scaling Basics</span><span class="r">done</span></div>
+            <div class="row day"><span class="tt">Back-of-the-Envelope Estimation</span><span class="r">done</span></div>
+            <div class="row day"><span class="tt">Arrays and Hashing Patterns</span><span class="r">today</span></div>
+            <div class="row day"><span class="tt">Load Balancers and Caching</span></div>
+            <div class="row day"><span class="tt">Two Pointers and Review</span></div>
+            <div class="row"><span class="lb">Week 2</span><span class="tt">Design Framework and First Design</span><span class="r">not planned</span></div>
+            <div class="row"><span class="lb">Week 3</span><span class="tt">Distributed Building Blocks</span><span class="r">not planned</span></div>
+            <div class="row"><span class="lb">Week 4</span><span class="tt">Replication in Depth</span><span class="r">not planned</span></div>
+          </div>
+          <div class="pane"><span class="kick">Week 1 · 2 of 5 days done</span><h2>Interview Landscape and Scaling Basics</h2>
+            <p>Sets the foundation with how senior interviews run today, how systems scale from one server to millions of users, and quick estimation, alongside first array and hashing coding patterns.</p>
+            <div class="lesson">Next up: Arrays and Hashing Patterns.<span class="btn">Open day 3</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="rail">
+      <div class="top"><div class="hd"><b>Materials</b><span class="faint" style="font-size:12px">13</span></div>
+        <span class="tot">≈ 17 h of reading · 22 h of practice · all checked</span>
+        <div class="filter"><span>Week 1</span><span class="on">All</span></div></div>
+      <div class="scroll">
+        <span class="cap gl">Backbone</span>
+        <div class="mi wk"><span class="ic bb">▤</span><div class="m"><b>System Design Interview – An Insider's Guide</b><small>Book · ≈ 8 h 15 · <em>ch. 1–2 in Week 1</em></small></div></div>
+        <span class="cap gl">Books</span>
+        <div class="mi"><span class="ic">▤</span><div class="m"><b>Designing Data-Intensive Applications</b><small>≈ 4 h 10 · ch. 5–6, 9</small></div></div>
+        <div class="mi"><span class="ic">▤</span><div class="m"><b>The Manager's Path</b><small>≈ 1 h 10 · ch. 3–4</small></div></div>
+        <span class="cap gl">Guides and essays</span>
+        <div class="mi wk"><span class="ic">‹›</span><div class="m"><b>Technical Interview Guide for Busy Engineers</b><small>≈ 50 min · <em>Week 1</em></small></div></div>
+        <div class="mi wk"><span class="ic">‹›</span><div class="m"><b>Senior Software Engineer Interviews in 2026</b><small>≈ 15 min · <em>Week 1</em></small></div></div>
+        <div class="mi"><span class="ic">‹›</span><div class="m"><b>System Design Interview Guide for Senior Engineers</b><small>≈ 30 min</small></div></div>
+        <span class="cap gl">Videos</span>
+        <div class="mi"><span class="ic">▶</span><div class="m"><b>Distributed Systems in One Lesson</b><small>≈ 1 h</small></div></div>
+        <span class="cap gl">Practice</span>
+        <div class="mi wk"><span class="ic">✎</span><div class="m"><b>NeetCode 150</b><small>150 problems · <em>Arrays &amp; Hashing in Week 1</em></small></div></div>
+        <div class="mi"><span class="ic">✎</span><div class="m"><b>Cracking the Coding Interview</b><small>189 problems</small></div></div>
+        <div class="mi"><span class="ic">✎</span><div class="m"><b>Grokking the System Design Interview</b><small>16 designs</small></div></div>
+        <div class="mi"><span class="ic">✎</span><div class="m"><b>Pramp mock interviews</b><small>Mock · 4 sessions</small></div></div>
+        <div class="mi"><span class="ic">✎</span><div class="m"><b>Anki deck: system design terms</b><small>Recall · 120 cards</small></div></div>
+      </div>
+      <div class="foot">Click a material to see its description, link and what the plan uses.</div>
+    </aside>
+  </div>
+</div>
+<!-- ============ T3 ============ -->
+<div class="label" id="t3"><b>T3 · T1's materials column, with your study days in the top right corner</b><span>The band shrinks to the left two columns, and the date grid takes the corner beside it. The grid lies on its side to fit: the last 12 weeks run left to right, Monday to Sunday top to bottom. The materials column starts under it at the same height as in T1.</span></div>
+<div class="window">
+  <div class="topbar"><span class="brand"><i></i>Pensieve</span><span class="t on">Tracks</span><span class="t">Explore</span><span class="t">Journey</span><span class="av"></span></div>
+  <div class="shell">
+    <div class="crumb">Your tracks › <b>Senior software engineer interview preparation</b></div>
+    <div class="head"><div><h1>Senior software engineer interview preparation</h1><div class="pace">Daily · 5 days a week · 6 h a week</div></div>
+      <div class="stats"><div><b>2 / 40</b><small>days done</small></div><div><b>2.5 h</b><small>of 48 h</small></div><div><b>Dec 26</b><small>finish</small></div><span class="adjust">Adjust plan</span></div></div>
+    <div class="strip"><i class="c"></i><i class="c"></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i></div>
+    <div class="tabs"><span class="on">Plan</span><span>Activity</span></div>
+    <div class="body t3">
+      <div class="glance">
+        <div class="col"><span class="cap">The plan</span>
+          <p class="sum">8 weeks, usually 5 study days a week: from Interview Landscape and Scaling Basics, through the system design framework, replication, partitioning and worked designs, to Video Platform, Tech Leadership and Full Mocks.</p>
+          <span class="more">More</span></div>
+        <div class="col"><div style="display:flex;align-items:baseline;gap:8px"><span class="cap">How the 48 h split</span><span class="faint" style="font-size:11.5px;margin-left:auto">The plan's call · <span class="more">Why</span></span></div>
+          <div class="split"><i class="sw1" style="width:35%"></i><i class="sw2" style="width:29%"></i><i class="sw3" style="width:19%"></i><i class="sw4" style="width:10%"></i><i class="sw5" style="width:7%"></i></div>
+          <div class="legend"><span><i class="sw1"></i>Reading <b>35%</b></span><span><i class="sw2"></i>Problems <b>29%</b></span><span><i class="sw3"></i>Design <b>19%</b></span><span><i class="sw4"></i>Mock <b>10%</b></span><span><i class="sw5"></i>Recall <b>7%</b></span></div></div>
+      </div>
+      <div class="cal">
+        <div class="hd"><span class="cap">Your study days</span><a class="more" style="font-size:11.5px">Activity</a></div>
+        <div class="bodyc">
+          <div class="cg" id="cg"></div>
+          <div class="cnum"><div><b>38 h</b>studied</div><div><b>32</b>days</div><div><b>26 Dec</b>est. finish</div></div>
+        </div>
+      </div>
+      <div class="plan">
+        <div class="outline">
+          <div class="row sel"><span class="lb">Week 1</span><span class="tt">Interview Landscape and Scaling Basics</span><span class="r">2 of 5</span></div>
+          <div class="row day"><span class="tt">The Senior Loop and Scaling Basics</span><span class="r">done</span></div>
+          <div class="row day"><span class="tt">Back-of-the-Envelope Estimation</span><span class="r">done</span></div>
+          <div class="row day"><span class="tt">Arrays and Hashing Patterns</span><span class="r">today</span></div>
+          <div class="row day"><span class="tt">Load Balancers and Caching</span></div>
+          <div class="row day"><span class="tt">Two Pointers and Review</span></div>
+          <div class="row"><span class="lb">Week 2</span><span class="tt">Design Framework and First Design</span><span class="r">not planned</span></div>
+          <div class="row"><span class="lb">Week 3</span><span class="tt">Distributed Building Blocks</span><span class="r">not planned</span></div>
+          <div class="row"><span class="lb">Week 4</span><span class="tt">Replication in Depth</span><span class="r">not planned</span></div>
+          <div class="row"><span class="lb">Week 5</span><span class="tt">Partitioning in Depth</span><span class="r">not planned</span></div>
+          <div class="row"><span class="lb">Week 6</span><span class="tt">Worked Designs: Shortener, Crawler…</span><span class="r">not planned</span></div>
+        </div>
+        <div class="pane"><span class="kick">Week 1 · 2 of 5 days done</span><h2>Interview Landscape and Scaling Basics</h2>
+          <p>Sets the foundation with how senior interviews run today, how systems scale from one server to millions of users, and quick estimation, alongside first array and hashing coding patterns.</p>
+          <div class="mat"><div><i></i>System Design Interview — ch. 1–2</div><div><i></i>Technical Interview Guide for Busy Engineers</div><div><i></i>Senior Software Engineer Interviews in 2026</div><div><i></i>NeetCode · Arrays &amp; Hashing, Two Pointers</div></div>
+          <div class="lesson">Next up: Arrays and Hashing Patterns.<span class="btn">Open day 3</span></div>
+        </div>
+      </div>
+      <aside class="rail">
+        <div class="top"><div class="hd"><b>Materials</b><span class="faint" style="font-size:12px">13</span></div>
+          <span class="tot">≈ 17 h of reading · 22 h of practice · all checked</span>
+          <div class="filter"><span class="on">Week 1</span><span>All</span></div></div>
+        <div class="scroll">
+          <span class="cap gl">Used in Week 1</span>
+          <div class="mi wk"><span class="ic bb">▤</span><div class="m"><b>System Design Interview – An Insider's Guide</b><small>Backbone · <em>ch. 1–2 this week</em></small></div></div>
+          <div class="mi wk"><span class="ic">‹›</span><div class="m"><b>Technical Interview Guide for Busy Engineers</b><small>Guide · ≈ 50 min</small></div></div>
+          <div class="mi wk"><span class="ic">‹›</span><div class="m"><b>Senior Software Engineer Interviews in 2026</b><small>Essay · ≈ 15 min</small></div></div>
+          <div class="mi wk"><span class="ic">✎</span><div class="m"><b>NeetCode 150</b><small>Practice · <em>Arrays &amp; Hashing, Two Pointers</em></small></div></div>
+          <span class="cap gl">Later in the plan</span>
+          <div class="mi dim"><span class="ic">▤</span><div class="m"><b>Designing Data-Intensive Applications</b><small>Book · ≈ 4 h 10 · from Week 3</small></div></div>
+          <div class="mi dim"><span class="ic">▤</span><div class="m"><b>The Manager's Path</b><small>Book · ≈ 1 h 10 · Week 7</small></div></div>
+          <div class="mi dim"><span class="ic">‹›</span><div class="m"><b>System Design Interview Guide for Senior Engineers</b><small>Guide · ≈ 30 min · Week 2</small></div></div>
+          <div class="mi dim"><span class="ic">▶</span><div class="m"><b>Distributed Systems in One Lesson</b><small>Video · ≈ 1 h · Week 3</small></div></div>
+          <div class="mi dim"><span class="ic">✎</span><div class="m"><b>Cracking the Coding Interview</b><small>Practice · from Week 2</small></div></div>
+        </div>
+        <div class="foot">+ 4 more · <span class="more">Show all 13</span></div>
+      </aside>
+    </div>
+  </div>
+</div>
+<!-- ============ T4 ============ -->
+<div class="label" id="t4"><b>T4 · Like T3, with the date grid rising beside the header</b><span>The right column starts level with the track title. The title, stats, strip of days, tabs and band all stop short of it, and the date grid card fills that corner with bigger squares. The materials column starts at the same height as in T1 and T3.</span></div>
+<div class="window">
+  <div class="topbar"><span class="brand"><i></i>Pensieve</span><span class="t on">Tracks</span><span class="t">Explore</span><span class="t">Journey</span><span class="av"></span></div>
+  <div class="shell t4">
+    <div class="lefttop">
+      <div class="crumb">Your tracks › <b>Senior software engineer interview preparation</b></div>
+      <div class="head"><div><h1>Senior software engineer interview preparation</h1><div class="pace">Daily · 5 days a week · 6 h a week</div></div>
+        <div class="stats"><div><b>2 / 40</b><small>days done</small></div><div><b>2.5 h</b><small>of 48 h</small></div><div><b>Dec 26</b><small>finish</small></div><span class="adjust">Adjust plan</span></div></div>
+      <div class="strip"><i class="c"></i><i class="c"></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i><i class="w"></i><i></i><i></i><i></i><i></i></div>
+      <div class="tabs"><span class="on">Plan</span><span>Activity</span></div>
+      <div class="glance">
+        <div class="col"><span class="cap">The plan</span>
+          <p class="sum">8 weeks, usually 5 study days a week: from Interview Landscape and Scaling Basics, through the system design framework, replication, partitioning and worked designs, to Video Platform, Tech Leadership and Full Mocks.</p>
+          <span class="more">More</span></div>
+        <div class="col"><div style="display:flex;align-items:baseline;gap:8px"><span class="cap">How the 48 h split</span><span class="faint" style="font-size:11.5px;margin-left:auto">The plan's call · <span class="more">Why</span></span></div>
+          <div class="split"><i class="sw1" style="width:35%"></i><i class="sw2" style="width:29%"></i><i class="sw3" style="width:19%"></i><i class="sw4" style="width:10%"></i><i class="sw5" style="width:7%"></i></div>
+          <div class="legend"><span><i class="sw1"></i>Reading <b>35%</b></span><span><i class="sw2"></i>Problems <b>29%</b></span><span><i class="sw3"></i>Design <b>19%</b></span><span><i class="sw4"></i>Mock <b>10%</b></span><span><i class="sw5"></i>Recall <b>7%</b></span></div></div>
+      </div>
+    </div>
+    <div class="cal">
+      <div class="hd"><span class="cap">Your study days</span><a class="more" style="font-size:11.5px">Activity</a></div>
+      <div class="cg lg" id="cg4"></div>
+      <div class="cnum row"><div><b>38 h</b>studied</div><div><b>32</b>days</div><div><b>26 Dec</b>est. finish</div></div>
+    </div>
+    <div class="plan">
+      <div class="outline">
+        <div class="row sel"><span class="lb">Week 1</span><span class="tt">Interview Landscape and Scaling Basics</span><span class="r">2 of 5</span></div>
+        <div class="row day"><span class="tt">The Senior Loop and Scaling Basics</span><span class="r">done</span></div>
+        <div class="row day"><span class="tt">Back-of-the-Envelope Estimation</span><span class="r">done</span></div>
+        <div class="row day"><span class="tt">Arrays and Hashing Patterns</span><span class="r">today</span></div>
+        <div class="row day"><span class="tt">Load Balancers and Caching</span></div>
+        <div class="row day"><span class="tt">Two Pointers and Review</span></div>
+        <div class="row"><span class="lb">Week 2</span><span class="tt">Design Framework and First Design</span><span class="r">not planned</span></div>
+        <div class="row"><span class="lb">Week 3</span><span class="tt">Distributed Building Blocks</span><span class="r">not planned</span></div>
+        <div class="row"><span class="lb">Week 4</span><span class="tt">Replication in Depth</span><span class="r">not planned</span></div>
+        <div class="row"><span class="lb">Week 5</span><span class="tt">Partitioning in Depth</span><span class="r">not planned</span></div>
+        <div class="row"><span class="lb">Week 6</span><span class="tt">Worked Designs: Shortener, Crawler…</span><span class="r">not planned</span></div>
+      </div>
+      <div class="pane"><span class="kick">Week 1 · 2 of 5 days done</span><h2>Interview Landscape and Scaling Basics</h2>
+        <p>Sets the foundation with how senior interviews run today, how systems scale from one server to millions of users, and quick estimation, alongside first array and hashing coding patterns.</p>
+        <div class="mat"><div><i></i>System Design Interview — ch. 1–2</div><div><i></i>Technical Interview Guide for Busy Engineers</div><div><i></i>Senior Software Engineer Interviews in 2026</div><div><i></i>NeetCode · Arrays &amp; Hashing, Two Pointers</div></div>
+        <div class="lesson">Next up: Arrays and Hashing Patterns.<span class="btn">Open day 3</span></div>
+      </div>
+    </div>
+    <aside class="rail">
+      <div class="top"><div class="hd"><b>Materials</b><span class="faint" style="font-size:12px">13</span></div>
+        <span class="tot">≈ 17 h of reading · 22 h of practice · all checked</span>
+        <div class="filter"><span class="on">Week 1</span><span>All</span></div></div>
+      <div class="scroll">
+        <span class="cap gl">Used in Week 1</span>
+        <div class="mi wk"><span class="ic bb">▤</span><div class="m"><b>System Design Interview – An Insider's Guide</b><small>Backbone · <em>ch. 1–2 this week</em></small></div></div>
+        <div class="mi wk"><span class="ic">‹›</span><div class="m"><b>Technical Interview Guide for Busy Engineers</b><small>Guide · ≈ 50 min</small></div></div>
+        <div class="mi wk"><span class="ic">‹›</span><div class="m"><b>Senior Software Engineer Interviews in 2026</b><small>Essay · ≈ 15 min</small></div></div>
+        <div class="mi wk"><span class="ic">✎</span><div class="m"><b>NeetCode 150</b><small>Practice · <em>Arrays &amp; Hashing, Two Pointers</em></small></div></div>
+        <span class="cap gl">Later in the plan</span>
+        <div class="mi dim"><span class="ic">▤</span><div class="m"><b>Designing Data-Intensive Applications</b><small>Book · ≈ 4 h 10 · from Week 3</small></div></div>
+        <div class="mi dim"><span class="ic">▤</span><div class="m"><b>The Manager's Path</b><small>Book · ≈ 1 h 10 · Week 7</small></div></div>
+        <div class="mi dim"><span class="ic">‹›</span><div class="m"><b>System Design Interview Guide for Senior Engineers</b><small>Guide · ≈ 30 min · Week 2</small></div></div>
+        <div class="mi dim"><span class="ic">▶</span><div class="m"><b>Distributed Systems in One Lesson</b><small>Video · ≈ 1 h · Week 3</small></div></div>
+        <div class="mi dim"><span class="ic">✎</span><div class="m"><b>Cracking the Coding Interview</b><small>Practice · from Week 2</small></div></div>
+      </div>
+      <div class="foot">+ 4 more · <span class="more">Show all 13</span></div>
+    </aside>
+  </div>
+</div>
+<script>
+// The last 12 weeks, Mondays 10 Aug to 26 Oct; the track starts 14 Sep; today is Sat 31 Oct.
+["cg", "cg4"].forEach((id) => {
+  const g = document.getElementById(id);
+  const add = (html, row, col, cls) => { const e = document.createElement(html ? "span" : "i"); if (html) e.textContent = html; if (cls) e.className = cls; e.style.gridRow = row; e.style.gridColumn = col; g.append(e); };
+  [["Aug", 2], ["Sep", 6], ["Oct", 10]].forEach(([m, c]) => add(m, 1, `${c} / span 4`, "ml"));
+  [["M", 2], ["W", 4], ["F", 6]].forEach(([d, r]) => add(d, r, 1));
+  const weeks = { 5: "1111000", 6: "1101100", 7: "1111100", 8: "1011101", 9: "1111000", 10: "0111110", 11: "1110110" };
+  for (let w = 0; w < 12; w++) for (let d = 0; d < 7; d++) {
+    let cls = "b";
+    if (weeks[w]) cls = weeks[w][d] === "1" ? "s" : "";
+    if (w === 11 && d === 6) cls = "f";
+    if (w === 11 && d === 5) cls += " t";
+    add("", d + 2, w + 2, cls);
+  }
+});
+</script>
+
+<p class="note">Rows are one line each, so the column holds the whole list; a material's description and link open when you click it. Titles, sizes and week numbers are filled in for the mock. In T3 and T4 the date grid and its numbers are filled in as if the track were seven weeks in, to show its shape; the rest of the page is a track's first week.</p>
+</body>
+</html>

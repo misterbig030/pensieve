@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pensieve home mocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Geist+Mono&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5ead8; --fg: #201e1d; --card: #ebddc5; --primary: #c67139; --on-primary: #f5ead8;
+  --muted: color-mix(in srgb, #201e1d 55%, transparent);
+  --faint: color-mix(in srgb, #201e1d 38%, transparent);
+  --line: color-mix(in srgb, #201e1d 12%, transparent);
+  --a100: #fff2eb; --a200: #ffe1d0; --a300: #ffc6a5; --a400: #f6a06b; --a500: #d67f48; --a800: #643312;
+  --g100: #f0fae1; --g200: #e1eecc; --g300: #ccdbb2; --g400: #aebf92; --g500: #8fa073; --g600: #728157; --g800: #3d472b;
+  --n100: #f9f4ed; --n200: #eee7db; --n300: #dcd3c4; --n400: #c0b6a5; --n800: #474238;
+  --sh-sm: 0 1px 2px color-mix(in srgb, #2e2b25 14%, transparent);
+  --sh-md: 0 3px 10px color-mix(in srgb, #2e2b25 16%, transparent);
+  --sh-lg: 0 12px 32px color-mix(in srgb, #2e2b25 22%, transparent);
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: Figtree, system-ui, sans-serif; background: #d9ccb6; color: var(--fg); padding: 32px 24px 64px; }
+.page-title { font-family: Caprasimo, serif; font-weight: 400; font-size: 28px; max-width: 1280px; margin: 0 auto 6px; }
+.page-sub { max-width: 1280px; margin: 0 auto 28px; color: var(--n800); font-size: 15px; }
+.label { max-width: 1280px; margin: 40px auto 12px; display: flex; flex-direction: column; gap: 4px; }
+.label b { font-family: Caprasimo, serif; font-weight: 400; font-size: 20px; }
+.label span { color: var(--n800); font-size: 14px; }
+.stage { max-width: 1280px; margin: 0 auto; }
+.window { width: 1280px; height: 800px; border-radius: 14px; overflow: hidden; background: var(--bg); box-shadow: var(--sh-lg); transform-origin: top left; display: flex; flex-direction: column; }
+.chrome { height: 36px; flex: none; background: #e3d5bd; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.chrome i { width: 11px; height: 11px; border-radius: 50%; background: var(--n400); }
+.chrome .url { margin: 0 auto; width: 420px; height: 22px; border-radius: 6px; background: var(--n100); font-size: 12px; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+.app { flex: 1; min-height: 0; display: flex; }
+
+h1, h2, h3, .serif { font-family: Caprasimo, serif; font-weight: 400; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 16px; border-radius: 999px; font: 600 13px Figtree, sans-serif; border: 0; cursor: pointer; white-space: nowrap; }
+.btn-primary { background: var(--primary); color: var(--on-primary); box-shadow: var(--sh-sm); }
+.btn-ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+.btn-sm { height: 28px; padding: 0 12px; font-size: 12px; }
+.tag { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.tag-a { background: var(--a100); color: var(--a800); }
+.tag-g { background: var(--g100); color: var(--g800); }
+.tag-n { background: var(--n100); color: var(--n800); }
+.bar { height: 6px; border-radius: 999px; background: color-mix(in srgb, #201e1d 9%, transparent); overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
+.bar.g > span { background: var(--g500); }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.ico { width: 16px; height: 16px; flex: none; }
+.ico-lg { width: 18px; height: 18px; flex: none; }
+
+/* ---------- A ---------- */
+.side { width: 248px; flex: none; background: var(--card); padding: 18px 14px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px; }
+.brand i { width: 26px; height: 26px; border-radius: 50%; background: var(--primary); }
+.brand span { font-family: Caprasimo, serif; font-size: 19px; }
+.nav { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 12px; font-size: 14px; font-weight: 500; color: color-mix(in srgb, #201e1d 75%, transparent); }
+.nav.on { background: var(--bg); color: var(--fg); box-shadow: var(--sh-sm); font-weight: 600; }
+.nav .soon { margin-left: auto; font-size: 10px; font-weight: 600; color: var(--faint); text-transform: lowercase; }
+.nav .count { margin-left: auto; font-size: 12px; color: var(--faint); }
+.side-h { font-size: 11px; font-weight: 600; color: var(--faint); letter-spacing: .04em; padding: 22px 10px 6px; text-transform: uppercase; }
+.side-track { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 10px; font-size: 13px; }
+.side-track .pct { margin-left: auto; font-size: 11px; color: var(--faint); }
+.side-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; border-top: 1px solid var(--line); }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--g300); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--g800); }
+
+.main { flex: 1; min-width: 0; overflow: hidden; padding: 30px 40px; display: flex; flex-direction: column; gap: 24px; }
+.hello { display: flex; align-items: flex-end; gap: 16px; }
+.hello h1 { font-size: 32px; line-height: 1.1; }
+.hello p { font-size: 14px; margin-top: 6px; }
+.hello .btn { margin-left: auto; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28px; min-height: 0; }
+.sec-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.sec-h h3 { font-size: 17px; }
+.sec-h span { font-size: 13px; }
+.sec-h a { margin-left: auto; font-size: 13px; color: var(--primary); font-weight: 600; text-decoration: none; }
+
+.hero { background: var(--n100); border-radius: 28px; padding: 24px 26px; box-shadow: var(--sh-md); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 24px; position: relative; overflow: hidden; }
+.hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 200px; height: 200px; border-radius: 50%; background: var(--a100); }
+.hero > * { position: relative; z-index: 1; }
+.hero .meta { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.hero h2 { font-size: 26px; line-height: 1.15; margin-top: 4px; }
+.hero p.sum { font-size: 14px; line-height: 1.55; color: color-mix(in srgb, #201e1d 72%, transparent); max-width: 560px; }
+.hero .facts { display: flex; gap: 18px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.hero .facts span { display: inline-flex; align-items: center; gap: 6px; }
+.hero .go { grid-column: 2; grid-row: 1 / span 4; align-self: end; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.hero .go .btn { height: 42px; padding: 0 22px; font-size: 14px; }
+
+.queue { margin-top: 18px; background: var(--card); border-radius: 22px; padding: 6px; }
+.q { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 16px; }
+.q + .q { border-top: 1px solid var(--line); border-radius: 0 0 16px 16px; }
+.q .chk { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--n400); flex: none; display: flex; align-items: center; justify-content: center; }
+.q .chk.done { background: var(--g500); border-color: var(--g500); color: white; }
+.q .t { flex: 1; min-width: 0; }
+.q .t b { display: block; font-size: 14px; font-weight: 600; }
+.q .t small { font-size: 12px; color: var(--muted); }
+.q.done .t b { color: var(--faint); text-decoration: line-through; }
+.q .hrs { width: 140px; font-size: 12px; color: var(--muted); }
+.q .hrs .bar { margin-top: 5px; }
+
+.rail { display: flex; flex-direction: column; gap: 16px; }
+.panel { background: var(--card); border-radius: 22px; padding: 18px 20px; }
+.streak { display: flex; align-items: center; gap: 14px; }
+.flame { width: 44px; height: 44px; border-radius: 50%; background: var(--a200); color: var(--a800); display: flex; align-items: center; justify-content: center; }
+.streak b { font-family: Caprasimo, serif; font-weight: 400; font-size: 28px; line-height: 1; }
+.streak small { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; }
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 16px; text-align: center; font-size: 11px; color: var(--faint); }
+.week i { display: block; aspect-ratio: 1; border-radius: 10px; margin-top: 4px; background: color-mix(in srgb, #201e1d 7%, transparent); }
+.week i.d1 { background: var(--g300); } .week i.d2 { background: var(--g500); }
+.week i.today { background: transparent; border: 2px dashed var(--primary); }
+.tp { display: flex; flex-direction: column; gap: 14px; }
+.tp-row { font-size: 13px; }
+.tp-row div:first-child { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.tp-row div:first-child span { color: var(--faint); font-size: 12px; }
+.explore-teaser { border: 1.5px dashed var(--n400); border-radius: 22px; padding: 16px 20px; display: flex; gap: 12px; align-items: center; font-size: 13px; }
+
+/* ---------- B ---------- */
+.b { flex-direction: column; }
+.top { height: 60px; flex: none; display: flex; align-items: center; gap: 28px; padding: 0 32px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.top .brand { padding: 0; }
+.tabs { display: flex; gap: 4px; height: 100%; }
+.tab { display: flex; align-items: center; gap: 8px; padding: 0 14px; font-size: 14px; font-weight: 500; color: var(--muted); border-bottom: 2.5px solid transparent; }
+.tab.on { color: var(--fg); font-weight: 600; border-color: var(--primary); }
+.tab .soon { font-size: 10px; font-weight: 600; background: var(--n200); color: var(--n800); padding: 2px 6px; border-radius: 999px; }
+.top-r { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.search { width: 240px; height: 34px; border-radius: 999px; background: var(--n100); border: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 13px; color: var(--faint); }
+.search kbd { margin-left: auto; font: 600 11px Figtree; color: var(--faint); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
+.chip-streak { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--a800); background: var(--a100); height: 30px; padding: 0 12px; border-radius: 999px; }
+
+.bwrap { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+.bmain { padding: 28px 32px; display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+.bhead { display: flex; align-items: flex-end; gap: 16px; }
+.bhead h1 { font-size: 30px; line-height: 1.1; }
+.bhead p { font-size: 14px; margin-top: 6px; }
+.seg { display: inline-flex; background: var(--card); border-radius: 999px; padding: 3px; }
+.seg span { height: 30px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.seg span.on { background: var(--n100); color: var(--fg); font-weight: 600; box-shadow: var(--sh-sm); }
+.seg em { font-style: normal; font-size: 11px; color: var(--faint); }
+.toolbar { display: flex; align-items: center; gap: 12px; }
+.sort { margin-left: auto; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.tcard { background: var(--n100); border-radius: 26px; padding: 18px 18px 16px; box-shadow: var(--sh-sm); display: flex; flex-direction: column; gap: 10px; }
+.tcard .hd { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.tcard .hd .more { margin-left: auto; color: var(--faint); }
+.tcard h3 { font-size: 19px; line-height: 1.2; }
+.next { background: var(--card); border-radius: 16px; padding: 10px 12px; font-size: 13px; display: flex; align-items: center; gap: 10px; }
+.next small { display: block; font-size: 11px; color: var(--faint); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.next b { font-weight: 600; }
+.next .btn { margin-left: auto; }
+.next.done { background: var(--g100); color: var(--g800); }
+.wk { display: flex; gap: 4px; align-items: center; font-size: 11px; color: var(--faint); }
+.wk i { width: 14px; height: 14px; border-radius: 5px; background: color-mix(in srgb, #201e1d 8%, transparent); }
+.wk i.d { background: var(--g500); } .wk i.t { border: 1.5px dashed var(--primary); background: transparent; } .wk i.off { background: transparent; border: 1px solid var(--line); }
+.wk span { margin-left: auto; }
+.foot { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.newcard { border: 2px dashed var(--n400); border-radius: 26px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 14px; font-weight: 500; min-height: 230px; }
+.newcard i { width: 44px; height: 44px; border-radius: 50%; background: var(--a100); color: var(--primary); display: flex; align-items: center; justify-content: center; }
+
+.brail { border-left: 1px solid var(--line); padding: 28px 24px; display: flex; flex-direction: column; gap: 22px; background: color-mix(in srgb, var(--card) 45%, var(--bg)); }
+.brail h4 { font-size: 12px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
+.big { display: flex; align-items: baseline; gap: 8px; }
+.big b { font-family: Caprasimo, serif; font-weight: 400; font-size: 40px; line-height: 1; }
+.big span { font-size: 13px; color: var(--muted); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { background: var(--n100); border-radius: 16px; padding: 12px 14px; }
+.stat b { display: block; font-family: Caprasimo, serif; font-weight: 400; font-size: 22px; }
+.stat span { font-size: 12px; color: var(--muted); }
+.heat { display: grid; grid-template-columns: repeat(12, 1fr); grid-auto-flow: column; grid-template-rows: repeat(7, 1fr); gap: 3px; }
+.heat i { aspect-ratio: 1; border-radius: 3px; background: color-mix(in srgb, #201e1d 7%, transparent); }
+.heat i.l1 { background: var(--g200); } .heat i.l2 { background: var(--g400); } .heat i.l3 { background: var(--g600); }
+.legend { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--faint); margin-top: 8px; justify-content: flex-end; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; }
+.activity { display: flex; flex-direction: column; gap: 12px; font-size: 13px; }
+.activity div { display: flex; gap: 10px; align-items: flex-start; }
+.activity small { display: block; color: var(--faint); font-size: 12px; }
+
+/* ---------- plan page, shared ---------- */
+.crumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.crumb b { color: var(--fg); font-weight: 600; }
+.days30 { display: grid; grid-template-columns: repeat(30, 1fr); gap: 3px; }
+.days30 i { height: 10px; border-radius: 3px; background: color-mix(in srgb, #201e1d 8%, transparent); }
+.days30 i.d { background: var(--g500); } .days30 i.r { background: var(--a300); } .days30 i.t { background: var(--primary); }
+.days30 i.wk { margin-left: 6px; }
+.key { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.key span { display: inline-flex; align-items: center; gap: 5px; }
+.key i { width: 10px; height: 10px; border-radius: 3px; }
+.split { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--n300); }
+.split span { display: block; }
+.mat { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; padding: 8px 0; }
+.mat + .mat { border-top: 1px solid var(--line); }
+.mat .ic { width: 28px; height: 28px; border-radius: 9px; background: var(--n100); display: flex; align-items: center; justify-content: center; color: var(--a800); flex: none; }
+.mat small { display: block; color: var(--faint); font-size: 12px; }
+
+/* ---------- plan page, A ---------- */
+.pa { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 330px; }
+.pa-main { padding: 22px 32px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+.pa-head { display: flex; align-items: flex-start; gap: 12px; }
+.pa-head h1 { font-size: 30px; line-height: 1.1; }
+.pa-head .meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+.pa-head .acts { margin-left: auto; display: flex; gap: 8px; }
+.icon-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.prog { background: var(--card); border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.prog .top-line { display: flex; align-items: baseline; gap: 10px; font-size: 13px; }
+.prog .top-line b { font-family: Caprasimo, serif; font-weight: 400; font-size: 18px; }
+.prog .key { margin-left: auto; }
+.wkblock { border-radius: 20px; background: var(--n100); box-shadow: var(--sh-sm); overflow: hidden; }
+.wkblock.flat { background: var(--card); box-shadow: none; }
+.wkh { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font-size: 13px; }
+.wkh .lv { font-family: Caprasimo, serif; font-size: 12px; color: var(--a800); width: 52px; flex: none; }
+.wkh h3 { font-size: 15px; }
+.wkh .r { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.wkh .mini { width: 60px; height: 5px; border-radius: 999px; background: var(--n300); overflow: hidden; }
+.wkh .mini span { display: block; height: 100%; background: var(--g500); }
+.dayrow { display: grid; grid-template-columns: 22px 52px minmax(0, 1fr) 60px 70px 92px; align-items: center; gap: 10px; padding: 9px 16px; border-top: 1px solid var(--line); font-size: 13px; }
+.dayrow .n { font-family: Caprasimo, serif; font-size: 12px; color: var(--muted); }
+.dayrow .ti b { font-weight: 600; display: block; }
+.dayrow .ti small { color: var(--faint); font-size: 12px; }
+.dayrow .mins { color: var(--muted); font-size: 12px; text-align: right; }
+.dayrow .icons { display: flex; gap: 4px; color: var(--faint); justify-content: flex-end; }
+.dayrow .st { justify-self: end; }
+.dayrow.done .ti b { color: var(--muted); font-weight: 500; }
+.dayrow.today { background: var(--a100); box-shadow: inset 3px 0 0 var(--primary); }
+.st-ic { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--n400); display: flex; align-items: center; justify-content: center; }
+.st-ic.done { background: var(--g500); border-color: var(--g500); color: white; }
+.st-ic.now { border-color: var(--primary); }
+.st-ic.now::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+.unplanned { display: flex; align-items: center; gap: 12px; border: 1.5px dashed var(--n400); border-radius: 20px; padding: 12px 16px; font-size: 13px; }
+.unplanned .btn { margin-left: auto; }
+.pa-side { background: var(--card); border-left: 1px solid var(--line); padding: 22px 22px; display: flex; flex-direction: column; gap: 18px; overflow: hidden; }
+.pa-side h4 { font-size: 11px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; display: flex; }
+.pa-side h4 a { margin-left: auto; text-transform: none; letter-spacing: 0; color: var(--primary); text-decoration: none; font-size: 12px; }
+.lesson { background: var(--n100); border-radius: 22px; padding: 16px; box-shadow: var(--sh-sm); display: flex; flex-direction: column; gap: 8px; }
+.lesson h3 { font-size: 18px; line-height: 1.2; }
+.lesson p { font-size: 13px; line-height: 1.5; color: color-mix(in srgb, #201e1d 70%, transparent); }
+.lesson .btn { align-self: stretch; justify-content: center; }
+.summary-txt { font-size: 13px; line-height: 1.55; color: color-mix(in srgb, #201e1d 78%, transparent); }
+
+/* ---------- plan page, B ---------- */
+.pb-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.pb-hero { padding: 20px 32px 0; display: flex; flex-direction: column; gap: 14px; }
+.pb-title { display: flex; align-items: flex-start; gap: 24px; }
+.pb-title h1 { font-size: 30px; line-height: 1.1; }
+.pb-title p { font-size: 14px; line-height: 1.5; margin-top: 6px; max-width: 760px; color: color-mix(in srgb, #201e1d 70%, transparent); }
+.pb-stats { margin-left: auto; display: flex; gap: 10px; }
+.pb-stat { background: var(--n100); border-radius: 18px; padding: 10px 14px; min-width: 104px; }
+.pb-stat b { display: block; font-family: Caprasimo, serif; font-weight: 400; font-size: 20px; }
+.pb-stat span { font-size: 12px; color: var(--muted); }
+.subtabs { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); }
+.subtab { display: flex; align-items: center; gap: 6px; padding: 10px 12px; font-size: 14px; font-weight: 500; color: var(--muted); border-bottom: 2.5px solid transparent; margin-bottom: -1px; }
+.subtab.on { color: var(--fg); font-weight: 600; border-color: var(--primary); }
+.subtab em { font-style: normal; font-size: 11px; background: var(--n200); padding: 1px 6px; border-radius: 999px; color: var(--n800); }
+.subtabs .r { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.pb-board { flex: 1; min-height: 0; padding: 12px 32px 16px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.col { background: var(--card); border-radius: 22px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.col.now { background: var(--a100); box-shadow: inset 0 0 0 1.5px var(--a300); }
+.col.ghost { background: transparent; border: 1.5px dashed var(--n400); }
+.colh { display: flex; flex-direction: column; gap: 3px; padding: 2px 4px 4px; }
+.colh .lv { display: flex; align-items: center; gap: 6px; font-family: Caprasimo, serif; font-size: 12px; color: var(--a800); }
+.colh .lv span { margin-left: auto; font-family: Figtree; font-size: 11px; color: var(--muted); }
+.colh b { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.dcard { background: var(--n100); border-radius: 14px; padding: 9px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; box-shadow: var(--sh-sm); }
+.dcard .h { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: 11px; }
+.dcard .h .ok { margin-left: auto; color: var(--g600); }
+.dcard b { font-weight: 600; font-size: 12.5px; line-height: 1.3; }
+.dcard.done { padding: 6px 10px; gap: 1px; box-shadow: none; background: color-mix(in srgb, var(--n100) 60%, transparent); }
+.dcard.done b { color: var(--muted); font-weight: 500; }
+.dcard.today { box-shadow: 0 0 0 2px var(--primary), var(--sh-md); }
+.dcard .btn { align-self: flex-start; margin-top: 4px; }
+.dcard .h .tag { height: 18px; font-size: 10px; margin-left: auto; }
+.budget { background: var(--n100); border-radius: 14px; padding: 12px; font-size: 12px; display: flex; flex-direction: column; gap: 8px; color: var(--muted); }
+/* ---------- plan page, B revised ---------- */
+.th { padding: 18px 32px 0; display: flex; flex-direction: column; gap: 12px; }
+.th-row { display: flex; align-items: center; gap: 16px; }
+.th-row h1 { font-size: 28px; line-height: 1.1; }
+.th-row .meta { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.th-row .acts { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.inline-stats { display: flex; gap: 18px; font-size: 12px; color: var(--muted); margin-right: 8px; }
+.inline-stats b { display: block; font-family: Caprasimo, serif; font-weight: 400; font-size: 18px; color: var(--fg); }
+
+.md { flex: 1; min-height: 0; display: grid; grid-template-columns: 440px minmax(0, 1fr); }
+.outline { border-right: 1px solid var(--line); padding: 14px 16px 14px 32px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.o-wk { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; font-size: 13px; }
+.o-wk .lv { font-family: Caprasimo, serif; font-size: 11px; color: var(--a800); width: 46px; flex: none; }
+.o-wk b { font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.o-wk .r { display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 12px; }
+.o-wk.open { background: var(--card); border-radius: 12px 12px 0 0; }
+.o-days { background: var(--card); border-radius: 0 0 14px 14px; padding: 0 6px 6px; margin-top: -6px; display: flex; flex-direction: column; gap: 2px; }
+.o-day { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; font-size: 13px; }
+.o-day .n { font-size: 11px; color: var(--faint); width: 40px; flex: none; }
+.o-day span.t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.o-day small { font-size: 11px; color: var(--faint); }
+.o-day.done span.t { color: var(--muted); }
+.o-day.sel { background: var(--n100); box-shadow: var(--sh-sm), inset 3px 0 0 var(--primary); font-weight: 600; }
+.o-day .st-ic { width: 16px; height: 16px; border-width: 1.5px; }
+.o-day .st-ic.now::after { width: 6px; height: 6px; }
+.o-plan { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1.5px dashed var(--n400); border-radius: 12px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.o-plan .btn { margin-left: auto; }
+
+.detail { padding: 20px 32px 20px 36px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+.detail .kick { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--primary); }
+.detail h2 { font-size: 26px; line-height: 1.15; margin-top: 4px; }
+.detail .lede { font-size: 14px; line-height: 1.55; color: color-mix(in srgb, #201e1d 72%, transparent); max-width: 640px; }
+.d-acts { display: flex; align-items: center; gap: 8px; }
+.d-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.box { background: var(--card); border-radius: 20px; padding: 14px 16px; }
+.box h4 { font-size: 11px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; display: flex; }
+.box h4 span { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.rrow { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; font-size: 13px; }
+.rrow + .rrow { border-top: 1px solid var(--line); }
+.rrow .ic { width: 28px; height: 28px; border-radius: 9px; background: var(--n100); display: flex; align-items: center; justify-content: center; color: var(--a800); flex: none; }
+.rrow > span:nth-child(2) { flex: 1; min-width: 0; }
+.rrow small { display: block; color: var(--faint); font-size: 12px; }
+.rrow .m { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.tier { height: 18px; font-size: 10px; margin-left: 6px; vertical-align: 1px; }
+.lesson-box { background: var(--n100); border-radius: 20px; padding: 16px 18px; box-shadow: var(--sh-sm); display: flex; flex-direction: column; gap: 8px; }
+.lesson-box .h { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.lesson-box p { font-size: 13.5px; line-height: 1.6; color: color-mix(in srgb, #201e1d 80%, transparent); }
+.lesson-box p + p { color: var(--faint); }
+
+.wr { flex: 1; min-height: 0; padding: 14px 32px 18px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.wrow { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.wlab { background: var(--card); border-radius: 18px; padding: 10px 14px; display: flex; flex-direction: column; justify-content: center; gap: 3px; font-size: 12px; }
+.wlab .lv { display: flex; align-items: center; font-family: Caprasimo, serif; font-size: 11px; color: var(--a800); }
+.wlab .lv span { margin-left: auto; font-family: Figtree; color: var(--muted); }
+.wlab b { font-weight: 600; font-size: 13px; line-height: 1.3; }
+.wlab .mini { height: 4px; border-radius: 999px; background: var(--n300); overflow: hidden; margin-top: 4px; }
+.wlab .mini span { display: block; height: 100%; background: var(--g500); }
+.wdays { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.wd { background: var(--n100); border-radius: 14px; padding: 8px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 3px; box-shadow: var(--sh-sm); }
+.wd .h { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); }
+.wd .h > :last-child { margin-left: auto; }
+.wd b { font-weight: 600; font-size: 12.5px; line-height: 1.3; }
+.wd.done { background: color-mix(in srgb, var(--n100) 55%, transparent); box-shadow: none; }
+.wd.done b { color: var(--muted); font-weight: 500; }
+.wd.today { box-shadow: 0 0 0 2px var(--primary), var(--sh-md); }
+.wd .btn { align-self: flex-start; margin-top: 2px; }
+.wrow.compact .wd { padding: 6px 10px; }
+.wrow.compact .wlab { padding: 8px 14px; }
+.wrow.now .wlab { background: var(--a100); box-shadow: inset 0 0 0 1.5px var(--a300); }
+.wspan { grid-column: 1 / -1; background: var(--card); border-radius: 14px; padding: 10px 14px; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--muted); }
+.wspan .btn { margin-left: auto; }
+.wspan.ghost { background: transparent; border: 1.5px dashed var(--n400); }
+/* ---------- lesson ---------- */
+.prose { font-size: 15px; line-height: 1.7; color: color-mix(in srgb, #201e1d 88%, transparent); display: flex; flex-direction: column; gap: 12px; }
+.prose h3 { font-size: 19px; margin-top: 6px; color: var(--fg); }
+.prose code { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; background: var(--card); padding: 1px 5px; border-radius: 5px; }
+.prose pre { font-family: "Geist Mono", ui-monospace, monospace; font-size: 12.5px; line-height: 1.6; background: #2e2b25; color: #eee7db; padding: 14px 16px; border-radius: 16px; white-space: pre-wrap; }
+.prose pre .c { color: #a19786; } .prose pre .e { color: #f6a06b; }
+.prose sup { color: var(--primary); font-size: 10px; font-weight: 700; }
+.callout { background: var(--g100); color: var(--g800); border-radius: 16px; padding: 12px 14px; font-size: 14px; display: flex; gap: 10px; }
+.l1 { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 300px; overflow: hidden; }
+.l1-main { padding: 20px 32px 0 120px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.l1-main .kick, .l2-main .kick { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--primary); }
+.l1-main h1 { font-size: 32px; line-height: 1.1; margin-top: 4px; }
+.l1-main .lede { font-size: 15px; line-height: 1.55; color: var(--muted); max-width: 680px; }
+.l1-main .prose { max-width: 680px; }
+.l1-rail { padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; border-left: 1px solid var(--line); background: color-mix(in srgb, var(--card) 45%, var(--bg)); }
+.l1-rail h4, .l2-bar h4 { font-size: 11px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+.todo { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; padding: 7px 0; }
+.todo + .todo { border-top: 1px solid var(--line); }
+.todo .st-ic { width: 18px; height: 18px; border-width: 1.5px; margin-top: 1px; }
+.todo small { display: block; color: var(--faint); font-size: 12px; }
+.todo .m { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.daynav { display: flex; gap: 8px; }
+.daynav a { flex: 1; background: var(--n100); border-radius: 14px; padding: 8px 10px; font-size: 12px; text-decoration: none; color: var(--fg); }
+.daynav a small { display: block; color: var(--faint); font-size: 11px; }
+.l2 { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr); }
+.l2 .outline { padding: 12px 10px 12px 20px; }
+.l2 .o-day { padding: 6px 8px; gap: 8px; font-size: 12.5px; }
+.l2 .o-day .n { width: 34px; }
+.l2 .o-wk { padding: 7px 8px; font-size: 12.5px; }
+.l2 .o-wk .lv { width: 46px; white-space: nowrap; }
+.l2-pane { display: flex; flex-direction: column; min-height: 0; }
+.l2-head { display: flex; align-items: center; gap: 10px; padding: 12px 28px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.l2-head .r { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.l2-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 28px; padding: 18px 28px 0; overflow: hidden; }
+.l2-main { display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.l2-main h2 { font-size: 28px; line-height: 1.12; margin-top: 2px; }
+.l2-main .prose { max-width: 660px; }
+.l2-bar { display: flex; flex-direction: column; gap: 14px; }
+.l2-foot { display: flex; align-items: center; gap: 10px; padding: 12px 28px; border-top: 1px solid var(--line); background: var(--bg); font-size: 13px; }
+.l2-foot .r { margin-left: auto; display: flex; gap: 8px; }
+.ghost-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; font-size: 12px; color: var(--muted); padding: 10px; }
+</style>
+</head>
+<body>
+
+<h1 class="page-title">Pensieve home and plan page, two directions</h1>
+<p class="page-sub">Each direction has a home screen and a plan page. All mocks use the app's real palette and type (Caprasimo headings, Figtree text, terracotta and sage), drawn at a 1280×800 laptop viewport.</p>
+
+<div class="label"><b>A · Sidebar app shell, Today-first</b><span>The home answers "what do I study now?" Tracks, Explore and Journey sit in a sidebar that's always visible.</span></div>
+<div class="stage"><div class="window">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">pensieve.app/today</div></div>
+  <div class="app">
+    <aside class="side">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <div class="nav on"><svg class="ico-lg" data-lucide="sun"></svg>Today<span class="count">3</span></div>
+      <div class="nav"><svg class="ico-lg" data-lucide="route"></svg>Tracks</div>
+      <div class="nav"><svg class="ico-lg" data-lucide="compass"></svg>Explore<span class="soon">soon</span></div>
+      <div class="nav"><svg class="ico-lg" data-lucide="history"></svg>Journey</div>
+      <div class="side-h">Active tracks</div>
+      <div class="side-track"><span class="dot" style="background: var(--primary)"></span>Rust in 30 days<span class="pct">27%</span></div>
+      <div class="side-track"><span class="dot" style="background: var(--g500)"></span>Music theory basics<span class="pct">13%</span></div>
+      <div class="side-track"><span class="dot" style="background: var(--a400)"></span>Reading the Stoics<span class="pct">71%</span></div>
+      <div class="side-track faint"><svg class="ico" data-lucide="plus"></svg>New track</div>
+      <div class="side-foot"><span class="avatar">MB</span><span style="font-size: 13px; font-weight: 600">misterbig</span><svg class="ico faint" style="margin-left: auto" data-lucide="settings"></svg></div>
+    </aside>
+
+    <main class="main">
+      <div class="hello">
+        <div><h1>Good morning</h1><p class="muted">Thursday, October 30 · two sessions left today, about an hour</p></div>
+        <button class="btn btn-primary"><svg class="ico" data-lucide="plus"></svg>New track</button>
+      </div>
+
+      <div class="cols">
+        <div>
+          <div class="sec-h"><h3>Up next</h3></div>
+          <div class="hero">
+            <div class="meta"><span class="tag tag-a">Rust in 30 days</span><span class="muted">Week 2 · Day 9</span></div>
+            <h2>Ownership, borrowing, and the borrow checker</h2>
+            <p class="sum">Why Rust moves values instead of copying them, how references let you lend without giving away, and the three rules the compiler enforces. Ends with a short exercise fixing broken borrows.</p>
+            <div class="facts"><span><svg class="ico" data-lucide="clock"></svg>40 min</span><span><svg class="ico" data-lucide="book-open"></svg>2 readings</span><span><svg class="ico" data-lucide="code"></svg>1 exercise</span></div>
+            <div class="go"><button class="btn btn-primary">Start session<svg class="ico" data-lucide="arrow-right"></svg></button><span class="faint" style="font-size: 12px">Lesson ready</span></div>
+          </div>
+
+          <div class="sec-h" style="margin-top: 26px"><h3>Also today</h3><span class="muted">across your tracks</span></div>
+          <div class="queue">
+            <div class="q"><span class="chk"></span><div class="t"><b>Hearing intervals: thirds and fifths</b><small>Music theory basics · this week</small></div><div class="hrs">1.5 of 4 h this week<div class="bar g"><span style="width: 38%"></span></div></div><button class="btn btn-ghost btn-sm">Log session</button></div>
+            <div class="q done"><span class="chk done"><svg class="ico" data-lucide="check"></svg></span><div class="t"><b>Seneca, letters 1–4</b><small>Reading the Stoics · Day 15 · done at 7:40</small></div></div>
+          </div>
+        </div>
+
+        <div class="rail">
+          <div class="panel">
+            <div class="streak"><span class="flame"><svg class="ico-lg" data-lucide="flame"></svg></span><div><b>12 days</b><small>Your longest is 19. Study today to keep it going.</small></div></div>
+            <div class="week"><div>M<i class="d2"></i></div><div>T<i class="d2"></i></div><div>W<i class="d1"></i></div><div>T<i class="today"></i></div><div>F<i></i></div><div>S<i></i></div><div>S<i></i></div></div>
+          </div>
+          <div class="panel">
+            <div class="sec-h" style="margin-bottom: 14px"><h3>Your tracks</h3><a href="#">All tracks</a></div>
+            <div class="tp">
+              <div class="tp-row"><div>Rust in 30 days<span>Day 8 of 30</span></div><div class="bar"><span style="width: 27%"></span></div></div>
+              <div class="tp-row"><div>Music theory basics<span>Week 2 of 8</span></div><div class="bar"><span style="width: 13%"></span></div></div>
+              <div class="tp-row"><div>Reading the Stoics<span>Day 15 of 21</span></div><div class="bar"><span style="width: 71%"></span></div></div>
+            </div>
+          </div>
+          <div class="explore-teaser"><svg class="ico-lg" style="color: var(--primary)" data-lucide="compass"></svg><div><b style="font-weight: 600">Explore is coming</b><div class="muted" style="font-size: 12px">Browse plans other learners loved.</div></div></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div></div>
+
+<div class="label"><b>A · Plan page</b><span>The track keeps its place in the sidebar. The plan reads as a list of weeks and days, and a side panel holds today's lesson, the summary, the time split and the materials.</span></div>
+<div class="stage"><div class="window">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">pensieve.app/tracks/rust-in-30-days</div></div>
+  <div class="app">
+    <aside class="side">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <div class="nav"><svg class="ico-lg" data-lucide="sun"></svg>Today<span class="count">3</span></div>
+      <div class="nav"><svg class="ico-lg" data-lucide="route"></svg>Tracks</div>
+      <div class="nav"><svg class="ico-lg" data-lucide="compass"></svg>Explore<span class="soon">soon</span></div>
+      <div class="nav"><svg class="ico-lg" data-lucide="history"></svg>Journey</div>
+      <div class="side-h">Active tracks</div>
+      <div class="nav on" style="font-size: 13px; height: 32px"><span class="dot" style="background: var(--primary)"></span>Rust in 30 days<span class="count" style="font-size: 11px">27%</span></div>
+      <div class="side-track"><span class="dot" style="background: var(--g500)"></span>Music theory basics<span class="pct">13%</span></div>
+      <div class="side-track"><span class="dot" style="background: var(--a400)"></span>Reading the Stoics<span class="pct">71%</span></div>
+      <div class="side-track faint"><svg class="ico" data-lucide="plus"></svg>New track</div>
+      <div class="side-foot"><span class="avatar">MB</span><span style="font-size: 13px; font-weight: 600">misterbig</span><svg class="ico faint" style="margin-left: auto" data-lucide="settings"></svg></div>
+    </aside>
+
+    <div class="pa">
+      <main class="pa-main">
+        <div class="crumb">Tracks<svg class="ico" data-lucide="chevron-right"></svg><b>Rust in 30 days</b></div>
+        <div class="pa-head">
+          <div>
+            <h1>Rust in 30 days</h1>
+            <div class="meta"><span class="tag tag-g">Active</span><span class="muted">Daily · 5 days a week · 3.5 h a week · Oct 20 to Nov 28</span></div>
+          </div>
+          <div class="acts"><button class="btn btn-ghost"><svg class="ico" data-lucide="sliders-horizontal"></svg>Adjust plan</button><span class="icon-btn"><svg class="ico" data-lucide="ellipsis"></svg></span></div>
+        </div>
+
+        <div class="prog">
+          <div class="top-line"><b>8 of 30 days</b><span class="muted">27% · 12-day streak · 5.5 h studied</span>
+            <div class="key"><span><i style="background: var(--g500)"></i>Done</span><span><i style="background: var(--primary)"></i>Today</span><span><i style="background: var(--a300)"></i>Lesson ready</span><span><i style="background: color-mix(in srgb, #201e1d 8%, transparent)"></i>Planned</span></div>
+          </div>
+          <div class="days30" data-days="dddddddd t rrr"></div>
+        </div>
+
+        <div class="wkblock flat"><div class="wkh"><span class="lv">Week 1</span><h3>Setup, syntax, and your first programs</h3><div class="r"><span class="tag tag-g">Done</span><span class="mini"><span style="width: 100%"></span></span>5 of 5<svg class="ico" data-lucide="chevron-down"></svg></div></div></div>
+
+        <div class="wkblock">
+          <div class="wkh"><span class="lv">Week 2</span><h3>Ownership and memory</h3><div class="r"><span class="mini"><span style="width: 60%"></span></span>3 of 5<svg class="ico" data-lucide="chevron-up"></svg></div></div>
+          <div class="dayrow done"><span class="st-ic done"><svg class="ico" style="width: 12px; height: 12px" data-lucide="check"></svg></span><span class="n">Day 6</span><span class="ti"><b>Stack, heap, and why they matter</b></span><span class="mins">40 min</span><span class="icons"><svg class="ico" data-lucide="book-open"></svg></span><span class="st muted" style="font-size: 12px">Mon</span></div>
+          <div class="dayrow done"><span class="st-ic done"><svg class="ico" style="width: 12px; height: 12px" data-lucide="check"></svg></span><span class="n">Day 7</span><span class="ti"><b>Moves and clones</b></span><span class="mins">45 min</span><span class="icons"><svg class="ico" data-lucide="book-open"></svg><svg class="ico" data-lucide="code"></svg></span><span class="st muted" style="font-size: 12px">Tue</span></div>
+          <div class="dayrow done"><span class="st-ic done"><svg class="ico" style="width: 12px; height: 12px" data-lucide="check"></svg></span><span class="n">Day 8</span><span class="ti"><b>References and borrowing</b></span><span class="mins">40 min</span><span class="icons"><svg class="ico" data-lucide="book-open"></svg><svg class="ico" data-lucide="video"></svg></span><span class="st muted" style="font-size: 12px">Wed</span></div>
+          <div class="dayrow today"><span class="st-ic now"></span><span class="n" style="color: var(--a800)">Day 9</span><span class="ti"><b>The borrow checker in practice</b><small>Fix five broken borrows from Rustlings</small></span><span class="mins">40 min</span><span class="icons"><svg class="ico" data-lucide="book-open"></svg><svg class="ico" data-lucide="code"></svg></span><span class="st"><button class="btn btn-primary btn-sm">Start</button></span></div>
+          <div class="dayrow"><span class="st-ic"></span><span class="n">Day 10</span><span class="ti"><b>Slices and string types</b></span><span class="mins">40 min</span><span class="icons"><svg class="ico" data-lucide="book-open"></svg></span><span class="st"><span class="tag tag-a">Lesson ready</span></span></div>
+        </div>
+
+        <div class="wkblock flat"><div class="wkh"><span class="lv">Week 3</span><h3>Structs, enums, and pattern matching</h3><div class="r"><span class="tag tag-a">2 lessons ready</span>0 of 5<svg class="ico" data-lucide="chevron-down"></svg></div></div></div>
+        <div class="wkblock flat"><div class="wkh"><span class="lv">Week 4</span><h3>Errors, collections, and traits</h3><div class="r"><span>3.5 h budget</span><button class="btn btn-ghost btn-sm">Split into days</button></div></div></div>
+        <div class="unplanned"><svg class="ico-lg faint" data-lucide="sparkles"></svg><div><b style="font-weight: 600">Weeks 5 and 6 aren't planned yet</b><div class="muted" style="font-size: 12px">Lifetimes, then a small CLI project. Pensieve plans them as you get closer.</div></div><button class="btn btn-ghost btn-sm">Plan everything</button></div>
+      </main>
+
+      <aside class="pa-side">
+        <div>
+          <h4>Today · Day 9</h4>
+          <div class="lesson">
+            <h3>The borrow checker in practice</h3>
+            <p>Read chapter 4.2 of the Rust Book, then fix five broken borrows from Rustlings. The fixes show the three rules you met yesterday.</p>
+            <div class="facts muted" style="display: flex; gap: 14px; font-size: 12px"><span><svg class="ico" style="vertical-align: -3px" data-lucide="clock"></svg> 40 min</span><span>15 min reading · 25 min practice</span></div>
+            <button class="btn btn-primary">Start session<svg class="ico" data-lucide="arrow-right"></svg></button>
+          </div>
+        </div>
+        <div>
+          <h4>Summary</h4>
+          <p class="summary-txt">Six weeks from first program to a small command-line tool, built around the Rust Book with Rustlings drills each week.</p>
+        </div>
+        <div>
+          <h4>How the plan spends your 21 h<a href="#">Change</a></h4>
+          <div class="split"><span style="width: 52%; background: var(--a800)"></span><span style="width: 29%; background: var(--g600)"></span><span style="width: 19%; background: var(--g400)"></span></div>
+          <div class="key" style="flex-wrap: wrap; gap: 6px 12px; margin-top: 8px"><span><i style="background: var(--a800)"></i>Reading · 11 h</span><span><i style="background: var(--g600)"></i>Problem sets · 6 h</span><span><i style="background: var(--g400)"></i>Project · 4 h</span></div>
+        </div>
+        <div>
+          <h4>Materials<a href="#">All 9</a></h4>
+          <div class="mat"><span class="ic"><svg class="ico" data-lucide="book-open"></svg></span><span><b style="font-weight: 600">The Rust Programming Language</b><small>Book · the plan's backbone</small></span></div>
+          <div class="mat"><span class="ic"><svg class="ico" data-lucide="code"></svg></span><span>Rustlings<small>Problem set · 94 exercises</small></span></div>
+          <div class="mat"><span class="ic"><svg class="ico" data-lucide="video"></svg></span><span>Crust of Rust: lifetimes<small>Video · 1 h 50 min</small></span></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div></div>
+
+<div class="label"><b>B · Top tabs, tracks board with a stats rail</b><span>The home is your tracks, with a richer card for each. Tabs across the top, and stats always on the right.</span></div>
+<div class="stage"><div class="window">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">pensieve.app/tracks</div></div>
+  <div class="app b">
+    <header class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <div class="tab on"><svg class="ico" data-lucide="route"></svg>Tracks</div>
+        <div class="tab"><svg class="ico" data-lucide="compass"></svg>Explore<span class="soon">soon</span></div>
+        <div class="tab"><svg class="ico" data-lucide="history"></svg>Journey</div>
+      </nav>
+      <div class="top-r">
+        <div class="search"><svg class="ico" data-lucide="search"></svg>Search tracks and lessons<kbd>⌘K</kbd></div>
+        <span class="chip-streak"><svg class="ico" data-lucide="flame"></svg>12</span>
+        <span class="avatar">MB</span>
+      </div>
+    </header>
+
+    <div class="bwrap">
+      <main class="bmain">
+        <div class="bhead">
+          <div><h1>Your tracks</h1><p class="muted">Two sessions left today. Pick up where you left off.</p></div>
+          <button class="btn btn-primary" style="margin-left: auto"><svg class="ico" data-lucide="plus"></svg>New track</button>
+        </div>
+        <div class="toolbar">
+          <div class="seg"><span class="on">Active <em>3</em></span><span>Completed <em>2</em></span><span>Archived <em>4</em></span></div>
+          <div class="sort"><svg class="ico" data-lucide="arrow-up-down"></svg>Up next first<svg class="ico" data-lucide="chevron-down"></svg></div>
+        </div>
+
+        <div class="grid">
+          <div class="tcard">
+            <div class="hd"><span class="tag tag-g">Active</span><span class="muted">Daily · 40 min</span><svg class="ico more" data-lucide="ellipsis"></svg></div>
+            <h3>Rust in 30 days</h3>
+            <div class="next"><div><small>Today · Day 9</small><b>Ownership and borrowing</b></div><button class="btn btn-primary btn-sm">Start</button></div>
+            <div class="wk"><i class="d"></i><i class="d"></i><i class="d"></i><i class="t"></i><i></i><i class="off"></i><i class="off"></i><span>3 of 5 this week</span></div>
+            <div class="bar"><span style="width: 27%"></span></div>
+            <div class="foot"><span>Day 8 of 30</span><span>Ends Nov 21</span></div>
+          </div>
+          <div class="tcard">
+            <div class="hd"><span class="tag tag-g">Active</span><span class="muted">Weekly · 4 h</span><svg class="ico more" data-lucide="ellipsis"></svg></div>
+            <h3>Music theory basics</h3>
+            <div class="next"><div><small>This week · Week 2</small><b>Hearing intervals</b></div><button class="btn btn-ghost btn-sm">Log</button></div>
+            <div class="wk"><i class="d"></i><i></i><i class="d"></i><i class="t"></i><i></i><i></i><i></i><span>1.5 of 4 h</span></div>
+            <div class="bar"><span style="width: 13%"></span></div>
+            <div class="foot"><span>Week 2 of 8</span><span>Ends Dec 18</span></div>
+          </div>
+          <div class="tcard">
+            <div class="hd"><span class="tag tag-g">Active</span><span class="muted">Daily · 25 min</span><svg class="ico more" data-lucide="ellipsis"></svg></div>
+            <h3>Reading the Stoics</h3>
+            <div class="next done"><svg class="ico" data-lucide="circle-check"></svg><div><small style="color: var(--g600)">Done today</small><b>Seneca, letters 1–4</b></div></div>
+            <div class="wk"><i class="d"></i><i class="d"></i><i class="d"></i><i class="d"></i><i></i><i></i><i></i><span>4 of 7 this week</span></div>
+            <div class="bar"><span style="width: 71%"></span></div>
+            <div class="foot"><span>Day 15 of 21</span><span>Ends Nov 5</span></div>
+          </div>
+          <div class="newcard"><i><svg class="ico-lg" data-lucide="plus"></svg></i>Start a new track<span class="faint" style="font-size: 12px; font-weight: 400">Tell Pensieve what you want to learn</span></div>
+        </div>
+      </main>
+
+      <aside class="brail">
+        <div>
+          <h4>Streak</h4>
+          <div class="big"><b>12</b><span>days · longest 19</span></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><b>31</b><span>sessions this month</span></div>
+          <div class="stat"><b>18.5 h</b><span>studied this month</span></div>
+        </div>
+        <div>
+          <h4>Last 12 weeks</h4>
+          <div class="heat" id="heat"></div>
+          <div class="legend">Less<i style="background: color-mix(in srgb, #201e1d 7%, transparent)"></i><i style="background: var(--g200)"></i><i style="background: var(--g400)"></i><i style="background: var(--g600)"></i>More</div>
+        </div>
+        <div>
+          <h4>Recently</h4>
+          <div class="activity">
+            <div><svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg><span>Finished Seneca, letters 1–4<small>Reading the Stoics · 7:40 today</small></span></div>
+            <div><svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg><span>Logged 45 min of interval drills<small>Music theory basics · yesterday</small></span></div>
+            <div><svg class="ico" style="color: var(--primary)" data-lucide="sparkles"></svg><span>Plan adjusted for a lighter week<small>Rust in 30 days · Tue</small></span></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div></div>
+
+<div class="label"><b>B · Plan page, first try (week columns)</b><span>Kept for comparison. The two revised plan pages for B's shell are at the end of this page.</span></div>
+<div class="stage"><div class="window">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">pensieve.app/tracks/rust-in-30-days</div></div>
+  <div class="app b">
+    <header class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <div class="tab on"><svg class="ico" data-lucide="route"></svg>Tracks</div>
+        <div class="tab"><svg class="ico" data-lucide="compass"></svg>Explore<span class="soon">soon</span></div>
+        <div class="tab"><svg class="ico" data-lucide="history"></svg>Journey</div>
+      </nav>
+      <div class="top-r">
+        <div class="search"><svg class="ico" data-lucide="search"></svg>Search tracks and lessons<kbd>⌘K</kbd></div>
+        <span class="chip-streak"><svg class="ico" data-lucide="flame"></svg>12</span>
+        <span class="avatar">MB</span>
+      </div>
+    </header>
+
+    <div class="pb-wrap">
+      <div class="pb-hero">
+        <div class="crumb">Your tracks<svg class="ico" data-lucide="chevron-right"></svg><b>Rust in 30 days</b></div>
+        <div class="pb-title">
+          <div>
+            <h1>Rust in 30 days</h1>
+            <p>Six weeks from first program to a small CLI tool, built on the Rust Book with weekly Rustlings drills.</p>
+          </div>
+          <div class="pb-stats">
+            <div class="pb-stat"><b>8 / 30</b><span>days done</span></div>
+            <div class="pb-stat"><b>5.5 h</b><span>of 21 h studied</span></div>
+            <div class="pb-stat"><b>Nov 28</b><span>finish date</span></div>
+          </div>
+        </div>
+        <div class="days30" data-days="dddddddd t rrr"></div>
+        <div class="subtabs">
+          <div class="subtab on">Plan</div>
+          <div class="subtab">Materials <em>9</em></div>
+          <div class="subtab">Activity</div>
+          <div class="subtab">About</div>
+          <div class="r">
+            <div class="seg" style="transform: scale(.9)"><span class="on"><svg class="ico" data-lucide="columns-3"></svg>Board</span><span><svg class="ico" data-lucide="list"></svg>List</span></div>
+            <button class="btn btn-ghost btn-sm"><svg class="ico" data-lucide="sliders-horizontal"></svg>Adjust plan</button>
+            <button class="btn btn-primary btn-sm">Start Day 9<svg class="ico" data-lucide="arrow-right"></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pb-board">
+        <div class="col">
+          <div class="colh"><span class="lv">Week 1<span>5 of 5</span></span><b>Setup, syntax, and first programs</b></div>
+          <div class="dcard done"><div class="h">Day 1<svg class="ico ok" data-lucide="circle-check"></svg></div><b>Installing Rust and Cargo</b></div>
+          <div class="dcard done"><div class="h">Day 2<svg class="ico ok" data-lucide="circle-check"></svg></div><b>Variables and mutability</b></div>
+          <div class="dcard done"><div class="h">Day 3<svg class="ico ok" data-lucide="circle-check"></svg></div><b>Functions and control flow</b></div>
+          <div class="dcard done"><div class="h">Day 4<svg class="ico ok" data-lucide="circle-check"></svg></div><b>A guessing game</b></div>
+          <div class="dcard done"><div class="h">Day 5<svg class="ico ok" data-lucide="circle-check"></svg></div><b>Review and Rustlings, part 1</b></div>
+        </div>
+        <div class="col now">
+          <div class="colh"><span class="lv">Week 2<span>3 of 5</span></span><b>Ownership and memory</b></div>
+          <div class="dcard done"><div class="h">Day 6<svg class="ico ok" data-lucide="circle-check"></svg></div><b>Stack, heap, and why they matter</b></div>
+          <div class="dcard done"><div class="h">Day 7<svg class="ico ok" data-lucide="circle-check"></svg></div><b>Moves and clones</b></div>
+          <div class="dcard done"><div class="h">Day 8<svg class="ico ok" data-lucide="circle-check"></svg></div><b>References and borrowing</b></div>
+          <div class="dcard today"><div class="h" style="color: var(--a800)">Day 9 · today<span class="tag tag-a">40 min</span></div><b>The borrow checker in practice</b><span class="muted" style="font-size: 11.5px">Book ch. 4.2 · 5 Rustlings fixes</span><button class="btn btn-primary btn-sm">Start</button></div>
+          <div class="dcard"><div class="h">Day 10<span class="tag tag-a">Ready</span></div><b>Slices and string types</b></div>
+        </div>
+        <div class="col">
+          <div class="colh"><span class="lv">Week 3<span>0 of 5</span></span><b>Structs, enums, and matching</b></div>
+          <div class="dcard"><div class="h">Day 11<span class="tag tag-a">Ready</span></div><b>Defining structs</b></div>
+          <div class="dcard"><div class="h">Day 12<span class="tag tag-a">Ready</span></div><b>Methods and impl blocks</b></div>
+          <div class="dcard"><div class="h">Day 13</div><b>Enums and Option</b></div>
+          <div class="dcard"><div class="h">Day 14</div><b>match and if let</b></div>
+          <div class="dcard"><div class="h">Day 15</div><b>Modelling a deck of cards</b></div>
+        </div>
+        <div class="col">
+          <div class="colh"><span class="lv">Week 4<span>3.5 h</span></span><b>Errors, collections, and traits</b></div>
+          <div class="budget">
+            <span>Planned as one week: Result and the ? operator, Vec and HashMap, then your first traits.</span>
+            <div class="key" style="flex-direction: column; gap: 4px"><span><svg class="ico" data-lucide="book-open"></svg>Book ch. 8–10</span><span><svg class="ico" data-lucide="code"></svg>Rustlings 30–52</span></div>
+            <button class="btn btn-ghost btn-sm" style="align-self: flex-start">Split into days</button>
+          </div>
+        </div>
+        <div class="col ghost">
+          <div class="colh"><span class="lv">Week 5</span><b>Lifetimes and generics</b></div>
+          <div class="ghost-body"><svg class="ico-lg" data-lucide="sparkles"></svg>Not planned yet<button class="btn btn-ghost btn-sm">Plan week</button></div>
+        </div>
+        <div class="col ghost">
+          <div class="colh"><span class="lv">Week 6</span><b>Build a small CLI tool</b></div>
+          <div class="ghost-body"><svg class="ico-lg" data-lucide="sparkles"></svg>Not planned yet<button class="btn btn-ghost btn-sm">Plan everything</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="label"><b>B · Plan page, option 1: outline and day preview (recommended)</b><span>A's week-and-day list becomes a narrow outline on the left, and the day you pick opens on the right with its readings, practice and lesson. Track-wide details (summary, time split, all materials) move to the About and Materials tabs.</span></div>
+<div class="stage"><div class="window">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">pensieve.app/tracks/rust-in-30-days?day=9</div></div>
+  <div class="app b">
+    <header class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <div class="tab on"><svg class="ico" data-lucide="route"></svg>Tracks</div>
+        <div class="tab"><svg class="ico" data-lucide="compass"></svg>Explore<span class="soon">soon</span></div>
+        <div class="tab"><svg class="ico" data-lucide="history"></svg>Journey</div>
+      </nav>
+      <div class="top-r">
+        <div class="search"><svg class="ico" data-lucide="search"></svg>Search tracks and lessons<kbd>⌘K</kbd></div>
+        <span class="chip-streak"><svg class="ico" data-lucide="flame"></svg>12</span>
+        <span class="avatar">MB</span>
+      </div>
+    </header>
+
+    <div class="pb-wrap">
+      <div class="th">
+        <div class="crumb">Your tracks<svg class="ico" data-lucide="chevron-right"></svg><b>Rust in 30 days</b></div>
+        <div class="th-row">
+          <div>
+            <h1>Rust in 30 days</h1>
+            <div class="meta"><span class="tag tag-g">Active</span>Daily · 5 days a week · 3.5 h a week</div>
+          </div>
+          <div class="acts">
+            <div class="inline-stats"><span><b>8 / 30</b>days done</span><span><b>5.5 h</b>of 21 h</span><span><b>Nov 28</b>finish</span></div>
+            <button class="btn btn-ghost"><svg class="ico" data-lucide="sliders-horizontal"></svg>Adjust plan</button>
+            <span class="icon-btn"><svg class="ico" data-lucide="ellipsis"></svg></span>
+          </div>
+        </div>
+        <div class="days30" data-days="dddddddd t rrr"></div>
+        <div class="subtabs">
+          <div class="subtab on">Plan</div>
+          <div class="subtab">Materials <em>9</em></div>
+          <div class="subtab">Activity</div>
+          <div class="subtab">About</div>
+        </div>
+      </div>
+
+      <div class="md">
+        <nav class="outline">
+          <div class="o-wk"><span class="lv">Week 1</span><b>Setup, syntax, first programs</b><span class="r"><svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg><svg class="ico" data-lucide="chevron-right"></svg></span></div>
+          <div class="o-wk open"><span class="lv">Week 2</span><b>Ownership and memory</b><span class="r">3 of 5<svg class="ico" data-lucide="chevron-down"></svg></span></div>
+          <div class="o-days">
+            <div class="o-day done"><span class="st-ic done"><svg class="ico" style="width: 10px; height: 10px" data-lucide="check"></svg></span><span class="n">Day 6</span><span class="t">Stack, heap, and why they matter</span></div>
+            <div class="o-day done"><span class="st-ic done"><svg class="ico" style="width: 10px; height: 10px" data-lucide="check"></svg></span><span class="n">Day 7</span><span class="t">Moves and clones</span></div>
+            <div class="o-day done"><span class="st-ic done"><svg class="ico" style="width: 10px; height: 10px" data-lucide="check"></svg></span><span class="n">Day 8</span><span class="t">References and borrowing</span></div>
+            <div class="o-day sel"><span class="st-ic now"></span><span class="n" style="color: var(--a800)">Day 9</span><span class="t">The borrow checker in practice</span><small>Today</small></div>
+            <div class="o-day"><span class="st-ic"></span><span class="n">Day 10</span><span class="t">Slices and string types</span><small style="color: var(--a800)">Ready</small></div>
+          </div>
+          <div class="o-wk"><span class="lv">Week 3</span><b>Structs, enums, and matching</b><span class="r">0 of 5<svg class="ico" data-lucide="chevron-right"></svg></span></div>
+          <div class="o-wk"><span class="lv">Week 4</span><b>Errors, collections, and traits</b><span class="r">3.5 h<svg class="ico" data-lucide="chevron-right"></svg></span></div>
+          <div class="o-wk" style="color: var(--faint)"><span class="lv" style="color: var(--faint)">Week 5</span><b style="font-weight: 500">Lifetimes and generics</b><span class="r">not planned</span></div>
+          <div class="o-wk" style="color: var(--faint)"><span class="lv" style="color: var(--faint)">Week 6</span><b style="font-weight: 500">Build a small CLI tool</b><span class="r">not planned</span></div>
+          <div class="o-plan"><svg class="ico" data-lucide="sparkles"></svg>2 weeks left to plan<button class="btn btn-ghost btn-sm">Plan everything</button></div>
+        </nav>
+
+        <section class="detail">
+          <div>
+            <div class="kick">Week 2 · Day 9 · Today</div>
+            <h2>The borrow checker in practice</h2>
+          </div>
+          <p class="lede">Yesterday you met the three borrowing rules. Today you watch the compiler enforce them: read how mutable and shared references conflict, then fix five broken programs until they compile.</p>
+          <div class="d-acts">
+            <button class="btn btn-primary">Open lesson<svg class="ico" data-lucide="arrow-right"></svg></button>
+            <button class="btn btn-ghost"><svg class="ico" data-lucide="check"></svg>Mark complete</button>
+            <span class="muted" style="font-size: 13px; margin-left: 8px"><svg class="ico" style="vertical-align: -3px" data-lucide="clock"></svg> 40 min · 15 reading, 25 practice</span>
+          </div>
+          <div class="d-grid">
+            <div class="box">
+              <h4>Read<span>15 min</span></h4>
+              <div class="rrow"><span class="ic"><svg class="ico" data-lucide="book-open"></svg></span><span>The Rust Programming Language<span class="tag tag-a tier">Must</span><small>Ch. 4.2 · References and borrowing</small></span><span class="m">12 min</span></div>
+              <div class="rrow"><span class="ic"><svg class="ico" data-lucide="file-text"></svg></span><span>Rust by Example: borrowing<span class="tag tag-n tier">Should</span><small>Aliasing section</small></span><span class="m">3 min</span></div>
+            </div>
+            <div class="box">
+              <h4>Do<span>25 min</span></h4>
+              <div class="rrow"><span class="ic"><svg class="ico" data-lucide="code"></svg></span><span>Rustlings: move semantics<small>Exercises 1–5 · fix each until it compiles</small></span><span class="m">25 min</span></div>
+            </div>
+          </div>
+          <div class="lesson-box">
+            <div class="h"><svg class="ico" style="color: var(--primary)" data-lucide="sparkles"></svg>Lesson ready · written from 3 materials<span class="tag tag-a" style="margin-left: auto">Preview</span></div>
+            <p>Every value in Rust has one owner, and you can lend it out in two ways: many readers at once, or a single writer. The borrow checker is the part of the compiler that refuses any program where those two overlap…</p>
+            <p>Continues with 4 worked examples and the exercise walkthrough.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="label"><b>B · Plan page, option 2: week rows</b><span>The same order as A's list, but each week is a row with its days laid across, like a calendar. The current week is open with full day cards, past weeks shrink to one line, and future weeks show what's planned.</span></div>
+<div class="stage"><div class="window">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">pensieve.app/tracks/rust-in-30-days</div></div>
+  <div class="app b">
+    <header class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <div class="tab on"><svg class="ico" data-lucide="route"></svg>Tracks</div>
+        <div class="tab"><svg class="ico" data-lucide="compass"></svg>Explore<span class="soon">soon</span></div>
+        <div class="tab"><svg class="ico" data-lucide="history"></svg>Journey</div>
+      </nav>
+      <div class="top-r">
+        <div class="search"><svg class="ico" data-lucide="search"></svg>Search tracks and lessons<kbd>⌘K</kbd></div>
+        <span class="chip-streak"><svg class="ico" data-lucide="flame"></svg>12</span>
+        <span class="avatar">MB</span>
+      </div>
+    </header>
+
+    <div class="pb-wrap">
+      <div class="th">
+        <div class="crumb">Your tracks<svg class="ico" data-lucide="chevron-right"></svg><b>Rust in 30 days</b></div>
+        <div class="th-row">
+          <div>
+            <h1>Rust in 30 days</h1>
+            <div class="meta"><span class="tag tag-g">Active</span>Daily · 5 days a week · 3.5 h a week</div>
+          </div>
+          <div class="acts">
+            <div class="inline-stats"><span><b>8 / 30</b>days done</span><span><b>5.5 h</b>of 21 h</span><span><b>Nov 28</b>finish</span></div>
+            <button class="btn btn-ghost"><svg class="ico" data-lucide="sliders-horizontal"></svg>Adjust plan</button>
+            <button class="btn btn-primary">Start Day 9<svg class="ico" data-lucide="arrow-right"></svg></button>
+          </div>
+        </div>
+        <div class="subtabs">
+          <div class="subtab on">Plan</div>
+          <div class="subtab">Materials <em>9</em></div>
+          <div class="subtab">Activity</div>
+          <div class="subtab">About</div>
+        </div>
+      </div>
+
+      <div class="wr">
+        <div class="wrow compact">
+          <div class="wlab"><span class="lv">Week 1<span>5 of 5</span></span><b>Setup, syntax, first programs</b></div>
+          <div class="wdays">
+            <div class="wd done"><div class="h">Day 1<svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg></div><b>Installing Rust and Cargo</b></div>
+            <div class="wd done"><div class="h">Day 2<svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg></div><b>Variables and mutability</b></div>
+            <div class="wd done"><div class="h">Day 3<svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg></div><b>Functions and control flow</b></div>
+            <div class="wd done"><div class="h">Day 4<svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg></div><b>A guessing game</b></div>
+            <div class="wd done"><div class="h">Day 5<svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg></div><b>Review and Rustlings, part 1</b></div>
+          </div>
+        </div>
+
+        <div class="wrow now">
+          <div class="wlab"><span class="lv">Week 2 · this week<span>3 of 5</span></span><b>Ownership and memory</b><span class="muted">Who owns a value, and how to lend it safely.</span><span class="mini"><span style="width: 60%"></span></span></div>
+          <div class="wdays">
+            <div class="wd done"><div class="h">Day 6 · Mon<svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg></div><b>Stack, heap, and why they matter</b><span class="faint" style="font-size: 11px">40 min · book</span></div>
+            <div class="wd done"><div class="h">Day 7 · Tue<svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg></div><b>Moves and clones</b><span class="faint" style="font-size: 11px">45 min · book, Rustlings</span></div>
+            <div class="wd done"><div class="h">Day 8 · Wed<svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg></div><b>References and borrowing</b><span class="faint" style="font-size: 11px">40 min · book, video</span></div>
+            <div class="wd today"><div class="h" style="color: var(--a800)">Day 9 · today<span class="tag tag-a" style="height: 18px; font-size: 10px">40 min</span></div><b>The borrow checker in practice</b><span class="muted" style="font-size: 11px">Book ch. 4.2 · 5 Rustlings fixes</span><button class="btn btn-primary btn-sm">Start</button></div>
+            <div class="wd"><div class="h">Day 10 · Fri<span class="tag tag-a" style="height: 18px; font-size: 10px">Ready</span></div><b>Slices and string types</b><span class="faint" style="font-size: 11px">40 min · book</span></div>
+          </div>
+        </div>
+
+        <div class="wrow">
+          <div class="wlab"><span class="lv">Week 3<span>0 of 5</span></span><b>Structs, enums, and matching</b></div>
+          <div class="wdays">
+            <div class="wd"><div class="h">Day 11<span class="tag tag-a" style="height: 18px; font-size: 10px">Ready</span></div><b>Defining structs</b></div>
+            <div class="wd"><div class="h">Day 12<span class="tag tag-a" style="height: 18px; font-size: 10px">Ready</span></div><b>Methods and impl blocks</b></div>
+            <div class="wd"><div class="h">Day 13</div><b>Enums and Option</b></div>
+            <div class="wd"><div class="h">Day 14</div><b>match and if let</b></div>
+            <div class="wd"><div class="h">Day 15</div><b>Modelling a deck of cards</b></div>
+          </div>
+        </div>
+
+        <div class="wrow">
+          <div class="wlab"><span class="lv">Week 4<span>3.5 h</span></span><b>Errors, collections, and traits</b></div>
+          <div class="wdays"><div class="wspan"><svg class="ico" data-lucide="calendar-range"></svg><span>Planned as one week: Result and ?, Vec and HashMap, first traits · Book ch. 8–10 · Rustlings 30–52</span><button class="btn btn-ghost btn-sm">Split into days</button></div></div>
+        </div>
+
+        <div class="wrow">
+          <div class="wlab" style="background: transparent; border: 1.5px dashed var(--n400)"><span class="lv" style="color: var(--faint)">Weeks 5–6</span><b style="color: var(--muted)">Lifetimes, then a small CLI tool</b></div>
+          <div class="wdays"><div class="wspan ghost"><svg class="ico" data-lucide="sparkles"></svg><span>Not planned yet. Pensieve plans these as you get closer, or you can plan them now.</span><button class="btn btn-ghost btn-sm">Plan everything</button></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="label"><b>Lesson, case 1: its own page</b><span>Open lesson goes to a separate page for reading. The text sits in a centered column, and a rail on the right holds today's checklist, Mark complete, and links to the previous and next day.</span></div>
+<div class="stage"><div class="window">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">pensieve.app/tracks/rust-in-30-days/days/9</div></div>
+  <div class="app b">
+    <header class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <div class="tab on"><svg class="ico" data-lucide="route"></svg>Tracks</div>
+        <div class="tab"><svg class="ico" data-lucide="compass"></svg>Explore<span class="soon">soon</span></div>
+        <div class="tab"><svg class="ico" data-lucide="history"></svg>Journey</div>
+      </nav>
+      <div class="top-r">
+        <div class="search"><svg class="ico" data-lucide="search"></svg>Search tracks and lessons<kbd>⌘K</kbd></div>
+        <span class="chip-streak"><svg class="ico" data-lucide="flame"></svg>12</span>
+        <span class="avatar">MB</span>
+      </div>
+    </header>
+    <div class="l1">
+      <main class="l1-main">
+        <div class="crumb">Your tracks<svg class="ico" data-lucide="chevron-right"></svg>Rust in 30 days<svg class="ico" data-lucide="chevron-right"></svg><b>Day 9</b></div>
+        <div>
+          <div class="kick">Week 2 · Day 9 · Today</div>
+          <h1>The borrow checker in practice</h1>
+        </div>
+        <p class="lede">Yesterday you met the three borrowing rules. Today you watch the compiler enforce them, then fix five broken programs until they compile.</p>
+        <div class="prose">
+          <h3>Two kinds of loan</h3>
+          <p>Every value has one owner, and the owner can lend it out in two ways: as many shared references (<code>&amp;T</code>) as you like, or exactly one mutable reference (<code>&amp;mut T</code>). Never both at once.<sup>1</sup> The borrow checker is the part of the compiler that rejects any program where the two overlap.</p>
+<pre><span class="c">// a shared borrow is still alive when we try to change the vector</span>
+let mut scores = vec![90, 72];
+let first = &amp;scores[0];
+scores.push(88);
+println!("{first}");
+
+<span class="e">error[E0502]: cannot borrow `scores` as mutable because it is also borrowed as immutable</span></pre>
+          <div class="callout"><svg class="ico" style="margin-top: 3px" data-lucide="lightbulb"></svg><span>Two fixes: print <code>first</code> before the push, or copy the number out with <code>let first = scores[0];</code> so nothing is borrowed.</span></div>
+        </div>
+      </main>
+      <aside class="l1-rail">
+        <div>
+          <h4>Today · 40 min</h4>
+          <div class="todo"><span class="st-ic done"><svg class="ico" style="width: 10px; height: 10px" data-lucide="check"></svg></span><span>Read the lesson<small>This page · 10 min</small></span></div>
+          <div class="todo"><span class="st-ic"></span><span>Rust Book, ch. 4.2<small>References and borrowing</small></span><span class="m">12 min</span></div>
+          <div class="todo"><span class="st-ic"></span><span>Rust by Example<small>Aliasing · optional</small></span><span class="m">3 min</span></div>
+          <div class="todo"><span class="st-ic"></span><span>Rustlings: move semantics<small>Exercises 1–5</small></span><span class="m">25 min</span></div>
+        </div>
+        <button class="btn btn-primary" style="justify-content: center; height: 40px"><svg class="ico" data-lucide="check"></svg>Mark Day 9 complete</button>
+        <div>
+          <h4>Sources</h4>
+          <div class="muted" style="font-size: 12px; line-height: 1.6"><sup style="color: var(--primary); font-weight: 700">1</sup> The Rust Programming Language, 4.2<br><sup style="color: var(--primary); font-weight: 700">2</sup> Rust by Example, 15.3.2</div>
+        </div>
+        <div class="daynav" style="margin-top: auto">
+          <a href="#"><small>← Day 8</small>References and borrowing</a>
+          <a href="#" style="text-align: right"><small>Day 10 →</small>Slices and string types</a>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="justify-content: center"><svg class="ico" data-lucide="refresh-cw"></svg>Rewrite this lesson</button>
+      </aside>
+    </div>
+  </div>
+</div></div>
+
+<div class="label"><b>Lesson, case 2: inside the plan page</b><span>Open lesson expands the right pane and shrinks the outline to a slim column, so the plan stays in view. A bar at the bottom holds previous and next day and Mark complete, and the expand icon hides the outline for focused reading.</span></div>
+<div class="stage"><div class="window">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">pensieve.app/tracks/rust-in-30-days?day=9&amp;lesson</div></div>
+  <div class="app b">
+    <header class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <div class="tab on"><svg class="ico" data-lucide="route"></svg>Tracks</div>
+        <div class="tab"><svg class="ico" data-lucide="compass"></svg>Explore<span class="soon">soon</span></div>
+        <div class="tab"><svg class="ico" data-lucide="history"></svg>Journey</div>
+      </nav>
+      <div class="top-r">
+        <div class="search"><svg class="ico" data-lucide="search"></svg>Search tracks and lessons<kbd>⌘K</kbd></div>
+        <span class="chip-streak"><svg class="ico" data-lucide="flame"></svg>12</span>
+        <span class="avatar">MB</span>
+      </div>
+    </header>
+    <div class="pb-wrap">
+      <div class="th" style="padding-top: 14px">
+        <div class="th-row">
+          <div style="display: flex; align-items: baseline; gap: 14px"><h1 style="font-size: 22px">Rust in 30 days</h1><span class="muted" style="font-size: 13px">8 of 30 days · finishes Nov 28</span></div>
+          <div class="acts"><button class="btn btn-ghost btn-sm"><svg class="ico" data-lucide="sliders-horizontal"></svg>Adjust plan</button></div>
+        </div>
+        <div class="subtabs">
+          <div class="subtab on">Plan</div>
+          <div class="subtab">Materials <em>9</em></div>
+          <div class="subtab">Activity</div>
+          <div class="subtab">About</div>
+        </div>
+      </div>
+      <div class="l2">
+        <nav class="outline">
+          <div class="o-wk"><span class="lv">Wk 1</span><b>Setup and syntax</b><span class="r"><svg class="ico" style="color: var(--g600)" data-lucide="circle-check"></svg></span></div>
+          <div class="o-wk open"><span class="lv">Wk 2</span><b>Ownership</b><span class="r">3/5</span></div>
+          <div class="o-days">
+            <div class="o-day done"><span class="st-ic done"><svg class="ico" style="width: 10px; height: 10px" data-lucide="check"></svg></span><span class="n">Day 6</span><span class="t">Stack and heap</span></div>
+            <div class="o-day done"><span class="st-ic done"><svg class="ico" style="width: 10px; height: 10px" data-lucide="check"></svg></span><span class="n">Day 7</span><span class="t">Moves and clones</span></div>
+            <div class="o-day done"><span class="st-ic done"><svg class="ico" style="width: 10px; height: 10px" data-lucide="check"></svg></span><span class="n">Day 8</span><span class="t">References</span></div>
+            <div class="o-day sel"><span class="st-ic now"></span><span class="n" style="color: var(--a800)">Day 9</span><span class="t">Borrow checker</span></div>
+            <div class="o-day"><span class="st-ic"></span><span class="n">Day 10</span><span class="t">Slices</span></div>
+          </div>
+          <div class="o-wk"><span class="lv">Wk 3</span><b>Structs and enums</b></div>
+          <div class="o-wk"><span class="lv">Wk 4</span><b>Errors and traits</b></div>
+          <div class="o-wk" style="color: var(--faint)"><span class="lv" style="color: var(--faint)">Wk 5–6</span><b style="font-weight: 500">Not planned</b></div>
+        </nav>
+        <section class="l2-pane">
+          <div class="l2-head">
+            <span class="crumb"><svg class="ico" data-lucide="arrow-left"></svg>Day overview</span>
+            <div class="r"><span class="muted" style="font-size: 12px">40 min · Book ch. 4.2 · Rustlings 1–5</span><span class="icon-btn" title="Hide the outline"><svg class="ico" data-lucide="maximize-2"></svg></span></div>
+          </div>
+          <div class="l2-body">
+            <div class="l2-main">
+              <div>
+                <div class="kick">Week 2 · Day 9 · Today</div>
+                <h2>The borrow checker in practice</h2>
+              </div>
+              <div class="prose">
+                <p>Every value has one owner, and the owner can lend it out in two ways: as many shared references (<code>&amp;T</code>) as you like, or exactly one mutable reference (<code>&amp;mut T</code>). Never both at once.<sup>1</sup> The borrow checker rejects any program where the two overlap.</p>
+<pre><span class="c">// a shared borrow is still alive when we try to change the vector</span>
+let mut scores = vec![90, 72];
+let first = &amp;scores[0];
+scores.push(88);
+println!("{first}");
+
+<span class="e">error[E0502]: cannot borrow `scores` as mutable because it is also borrowed as immutable</span></pre>
+                <p>Read the error from the bottom up: the compiler points at <code>push</code>, then at the line where <code>first</code> was borrowed, then at the line that still uses it.</p>
+              </div>
+            </div>
+            <aside class="l2-bar">
+              <div>
+                <h4>Today's checklist</h4>
+                <div class="todo"><span class="st-ic done"><svg class="ico" style="width: 10px; height: 10px" data-lucide="check"></svg></span><span>Read the lesson</span></div>
+                <div class="todo"><span class="st-ic"></span><span>Rust Book, ch. 4.2</span><span class="m">12 min</span></div>
+                <div class="todo"><span class="st-ic"></span><span>Rust by Example<small>optional</small></span><span class="m">3 min</span></div>
+                <div class="todo"><span class="st-ic"></span><span>Rustlings 1–5</span><span class="m">25 min</span></div>
+              </div>
+              <div>
+                <h4>Sources</h4>
+                <div class="muted" style="font-size: 12px; line-height: 1.6"><sup style="color: var(--primary); font-weight: 700">1</sup> The Rust Programming Language, 4.2<br><sup style="color: var(--primary); font-weight: 700">2</sup> Rust by Example, 15.3.2</div>
+              </div>
+            </aside>
+          </div>
+          <div class="l2-foot">
+            <button class="btn btn-ghost btn-sm"><svg class="ico" data-lucide="chevron-left"></svg>Day 8</button>
+            <span class="faint" style="font-size: 12px">Keys: J and K move between days</span>
+            <div class="r"><button class="btn btn-ghost btn-sm">Day 10<svg class="ico" data-lucide="chevron-right"></svg></button><button class="btn btn-primary btn-sm"><svg class="ico" data-lucide="check"></svg>Mark complete</button></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script>
+  const heat = document.getElementById("heat");
+  const levels = "0123012302312012330120123312023101231230123202310312301230123102301230123012320123010";
+  for (let i = 0; i < 84; i++) {
+    const cell = document.createElement("i");
+    const l = i >= 81 ? 0 : Number(levels[i % levels.length]);
+    if (l) cell.className = "l" + l;
+    heat.appendChild(cell);
+  }
+  document.querySelectorAll(".days30").forEach((strip) => {
+    const states = strip.dataset.days.replace(/ /g, "");
+    for (let i = 0; i < 30; i++) {
+      const cell = document.createElement("i");
+      const s = { d: "d", t: "t", r: "r" }[states[i]];
+      cell.className = [s, i > 0 && i % 5 === 0 ? "wk" : ""].filter(Boolean).join(" ");
+      strip.appendChild(cell);
+    }
+  });
+  if (window.lucide) lucide.createIcons({ attrs: { "stroke-width": 2 } });
+  function fit() {
+    document.querySelectorAll(".stage").forEach((stage) => {
+      const scale = Math.min(1, stage.clientWidth / 1280);
+      stage.firstElementChild.style.transform = `scale(${scale})`;
+      stage.style.height = 800 * scale + "px";
+    });
+  }
+  addEventListener("resize", fit);
+  fit();
+</script>
+</body>
+</html>

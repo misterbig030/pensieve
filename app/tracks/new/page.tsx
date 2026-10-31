@@ -3,7 +3,7 @@ import { NewTrackForm } from "./NewTrackForm";
 
 export default function NewTrackPage() {
   return (
-    <PageShell wide>
+    <PageShell className="mx-auto max-w-[1280px]">
       <NewTrackForm />
     </PageShell>
   );

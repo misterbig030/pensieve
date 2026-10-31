@@ -8,10 +8,10 @@ import { db } from "@/lib/db/client";
 import { sources } from "@/lib/db/schema";
 import { collectCalls } from "@/lib/ai/collectCalls";
 import { generateDailyContent, type LessonMaterial, type LessonPractice } from "@/lib/ai/dailyContent";
-import { chapterAt } from "@/lib/schemas/material";
 import type { ModelCall } from "@/lib/ai/logged";
-import { PRACTICE_REGISTRY } from "@/lib/practice";
-import { getNodePracticeList, getNodeReadList, getOwnedNode, upsertLeafContent } from "@/lib/db/planQueries";
+import { upsertLeafContent } from "@/lib/db/planQueries";
+import { lessonInputs } from "@/lib/dayTasks";
+import { loadDay } from "./loadDay";
 import { resolveModels } from "@/lib/ai/resolve";
 import { UserKeyError, guardUserKeyCall } from "@/lib/ai/userKeyError";
 import type { KeyErrorKind } from "@/lib/ai/models";
@@ -32,41 +32,23 @@ export async function generateLeafContentAction(input: {
   const calls: ModelCall[] = [];
   const extra = admin ? { calls } : {};
 
-  const node = await getOwnedNode(input.nodeId, userId);
-  if (!node || node.trackId !== input.trackId) throw new Error("Plan node not found");
+  const day = await loadDay(input.trackId, input.nodeId, userId);
+  if (!day) throw new Error("Plan node not found");
+  const { node, readRows, tasks } = day;
 
-  // The lesson reads the leaf's Read table. Plans saved before materials were assigned fall back to the whole list.
-  const reads = await getNodeReadList(node.id);
+  // The lesson walks through the day's tasks. Plans saved before materials were assigned have no Read table: those
+  // lessons read every source on the track, as plain prose with no steps.
+  const inputs = lessonInputs(tasks);
   const materials: LessonMaterial[] =
-    reads.length > 0
-      ? reads.map((r) => ({
-          title: r.source.title ?? r.source.url,
-          url: r.source.url,
-          type: r.source.type,
-          kind: r.source.kind,
-          tier: r.tier,
-          minutes: r.minutes,
-          note: r.note,
-          chapter: chapterAt(r.source.toc, r.chapter || null),
-          activity: r.activity,
-        }))
+    readRows.length > 0
+      ? inputs.materials
       : (await db.query.sources.findMany({ where: eq(sources.trackId, input.trackId), orderBy: [asc(sources.position)] })).map((s) => ({
           title: s.title ?? s.url,
           url: s.url,
           type: s.type,
           kind: s.kind,
         }));
-
-  // The Do table: a generated recall row keeps its reading as source, any other generated row has none.
-  const practice: LessonPractice[] = (await getNodePracticeList(node.id)).map((p) => ({
-    format: p.format,
-    label: PRACTICE_REGISTRY[p.format].label,
-    task: p.task,
-    done: p.done ?? "",
-    minutes: p.minutes ?? 0,
-    source: p.source ? { title: p.source.title ?? p.source.url, url: p.source.url } : null,
-    generated: p.generated,
-  }));
+  const practice: LessonPractice[] = inputs.practice;
 
   const models = await resolveModels(userId);
   let generated: Awaited<ReturnType<typeof generateDailyContent>>;

@@ -32,6 +32,8 @@ export interface PracticeRow {
   generated: boolean;
   /** The item of the source's list this row is, when it names one; null for any other practice row. */
   item: PracticeItem | null;
+  /** 1-based position of the row's item in its source's list; null without one. */
+  itemFrom: number | null;
   /** Unique within a node. */
   key: string;
 }
@@ -60,7 +62,7 @@ export function practiceRowsFor(refs: PracticeRef[] | undefined, byId: ReadonlyM
   return (refs ?? []).flatMap((r, i) => {
     const material = r.id === null ? null : (byId.get(r.id) ?? null);
     if (r.id !== null && !material) return [];
-    return [{ format: r.format, label: PRACTICE_REGISTRY[r.format].label, task: r.task, done: r.done, minutes: r.minutes, material, generated: r.generated, item: itemOf(r, material), key: `${r.format}#${r.id ?? "generated"}#${i}` }];
+    return [{ format: r.format, label: PRACTICE_REGISTRY[r.format].label, task: r.task, done: r.done, minutes: r.minutes, material, generated: r.generated, item: itemOf(r, material), itemFrom: r.itemFrom ?? null, key: `${r.format}#${r.id ?? "generated"}#${i}` }];
   });
 }
 
@@ -146,7 +148,7 @@ const EXTERNAL = { target: "_blank", rel: "noopener noreferrer" } as const;
  * What a Do row asks for: its task, or for a row that is one item of a source's list the item as "49. Group Anagrams"
  * (linked to the item's page), a small solution link, and its group as a quiet label. `link` is off inside a link.
  */
-function PracticeTask({ row, link = true }: { row: PracticeRow; link?: boolean }) {
+export function PracticeTask({ row, link = true }: { row: PracticeRow; link?: boolean }) {
   const item = row.item;
   if (!item) return <>{row.task}</>;
   return (
@@ -169,7 +171,7 @@ function PracticeTask({ row, link = true }: { row: PracticeRow; link?: boolean }
 }
 
 /** Where a Do row comes from: its source, the reading a generated recall row was made from, or a Generated tag. */
-function PracticeSource({ row, link = true }: { row: PracticeRow; link?: boolean }) {
+export function PracticeSource({ row, link = true }: { row: PracticeRow; link?: boolean }) {
   if (!row.material) return <span>Generated</span>;
   return (
     <span>
@@ -179,7 +181,7 @@ function PracticeSource({ row, link = true }: { row: PracticeRow; link?: boolean
   );
 }
 
-function ItemLink({ material: m, href, className, link = true }: { material: Material; href: string; className?: string; link?: boolean }) {
+export function ItemLink({ material: m, href, className, link = true }: { material: Material; href: string; className?: string; link?: boolean }) {
   // The row names the material short; the tooltip keeps its full title.
   if (!link || m.type === "note" || m.type === "file") return <span className={className} title={m.title}>{shortTitle(m.title)}</span>;
   return (

@@ -30,7 +30,7 @@ export default async function SettingsPage() {
     : null;
 
   return (
-    <PageShell>
+    <PageShell className="mx-auto max-w-[960px]">
       <div className="pb-7">
         <h1 className="font-heading text-[26px]">Settings</h1>
         <p className="text-muted-foreground">Pay for your own usage with an API key. Without one, Pensieve pays.</p>
