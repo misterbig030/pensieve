@@ -1,9 +1,11 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { PROVIDER_NAMES } from "@/lib/ai/providerKeys";
+import { getCreditStatus } from "@/lib/db/creditStatus";
 import { getUserApiKeys } from "@/lib/db/userApiKeys";
 import { AccountCard } from "./AccountCard";
 import { ApiKeyCard, type StoredKey } from "./ApiKeyCard";
+import { CreditsCard } from "./CreditsCard";
 
 function ago(from: Date, now = new Date()): string {
   const minutes = Math.max(1, Math.round((now.getTime() - from.getTime()) / 60_000));
@@ -16,7 +18,7 @@ function ago(from: Date, now = new Date()): string {
 export default async function SettingsPage() {
   const { userId } = await auth();
   if (!userId) return null;
-  const [rows, user] = await Promise.all([getUserApiKeys(userId), currentUser()]);
+  const [rows, user, credits] = await Promise.all([getUserApiKeys(userId), currentUser(), getCreditStatus(userId)]);
   const row = rows.find((r) => r.provider === "anthropic") ?? null;
   const stored: StoredKey | null = row
     ? {
@@ -33,10 +35,13 @@ export default async function SettingsPage() {
     <PageShell className="mx-auto max-w-[960px]">
       <div className="pb-7">
         <h1 className="font-heading text-[26px]">Settings</h1>
-        <p className="text-muted-foreground">Pay for your own usage with an API key. Without one, Pensieve pays.</p>
+        <p className="text-muted-foreground">Pensieve pays for your usage up to your monthly credits. Add an API key to pay for your own.</p>
       </div>
       <div className="flex max-w-[620px] flex-col gap-5">
-        <ApiKeyCard stored={stored} />
+        <CreditsCard {...credits} />
+        <div id="api-key" className="scroll-mt-6">
+          <ApiKeyCard stored={stored} />
+        </div>
         <AccountCard email={user?.primaryEmailAddress?.emailAddress ?? null} />
       </div>
     </PageShell>
