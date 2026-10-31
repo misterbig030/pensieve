@@ -26,7 +26,7 @@ import { approxDuration } from "@/lib/researchProgress";
 import { KIND_LABEL, KIND_ORDER, hostOf, type Material, type MaterialKind, type MaterialPractice } from "@/lib/schemas/material";
 import { cn } from "@/lib/utils";
 
-const KIND_ICON: Record<MaterialKind, ComponentType<{ className?: string; strokeWidth?: number }>> = {
+export const KIND_ICON: Record<MaterialKind, ComponentType<{ className?: string; strokeWidth?: number }>> = {
   book: BookOpen,
   course: GraduationCap,
   video: CirclePlay,
@@ -216,7 +216,7 @@ export function shownRows(ordered: Material[], initialShown: number): Material[]
 }
 
 /** A practice-only source goes in the "Practice" group instead of a kind group. */
-function groupLabel(m: Material): string {
+export function groupLabel(m: Material): string {
   return isPracticeOnly(m) ? "Practice" : KIND_LABEL[m.kind];
 }
 
@@ -278,7 +278,7 @@ export function splitCoverage(open: string[]): { areas: string[]; practice: stri
   return { areas: open.filter((a) => !isPracticeOpen(a)), practice };
 }
 
-function byline(m: Material, withKind = false): string {
+export function byline(m: Material, withKind = false): string {
   return [m.author, hostOf(m.url) && m.kind !== "note" && !m.author ? hostOf(m.url) : null, m.year, withKind ? m.kind : null].filter(Boolean).join(" · ");
 }
 
