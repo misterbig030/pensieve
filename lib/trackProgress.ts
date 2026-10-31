@@ -99,14 +99,21 @@ function formatHours(hours: number): string {
 
 /**
  * This week at a glance. A day track shows the study days of the plan week holding the current leaf; a week track
- * shows the seven days of this calendar week, filled on days with a logged session.
+ * shows the seven days of this calendar week, filled on days with a logged session or a day finished in a split week.
  */
-export function weekActivity(root: PlanNode, granularity: Granularity, checkIns: CheckIn[], today: Date, hoursPerWeek: number): WeekActivity {
+export function weekActivity(
+  root: PlanNode,
+  granularity: Granularity,
+  checkIns: CheckIn[],
+  today: Date,
+  hoursPerWeek: number,
+  daysPerWeek: number,
+): WeekActivity {
   if (granularity === "week") {
     const keys = thisWeekKeys(today);
-    const sessions = checkIns.filter((c) => c.hours !== null && keys.includes(dayKey(c.completedAt)));
-    const days = new Set(sessions.map((c) => dayKey(c.completedAt)));
-    const hours = sessions.reduce((sum, c) => sum + (c.hours ?? 0), 0);
+    const events = studyEvents(root, checkIns, hoursPerWeek, daysPerWeek).filter((e) => keys.includes(dayKey(e.at)));
+    const days = new Set(events.map((e) => dayKey(e.at)));
+    const hours = events.reduce((sum, e) => sum + e.hours, 0);
     return { cells: keys.map((k) => (days.has(k) ? "done" : "open")), label: `${formatHours(hours)} of ${hoursPerWeek} h` };
   }
   const current = currentLeaf(root);

@@ -71,7 +71,7 @@ export function toTrackCard(track: CardTrack, root: PlanNode, checkIns: CardChec
     actionLabel: actionLabel(root, action),
     actionTitle: latestToday?.nodeTitle ?? (action.kind === "finished" ? "" : action.node.title),
     doneToday: doneToday(checkIns, today),
-    week: weekActivity(root, track.granularity, checkIns, today, track.hoursPerWeek),
+    week: weekActivity(root, track.granularity, checkIns, today, track.hoursPerWeek, track.daysPerWeek),
     progress: progress(root, track),
     finish: finishDate(root, track.daysPerWeek, today),
     createdAt: track.createdAt,

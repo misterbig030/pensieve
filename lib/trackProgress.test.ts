@@ -88,13 +88,13 @@ describe("plannedHours", () => {
 
 describe("weekActivity", () => {
   it("shows the current plan week's days on a day track", () => {
-    expect(weekActivity(sampleDayPlan(), "day", [], today, 6)).toEqual({ cells: ["done", "current", "open", "off", "off", "off", "off"], label: "1 of 3 this week" });
+    expect(weekActivity(sampleDayPlan(), "day", [], today, 6, 5)).toEqual({ cells: ["done", "current", "open", "off", "off", "off", "off"], label: "1 of 3 this week" });
   });
 
   it("shows no week on a day track whose current week isn't planned", () => {
     const root = sampleDayPlan();
     for (const id of ["b2", "b3"]) findNode(root, id)!.status = "completed";
-    expect(weekActivity(root, "day", [], today, 6).cells).toEqual([]);
+    expect(weekActivity(root, "day", [], today, 6, 5).cells).toEqual([]);
   });
 
   it("shows this calendar week's sessions on a week track", () => {
@@ -103,9 +103,17 @@ describe("weekActivity", () => {
       { nodeId: "w2", completedAt: new Date("2026-10-30T09:00:00Z"), hours: 0.5 },
       { nodeId: "w1", completedAt: new Date("2026-10-20T09:00:00Z"), hours: 3 },
     ];
-    expect(weekActivity(sampleWeekPlan(), "week", sessions, today, 4)).toEqual({
+    expect(weekActivity(sampleWeekPlan(), "week", sessions, today, 4, 5)).toEqual({
       cells: ["open", "done", "open", "open", "done", "open", "open"],
       label: "1.5 of 4 h",
+    });
+  });
+
+  it("counts a day finished in a split week as that day's share of the week's hours", () => {
+    const finished = [{ nodeId: "b1", completedAt: new Date("2026-10-29T10:00:00Z"), hours: null }];
+    expect(weekActivity(sampleSplitWeekPlan(), "week", finished, today, 4, 5)).toEqual({
+      cells: ["open", "open", "open", "done", "open", "open", "open"],
+      label: "0.8 of 4 h", // 50 minutes
     });
   });
 });
