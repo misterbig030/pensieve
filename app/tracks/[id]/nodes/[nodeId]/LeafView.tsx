@@ -43,7 +43,10 @@ interface Props {
   /** Week leaves only. */
   budgetHours: number | null;
   initialSessions: { hours: number }[];
-  initialContent: { contentMarkdown: string; citations: { title: string; url: string }[] } | null;
+  initialContent: {
+    contentMarkdown: string;
+    citations: { title: string; url: string }[];
+  } | null;
   youtubeSources: Source[];
   isCompleted: boolean;
   /** The leaf's Read table, for "Where these come from"; empty for plans saved before materials were assigned. */
@@ -55,7 +58,11 @@ interface Props {
 }
 
 function SectionHeading({ children }: { children: ReactNode }) {
-  return <h2 className="mb-1.5 font-sans text-[11px] font-semibold tracking-[.04em] text-foreground/45 uppercase">{children}</h2>;
+  return (
+    <h2 className="mb-1.5 font-sans text-[11px] font-semibold tracking-[.04em] text-foreground/45 uppercase">
+      {children}
+    </h2>
+  );
 }
 
 /** The day page: the day's tasks in a column that stays put, and beside it the lesson that walks through them. */
@@ -91,11 +98,19 @@ export function LeafView({
   const stepKeys = new Map<string, string[]>();
   for (const part of content ? splitLesson(content.contentMarkdown) : []) {
     if (part.kind !== "step" || !part.taskId) continue;
-    stepKeys.set(part.taskId, [...(stepKeys.get(part.taskId) ?? []), stepKey(part.taskId, part.nth)]);
+    stepKeys.set(part.taskId, [
+      ...(stepKeys.get(part.taskId) ?? []),
+      stepKey(part.taskId, part.nth),
+    ]);
   }
   const stepKeysOf = (id: string) => stepKeys.get(id) ?? [];
-  const taskIds = [...tasks.map((t) => t.id), ...(content ? [LESSON_TASK] : [])];
-  const allDone = taskIds.length > 0 && doneCount(taskIds, stepKeysOf, ticks) === taskIds.length;
+  const taskIds = [
+    ...tasks.map((t) => t.id),
+    ...(content ? [LESSON_TASK] : []),
+  ];
+  const allDone =
+    taskIds.length > 0 &&
+    doneCount(taskIds, stepKeysOf, ticks) === taskIds.length;
 
   async function handleGenerate() {
     setIsPending(true);
@@ -108,17 +123,24 @@ export function LeafView({
         setError(result.message);
         setErrorLink(true);
       } else {
-        setContent({ contentMarkdown: result.contentMarkdown, citations: result.citations });
+        setContent({
+          contentMarkdown: result.contentMarkdown,
+          citations: result.citations,
+        });
         setCostUsd(result.costUsd);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation failed. Try again.");
+      setError(
+        err instanceof Error ? err.message : "Generation failed. Try again.",
+      );
     } finally {
       setIsPending(false);
     }
   }
 
-  const provenance = readRows.length > 0 && <WhereTheseComeFrom rows={readRows} />;
+  const provenance = readRows.length > 0 && (
+    <WhereTheseComeFrom rows={readRows} />
+  );
 
   const main = content ? (
     <>
@@ -132,13 +154,24 @@ export function LeafView({
       />
       {youtubeSources.length > 0 && (
         <div>
-          <p className="mb-2.5 text-[11px] tracking-wide text-muted-foreground uppercase">Related video</p>
+          <p className="mb-2.5 text-[11px] tracking-wide text-muted-foreground uppercase">
+            Related video
+          </p>
           <div className="flex flex-col gap-2">
             {youtubeSources.map((s) => (
-              <a key={s.url} href={s.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl p-2 hover:bg-secondary">
+              <a
+                key={s.url}
+                href={s.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-2xl p-2 hover:bg-secondary"
+              >
                 <span
                   className="h-10 w-16 shrink-0 rounded-[10px]"
-                  style={{ backgroundImage: "repeating-linear-gradient(135deg, var(--neutral-300) 0 6px, var(--neutral-200) 6px 12px)" }}
+                  style={{
+                    backgroundImage:
+                      "repeating-linear-gradient(135deg, var(--neutral-300) 0 6px, var(--neutral-200) 6px 12px)",
+                  }}
                 />
                 <span className="text-[13px]">{s.title ?? s.url}</span>
               </a>
@@ -152,7 +185,12 @@ export function LeafView({
           <ul className="flex flex-col gap-1 text-[13px] leading-snug">
             {content.citations.map((c) => (
               <li key={c.url}>
-                <a href={c.url} target="_blank" rel="noreferrer" className="text-foreground/75 hover:text-accent-700 hover:underline">
+                <a
+                  href={c.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-foreground/75 hover:text-accent-700 hover:underline"
+                >
                   {c.title}
                 </a>
               </li>
@@ -161,54 +199,90 @@ export function LeafView({
         </section>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={handleGenerate} disabled={isPending}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleGenerate}
+          disabled={isPending}
+        >
           <RefreshCw />
           {isPending ? "Rewriting…" : "Rewrite this lesson"}
         </Button>
-        {costUsd !== null && <span className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(costUsd)}</span>}
+        {costUsd !== null && (
+          <span className="text-xs text-muted-foreground">
+            Estimated cost: {formatCostUsd(costUsd)}
+          </span>
+        )}
       </div>
       {error && <ActionError message={error} settingsLink={errorLink} />}
       {provenance}
     </>
   ) : (
     <>
-      <LessonIntro unit={unit} tasks={tasks} pending={isPending} error={error} errorLink={errorLink} onWrite={handleGenerate} />
+      <LessonIntro
+        unit={unit}
+        tasks={tasks}
+        pending={isPending}
+        error={error}
+        errorLink={errorLink}
+        onWrite={handleGenerate}
+      />
       {provenance}
     </>
   );
 
   return (
     <div className="grid min-h-[calc(100vh-60px)] grid-cols-[360px_minmax(0,1fr)] max-[900px]:grid-cols-1">
+      {/* The top bar scrolls away, so the column sticks to the window's top and keeps the height it had under the bar. */}
       <aside
         aria-label={isWeek ? "This week's tasks" : "Today's tasks"}
-        className="sticky top-[60px] flex h-[calc(100vh-60px)] flex-col gap-3 overflow-y-auto border-r border-border bg-[color-mix(in_srgb,var(--card)_45%,var(--background))] pt-5 pr-[22px] pb-5 pl-8 max-[900px]:static max-[900px]:h-auto max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:px-4"
+        className="border-r border-border bg-[color-mix(in_srgb,var(--card)_45%,var(--background))] max-[900px]:border-r-0 max-[900px]:border-b"
       >
-        <TaskColumn
-          unit={unit}
-          tasks={tasks}
-          lessonMinutes={content ? lessonMinutes(content.contentMarkdown) : null}
-          ticks={ticks}
-          stepKeysOf={stepKeysOf}
-          onToggleTask={(id) => setTicks(toggleTask(ticks, id, stepKeysOf(id)))}
-        >
-          {isWeek && (
-            <LogSessionForm nodeId={nodeId} budgetHours={budgetHours} sessions={sessions} onLogged={(hours) => setSessions((s) => [...s, { hours }])} />
-          )}
-          <MarkCompleteButton
-            nodeId={nodeId}
-            completed={completed}
-            onDone={() => setCompleted(true)}
-            label={`Mark ${unitLabel} complete`}
-            variant={allDone ? "default" : "outline"}
-            className="h-10 w-full justify-center"
-          />
-          {(prev || next) && (
-            <nav aria-label="Other days" className="flex gap-2">
-              {prev ? <DayLink link={prev} direction="prev" /> : <span className="flex-1" />}
-              {next ? <DayLink link={next} direction="next" /> : <span className="flex-1" />}
-            </nav>
-          )}
-        </TaskColumn>
+        <div className="sticky top-0 flex h-[calc(100dvh-60px)] flex-col gap-3 overflow-y-auto pt-5 pr-[22px] pb-5 pl-8 max-[900px]:static max-[900px]:h-auto max-[900px]:px-4">
+          <TaskColumn
+            unit={unit}
+            tasks={tasks}
+            lessonMinutes={
+              content ? lessonMinutes(content.contentMarkdown) : null
+            }
+            ticks={ticks}
+            stepKeysOf={stepKeysOf}
+            onToggleTask={(id) =>
+              setTicks(toggleTask(ticks, id, stepKeysOf(id)))
+            }
+          >
+            {isWeek && (
+              <LogSessionForm
+                nodeId={nodeId}
+                budgetHours={budgetHours}
+                sessions={sessions}
+                onLogged={(hours) => setSessions((s) => [...s, { hours }])}
+              />
+            )}
+            <MarkCompleteButton
+              nodeId={nodeId}
+              completed={completed}
+              onDone={() => setCompleted(true)}
+              label={`Mark ${unitLabel} complete`}
+              variant={allDone ? "default" : "outline"}
+              className="h-10 w-full justify-center"
+            />
+            {(prev || next) && (
+              <nav aria-label="Other days" className="flex gap-2">
+                {prev ? (
+                  <DayLink link={prev} direction="prev" />
+                ) : (
+                  <span className="flex-1" />
+                )}
+                {next ? (
+                  <DayLink link={next} direction="next" />
+                ) : (
+                  <span className="flex-1" />
+                )}
+              </nav>
+            )}
+          </TaskColumn>
+        </div>
       </aside>
 
       <div className="min-w-0 px-10 pt-5 pb-24 max-[640px]:px-4">
@@ -221,10 +295,24 @@ export function LeafView({
   );
 }
 
-function DayLink({ link, direction }: { link: LeafLink; direction: "prev" | "next" }) {
+function DayLink({
+  link,
+  direction,
+}: {
+  link: LeafLink;
+  direction: "prev" | "next";
+}) {
   return (
-    <Link href={link.href} className={cn("min-w-0 flex-1 rounded-[14px] bg-neutral-100 px-2.5 py-2 text-[12px] hover:bg-neutral-200", direction === "next" && "text-right")}>
-      <small className="block text-[11px] text-foreground/45">{direction === "prev" ? `← ${link.label}` : `${link.label} →`}</small>
+    <Link
+      href={link.href}
+      className={cn(
+        "min-w-0 flex-1 rounded-[14px] bg-neutral-100 px-2.5 py-2 text-[12px] hover:bg-neutral-200",
+        direction === "next" && "text-right",
+      )}
+    >
+      <small className="block text-[11px] text-foreground/45">
+        {direction === "prev" ? `← ${link.label}` : `${link.label} →`}
+      </small>
       <span className="line-clamp-2">{link.title}</span>
     </Link>
   );
@@ -234,27 +322,50 @@ function DayLink({ link, direction }: { link: LeafLink; direction: "prev" | "nex
 function WhereTheseComeFrom({ rows }: { rows: ReadRow[] }) {
   const checked = rows.filter((r) => r.material.verifiedAt);
   const unchecked = rows.length - checked.length;
-  const latest = checked.map((r) => r.material.verifiedAt!).sort().at(-1);
+  const latest = checked
+    .map((r) => r.material.verifiedAt!)
+    .sort()
+    .at(-1);
   const backbone = rows.find((r) => r.material.backbone)?.material;
   const parts: string[] = [];
   if (latest) {
-    const date = new Date(latest).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const date = new Date(latest).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
     parts.push(
       `Pensieve opened ${checked.length === rows.length ? (rows.length === 1 ? "this page" : "each page") : `${checked.length} of these pages`} on ${date} and checked ${checked.length === 1 ? "it is" : "each is"} what it claims to be.`,
     );
   }
-  if (unchecked > 0) parts.push(`${unchecked === 1 ? "One is" : `${unchecked} are`} your own, listed as you gave ${unchecked === 1 ? "it" : "them"}.`);
+  if (unchecked > 0)
+    parts.push(
+      `${unchecked === 1 ? "One is" : `${unchecked} are`} your own, listed as you gave ${unchecked === 1 ? "it" : "them"}.`,
+    );
   if (backbone && backbone.recommendedBy.length > 0) {
-    parts.push(`The textbook was recommended by ${backbone.recommendedBy.length} independent source${backbone.recommendedBy.length === 1 ? "" : "s"}.`);
+    parts.push(
+      `The textbook was recommended by ${backbone.recommendedBy.length} independent source${backbone.recommendedBy.length === 1 ? "" : "s"}.`,
+    );
   }
   if (parts.length === 0) return null;
   return (
-    <section aria-labelledby="src-h" className="flex flex-col gap-2 rounded-[28px] bg-foreground/4 px-[22px] py-[18px]">
-      <h2 id="src-h" className="m-0 flex items-center gap-2 font-sans text-[13px] font-semibold">
-        <ShieldCheck className="size-[15px] text-accent-2-700" strokeWidth={2.5} />
+    <section
+      aria-labelledby="src-h"
+      className="flex flex-col gap-2 rounded-[28px] bg-foreground/4 px-[22px] py-[18px]"
+    >
+      <h2
+        id="src-h"
+        className="m-0 flex items-center gap-2 font-sans text-[13px] font-semibold"
+      >
+        <ShieldCheck
+          className="size-[15px] text-accent-2-700"
+          strokeWidth={2.5}
+        />
         Where these come from
       </h2>
-      <p className="m-0 text-[12.5px] leading-normal text-neutral-800">{parts.join(" ")}</p>
+      <p className="m-0 text-[12.5px] leading-normal text-neutral-800">
+        {parts.join(" ")}
+      </p>
     </section>
   );
 }
