@@ -48,16 +48,6 @@ export function monthTotals(events: StudyEvent[], today: Date): { sessions: numb
   return { sessions: inMonth.length, hours: Math.round(hours * 2) / 2 };
 }
 
-/** Rows grouped by the UTC week they fall in, newest week first and newest row first within it. */
-export function byWeek<T extends { completedAt: Date }>(rows: T[]): { start: Date; rows: T[] }[] {
-  const groups = new Map<number, T[]>();
-  for (const row of [...rows].sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())) {
-    const start = weekStart(row.completedAt).getTime();
-    groups.set(start, [...(groups.get(start) ?? []), row]);
-  }
-  return [...groups].map(([start, rows]) => ({ start: new Date(start), rows }));
-}
-
 /** "Nov 21", by UTC day. */
 export function shortDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -76,12 +66,6 @@ export function relativeDay(d: Date, today: Date): string {
   if (days === 1) return "yesterday";
   if (days > 1 && days < 7) return d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
   return shortDate(d);
-}
-
-/** Hours as a figure: whole hours as they are, the rest to one decimal. */
-export function hoursText(hours: number): string {
-  const tenths = Math.round(hours * 10) / 10;
-  return Number.isInteger(tenths) ? String(tenths) : tenths.toFixed(1);
 }
 
 export interface CalendarDay {
@@ -142,13 +126,3 @@ export function studyDates(rows: { completedAt: Date }[]): number {
   return new Set(rows.map((r) => dayKey(r.completedAt))).size;
 }
 
-/**
- * A week of check-ins in a line: finished days (no hours) and logged sessions (hours), then the study hours, as
- * "1 day · 2 sessions · 4 h". A count of none is left out.
- */
-export function weekTotal(rows: { hours: number | null }[], studyHours: number): string {
-  const days = rows.filter((r) => r.hours === null).length;
-  const sessions = rows.length - days;
-  const parts = [days > 0 && `${days} day${days === 1 ? "" : "s"}`, sessions > 0 && `${sessions} session${sessions === 1 ? "" : "s"}`].filter(Boolean);
-  return [...parts, `${hoursText(studyHours)} h`].join(" · ");
-}

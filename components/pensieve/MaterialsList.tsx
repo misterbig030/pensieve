@@ -71,8 +71,6 @@ export interface MaterialsListProps {
    * browser storage key that remembers the visit; omit for a list that is always open.
    */
   foldKey?: string;
-  /** Leaves out the heading and the totals line, for a page that shows them beside the list. */
-  bare?: boolean;
 }
 
 /** The plan-level materials list: the backbone pinned first, the rest grouped by kind. */
@@ -120,7 +118,7 @@ export function MaterialsList(props: MaterialsListProps) {
 
   const body = (
     <>
-      {!props.bare && sized + practiceMinutes > 0 && (
+      {sized + practiceMinutes > 0 && (
         <p className="m-0 text-[13px] leading-normal text-neutral-800">
           <strong className="font-semibold">{totalsLine(sized, practiceMinutes)}</strong>
           {props.totalHours ? ` for a plan of about ${props.totalHours} hours` : ""}
@@ -137,8 +135,7 @@ export function MaterialsList(props: MaterialsListProps) {
         <span className="text-[13px] text-muted-foreground">No backbone: units draw on the materials below directly.</span>
       )}
 
-      {/* Bare, the list flows into columns as its container widens, so rows never run the width of a wide screen. */}
-      <div className={props.bare ? "block gap-x-8 @min-[1000px]:columns-2 @min-[1600px]:columns-3" : "flex flex-col gap-0.5"}>
+      <div className="flex flex-col gap-0.5">
         {shown.map((m, i) => (
           <div key={m.id} className="contents">
             {(i === 0 || groupLabel(shown[i - 1]) !== groupLabel(m)) && (
@@ -146,9 +143,7 @@ export function MaterialsList(props: MaterialsListProps) {
                 {groupLabel(m)}
               </span>
             )}
-            <div className="break-inside-avoid">
-              <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
-            </div>
+            <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
           </div>
         ))}
       </div>
@@ -172,13 +167,10 @@ export function MaterialsList(props: MaterialsListProps) {
 
       {materials.length > 0 && (
         <section
-          aria-labelledby={props.bare ? undefined : "materials-h"}
-          aria-label={props.bare ? "Materials" : undefined}
+          aria-labelledby="materials-h"
           className="flex flex-col gap-3.5 rounded-[28px] bg-secondary px-[22px] pt-5 pb-[18px]"
         >
-          {props.bare ? (
-            body
-          ) : props.foldKey ? (
+          {props.foldKey ? (
             <details ref={fold} className="group/fold">
               <summary className="cursor-pointer list-none rounded-xl select-none [&::-webkit-details-marker]:hidden">{heading}</summary>
               <div className="mt-3.5 flex flex-col gap-3.5">{body}</div>

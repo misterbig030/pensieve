@@ -7,15 +7,15 @@ import { getTrackCheckIns } from "@/lib/db/activity";
 import { summarizePlan } from "@/lib/planSummary";
 import { currentLeaf, doneDays, resolveSelected, walk } from "@/lib/planTree";
 import { dayStrip, finishDate, plannedHours, studyEvents } from "@/lib/trackProgress";
-import { MaterialsTab } from "./MaterialsTab";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { DayStrip } from "@/components/pensieve/DayStrip";
-import { ActivityTab } from "./ActivityTab";
 import { PlanGlance } from "./PlanGlance";
 import { TrackHeader } from "./TrackHeader";
 import { DayPane } from "./DayPane";
 import { PlanOutline } from "./PlanOutline";
-import { TRACK_TABS, TrackTabs, type TrackTab } from "./TrackTabs";
+import { StudyDaysCard } from "./StudyDaysCard";
+import { MaterialsColumn } from "./MaterialsColumn";
+import { materialPlacement, placeLabel } from "@/lib/materialUses";
 
 const halfHours = (hours: number) => Math.round(hours * 2) / 2;
 
@@ -24,12 +24,12 @@ export default async function TrackDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; day?: string }>;
+  searchParams: Promise<{ day?: string }>;
 }) {
   const { userId } = await auth();
   if (!userId) return null;
 
-  const [{ id }, { tab, day }] = await Promise.all([params, searchParams]);
+  const [{ id }, { day }] = await Promise.all([params, searchParams]);
   const [detail, checkInRows] = await Promise.all([getTrackDetail(id, userId), getTrackCheckIns(id, userId)]);
   if (!detail) notFound();
 
@@ -47,12 +47,10 @@ export default async function TrackDetailPage({
     if (s) node.sessions = s;
   });
 
-  const active: TrackTab = TRACK_TABS.find((t) => t === tab) ?? "plan";
   const current = currentLeaf(root);
   const selected = resolveSelected(root, day);
   const summary = track.summary ?? summarizePlan(root, track.title, track.daysPerWeek);
-  const events = studyEvents(root, checkInRows, track.hoursPerWeek, track.daysPerWeek);
-  const studied = events.reduce((sum, e) => sum + e.hours, 0);
+  const studied = studyEvents(root, checkInRows, track.hoursPerWeek, track.daysPerWeek).reduce((sum, e) => sum + e.hours, 0);
   const today = new Date();
   const finish = finishDate(root, track.daysPerWeek, today);
   const planned = halfHours(plannedHours(root, track.hoursPerWeek, track.daysPerWeek));
@@ -60,71 +58,65 @@ export default async function TrackDetailPage({
 
   return (
     <PageShell>
-      <div className="flex flex-col gap-3">
-        <nav className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
-          <Link href="/" className="hover:text-primary">
-            Your tracks
-          </Link>
-          <ChevronRight className="size-3.5" />
-          <b className="truncate font-semibold text-foreground">{track.title}</b>
-        </nav>
-        <TrackHeader
-          title={track.title}
-          pace={pace}
-          done={doneDays(root)}
-          total={root.len}
-          studied={halfHours(studied)}
-          planned={planned}
-          finish={finish}
-          adjustHref={`/tracks/${track.id}/adjust`}
-        />
-        <DayStrip cells={dayStrip(root, track.granularity, track.daysPerWeek)} />
-        <TrackTabs trackId={track.id} active={active} materialsCount={materials.length} />
-      </div>
-
-      <div className="pt-6">
-        {active === "plan" && <PlanGlance summary={summary} totalHours={planned} split={track.split} materials={materials} />}
-        {active === "plan" && (
-          <div className="grid grid-cols-[440px_minmax(0,1fr)] max-[1100px]:grid-cols-[340px_minmax(0,1fr)] max-[900px]:grid-cols-1">
-            <div className="border-r border-border pr-4 max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:pr-0 max-[900px]:pb-4">
-              <PlanOutline
-                trackId={track.id}
-                root={root}
-                granularity={track.granularity}
-                daysPerWeek={track.daysPerWeek}
-                selectedId={selected.id}
-                currentLeafId={current?.id ?? null}
-              />
-            </div>
-            <div className="min-w-0 pl-8 max-[900px]:pt-6 max-[900px]:pl-0">
-              <DayPane
-                trackId={track.id}
-                root={root}
-                node={selected}
-                currentLeafId={current?.id ?? null}
-                materials={materials}
-                hoursPerWeek={track.hoursPerWeek}
-                daysPerWeek={track.daysPerWeek}
-                userId={userId}
-              />
-            </div>
-          </div>
-        )}
-        {active === "materials" &&
-          (materials.length > 0 ? (
-            <MaterialsTab topic={track.title} materials={materials} />
-          ) : (
-            <p className="py-10 text-center text-[14px] text-muted-foreground">This track has no materials.</p>
-          ))}
-        {active === "activity" && (
-          <ActivityTab
-            rows={checkInRows.map((row, i) => ({ ...row, studyHours: events[i].hours }))}
-            createdAt={track.createdAt}
-            today={today}
+      {/* One page, no tabs: the study days sit in the top corner beside the header, the materials under them beside the
+          outline and pane. Below 1200 px both drop under the plan. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_340px] gap-x-6 gap-y-[18px] max-[1199px]:grid-cols-1">
+        <div className="flex min-w-0 flex-col gap-3">
+          <nav className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+            <Link href="/" className="hover:text-primary">
+              Your tracks
+            </Link>
+            <ChevronRight className="size-3.5" />
+            <b className="truncate font-semibold text-foreground">{track.title}</b>
+          </nav>
+          <TrackHeader
+            title={track.title}
+            pace={pace}
+            done={doneDays(root)}
+            total={root.len}
             studied={halfHours(studied)}
+            planned={planned}
             finish={finish}
+            adjustHref={`/tracks/${track.id}/adjust`}
           />
-        )}
+          <DayStrip cells={dayStrip(root, track.granularity, track.daysPerWeek)} />
+          <div className="pt-3">
+            <PlanGlance summary={summary} totalHours={planned} split={track.split} materials={materials} />
+          </div>
+        </div>
+
+        <div className="max-[1199px]:order-3">
+          <StudyDaysCard rows={checkInRows} createdAt={track.createdAt} today={today} />
+        </div>
+
+        <div className="grid min-w-0 grid-cols-[300px_minmax(0,1fr)] min-[1440px]:grid-cols-[360px_minmax(0,1fr)] max-[900px]:grid-cols-1">
+          <div className="border-r border-border pr-4 max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:pr-0 max-[900px]:pb-4">
+            <PlanOutline
+              trackId={track.id}
+              root={root}
+              granularity={track.granularity}
+              daysPerWeek={track.daysPerWeek}
+              selectedId={selected.id}
+              currentLeafId={current?.id ?? null}
+            />
+          </div>
+          <div className="min-w-0 pl-6 max-[900px]:pt-6 max-[900px]:pl-0">
+            <DayPane
+              trackId={track.id}
+              root={root}
+              node={selected}
+              currentLeafId={current?.id ?? null}
+              materials={materials}
+              hoursPerWeek={track.hoursPerWeek}
+              daysPerWeek={track.daysPerWeek}
+              userId={userId}
+            />
+          </div>
+        </div>
+
+        <aside className="sticky top-5 flex max-h-[calc(100dvh-40px)] flex-col self-start max-[1199px]:static max-[1199px]:order-4 max-[1199px]:max-h-none">
+          <MaterialsColumn key={selected.id} materials={materials} unitLabel={placeLabel(root, selected)} placement={materialPlacement(root, materials, selected)} />
+        </aside>
       </div>
     </PageShell>
   );

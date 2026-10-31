@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byWeek, heatmapWeeks, hoursText, monthLabels, monthTotals, relativeDay, shortDate, studyCalendar, studyDates, thisWeekKeys, weekStart, weekTotal, weekdayDate } from "./activity";
+import { heatmapWeeks, monthLabels, monthTotals, relativeDay, shortDate, studyCalendar, studyDates, thisWeekKeys, weekStart, weekdayDate } from "./activity";
 
 const today = new Date("2026-10-30T12:00:00Z"); // a Friday
 
@@ -59,20 +59,6 @@ describe("relativeDay", () => {
   });
 });
 
-describe("byWeek", () => {
-  it("groups rows by their Monday-to-Sunday UTC week, newest week and row first", () => {
-    const at = (iso: string) => ({ completedAt: new Date(iso) });
-    const groups = byWeek([at("2026-10-19T10:00:00Z"), at("2026-10-30T08:00:00Z"), at("2026-10-26T00:00:00Z"), at("2026-10-25T23:59:00Z")]);
-    expect(groups.map((g) => g.start.toISOString())).toEqual(["2026-10-26T00:00:00.000Z", "2026-10-19T00:00:00.000Z"]);
-    expect(groups[0].rows.map((r) => r.completedAt.toISOString())).toEqual(["2026-10-30T08:00:00.000Z", "2026-10-26T00:00:00.000Z"]);
-    expect(groups[1].rows.map((r) => r.completedAt.toISOString())).toEqual(["2026-10-25T23:59:00.000Z", "2026-10-19T10:00:00.000Z"]);
-  });
-
-  it("returns no groups for no rows", () => {
-    expect(byWeek([])).toEqual([]);
-  });
-});
-
 describe("shortDate", () => {
   it("formats the UTC day as month and day", () => {
     expect(shortDate(new Date("2026-11-21T23:30:00Z"))).toBe("Nov 21");
@@ -126,23 +112,5 @@ describe("studyDates", () => {
   it("counts distinct dates", () => {
     const at = (iso: string) => ({ completedAt: new Date(iso) });
     expect(studyDates([at("2026-10-30T08:00:00Z"), at("2026-10-30T20:00:00Z"), at("2026-10-31T08:00:00Z")])).toBe(2);
-  });
-});
-
-describe("weekTotal", () => {
-  it("totals a week", () => {
-    expect(weekTotal([{ hours: null }, { hours: null }], 2.5)).toBe("2 days · 2.5 h");
-    expect(weekTotal([{ hours: 1 }, { hours: 2 }, { hours: 1 }], 4)).toBe("3 sessions · 4 h");
-    expect(weekTotal([{ hours: null }, { hours: 1 }, { hours: 2 }], 4)).toBe("1 day · 2 sessions · 4 h");
-    expect(weekTotal([{ hours: 1.25 }], 1.25)).toBe("1 session · 1.3 h");
-  });
-});
-
-describe("hoursText", () => {
-  it("rounds sums to a tenth and drops a trailing .0", () => {
-    expect(hoursText(7.000000000000001)).toBe("7");
-    expect(hoursText(1.983)).toBe("2");
-    expect(hoursText(2.5)).toBe("2.5");
-    expect(hoursText(1.25)).toBe("1.3");
   });
 });

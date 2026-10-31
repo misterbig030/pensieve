@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SPLIT_SET_BY_LEARNER, type PlanSplit } from "@/lib/studyTime";
 import { PlanGlance } from "./PlanGlance";
-import { TRACK_TABS } from "./TrackTabs";
 
 const summary = "8 weeks on Senior software engineer interview preparation, usually 5 study days a week.";
 const split: PlanSplit = { readingShare: 65, practice: "building projects", reason: "Mostly reading, with projects." };
@@ -36,11 +35,5 @@ describe("PlanGlance", () => {
     expect(html).toContain(summary);
     expect(html).not.toContain("split");
     expect(html).not.toContain('role="img"');
-  });
-});
-
-describe("TrackTabs", () => {
-  it("has no About tab", () => {
-    expect(TRACK_TABS).toEqual(["plan", "materials", "activity"]);
   });
 });
