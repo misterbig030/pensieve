@@ -1,75 +1,106 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
+import { Plus } from "lucide-react";
 import { getDashboardTracksForUser } from "@/lib/db/queries";
-import { computeStreak } from "@/lib/streak";
-import { doneDays } from "@/lib/planTree";
-import { Badge } from "@/components/ui/badge";
+import { heatmapWeeks, monthTotals } from "@/lib/activity";
+import { computeStreak, longestStreak } from "@/lib/streak";
+import { toTrackCard } from "@/lib/trackCard";
+import { sortTracks, studyEvents, type SortKey } from "@/lib/trackProgress";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { PageShell } from "@/components/pensieve/PageShell";
-import { StreakChip } from "@/components/pensieve/StreakChip";
+import { SortMenu } from "@/components/pensieve/home/SortMenu";
+import { StatsRail } from "@/components/pensieve/home/StatsRail";
+import { TrackCard } from "@/components/pensieve/home/TrackCard";
 
-const STATUS_LABEL: Record<string, string> = {
-  active: "Active",
-  completed: "Completed",
-  archived: "Archived",
-};
-const STATUS_VARIANT: Record<string, "accent2" | "accent" | "neutral"> = {
-  active: "accent2",
-  completed: "accent",
-  archived: "neutral",
-};
+const SORT_KEYS: readonly SortKey[] = ["next", "recent", "newest"];
 
-export default async function Home() {
+function statusLine(left: number): string {
+  if (left === 0) return "You're done for today.";
+  if (left === 1) return "One session left today. Pick up where you left off.";
+  return `${left} sessions left today. Pick up where you left off.`;
+}
+
+export default async function Home({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
   const { userId } = await auth();
   if (!userId) return null;
 
+  const { sort } = await searchParams;
+  const sortKey: SortKey = SORT_KEYS.find((k) => k === sort) ?? "next";
+  const today = new Date();
   const dashboardTracks = await getDashboardTracksForUser(userId);
 
+  const cards = sortTracks(
+    dashboardTracks.map(({ track, root, checkIns }) => toTrackCard(track, root, checkIns, today)),
+    sortKey,
+  );
+  const left = cards.filter((c) => (c.action.kind === "start" || c.action.kind === "log") && !c.doneToday).length;
+
+  const allCheckIns = dashboardTracks.flatMap((t) => t.checkIns).sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime());
+  const dates = allCheckIns.map((c) => c.completedAt);
+  const events = dashboardTracks.flatMap(({ track, root, checkIns }) => studyEvents(root, checkIns, track.hoursPerWeek, track.daysPerWeek));
+
   return (
-    <PageShell className="mx-auto max-w-[1280px]">
-      <div className="flex items-end gap-4 pb-7">
-        <div className="mr-auto">
-          <h1>Your learning tracks</h1>
-          <p className="text-muted-foreground">Pick up where you left off, or start something new.</p>
+    <PageShell className="grid min-h-[calc(100vh-60px)] grid-cols-[minmax(0,1fr)_320px] p-0 max-[900px]:grid-cols-1 max-[640px]:px-0">
+      <div className="flex min-w-0 flex-col gap-5 px-8 pt-7 pb-24 max-[640px]:px-4">
+        <div className="flex items-end gap-4">
+          <div className="mr-auto">
+            <h1 className="text-[30px] leading-[1.1]">Your tracks</h1>
+            {cards.length > 0 && <p className="mt-1.5 text-[14px] text-muted-foreground">{statusLine(left)}</p>}
+          </div>
+          <Button
+            nativeButton={false}
+            render={
+              <Link href="/tracks/new">
+                <Plus />
+                New track
+              </Link>
+            }
+          />
         </div>
-        <Button nativeButton={false} render={<Link href="/tracks/new">+ New track</Link>} />
+
+        {cards.length > 0 ? (
+          <>
+            <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
+              <span>
+                {cards.length} {cards.length === 1 ? "track" : "tracks"}
+              </span>
+              <SortMenu value={sortKey} />
+            </div>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
+              {cards.map((card) => (
+                <TrackCard key={card.id} card={card} />
+              ))}
+              <Link
+                href="/tracks/new"
+                className="flex min-h-[230px] flex-col items-center justify-center gap-2.5 rounded-[26px] border-2 border-dashed border-neutral-400 text-[14px] font-medium text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+              >
+                <span className="flex size-11 items-center justify-center rounded-full bg-accent-100 text-primary">
+                  <Plus className="size-5" />
+                </span>
+                Start a new track
+                <span className="text-[12px] font-normal text-foreground/45">Tell Pensieve what you want to learn</span>
+              </Link>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-[32px] bg-secondary px-6 py-16 text-center">
+            <div className="mx-auto mb-[18px] size-11 rounded-full bg-accent-100" />
+            <h3>No tracks yet</h3>
+            <p className="text-muted-foreground">
+              Tell Pensieve what you want to learn and it will draft a day-by-day plan.
+            </p>
+            <Button className="mt-2" nativeButton={false} render={<Link href="/tracks/new">+ New track</Link>} />
+          </div>
+        )}
       </div>
 
-      {dashboardTracks.length > 0 ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(272px,1fr))] gap-4">
-          {dashboardTracks.map(({ track, root, checkIns }) => {
-            const total = root.len;
-            const done = doneDays(root);
-            return (
-              <Link
-                key={track.id}
-                href={`/tracks/${track.id}`}
-                className="elev-sm flex flex-col gap-2 rounded-[32px] bg-secondary p-[13px] transition-transform hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <span className="font-heading text-[17px] leading-tight">{track.title}</span>
-                <Progress value={total > 0 ? (done / total) * 100 : 0} />
-                <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-foreground/60">
-                  <Badge variant={STATUS_VARIANT[track.status]}>{STATUS_LABEL[track.status]}</Badge>
-                  <span>
-                    {done} of {total} days complete
-                  </span>
-                  <StreakChip days={computeStreak(checkIns.map((c) => c.completedAt))} />
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="rounded-[32px] bg-secondary px-6 py-16 text-center">
-          <div className="mx-auto mb-[18px] size-11 rounded-full bg-accent-100" />
-          <h3>No tracks yet</h3>
-          <p className="text-muted-foreground">
-            Tell Pensieve what you want to learn and it will draft a day-by-day plan.
-          </p>
-          <Button className="mt-2" nativeButton={false} render={<Link href="/tracks/new">+ New track</Link>} />
-        </div>
-      )}
+      <StatsRail
+        streak={computeStreak(dates, today)}
+        longest={longestStreak(dates)}
+        month={monthTotals(events, today)}
+        heatmap={heatmapWeeks(dates, today)}
+        recent={allCheckIns.slice(0, 4)}
+      />
     </PageShell>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heatmapWeeks, monthTotals, thisWeekKeys, weekStart } from "./activity";
+import { heatmapWeeks, monthTotals, relativeDay, shortDate, thisWeekKeys, weekStart } from "./activity";
 
 const today = new Date("2026-10-30T12:00:00Z"); // a Friday
 
@@ -43,5 +43,24 @@ describe("monthTotals", () => {
       { at: new Date("2026-09-30T23:59:00Z"), hours: 4 },
     ];
     expect(monthTotals(events, today)).toEqual({ sessions: 2, hours: 2.5 });
+  });
+});
+
+describe("relativeDay", () => {
+  it("names today and yesterday by UTC day", () => {
+    expect(relativeDay(new Date("2026-10-30T00:10:00Z"), today)).toBe("today");
+    expect(relativeDay(new Date("2026-10-29T23:59:00Z"), today)).toBe("yesterday");
+  });
+
+  it("uses the weekday within the last week, then the date", () => {
+    expect(relativeDay(new Date("2026-10-27T09:00:00Z"), today)).toBe("Tue");
+    expect(relativeDay(new Date("2026-10-24T09:00:00Z"), today)).toBe("Sat");
+    expect(relativeDay(new Date("2026-10-23T09:00:00Z"), today)).toBe("Oct 23");
+  });
+});
+
+describe("shortDate", () => {
+  it("formats the UTC day as month and day", () => {
+    expect(shortDate(new Date("2026-11-21T23:30:00Z"))).toBe("Nov 21");
   });
 });

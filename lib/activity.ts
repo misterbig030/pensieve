@@ -47,3 +47,17 @@ export function monthTotals(events: StudyEvent[], today: Date): { sessions: numb
   const hours = inMonth.reduce((sum, e) => sum + e.hours, 0);
   return { sessions: inMonth.length, hours: Math.round(hours * 2) / 2 };
 }
+
+/** "Nov 21", by UTC day. */
+export function shortDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/** When something happened, by UTC day: "today", "yesterday", a weekday within the last week, else the date. */
+export function relativeDay(d: Date, today: Date): string {
+  const days = Math.round((Date.parse(dayKey(today)) - Date.parse(dayKey(d))) / DAY_MS);
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days > 1 && days < 7) return d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+  return shortDate(d);
+}
