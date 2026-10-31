@@ -77,3 +77,68 @@ export function relativeDay(d: Date, today: Date): string {
   if (days > 1 && days < 7) return d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
   return shortDate(d);
 }
+
+/** Hours as a figure: whole hours as they are, the rest to one decimal. */
+export function hoursText(hours: number): string {
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+}
+
+export interface CalendarDay {
+  key: string;
+  date: Date;
+  /** "before" the track existed and "future" are blank; "empty" is a past day with no check-in. */
+  state: "before" | "future" | "studied" | "empty";
+  today: boolean;
+  /** What was done that day, in time order. */
+  titles: string[];
+}
+
+export interface CalendarWeek {
+  monday: Date;
+  /** Monday first. */
+  days: CalendarDay[];
+}
+
+/**
+ * A track's study days on the calendar: from the week it was created, or `weeks - 1` weeks before this one if later,
+ * to this week, oldest first. A day with a check-in is studied and names what was done.
+ */
+export function studyCalendar(rows: { completedAt: Date; nodeTitle: string }[], start: Date, today: Date, weeks = 12): CalendarWeek[] {
+  const titles = new Map<string, string[]>();
+  for (const row of [...rows].sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime())) {
+    const key = dayKey(row.completedAt);
+    titles.set(key, [...(titles.get(key) ?? []), row.nodeTitle]);
+  }
+  const todayKey = dayKey(today);
+  const startKey = dayKey(start);
+  const last = weekStart(today).getTime();
+  const first = Math.max(weekStart(start).getTime(), last - (weeks - 1) * 7 * DAY_MS);
+  const count = Math.round((last - first) / (7 * DAY_MS)) + 1;
+  return Array.from({ length: count }, (_, w) => {
+    const monday = new Date(first + w * 7 * DAY_MS);
+    const days = Array.from({ length: 7 }, (_, d): CalendarDay => {
+      const date = new Date(monday.getTime() + d * DAY_MS);
+      const key = dayKey(date);
+      const done = titles.get(key) ?? [];
+      const state = key < startKey ? "before" : key > todayKey ? "future" : done.length > 0 ? "studied" : "empty";
+      return { key, date, state, today: key === todayKey, titles: done };
+    });
+    return { monday, days };
+  });
+}
+
+/** How many distinct UTC dates have a check-in. */
+export function studyDates(rows: { completedAt: Date }[]): number {
+  return new Set(rows.map((r) => dayKey(r.completedAt))).size;
+}
+
+/**
+ * A week of check-ins in a line: finished days (no hours) and logged sessions (hours), then the study hours, as
+ * "1 day · 2 sessions · 4 h". A count of none is left out.
+ */
+export function weekTotal(rows: { hours: number | null }[], studyHours: number): string {
+  const days = rows.filter((r) => r.hours === null).length;
+  const sessions = rows.length - days;
+  const parts = [days > 0 && `${days} day${days === 1 ? "" : "s"}`, sessions > 0 && `${sessions} session${sessions === 1 ? "" : "s"}`].filter(Boolean);
+  return [...parts, `${hoursText(studyHours)} h`].join(" · ");
+}
