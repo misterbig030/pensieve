@@ -1,43 +1,21 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
-import { db } from "@/lib/db/client";
-import { sources } from "@/lib/db/schema";
-import { getTrackDetail, sourceToMaterial } from "@/lib/db/queries";
-import { getLeafWithContent, getNodeReadList } from "@/lib/db/planQueries";
 import { budgetMinutes } from "@/lib/materials";
 import { ChevronRight } from "lucide-react";
-import { budgetFor, currentLeaf, daysInWeekOf, findNode, fullLabelOf, neighbours, type PlanNode } from "@/lib/planTree";
+import { budgetFor, currentLeaf, daysInWeekOf, fullLabelOf, neighbours, type PlanNode } from "@/lib/planTree";
 import { PageShell } from "@/components/pensieve/PageShell";
-import { byTier, practiceRowsFor, type ReadRow } from "@/components/pensieve/ReadTable";
-import { chapterAt } from "@/lib/schemas/material";
 import { LeafView, type LeafLink } from "./LeafView";
+import { loadDay } from "./loadDay";
 
 export default async function LeafPage({ params }: { params: Promise<{ id: string; nodeId: string }> }) {
   const { userId } = await auth();
   if (!userId) return null;
 
   const { id, nodeId } = await params;
-  const [detail, leaf, trackSources] = await Promise.all([
-    getTrackDetail(id, userId),
-    getLeafWithContent(nodeId, userId),
-    db.query.sources.findMany({ where: eq(sources.trackId, id) }),
-  ]);
-  if (!detail || !leaf || leaf.node.trackId !== id) notFound();
-  const readList = await getNodeReadList(nodeId);
-  const readRows: ReadRow[] = readList
-    .map((r): ReadRow => {
-      const material = sourceToMaterial(r.source);
-      return { material, tier: r.tier ?? "should", minutes: r.minutes, note: r.note, chapter: chapterAt(material.toc, r.chapter || null), activity: r.activity, key: `${material.id}#${r.chapter}` };
-    })
-    .sort(byTier);
-
-  const node = findNode(detail.root, nodeId);
-  if (!node || node.children !== null) notFound();
-
-  const trackMaterials = new Map(trackSources.map((s) => [s.id, sourceToMaterial(s)]));
-  const practiceRows = practiceRowsFor(node.practice, trackMaterials);
+  const day = await loadDay(id, nodeId, userId);
+  if (!day) notFound();
+  const { detail, leaf, node, trackSources, readRows, practiceRows } = day;
 
   const kicker = fullLabelOf(detail.root, node);
   const isWeek = node.level !== "day";
