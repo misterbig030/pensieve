@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { findNode, makeNode, makeRoot } from "./planTree";
 import { dayMinutes } from "./studyTime";
-import { sampleDayPlan, sampleMonthPlan, sampleWeekPlan } from "./testPlans";
+import { sampleDayPlan, sampleMonthPlan, sampleSplitWeekPlan, sampleWeekPlan } from "./testPlans";
 import { cardAction, dayStrip, doneToday, finishDate, plannedHours, sortTracks, studyEvents, weekActivity, type CardAction } from "./trackProgress";
 
 const today = new Date("2026-10-30T12:00:00Z"); // a Friday
@@ -23,6 +23,18 @@ describe("dayStrip", () => {
     const cells = dayStrip(sampleWeekPlan(), "week", 5);
     expect(cells.map((c) => c.state)).toEqual(["done", "current", "planned"]);
     expect(cells.every((c) => c.weekStart)).toBe(true);
+  });
+
+  it("keeps one cell for a week split into days on a week-granularity track", () => {
+    const cells = dayStrip(sampleSplitWeekPlan(), "week", 5);
+    expect(cells.map((c) => c.state)).toEqual(["done", "current", "planned"]);
+    expect(cells.every((c) => c.weekStart)).toBe(true);
+  });
+
+  it("marks a split week done on a week track when all its days are done", () => {
+    const root = sampleSplitWeekPlan();
+    for (const id of ["b2", "b3", "b4", "b5"]) findNode(root, id)!.status = "completed";
+    expect(dayStrip(root, "week", 5).map((c) => c.state)).toEqual(["done", "done", "current"]);
   });
 
   it("starts a week at each week's first day inside a month", () => {

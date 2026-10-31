@@ -2,16 +2,16 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Check, RefreshCw, ShieldCheck } from "lucide-react";
+import { RefreshCw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LessonMarkdown } from "@/components/pensieve/LessonMarkdown";
-import { TierPill, partLabel, type PracticeRow, type ReadRow } from "@/components/pensieve/ReadTable";
+import type { PracticeRow, ReadRow } from "@/components/pensieve/ReadTable";
 import { ActionError } from "@/components/pensieve/leaf/ActionError";
 import { LogSessionForm } from "@/components/pensieve/leaf/LogSessionForm";
 import { MarkCompleteButton } from "@/components/pensieve/leaf/MarkCompleteButton";
+import { RailChecklist } from "@/components/pensieve/leaf/RailChecklist";
 import { formatCostUsd } from "@/lib/formatCost";
 import { pushModelCalls } from "@/lib/modelCalls";
-import { shortTitle } from "@/lib/shortTitle";
 import { formatDayTime } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 import { generateLeafContentAction } from "./actions";
@@ -50,29 +50,6 @@ interface Props {
   next: LeafLink | null;
 }
 
-function Tick({ on }: { on: boolean }) {
-  return (
-    <span
-      className={cn(
-        "mt-px flex size-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px]",
-        on ? "border-accent-2-500 bg-accent-2-500 text-background" : "border-neutral-400",
-      )}
-    >
-      {on && <Check className="size-2.5" strokeWidth={3} />}
-    </span>
-  );
-}
-
-function TodoRow({ on, onToggle, children, minutes }: { on: boolean; onToggle(): void; children: ReactNode; minutes?: number | null }) {
-  return (
-    <button type="button" role="checkbox" aria-checked={on} onClick={onToggle} className="flex w-full items-start gap-2.5 py-[7px] text-left text-[13px]">
-      <Tick on={on} />
-      <span className={cn("min-w-0 flex-1", on && "text-muted-foreground line-through decoration-foreground/30")}>{children}</span>
-      {minutes != null && <span className="shrink-0 text-[12px] whitespace-nowrap text-muted-foreground">{minutes} min</span>}
-    </button>
-  );
-}
-
 function RailHeading({ children }: { children: ReactNode }) {
   return <h4 className="mb-1.5 text-[11px] font-semibold tracking-[.04em] text-foreground/45 uppercase">{children}</h4>;
 }
@@ -102,17 +79,8 @@ export function LeafView({
   /** True when the error is a refused user key, so the message links to Settings. */
   const [errorLink, setErrorLink] = useState(false);
   const [costUsd, setCostUsd] = useState<number | null>(null);
-  /** Ticks on the rail's checklist. Kept for this visit only. */
-  const [ticked, setTicked] = useState<Set<string>>(() => new Set());
 
   const isWeek = unit === "week";
-  const toggle = (key: string) =>
-    setTicked((t) => {
-      const next = new Set(t);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
 
   async function handleGenerate() {
     setIsPending(true);
@@ -195,27 +163,7 @@ export function LeafView({
           <RailHeading>
             {isWeek ? "This week" : "Today"} · {formatDayTime(budgetMinutes)}
           </RailHeading>
-          <div className="divide-y divide-border">
-            <TodoRow on={ticked.has("lesson")} onToggle={() => toggle("lesson")}>
-              Read the lesson
-              <small className="block text-[12px] text-foreground/45">This page</small>
-            </TodoRow>
-            {readRows.map((r) => (
-              <TodoRow key={r.key} on={ticked.has(r.key)} onToggle={() => toggle(r.key)} minutes={r.minutes}>
-                <span className="flex items-center gap-1.5">
-                  <span className="truncate">{shortTitle(r.material.title)}</span>
-                  <TierPill tier={r.tier} />
-                </span>
-                {partLabel(r) && <small className="block text-[12px] text-foreground/45">{partLabel(r)}</small>}
-              </TodoRow>
-            ))}
-            {practiceRows.map((r) => (
-              <TodoRow key={r.key} on={ticked.has(r.key)} onToggle={() => toggle(r.key)} minutes={r.minutes}>
-                {r.label}
-                <small className="block text-[12px] text-foreground/45">{r.task}</small>
-              </TodoRow>
-            ))}
-          </div>
+          <RailChecklist readRows={readRows} practiceRows={practiceRows} />
         </section>
 
         {isWeek && (

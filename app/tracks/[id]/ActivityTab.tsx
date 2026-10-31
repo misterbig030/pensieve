@@ -1,19 +1,14 @@
 import { CircleCheck } from "lucide-react";
-import { byWeek } from "@/lib/activity";
+import { byWeek, weekdayDate } from "@/lib/activity";
 import type { CheckInRow } from "@/lib/db/activity";
 
 const WEEK_OF = { day: "numeric", month: "short", timeZone: "UTC" } as const;
-function when(d: Date): string {
-  const weekday = d.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
-  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
-  return `${weekday}, ${time}`;
-}
 
 function hoursText(hours: number): string {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
 
-/** Every check-in on the track, by week. Times are UTC, the day boundary the streak and stats use. */
+/** Every check-in on the track, by week. Days are UTC days, the boundary the streak and stats use. */
 export function ActivityTab({ rows }: { rows: CheckInRow[] }) {
   if (rows.length === 0) {
     return <p className="py-10 text-center text-[14px] text-muted-foreground">No check-ins yet. Finished days and logged sessions show up here.</p>;
@@ -32,7 +27,7 @@ export function ActivityTab({ rows }: { rows: CheckInRow[] }) {
                 <span className="min-w-0">
                   {row.nodeTitle}
                   <small className="block text-[12px] text-muted-foreground">
-                    {when(row.completedAt)}
+                    {weekdayDate(row.completedAt)}
                     {row.hours !== null && ` · ${hoursText(row.hours)} h`}
                   </small>
                 </span>

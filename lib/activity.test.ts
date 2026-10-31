@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byWeek, heatmapWeeks, monthTotals, relativeDay, shortDate, thisWeekKeys, weekStart } from "./activity";
+import { byWeek, heatmapWeeks, monthTotals, relativeDay, shortDate, thisWeekKeys, weekStart, weekdayDate } from "./activity";
 
 const today = new Date("2026-10-30T12:00:00Z"); // a Friday
 
@@ -76,5 +76,11 @@ describe("byWeek", () => {
 describe("shortDate", () => {
   it("formats the UTC day as month and day", () => {
     expect(shortDate(new Date("2026-11-21T23:30:00Z"))).toBe("Nov 21");
+  });
+});
+
+describe("weekdayDate", () => {
+  it("names the UTC day without a clock time", () => {
+    expect(weekdayDate(new Date("2026-10-30T23:15:00Z"))).toBe("Friday, 30 Oct");
   });
 });

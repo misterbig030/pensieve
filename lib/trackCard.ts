@@ -78,3 +78,18 @@ export function toTrackCard(track: CardTrack, root: PlanNode, checkIns: CardChec
     lastStudied,
   };
 }
+
+/**
+ * The line under the home's title: the sessions left today, else whether today is done (only when something was
+ * studied) and how many tracks wait on planning.
+ */
+export function homeStatus(cards: Pick<TrackCardData, "action" | "doneToday">[]): string {
+  const left = cards.filter((c) => (c.action.kind === "start" || c.action.kind === "log") && !c.doneToday).length;
+  if (left === 1) return "One session left today. Pick up where you left off.";
+  if (left > 1) return `${left} sessions left today. Pick up where you left off.`;
+  const studied = cards.some((c) => c.doneToday);
+  const toPlan = cards.filter((c) => c.action.kind === "plan").length;
+  const plan = toPlan === 1 ? "One track needs its next part planned." : `${toPlan} tracks need their next part planned.`;
+  if (toPlan > 0) return studied ? `You're done for today. ${plan}` : plan;
+  return studied ? "You're done for today." : "Every track is finished.";
+}

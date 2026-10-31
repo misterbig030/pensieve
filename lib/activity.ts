@@ -63,6 +63,12 @@ export function shortDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
+/** "Friday, 30 Oct", by UTC day. No clock time: a UTC time reads hours off for most learners. */
+export function weekdayDate(d: Date): string {
+  const weekday = d.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+  return `${weekday}, ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}`;
+}
+
 /** When something happened, by UTC day: "today", "yesterday", a weekday within the last week, else the date. */
 export function relativeDay(d: Date, today: Date): string {
   const days = Math.round((Date.parse(dayKey(today)) - Date.parse(dayKey(d))) / DAY_MS);

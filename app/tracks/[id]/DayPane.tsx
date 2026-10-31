@@ -3,9 +3,10 @@ import Link from "next/link";
 import { BookOpen, CircleCheck } from "lucide-react";
 import { getLeafWithContent } from "@/lib/db/planQueries";
 import { firstParagraph } from "@/lib/lessonPreview";
-import { budgetFor, doneDays, fullLabelOf, isHeading, labelOf, spanOf, type PlanNode } from "@/lib/planTree";
+import { budgetFor, doneDays, fullLabelOf, isHeading, labelOf, spanOf, weeksOf, type PlanNode } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
-import { formatDayTime } from "@/lib/studyTime";
+import { formatDayTime, totalHours } from "@/lib/studyTime";
+import { CoversRow } from "@/components/pensieve/PlanTree";
 import { Button } from "@/components/ui/button";
 import { practiceRowsFor, readRowsFor, sumMinutes, sumPracticeMinutes } from "@/components/pensieve/ReadTable";
 import { DoRows, ReadRows } from "./PaneRows";
@@ -48,34 +49,51 @@ function Heading({ kicker, title, summary }: { kicker: string; title: string; su
 }
 
 /** A unit that isn't a lesson: a week or month with its days, or one not planned yet. */
-function UnitPane({ trackId, root, node, daysPerWeek }: Props) {
+export function UnitPane({ trackId, root, node, materials, daysPerWeek, hoursPerWeek }: Props) {
   const heading = isHeading(node);
   const done = !heading && doneDays(node) >= node.len;
   const label = labelOf(root, node);
+  const hours = node.budgetHours ?? totalHours(weeksOf(root, node, daysPerWeek), hoursPerWeek);
   return (
     <div className="flex flex-col gap-4">
-      <Heading kicker={`${fullLabelOf(root, node)} · ${spanOf(root, node, daysPerWeek)}`} title={node.title} summary={node.summary} />
+      <Heading kicker={`${fullLabelOf(root, node)} · ${spanOf(root, node, daysPerWeek)} · about ${hours} h`} title={node.title} summary={node.summary} />
       {heading ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-[20px] border border-dashed border-neutral-400 px-4 py-3.5 text-[13.5px]">
-          <span className="text-muted-foreground">{label} isn&apos;t planned yet.</span>
-          <span className="ml-auto flex flex-wrap items-center gap-2">
-            <PlanUnitButton trackId={trackId} nodeId={node.id} reason="expand" label={`Plan ${label}`} />
-          </span>
-        </div>
-      ) : done ? (
-        <p className="flex items-center gap-2 text-[14px] font-semibold text-accent-2-700">
-          <CircleCheck className="size-4" />
-          Done
-        </p>
+        <>
+          <CoversRow node={node} byId={new Map(materials.map((m) => [m.id, m]))} />
+          <div className="flex flex-wrap items-center gap-3 rounded-[20px] border border-dashed border-neutral-400 px-4 py-3.5 text-[13.5px]">
+            <span className="text-muted-foreground">{label} isn&apos;t planned yet.</span>
+            <span className="ml-auto flex flex-wrap items-center gap-2">
+              <PlanUnitButton trackId={trackId} nodeId={node.id} reason="expand" label={`Plan ${label}`} daysPerWeek={daysPerWeek} hoursPerWeek={hoursPerWeek} />
+            </span>
+          </div>
+        </>
       ) : (
-        <p className="text-[13.5px] text-muted-foreground">Pick a day in the outline to see its readings and lesson.</p>
+        <>
+          {done && (
+            <p className="flex items-center gap-2 text-[14px] font-semibold text-accent-2-700">
+              <CircleCheck className="size-4" />
+              Done
+            </p>
+          )}
+          <ul className="flex flex-col divide-y divide-border rounded-[20px] bg-secondary px-4">
+            {(node.children ?? []).map((child) => (
+              <li key={child.id}>
+                <Link href={`?day=${child.id}`} scroll={false} className="flex items-center gap-2.5 py-2.5 text-[13.5px] hover:text-primary">
+                  <span className="w-14 shrink-0 text-[12px] text-muted-foreground">{labelOf(root, child)}</span>
+                  <span className="min-w-0 flex-1 truncate">{child.title}</span>
+                  {child.status === "completed" && <CircleCheck className="size-4 shrink-0 text-accent-2-600" />}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );
 }
 
 /** The selected day (or week leaf): what to read and do, the lesson, and the ways to finish it. */
-async function LeafPane({ trackId, root, node, currentLeafId, materials, hoursPerWeek, userId }: Props) {
+async function LeafPane({ trackId, root, node, currentLeafId, materials, hoursPerWeek, daysPerWeek, userId }: Props) {
   const leaf = await getLeafWithContent(node.id, userId);
   const byId = new Map(materials.map((m) => [m.id, m]));
   const readRows = readRowsFor(node.materials, byId);
@@ -112,7 +130,7 @@ async function LeafPane({ trackId, root, node, currentLeafId, materials, hoursPe
         ) : (
           content && <MarkCompleteButton nodeId={node.id} completed={false} />
         )}
-        {splittable && <PlanUnitButton trackId={trackId} nodeId={node.id} reason="split" label="Split into days" />}
+        {splittable && <PlanUnitButton trackId={trackId} nodeId={node.id} reason="split" label="Split into days" daysPerWeek={daysPerWeek} hoursPerWeek={hoursPerWeek} />}
         {readMinutes + practiceMinutes > 0 && (
           <span className="text-[12.5px] text-muted-foreground">
             {formatDayTime(readMinutes + practiceMinutes)} · {formatDayTime(readMinutes)} reading, {formatDayTime(practiceMinutes)} practice

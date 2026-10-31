@@ -38,6 +38,13 @@ export function dayStrip(root: PlanNode, granularity: Granularity, daysPerWeek: 
   const currentId = currentLeaf(root)?.id ?? null;
   const cells: StripCell[] = [];
   const visit = (node: PlanNode, startsWeek: boolean) => {
+    // A week track keeps one cell per week, even for a week split into days.
+    if (granularity === "week" && node.level === "week" && node.children && node.children.length > 0) {
+      const days = node.children;
+      const state = days.every((d) => d.status === "completed") ? "done" : days.some((d) => d.id === currentId) ? "current" : "planned";
+      cells.push({ state, weekStart: true });
+      return;
+    }
     if (node.children && node.children.length > 0) {
       node.children.forEach((child, i) => visit(child, node.level === "week" ? i === 0 && node.id !== root.id : child.level !== "day"));
       return;

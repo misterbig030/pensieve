@@ -31,6 +31,15 @@ export function sampleWeekPlan(): PlanNode {
   ]);
 }
 
+/** A week track whose Week 2 was split into five days, one finished (Week 2 holds the current leaf). */
+export function sampleSplitWeekPlan(): PlanNode {
+  return makeRoot([
+    week("w1", null, { len: 5, status: "completed", budgetHours: 4 }),
+    week("w2", [day("b1", "completed"), day("b2"), day("b3"), day("b4"), day("b5")]),
+    week("w3", null, { len: 5, budgetHours: 4 }),
+  ]);
+}
+
 /** Month 1 holds two weeks of two days; Month 2 is not planned yet. */
 export function sampleMonthPlan(): PlanNode {
   return makeRoot([

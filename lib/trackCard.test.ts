@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { makeRoot } from "@/lib/planTree";
 import { day, sampleDayPlan, sampleWeekPlan, week } from "@/lib/testPlans";
-import { toTrackCard, type CardCheckIn } from "./trackCard";
+import type { CardAction } from "./trackProgress";
+import { homeStatus, toTrackCard, type CardCheckIn } from "./trackCard";
 
 const today = new Date("2026-10-30T12:00:00Z");
 const createdAt = new Date("2026-10-01T00:00:00Z");
@@ -61,5 +62,23 @@ describe("toTrackCard", () => {
     expect(card.actionLabel).toBe("All days done");
     expect(card.actionTitle).toBe("");
     expect(card.finish).toBeNull();
+  });
+});
+
+describe("homeStatus", () => {
+  const card = (kind: CardAction["kind"], doneToday = false) => ({ action: { kind } as CardAction, doneToday });
+
+  it("counts the sessions left today", () => {
+    expect(homeStatus([card("start"), card("log"), card("start", true)])).toBe("2 sessions left today. Pick up where you left off.");
+  });
+
+  it("doesn't call the day done when nothing was studied and a track needs planning", () => {
+    expect(homeStatus([card("plan")])).toBe("One track needs its next part planned.");
+    expect(homeStatus([card("plan"), card("start", true)])).toBe("You're done for today. One track needs its next part planned.");
+  });
+
+  it("calls the day done only when something was studied", () => {
+    expect(homeStatus([card("start", true), card("finished")])).toBe("You're done for today.");
+    expect(homeStatus([card("finished")])).toBe("Every track is finished.");
   });
 });

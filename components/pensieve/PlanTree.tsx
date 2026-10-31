@@ -482,7 +482,7 @@ const SPLIT_CHOICES = Array.from({ length: MAX_DAYS_PER_WEEK }, (_, i) => i + 1)
  * "Split into [5 ▾] days". The words split the week into the learner's usual number of days; the number is a chip
  * that opens 1–7 days with the time each comes to, for a week that should have a different number.
  */
-function SplitControl({ usual, hoursPerWeek, onSplit }: { usual: number; hoursPerWeek?: number; onSplit: (days: number) => void }) {
+export function SplitControl({ usual, hoursPerWeek, onSplit }: { usual: number; hoursPerWeek?: number; onSplit: (days: number) => void }) {
   const words = "text-[11.5px] text-accent-700 underline underline-offset-2 hover:text-accent-800";
   const perDay = (n: number) => (n === usual ? "usual" : hoursPerWeek === undefined ? null : `${formatDayTime(dayMinutes(hoursPerWeek, n))} a day`);
   return (

@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { getDashboardTracksForUser } from "@/lib/db/queries";
 import { heatmapWeeks, monthTotals } from "@/lib/activity";
 import { computeStreak, longestStreak } from "@/lib/streak";
-import { toTrackCard } from "@/lib/trackCard";
+import { homeStatus, toTrackCard } from "@/lib/trackCard";
 import { sortTracks, studyEvents, type SortKey } from "@/lib/trackProgress";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/pensieve/PageShell";
@@ -13,12 +13,6 @@ import { StatsRail } from "@/components/pensieve/home/StatsRail";
 import { TrackCard } from "@/components/pensieve/home/TrackCard";
 
 const SORT_KEYS: readonly SortKey[] = ["next", "recent", "newest"];
-
-function statusLine(left: number): string {
-  if (left === 0) return "You're done for today.";
-  if (left === 1) return "One session left today. Pick up where you left off.";
-  return `${left} sessions left today. Pick up where you left off.`;
-}
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
   const { userId } = await auth();
@@ -33,7 +27,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
     dashboardTracks.map(({ track, root, checkIns }) => toTrackCard(track, root, checkIns, today)),
     sortKey,
   );
-  const left = cards.filter((c) => (c.action.kind === "start" || c.action.kind === "log") && !c.doneToday).length;
 
   const allCheckIns = dashboardTracks.flatMap((t) => t.checkIns).sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime());
   const dates = allCheckIns.map((c) => c.completedAt);
@@ -45,7 +38,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
         <div className="flex items-end gap-4">
           <div className="mr-auto">
             <h1 className="text-[30px] leading-[1.1]">Your tracks</h1>
-            {cards.length > 0 && <p className="mt-1.5 text-[14px] text-muted-foreground">{statusLine(left)}</p>}
+            {cards.length > 0 && <p className="mt-1.5 text-[14px] text-muted-foreground">{homeStatus(cards)}</p>}
           </div>
           <Button
             nativeButton={false}
