@@ -9,10 +9,10 @@ const tabClass = "flex h-full items-center gap-2 border-b-[2.5px] px-1 text-[14p
 
 function Soon({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
-    <span aria-disabled="true" className={cn(tabClass, "cursor-default border-transparent text-muted-foreground")}>
+    <span aria-disabled="true" aria-label={`${label}, coming soon`} className={cn(tabClass, "cursor-default border-transparent text-muted-foreground")}>
       <Icon className="size-4" />
-      {label}
-      <span className="rounded-full bg-neutral-200 px-1.5 py-px text-[10.5px] font-semibold text-neutral-700">soon</span>
+      <span className="max-[520px]:hidden">{label}</span>
+      <span className="rounded-full bg-neutral-200 px-1.5 py-px text-[10.5px] font-semibold text-neutral-700 max-[768px]:hidden">soon</span>
     </span>
   );
 }
@@ -22,7 +22,7 @@ export function NavTabs() {
   const pathname = usePathname();
   const tracksActive = pathname === "/" || pathname.startsWith("/tracks");
   return (
-    <nav className="flex h-full items-stretch gap-6">
+    <nav className="flex h-full items-stretch gap-6 max-[520px]:gap-4">
       <Link
         href="/"
         aria-current={tracksActive ? "page" : undefined}

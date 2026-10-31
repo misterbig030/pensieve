@@ -48,6 +48,16 @@ export function monthTotals(events: StudyEvent[], today: Date): { sessions: numb
   return { sessions: inMonth.length, hours: Math.round(hours * 2) / 2 };
 }
 
+/** Rows grouped by the UTC week they fall in, newest week first and newest row first within it. */
+export function byWeek<T extends { completedAt: Date }>(rows: T[]): { start: Date; rows: T[] }[] {
+  const groups = new Map<number, T[]>();
+  for (const row of [...rows].sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())) {
+    const start = weekStart(row.completedAt).getTime();
+    groups.set(start, [...(groups.get(start) ?? []), row]);
+  }
+  return [...groups].map(([start, rows]) => ({ start: new Date(start), rows }));
+}
+
 /** "Nov 21", by UTC day. */
 export function shortDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });

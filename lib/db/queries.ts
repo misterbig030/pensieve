@@ -132,16 +132,6 @@ export async function getCheckInDatesForUser(userId: string): Promise<Date[]> {
   return rows.map((r) => r.completedAt);
 }
 
-export async function getCheckInDatesForTrack(trackId: string, userId: string): Promise<Date[]> {
-  const rows = await db
-    .select({ completedAt: checkIns.completedAt })
-    .from(checkIns)
-    .innerJoin(planNodes, eq(checkIns.nodeId, planNodes.id))
-    .innerJoin(tracks, eq(planNodes.trackId, tracks.id))
-    .where(and(eq(planNodes.trackId, trackId), eq(tracks.userId, userId)));
-  return rows.map((r) => r.completedAt);
-}
-
 export async function createTrackWithPlan(input: {
   userId: string;
   title: string;

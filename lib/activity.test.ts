@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heatmapWeeks, monthTotals, relativeDay, shortDate, thisWeekKeys, weekStart } from "./activity";
+import { byWeek, heatmapWeeks, monthTotals, relativeDay, shortDate, thisWeekKeys, weekStart } from "./activity";
 
 const today = new Date("2026-10-30T12:00:00Z"); // a Friday
 
@@ -56,6 +56,20 @@ describe("relativeDay", () => {
     expect(relativeDay(new Date("2026-10-27T09:00:00Z"), today)).toBe("Tue");
     expect(relativeDay(new Date("2026-10-24T09:00:00Z"), today)).toBe("Sat");
     expect(relativeDay(new Date("2026-10-23T09:00:00Z"), today)).toBe("Oct 23");
+  });
+});
+
+describe("byWeek", () => {
+  it("groups rows by their Monday-to-Sunday UTC week, newest week and row first", () => {
+    const at = (iso: string) => ({ completedAt: new Date(iso) });
+    const groups = byWeek([at("2026-10-19T10:00:00Z"), at("2026-10-30T08:00:00Z"), at("2026-10-26T00:00:00Z"), at("2026-10-25T23:59:00Z")]);
+    expect(groups.map((g) => g.start.toISOString())).toEqual(["2026-10-26T00:00:00.000Z", "2026-10-19T00:00:00.000Z"]);
+    expect(groups[0].rows.map((r) => r.completedAt.toISOString())).toEqual(["2026-10-30T08:00:00.000Z", "2026-10-26T00:00:00.000Z"]);
+    expect(groups[1].rows.map((r) => r.completedAt.toISOString())).toEqual(["2026-10-25T23:59:00.000Z", "2026-10-19T10:00:00.000Z"]);
+  });
+
+  it("returns no groups for no rows", () => {
+    expect(byWeek([])).toEqual([]);
   });
 });
 

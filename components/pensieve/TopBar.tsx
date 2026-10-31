@@ -13,10 +13,10 @@ export async function TopBar() {
   const streak = userId ? computeStreak(await getCheckInDatesForUser(userId)) : 0;
 
   return (
-    <header className="flex h-[60px] items-stretch gap-8 border-b border-border px-8 max-[640px]:gap-4 max-[640px]:px-4">
-      <Link href="/" className="flex items-center gap-2.5">
+    <header className="flex h-[60px] items-stretch gap-8 border-b border-border px-8 max-[768px]:gap-4 max-[640px]:px-4">
+      <Link href="/" aria-label="Pensieve, home" className="flex items-center gap-2.5">
         <span className="size-7 shrink-0 rounded-full bg-primary" />
-        <span className="font-heading text-[19px] max-[640px]:hidden">Pensieve</span>
+        <span className="font-heading text-[19px] max-[768px]:hidden">Pensieve</span>
       </Link>
       <NavTabs />
       <div className="ml-auto flex items-center gap-3">
