@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { getDashboardTracksForUser } from "@/lib/db/queries";
 import { computeStreak } from "@/lib/streak";
+import { doneDays } from "@/lib/planTree";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -34,7 +35,7 @@ export default async function DashboardPage() {
 
       {dashboardTracks.length > 0 ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(272px,1fr))] gap-4">
-          {dashboardTracks.map(({ track, total, done, checkInDates }) => (
+          {dashboardTracks.map(({ track, root, checkIns }) => { const total = root.len; const done = doneDays(root); const checkInDates = checkIns.map((c) => c.completedAt); return (
             <Link
               key={track.id}
               href={`/tracks/${track.id}`}
@@ -50,7 +51,7 @@ export default async function DashboardPage() {
                 <StreakChip days={computeStreak(checkInDates)} />
               </span>
             </Link>
-          ))}
+          ); })}
         </div>
       ) : (
         <div className="rounded-[32px] bg-secondary px-6 py-16 text-center">
