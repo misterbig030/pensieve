@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyDraftEvent, type DraftMaterials, type PlanDraftEvent } from "@/lib/planChat";
+import { applyDraftEvent, chatLockHint, type DraftMaterials, type PlanDraftEvent } from "@/lib/planChat";
 import type { Material } from "@/lib/schemas/material";
 
 const material = (title: string): Material => ({ title, url: `https://example.com/${title}` }) as unknown as Material;
@@ -59,5 +59,13 @@ describe("applyDraftEvent", () => {
 
   it("leaves the state alone for any other event", () => {
     expect(applyDraftEvent(researched, { type: "finish", root: {} as never, costUsd: 0 })).toBe(researched);
+  });
+});
+
+describe("chatLockHint", () => {
+  it("locks the conversation while drafting and after a refused draft, until the plan is drafted", () => {
+    expect(chatLockHint({ drafting: true, draftRefused: false })).toBe("Available once the plan is drafted");
+    expect(chatLockHint({ drafting: false, draftRefused: true })).toBe("Available once the plan is drafted");
+    expect(chatLockHint({ drafting: false, draftRefused: false })).toBeNull();
   });
 });

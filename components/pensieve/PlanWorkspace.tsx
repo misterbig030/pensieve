@@ -21,6 +21,7 @@ import { pushModelCalls } from "@/lib/modelCalls";
 import { readNdjson } from "@/lib/ndjson";
 import {
   applyDraftEvent,
+  chatLockHint,
   nextMessageId,
   toTranscript,
   type ChatMessage,
@@ -420,7 +421,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
 
   async function send() {
     const text = input.trim();
-    if (!text || busy || drafting || expanding) return;
+    if (!text || busy || drafting || expanding || outOfCredits?.from === "draft") return;
     const userMessage: ChatMessage = { id: nextMessageId(), kind: "user", text };
     const history = [...messages, userMessage];
     setMessages(history);
@@ -621,6 +622,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         ? ["Why is month 2 before month 3?", "Last month should be 2 weeks", "Swap months 3 and 4"]
         : ["Why is week 2 before week 3?", "Expand week 2", "Swap weeks 3 and 4"];
   const streaming = drafting || expanding;
+  const chatLock = chatLockHint({ drafting, draftRefused: outOfCredits?.from === "draft" });
   const researching = drafting && !!research?.running;
   const canConfirm = !streaming && !revising && !busy && !confirming && tops.length > 0;
   const current = isAdjust ? currentLeaf(tree) : null;
@@ -778,8 +780,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           messages={messages}
           open={railOpen}
           unread={unread}
-          busy={busy || streaming}
-          disabledHint={drafting ? "Available once the plan is drafted" : undefined}
+          busy={busy || streaming || chatLock !== null}
+          disabledHint={chatLock ?? undefined}
           input={input}
           suggestions={suggestions}
           onToggle={() => {
