@@ -28,6 +28,7 @@ import {
   reservedRunMinutes,
   reservedRuns,
   weekPracticeTime,
+  fitWeekToDays,
   practiceRowKey,
   sizeChapterRows,
   tierMinutes,
@@ -1626,6 +1627,36 @@ describe("a week's practice time inside its reservation", () => {
     expect(reservedRuns(root.children![0], materials)).toEqual({ "problem-set": 195 });
   });
 
+  it("fits a week's time to its days in whole blocks that never outgrow a day", () => {
+    // Five 70-min days are 350 min. Run 3's Week 1: design's 52 min are one 50-min block, mock's 31 no 70-min block;
+    // what they leave is reading's, as far as the days reach: 99 + 195 + 50 + 6.
+    expect(fitWeekToDays(weekPracticeTime(budgets, { "problem-set": 195 }), { "problem-set": 195 }, 70, 5, true)).toEqual({
+      reading: 99,
+      practice: { "problem-set": 195, "design-exercise": 50, mock: 0, recall: 6 },
+      blocks: { "design-exercise": 1, mock: 0 },
+    });
+    // The 2026-10-31 Week 1: 65 + 170 + 77 + 30 + 18 is 360. Two designs and no mock round past the 97 min the days
+    // leave beside reading, problems and session, so one design.
+    const oct = { reading: 65, practice: { "problem-set": 170, "design-exercise": 77, mock: 30, session: 18 } };
+    expect(fitWeekToDays(oct, { "problem-set": 170 }, 70, 5, true)).toEqual({
+      reading: 112,
+      practice: { "problem-set": 170, "design-exercise": 50, mock: 0, session: 18 },
+      blocks: { "design-exercise": 1, mock: 0 },
+    });
+    // Without whole blocks only the excess goes, from the formats without a run, by their minutes.
+    expect(fitWeekToDays({ reading: 180, practice: { "problem-set": 108, recall: 72 } }, {}, 70, 5, false)).toEqual({
+      reading: 180,
+      practice: { "problem-set": 102, recall: 68 },
+      blocks: {},
+    });
+    // A run past the days leaves nothing for blocks, takes what it can from the rest, then from reading: 50 + 300.
+    expect(fitWeekToDays({ reading: 60, practice: { "problem-set": 300, mock: 40, recall: 20 } }, { "problem-set": 300 }, 70, 5, true)).toEqual({
+      reading: 50,
+      practice: { "problem-set": 300, mock: 0, recall: 0 },
+      blocks: { mock: 0 },
+    });
+  });
+
   it("gives what a run frees to reading when no block can take it", () => {
     const perItem = { ...split, formats: [split.formats[0], { ...split.formats[3], share: 44 }] };
     const plain = practiceBudgets(perItem, 360, materials);
@@ -1657,7 +1688,8 @@ describe("a week's practice time inside its reservation", () => {
         { practice: [item(8), item(9)] },
       ]);
       expect(out.breaches).toEqual([]);
-      expect(out.facts.filter((f) => f.includes("short"))).toEqual(["Week 1 practice short: Design 0 of about 52 min, Mock 0 of about 31 min"]);
+      // Design's 52 min are one 50-min block; Mock's 31 are none, so only Design is short.
+      expect(out.facts.filter((f) => f.includes("short"))).toEqual(["Week 1 practice short: Design 0 of about 50 min"]);
     });
 
     it("passes a week whose days write a design block in the time its run leaves", () => {

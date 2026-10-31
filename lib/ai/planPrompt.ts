@@ -1,6 +1,7 @@
 import {
   aliasMaterials,
   draftedSplit,
+  fitWeekToDays,
   formatAliases,
   itemAliases,
   itemRun,
@@ -14,7 +15,7 @@ import {
   type PickSources,
   type ResolvedAlias,
 } from "@/lib/materials";
-import { PRACTICE_REGISTRY, formatRuns, isBlockFormat, itemMinutes, itemPositions, listGroups, type PracticeFormat, type PracticeGenerated } from "@/lib/practice";
+import { PRACTICE_REGISTRY, blockMinutes, formatRuns, isBlockFormat, itemMinutes, itemPositions, listGroups, type PracticeFormat, type PracticeGenerated } from "@/lib/practice";
 import {
   budgetFor,
   capitalize,
@@ -565,27 +566,38 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   // for blocks the days write themselves when the week reserves none (`weekPracticeTime`, as the checks hold it).
   const runs = days ? reservedRuns(parent, input.materials, input.tree, (id) => takenPositions(input, id)) : {};
   const held = Object.keys(runs).length > 0;
-  const budgets = held ? weekPracticeTime(weekBudgetsOf(input), runs) : weekBudgetsOf(input);
-  const week = budgetFor(1, input.hoursPerWeek) * 60;
   const daysInWeek = days ? input.spans.length : input.daysPerWeek;
-  const half = Math.round(leafBudgetMinutes("day", daysInWeek, input.hoursPerWeek) / 2 / 5) * 5;
+  const day = leafBudgetMinutes("day", daysInWeek, input.hoursPerWeek);
+  // A week's days hold only their own minutes, in whole blocks where they write them (`fitWeekToDays`).
+  const budgets = days
+    ? fitWeekToDays(held ? weekPracticeTime(weekBudgetsOf(input), runs) : weekBudgetsOf(input), runs, day, daysInWeek, held)
+    : { ...weekBudgetsOf(input), blocks: {} as Partial<Record<PracticeFormat, number>> };
+  const week = days ? day * daysInWeek : budgetFor(1, input.hoursPerWeek) * 60;
+  const half = Math.round(day / 2 / 5) * 5;
   const lines = [`Practice: ${days ? "the" : "each"} week's time, about ${formatMinutes(week)}, is about ${formatMinutes(budgets.reading)} of reading and, by format:`];
   // A block is never split to fit a week's slice: it is budgeted over the plan, less what earlier units placed.
   const planBlocks = planBlockBudgets(input.split, budgetFor(input.weeks, input.hoursPerWeek) * 60, input.materials);
   let firstItem: string | null = null;
   for (const p of picks) {
     const spec = PRACTICE_REGISTRY[p.pick.format];
+    const size = days ? blockMinutes(p.pick.format, day) : spec.fixedMinutes;
+    const count = budgets.blocks[p.pick.format];
+    if (count === 0) {
+      lines.push(`- ${pickName(p.pick.format)}: none this week; write no ${spec.label} rows.`);
+      continue;
+    }
     let time = `about ${formatMinutes(budgets.practice[p.pick.format] ?? 0)} ${days ? "this week" : "a week"}`;
     let sizing = sizingSentence(p.pick.format);
     if (held && runs[p.pick.format] !== undefined) time += ", the minutes of the items reserved below";
-    if (held && isBlockFormat(p.pick.format)) {
-      sizing = `${spec.label} comes in whole blocks of about ${spec.fixedMinutes} min: when this week reserves none, write one yourself in about this week's time.`;
+    if (count !== undefined) {
+      time = `${count} block${count === 1 ? "" : "s"} of about ${size} min this week`;
+      sizing = `${spec.label} comes in whole blocks: when this week reserves none, write each yourself.`;
     } else if (isBlockFormat(p.pick.format)) {
       const total = planBlocks[p.pick.format] ?? 0;
       const placed = input.tree && parent ? placedMinutes(input.tree, p.pick.format, parent.start - 1) : 0;
       const left = Math.max(0, total - placed);
       time = `about ${formatMinutes(total)} over the whole plan, ${placed > 0 ? `about ${formatMinutes(placed)} placed so far, so about ${formatMinutes(left)} left` : "none placed so far"}`;
-      sizing = `${spec.label} comes in whole blocks of about ${spec.fixedMinutes} min: place one where a week has room, not a part of one each week.`;
+      sizing = `${spec.label} comes in whole blocks of about ${size} min: place one where a week has room, not a part of one each week.`;
     }
     const from = leafPickSources(input, aliases, p);
     if (from.items.length > 0) sizing = "Each listed item takes the minutes on its line.";
@@ -602,7 +614,7 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     lines.push(`A listed item is one row: id is the item's own ("${firstItem}"), task may restate its title, minutes are its minutes; never an item not listed for the unit, and never one item twice.`);
   }
   // Block formats are held over the plan, so a week's minutes follow the blocks it holds.
-  const blocks = picks.filter((p) => isBlockFormat(p.pick.format)).map((p) => `${PRACTICE_REGISTRY[p.pick.format].label}'s`);
+  const blocks = picks.filter((p) => isBlockFormat(p.pick.format) && budgets.blocks[p.pick.format] !== 0).map((p) => `${PRACTICE_REGISTRY[p.pick.format].label}'s`);
   const except =
     blocks.length === 0
       ? ""
