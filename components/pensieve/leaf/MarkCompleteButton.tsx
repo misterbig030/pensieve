@@ -7,7 +7,19 @@ import { Button } from "@/components/ui/button";
 import { ActionError } from "./ActionError";
 
 /** Finishes a day or week. Without `onDone` the page refreshes to show the new state. */
-export function MarkCompleteButton({ nodeId, completed, onDone }: { nodeId: string; completed: boolean; onDone?: () => void }) {
+export function MarkCompleteButton({
+  nodeId,
+  completed,
+  onDone,
+  label = "Mark complete",
+  className,
+}: {
+  nodeId: string;
+  completed: boolean;
+  onDone?: () => void;
+  label?: string;
+  className?: string;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,8 +40,8 @@ export function MarkCompleteButton({ nodeId, completed, onDone }: { nodeId: stri
 
   return (
     <>
-      <Button onClick={markComplete} disabled={pending || completed}>
-        {completed ? "Completed" : "Mark complete"}
+      <Button onClick={markComplete} disabled={pending || completed} className={className}>
+        {completed ? "Completed" : label}
       </Button>
       {error && <ActionError message={error} />}
     </>

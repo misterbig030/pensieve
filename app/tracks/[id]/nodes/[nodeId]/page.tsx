@@ -7,11 +7,12 @@ import { sources } from "@/lib/db/schema";
 import { getTrackDetail, sourceToMaterial } from "@/lib/db/queries";
 import { getLeafWithContent, getNodeReadList } from "@/lib/db/planQueries";
 import { budgetMinutes } from "@/lib/materials";
-import { budgetFor, daysInWeekOf, findNode, fullLabelOf } from "@/lib/planTree";
+import { ChevronRight } from "lucide-react";
+import { budgetFor, currentLeaf, daysInWeekOf, findNode, fullLabelOf, neighbours, type PlanNode } from "@/lib/planTree";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { byTier, practiceRowsFor, type ReadRow } from "@/components/pensieve/ReadTable";
 import { chapterAt } from "@/lib/schemas/material";
-import { LeafView } from "./LeafView";
+import { LeafView, type LeafLink } from "./LeafView";
 
 export default async function LeafPage({ params }: { params: Promise<{ id: string; nodeId: string }> }) {
   const { userId } = await auth();
@@ -49,37 +50,57 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
       ? readRows.filter((r) => r.material.type === "youtube").map((r) => ({ title: r.material.title, url: r.material.url }))
       : trackSources.filter((s) => s.type === "youtube").map((s) => ({ title: s.title, url: s.url }));
 
-  return (
-    <PageShell className="mx-auto max-w-[960px]">
-      <div className="mx-auto max-w-[640px] space-y-5">
-        <div className="text-[13px] text-foreground/60">
-          <Link href={`/tracks/${id}`} className="hover:text-primary">
-            ← {detail.track.title}
-          </Link>
-        </div>
-        <div className="space-y-2 pb-1">
-          <span className="text-[10px] tracking-wide text-primary uppercase">{kicker}</span>
-          <h1>{node.title}</h1>
-          <p className="text-muted-foreground">{node.summary}</p>
-        </div>
-        <LeafView
-          trackId={id}
-          nodeId={nodeId}
-          unit={isWeek ? "week" : "day"}
-          budgetHours={isWeek ? (node.budgetHours ?? budgetFor(1, hours)) : null}
-          initialSessions={sessions.map((s) => ({ hours: s.hours as number }))}
-          initialContent={
-            leaf.content
-              ? { contentMarkdown: leaf.content.contentMarkdown, citations: leaf.content.citations as { title: string; url: string }[] }
-              : null
-          }
-          youtubeSources={youtubeSources}
-          readRows={readRows}
-          practiceRows={practiceRows}
-          budgetMinutes={budgetMinutes({ level: node.level, budgetHours: isWeek ? (node.budgetHours ?? budgetFor(1, hours)) : null }, hours, days)}
-          isCompleted={node.status === "completed"}
-        />
+  const { prev, next } = neighbours(detail.root, nodeId);
+  const leafLink = (n: PlanNode | null): LeafLink | null => (n ? { href: `/tracks/${id}/nodes/${n.id}`, label: fullLabelOf(detail.root, n), title: n.title } : null);
+  const isToday = currentLeaf(detail.root)?.id === nodeId;
+
+  const header = (
+    <>
+      <nav className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+        <Link href="/" className="shrink-0 hover:text-primary">
+          Your tracks
+        </Link>
+        <ChevronRight className="size-3.5 shrink-0" />
+        <Link href={`/tracks/${id}`} className="truncate hover:text-primary">
+          {detail.track.title}
+        </Link>
+        <ChevronRight className="size-3.5 shrink-0" />
+        <b className="shrink-0 font-semibold text-foreground">{kicker}</b>
+      </nav>
+      <div className="flex flex-col gap-1">
+        <span className="text-[11px] font-semibold tracking-[.05em] text-primary uppercase">
+          {kicker}
+          {isToday && " · Today"}
+        </span>
+        <h1 className="text-[32px] leading-[1.1]">{node.title}</h1>
       </div>
+      {node.summary && <p className="text-[15px] leading-[1.55] text-muted-foreground">{node.summary}</p>}
+    </>
+  );
+
+  return (
+    <PageShell className="p-0 max-[640px]:px-0">
+      <LeafView
+        header={header}
+        unitLabel={kicker}
+        prev={leafLink(prev)}
+        next={leafLink(next)}
+        trackId={id}
+        nodeId={nodeId}
+        unit={isWeek ? "week" : "day"}
+        budgetHours={isWeek ? (node.budgetHours ?? budgetFor(1, hours)) : null}
+        initialSessions={sessions.map((s) => ({ hours: s.hours as number }))}
+        initialContent={
+          leaf.content
+            ? { contentMarkdown: leaf.content.contentMarkdown, citations: leaf.content.citations as { title: string; url: string }[] }
+            : null
+        }
+        youtubeSources={youtubeSources}
+        readRows={readRows}
+        practiceRows={practiceRows}
+        budgetMinutes={budgetMinutes({ level: node.level, budgetHours: isWeek ? (node.budgetHours ?? budgetFor(1, hours)) : null }, hours, days)}
+        isCompleted={node.status === "completed"}
+      />
     </PageShell>
   );
 }

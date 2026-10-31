@@ -1,27 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
+import { Check, RefreshCw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { LessonMarkdown } from "@/components/pensieve/LessonMarkdown";
-import { ReadTable, type PracticeRow, type ReadRow } from "@/components/pensieve/ReadTable";
-import { ShieldCheck } from "lucide-react";
+import { TierPill, partLabel, type PracticeRow, type ReadRow } from "@/components/pensieve/ReadTable";
+import { ActionError } from "@/components/pensieve/leaf/ActionError";
+import { LogSessionForm } from "@/components/pensieve/leaf/LogSessionForm";
+import { MarkCompleteButton } from "@/components/pensieve/leaf/MarkCompleteButton";
 import { formatCostUsd } from "@/lib/formatCost";
 import { pushModelCalls } from "@/lib/modelCalls";
+import { shortTitle } from "@/lib/shortTitle";
+import { formatDayTime } from "@/lib/studyTime";
+import { cn } from "@/lib/utils";
 import { generateLeafContentAction } from "./actions";
-import { logSessionAction, markCompleteAction } from "../../actions";
 
 interface Source {
   url: string;
   title: string | null;
 }
 
+/** A neighbouring day or week in the rail: where it goes, its label and its title. */
+export interface LeafLink {
+  href: string;
+  label: string;
+  title: string;
+}
+
 interface Props {
   trackId: string;
   nodeId: string;
   unit: "day" | "week";
+  /** "Week 2 · Day 3": names the leaf on its Mark complete button. */
+  unitLabel: string;
+  /** The breadcrumb, kicker, title and lede, at the top of the reading column. */
+  header: ReactNode;
   /** Week leaves only. */
   budgetHours: number | null;
   initialSessions: { hours: number }[];
@@ -32,21 +46,73 @@ interface Props {
   readRows: ReadRow[];
   practiceRows: PracticeRow[];
   budgetMinutes: number;
+  prev: LeafLink | null;
+  next: LeafLink | null;
 }
 
-export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, initialContent, youtubeSources, isCompleted, readRows, practiceRows, budgetMinutes }: Props) {
+function Tick({ on }: { on: boolean }) {
+  return (
+    <span
+      className={cn(
+        "mt-px flex size-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px]",
+        on ? "border-accent-2-500 bg-accent-2-500 text-background" : "border-neutral-400",
+      )}
+    >
+      {on && <Check className="size-2.5" strokeWidth={3} />}
+    </span>
+  );
+}
+
+function TodoRow({ on, onToggle, children, minutes }: { on: boolean; onToggle(): void; children: ReactNode; minutes?: number | null }) {
+  return (
+    <button type="button" role="checkbox" aria-checked={on} onClick={onToggle} className="flex w-full items-start gap-2.5 py-[7px] text-left text-[13px]">
+      <Tick on={on} />
+      <span className={cn("min-w-0 flex-1", on && "text-muted-foreground line-through decoration-foreground/30")}>{children}</span>
+      {minutes != null && <span className="shrink-0 text-[12px] whitespace-nowrap text-muted-foreground">{minutes} min</span>}
+    </button>
+  );
+}
+
+function RailHeading({ children }: { children: ReactNode }) {
+  return <h4 className="mb-1.5 text-[11px] font-semibold tracking-[.04em] text-foreground/45 uppercase">{children}</h4>;
+}
+
+export function LeafView({
+  trackId,
+  nodeId,
+  unit,
+  unitLabel,
+  header,
+  budgetHours,
+  initialSessions,
+  initialContent,
+  youtubeSources,
+  isCompleted,
+  readRows,
+  practiceRows,
+  budgetMinutes,
+  prev,
+  next,
+}: Props) {
   const [content, setContent] = useState(initialContent);
   const [sessions, setSessions] = useState(initialSessions);
-  const [hoursInput, setHoursInput] = useState("1");
   const [isPending, setIsPending] = useState(false);
   const [completed, setCompleted] = useState(isCompleted);
   const [error, setError] = useState<string | null>(null);
   /** True when the error is a refused user key, so the message links to Settings. */
   const [errorLink, setErrorLink] = useState(false);
   const [costUsd, setCostUsd] = useState<number | null>(null);
+  /** Ticks on the rail's checklist. Kept for this visit only. */
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set());
 
   const isWeek = unit === "week";
-  const loggedHours = sessions.reduce((a, s) => a + s.hours, 0);
+  const toggle = (key: string) =>
+    setTicked((t) => {
+      const next = new Set(t);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   async function handleGenerate() {
     setIsPending(true);
@@ -69,151 +135,140 @@ export function LeafView({ trackId, nodeId, unit, budgetHours, initialSessions, 
     }
   }
 
-  async function handleMarkComplete() {
-    setIsPending(true);
-    setError(null);
-    try {
-      await markCompleteAction(nodeId);
-      setCompleted(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not mark this complete. Try again.");
-    } finally {
-      setIsPending(false);
-    }
-  }
-
-  async function handleLogSession() {
-    const hours = Number(hoursInput);
-    if (!Number.isFinite(hours) || hours <= 0) return;
-    setIsPending(true);
-    setError(null);
-    try {
-      await logSessionAction(nodeId, hours);
-      setSessions((s) => [...s, { hours }]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not log the session. Try again.");
-    } finally {
-      setIsPending(false);
-    }
-  }
-
-  const sessionCard = isWeek && (
-    <div className="flex flex-wrap items-center justify-between gap-3.5 rounded-[28px] bg-secondary px-5 py-3.5 text-[13.5px]">
-      <span>
-        Time budget about {budgetHours} hours ·{" "}
-        {sessions.length > 0
-          ? `${sessions.length} session${sessions.length > 1 ? "s" : ""}, ${formatHours(loggedHours)} h logged`
-          : "no sessions logged yet"}
-      </span>
-      <span className="inline-flex items-center gap-2">
-        <Input
-          type="number"
-          min={0.25}
-          max={24}
-          step={0.25}
-          value={hoursInput}
-          onChange={(e) => setHoursInput(e.target.value)}
-          className="w-[76px]"
-          aria-label="Hours studied"
-        />
-        <span className="text-[13px] text-muted-foreground">h</span>
-        <Button variant="secondary" size="sm" className="border border-border" onClick={handleLogSession} disabled={isPending}>
-          Log a session
-        </Button>
-      </span>
-    </div>
-  );
-
-  const readTable = (readRows.length > 0 || practiceRows.length > 0) && <ReadTable rows={readRows} practice={practiceRows} budgetMinutes={budgetMinutes} />;
   const provenance = readRows.length > 0 && <WhereTheseComeFrom rows={readRows} />;
 
-  if (!content) {
-    return (
-      <div className="space-y-5">
-        {readTable}
-        {sessionCard}
-        <div className="elev-sm flex flex-col items-center gap-3.5 rounded-[32px] bg-secondary px-6 py-12 text-center">
-          <div className="size-11 rounded-full bg-accent-100" />
-          <h3 className="m-0">{isWeek ? "This week's material isn't written yet" : "Today's lesson isn't written yet"}</h3>
-          <p className="m-0 max-w-[38ch] text-muted-foreground">
-            {readRows.length > 0
-              ? `Written from the ${readRows.length === 1 ? "material" : `${readRows.length} materials`} above, and citing only ${readRows.length === 1 ? "it" : "them"}. Generate it when you start.`
-              : "Generate it now — Pensieve will pull in your sources and cite what it uses."}
-          </p>
-          <Button onClick={handleGenerate} disabled={isPending}>
-            {isWeek ? "Generate this week's material" : "Generate today's lesson"}
-          </Button>
-          {error && (
-            <p className="text-sm text-red-600">
-              {error}
-              {errorLink && (
-                <>
-                  {" "}
-                  <Link href="/settings" className="underline">
-                    Open Settings
-                  </Link>
-                </>
-              )}
-            </p>
-          )}
-        </div>
-        {provenance}
+  const main = content ? (
+    <>
+      <div className="space-y-4">
+        <LessonMarkdown>{content.contentMarkdown}</LessonMarkdown>
       </div>
-    );
-  }
+      {youtubeSources.length > 0 && (
+        <div>
+          <p className="mb-2.5 text-[11px] tracking-wide text-muted-foreground uppercase">Related video</p>
+          <div className="flex flex-col gap-2">
+            {youtubeSources.map((s) => (
+              <a key={s.url} href={s.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl p-2 hover:bg-secondary">
+                <span
+                  className="h-10 w-16 shrink-0 rounded-[10px]"
+                  style={{ backgroundImage: "repeating-linear-gradient(135deg, var(--neutral-300) 0 6px, var(--neutral-200) 6px 12px)" }}
+                />
+                <span className="text-[13px]">{s.title ?? s.url}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+      {costUsd !== null && <p className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(costUsd)}</p>}
+      {error && <ActionError message={error} settingsLink={errorLink} />}
+      {provenance}
+    </>
+  ) : (
+    <>
+      <div className="elev-sm flex flex-col items-center gap-3.5 rounded-[32px] bg-secondary px-6 py-12 text-center">
+        <div className="size-11 rounded-full bg-accent-100" />
+        <h3 className="m-0">{isWeek ? "This week's material isn't written yet" : "Today's lesson isn't written yet"}</h3>
+        <p className="m-0 max-w-[38ch] text-muted-foreground">
+          {readRows.length > 0
+            ? `Written from the ${readRows.length === 1 ? "material" : `${readRows.length} materials`} in the list beside it, and citing only ${readRows.length === 1 ? "it" : "them"}. Generate it when you start.`
+            : "Generate it now — Pensieve will pull in your sources and cite what it uses."}
+        </p>
+        <Button onClick={handleGenerate} disabled={isPending}>
+          {isWeek ? "Generate this week's material" : "Generate today's lesson"}
+        </Button>
+        {error && <ActionError message={error} settingsLink={errorLink} />}
+      </div>
+      {provenance}
+    </>
+  );
 
   return (
-    <div className="space-y-5">
-      {readTable}
-      {sessionCard}
-      <div className="elev-sm space-y-4 rounded-[32px] bg-card p-8">
-        <div className="space-y-4">
-          <LessonMarkdown>{content.contentMarkdown}</LessonMarkdown>
+    <div className="grid min-h-[calc(100vh-60px)] grid-cols-[minmax(0,1fr)_300px] max-[900px]:grid-cols-1">
+      <div className="min-w-0 px-8 pt-6 pb-24 max-[640px]:px-4">
+        <div className="flex max-w-[680px] flex-col gap-5 pl-[clamp(0px,6vw,96px)] max-[900px]:pl-0">
+          {header}
+          {main}
         </div>
+      </div>
 
-        {content.citations.length > 0 && (
-          <div>
-            <p className="mb-2.5 text-[11px] tracking-wide text-muted-foreground uppercase">Sources</p>
-            <div className="flex flex-wrap gap-2">
+      <aside className="flex flex-col gap-5 border-l border-border bg-[color-mix(in_srgb,var(--secondary)_45%,var(--background))] px-6 pt-6 pb-10 max-[900px]:border-t max-[900px]:border-l-0">
+        <section>
+          <RailHeading>
+            {isWeek ? "This week" : "Today"} · {formatDayTime(budgetMinutes)}
+          </RailHeading>
+          <div className="divide-y divide-border">
+            <TodoRow on={ticked.has("lesson")} onToggle={() => toggle("lesson")}>
+              Read the lesson
+              <small className="block text-[12px] text-foreground/45">This page</small>
+            </TodoRow>
+            {readRows.map((r) => (
+              <TodoRow key={r.key} on={ticked.has(r.key)} onToggle={() => toggle(r.key)} minutes={r.minutes}>
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate">{shortTitle(r.material.title)}</span>
+                  <TierPill tier={r.tier} />
+                </span>
+                {partLabel(r) && <small className="block text-[12px] text-foreground/45">{partLabel(r)}</small>}
+              </TodoRow>
+            ))}
+            {practiceRows.map((r) => (
+              <TodoRow key={r.key} on={ticked.has(r.key)} onToggle={() => toggle(r.key)} minutes={r.minutes}>
+                {r.label}
+                <small className="block text-[12px] text-foreground/45">{r.task}</small>
+              </TodoRow>
+            ))}
+          </div>
+        </section>
+
+        {isWeek && (
+          <LogSessionForm nodeId={nodeId} budgetHours={budgetHours} sessions={sessions} onLogged={(hours) => setSessions((s) => [...s, { hours }])} />
+        )}
+        {content && (
+          <MarkCompleteButton
+            nodeId={nodeId}
+            completed={completed}
+            onDone={() => setCompleted(true)}
+            label={`Mark ${unitLabel} complete`}
+            className="h-10 w-full justify-center"
+          />
+        )}
+
+        {content && content.citations.length > 0 && (
+          <section>
+            <RailHeading>Sources</RailHeading>
+            <ul className="flex flex-col gap-1 text-[12.5px] leading-snug">
               {content.citations.map((c) => (
-                <a key={c.url} href={c.url} target="_blank" rel="noreferrer">
-                  <Badge variant="tagOutline">{c.title}</Badge>
-                </a>
+                <li key={c.url}>
+                  <a href={c.url} target="_blank" rel="noreferrer" className="text-foreground/75 hover:text-accent-700 hover:underline">
+                    {c.title}
+                  </a>
+                </li>
               ))}
-            </div>
-          </div>
+            </ul>
+          </section>
         )}
 
-        {youtubeSources.length > 0 && (
-          <div>
-            <p className="mb-2.5 text-[11px] tracking-wide text-muted-foreground uppercase">Related video</p>
-            <div className="flex flex-col gap-2">
-              {youtubeSources.map((s) => (
-                <a key={s.url} href={s.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl p-2 hover:bg-secondary">
-                  <span
-                    className="h-10 w-16 shrink-0 rounded-[10px]"
-                    style={{ backgroundImage: "repeating-linear-gradient(135deg, var(--neutral-300) 0 6px, var(--neutral-200) 6px 12px)" }}
-                  />
-                  <span className="text-[13px]">{s.title ?? s.url}</span>
-                </a>
-              ))}
-            </div>
-          </div>
+        {(prev || next) && (
+          <nav aria-label="Other days" className="mt-auto flex gap-2 max-[900px]:mt-0">
+            {prev ? <DayLink link={prev} direction="prev" /> : <span className="flex-1" />}
+            {next ? <DayLink link={next} direction="next" /> : <span className="flex-1" />}
+          </nav>
         )}
-      </div>
-
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={handleGenerate} disabled={isPending}>
-          Try a different take
-        </Button>
-        <Button onClick={handleMarkComplete} disabled={isPending || completed}>
-          {completed ? "Completed" : "Mark complete"}
-        </Button>
-      </div>
-      {costUsd !== null && <p className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(costUsd)}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {provenance}
+        {content && (
+          <Button variant="ghost" size="sm" className="justify-center" onClick={handleGenerate} disabled={isPending}>
+            <RefreshCw />
+            Rewrite this lesson
+          </Button>
+        )}
+      </aside>
     </div>
+  );
+}
+
+function DayLink({ link, direction }: { link: LeafLink; direction: "prev" | "next" }) {
+  return (
+    <Link href={link.href} className={cn("min-w-0 flex-1 rounded-[14px] bg-neutral-100 px-2.5 py-2 text-[12px] hover:bg-neutral-200", direction === "next" && "text-right")}>
+      <small className="block text-[11px] text-foreground/45">{direction === "prev" ? `← ${link.label}` : `${link.label} →`}</small>
+      <span className="line-clamp-2">{link.title}</span>
+    </Link>
   );
 }
 
@@ -244,8 +299,4 @@ function WhereTheseComeFrom({ rows }: { rows: ReadRow[] }) {
       <p className="m-0 text-[12.5px] leading-normal text-neutral-800">{parts.join(" ")}</p>
     </section>
   );
-}
-
-function formatHours(hours: number): string {
-  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
