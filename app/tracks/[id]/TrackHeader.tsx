@@ -30,7 +30,7 @@ export function TrackHeader(props: {
   return (
     <div className="flex flex-wrap items-center gap-4">
       <div className="mr-auto min-w-0">
-        <h1 className="text-[28px] leading-[1.1]">{props.title}</h1>
+        <h1 className="font-heading text-[28px] leading-[1.1]">{props.title}</h1>
         <p className="mt-1.5 text-[13px] text-muted-foreground">{props.pace}</p>
       </div>
       <div className="mr-2 flex gap-[18px] text-[12px] text-muted-foreground">

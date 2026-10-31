@@ -3,7 +3,6 @@ import { CircleCheck } from "lucide-react";
 import { shortDate } from "@/lib/activity";
 import type { TrackCardData } from "@/lib/trackCard";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
 function Inset({ card }: { card: TrackCardData }) {
@@ -74,12 +73,22 @@ export function TrackCard({ card }: { card: TrackCardData }) {
               cell === "done" && "bg-accent-2-500",
               cell === "current" && "border-[1.5px] border-dashed border-primary",
               cell === "open" && "bg-foreground/8",
+              cell === "off" && "border border-border",
             )}
           />
         ))}
         <span className="ml-auto">{card.week.label}</span>
       </div>
-      <Progress value={progress.total > 0 ? (progress.done / progress.total) * 100 : 0} />
+      <div
+        role="progressbar"
+        aria-label="Progress"
+        aria-valuenow={progress.done}
+        aria-valuemin={0}
+        aria-valuemax={progress.total}
+        className="h-1.5 overflow-hidden rounded-full bg-foreground/9"
+      >
+        <span className="block h-full rounded-full bg-primary" style={{ width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%` }} />
+      </div>
       <div className="flex justify-between text-[12px] text-muted-foreground">
         <span>
           {progress.unit} {progress.done} of {progress.total}

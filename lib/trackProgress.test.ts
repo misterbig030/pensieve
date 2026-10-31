@@ -88,7 +88,13 @@ describe("plannedHours", () => {
 
 describe("weekActivity", () => {
   it("shows the current plan week's days on a day track", () => {
-    expect(weekActivity(sampleDayPlan(), "day", [], today, 6)).toEqual({ cells: ["done", "current", "open"], label: "1 of 3 this week" });
+    expect(weekActivity(sampleDayPlan(), "day", [], today, 6)).toEqual({ cells: ["done", "current", "open", "off", "off", "off", "off"], label: "1 of 3 this week" });
+  });
+
+  it("shows no week on a day track whose current week isn't planned", () => {
+    const root = sampleDayPlan();
+    for (const id of ["b2", "b3"]) findNode(root, id)!.status = "completed";
+    expect(weekActivity(root, "day", [], today, 6).cells).toEqual([]);
   });
 
   it("shows this calendar week's sessions on a week track", () => {

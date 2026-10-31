@@ -88,7 +88,8 @@ export function plannedHours(root: PlanNode, hoursPerWeek: number, daysPerWeek: 
 }
 
 export interface WeekActivity {
-  cells: ("done" | "current" | "open")[];
+  /** "off" is a rest day: the days of a seven-day week the track doesn't study. */
+  cells: ("done" | "current" | "open" | "off")[];
   label: string;
 }
 
@@ -112,9 +113,12 @@ export function weekActivity(root: PlanNode, granularity: Granularity, checkIns:
   const anchor = current ?? leavesOf(root).at(-1) ?? null;
   const parent = anchor ? parentOf(root, anchor.id) : null;
   const days = (parent?.children ?? []).filter((n) => n.level === "day");
-  const cells = days.map((d) => (d.status === "completed" ? "done" : d.id === current?.id ? "current" : "open"));
+  const cells: WeekActivity["cells"] = days.map((d) => (d.status === "completed" ? "done" : d.id === current?.id ? "current" : "open"));
   const done = cells.filter((c) => c === "done").length;
-  return { cells, label: `${done} of ${cells.length} this week` };
+  const label = `${done} of ${cells.length} this week`;
+  // The rest of a seven-day week shows as rest days.
+  if (cells.length > 0) while (cells.length < 7) cells.push("off");
+  return { cells, label };
 }
 
 /** Whether any check-in falls on today's UTC day. */

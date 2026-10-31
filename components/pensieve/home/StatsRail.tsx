@@ -45,11 +45,11 @@ export function StatsRail({
       <div className="grid grid-cols-2 gap-2.5">
         <div className="rounded-2xl bg-neutral-100 px-3.5 py-3">
           <b className="block font-heading text-[22px] font-normal">{month.sessions}</b>
-          <span className="text-[12px] text-muted-foreground">sessions this month</span>
+          <span className="block text-[12px] leading-snug text-muted-foreground">sessions this month</span>
         </div>
         <div className="rounded-2xl bg-neutral-100 px-3.5 py-3">
           <b className="block font-heading text-[22px] font-normal">{hoursText(month.hours)} h</b>
-          <span className="text-[12px] text-muted-foreground">studied this month</span>
+          <span className="block text-[12px] leading-snug text-muted-foreground">studied this month</span>
         </div>
       </div>
       <Section title={`Last ${heatmap.length} weeks`}>

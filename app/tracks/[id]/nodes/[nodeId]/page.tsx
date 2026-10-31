@@ -72,7 +72,7 @@ export default async function LeafPage({ params }: { params: Promise<{ id: strin
           {kicker}
           {isToday && " · Today"}
         </span>
-        <h1 className="text-[32px] leading-[1.1]">{node.title}</h1>
+        <h1 className="font-heading text-[32px] leading-[1.1]">{node.title}</h1>
       </div>
       {node.summary && <p className="text-[15px] leading-[1.55] text-muted-foreground">{node.summary}</p>}
     </>

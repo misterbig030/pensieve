@@ -37,7 +37,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
       <div className="flex min-w-0 flex-col gap-5 px-8 pt-7 pb-24 max-[640px]:px-4">
         <div className="flex items-end gap-4">
           <div className="mr-auto">
-            <h1 className="text-[30px] leading-[1.1]">Your tracks</h1>
+            <h1 className="font-heading text-[30px] leading-[1.1]">Your tracks</h1>
             {cards.length > 0 && <p className="mt-1.5 text-[14px] text-muted-foreground">{homeStatus(cards)}</p>}
           </div>
           <Button
@@ -59,7 +59,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
               </span>
               <SortMenu value={sortKey} />
             </div>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
               {cards.map((card) => (
                 <TrackCard key={card.id} card={card} />
               ))}
