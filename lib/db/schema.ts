@@ -19,9 +19,25 @@ import { PRACTICE_FORMATS } from "@/lib/practice";
 import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS, MINUTES_BASES, type ChapterList, type MaterialPractice, REF_ACTIVITIES } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 
+/**
+ * One row per Clerk user, for what Pensieve itself knows about them; Clerk keeps their identity and profile. A row is
+ * made the first time anything needs it (a track, a key, a credit check), with the signup date filled from Clerk then.
+ */
+export const users = pgTable("users", {
+  /** The Clerk user id, which every other table's `user_id` holds. */
+  id: text("id").primaryKey(),
+  /** When the user signed up with Clerk: their credit periods turn on this day of the month. Empty until first read. */
+  signedUpAt: timestamp("signed_up_at"),
+  /** Staff: debug call bodies, the admin dock, and no credit limit. */
+  isAdmin: boolean("is_admin").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const tracks = pgTable("tracks", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: text("user_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
   instructions: text("instructions"),
@@ -231,7 +247,9 @@ export const generationLog = pgTable(
 export const userApiKeys = pgTable(
   "user_api_keys",
   {
-    userId: text("user_id").notNull(), // the Clerk id, as on tracks
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     provider: text("provider", { enum: MODEL_PROVIDERS }).notNull(),
     /** AES-256-GCM with the server secret: base64 of iv + tag + ciphertext. */
     ciphertext: text("ciphertext").notNull(),
@@ -263,6 +281,7 @@ export type NewDailyContent = typeof dailyContent.$inferInsert;
 export type CheckIn = typeof checkIns.$inferSelect;
 export type GenerationLog = typeof generationLog.$inferSelect;
 export type NewGenerationLog = typeof generationLog.$inferInsert;
+export type User = typeof users.$inferSelect;
 export type UserApiKey = typeof userApiKeys.$inferSelect;
 export type NewUserApiKey = typeof userApiKeys.$inferInsert;
 

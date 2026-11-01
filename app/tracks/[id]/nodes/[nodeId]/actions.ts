@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { isAdminUserId } from "@/lib/admin";
+import { isAdmin } from "@/lib/admin";
 import { asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
@@ -28,7 +28,7 @@ export async function generateLeafContentAction(input: {
 }): Promise<GenerateLeafContentResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
-  const admin = isAdminUserId(userId);
+  const admin = await isAdmin(userId);
   const calls: ModelCall[] = [];
   const extra = admin ? { calls } : {};
 

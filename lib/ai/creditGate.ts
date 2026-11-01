@@ -2,9 +2,10 @@
  * The free monthly allowance's one check, made by the routes that start something new (a plan draft, a chat turn)
  * before any model call. Continuing work (expands, lessons) is never checked; an action that started always finishes.
  */
-import { isAdminUserId } from "@/lib/admin";
-import { creditsLeft, monthStart, nextReset, OUT_OF_CREDITS } from "@/lib/credits";
+import { isAdmin } from "@/lib/admin";
+import { creditPeriod, creditsLeft, OUT_OF_CREDITS } from "@/lib/credits";
 import { getAppSpendUsd } from "@/lib/db/credits";
+import { signedUpAt } from "@/lib/db/users";
 import type { ResolvedModel } from "./resolve";
 
 /**
@@ -12,8 +13,9 @@ import type { ResolvedModel } from "./resolve";
  * for admins. Refuses below one whole credit, so a user who sees "0" is always refused.
  */
 export async function creditRefusal(userId: string, roles: readonly ResolvedModel[], now: Date = new Date()): Promise<Response | null> {
-  if (roles.every((r) => r.keyOwner === "user") || isAdminUserId(userId)) return null;
-  const spent = await getAppSpendUsd(userId, monthStart(now));
+  if (roles.every((r) => r.keyOwner === "user") || (await isAdmin(userId))) return null;
+  const period = creditPeriod(await signedUpAt(userId), now);
+  const spent = await getAppSpendUsd(userId, period.start);
   if (creditsLeft(spent) >= 1) return null;
-  return Response.json({ code: OUT_OF_CREDITS, resetsAt: nextReset(now).toISOString() }, { status: 402 });
+  return Response.json({ code: OUT_OF_CREDITS, resetsAt: period.end.toISOString() }, { status: 402 });
 }

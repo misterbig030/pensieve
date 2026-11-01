@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { isAdminUserId } from "@/lib/admin";
+import { isAdmin } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
 import { creditRefusal } from "@/lib/ai/creditGate";
 import { runPlanChat } from "@/lib/ai/planChat";
@@ -57,9 +57,9 @@ export async function POST(request: Request) {
 
   const tree = fromTreeInput(body.tree);
   const daysPerWeek = body.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK;
-  const debug = body.debug === true && isAdminUserId(userId);
+  const debug = body.debug === true && (await isAdmin(userId));
   const models = await resolveModels(userId);
-  // A chat turn is checked against the month's free credits: the chat model, and the outline model its revision uses.
+  // A chat turn is checked against the free credits: the chat model, and the outline model its revision uses.
   const refused = await creditRefusal(userId, [models.chat, models.outline]);
   if (refused) return refused;
   return ndjsonResponse(
