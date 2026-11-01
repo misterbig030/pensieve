@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { creditPeriod, creditsLeft, formatReset, monthStart } from "./credits";
+import { countSince, creditPeriod, creditsLeft, formatReset, monthStart } from "./credits";
 
 describe("creditPeriod", () => {
   const iso = (p: { start: Date; end: Date }) => [p.start.toISOString(), p.end.toISOString()];
@@ -40,6 +40,19 @@ describe("creditPeriod", () => {
 
   it("formats a reset date as the app shows it", () => {
     expect(formatReset(new Date("2026-12-14T00:00:00Z"))).toBe("14 Dec");
+  });
+});
+
+describe("countSince", () => {
+  const period = { start: new Date("2026-11-14T00:00:00Z"), end: new Date("2026-12-14T00:00:00Z") };
+
+  it("counts from a reset made this period", () => {
+    expect(countSince(period, new Date("2026-11-18T09:30:00Z"))).toEqual(new Date("2026-11-18T09:30:00Z"));
+  });
+
+  it("ignores a reset from an earlier period, or none", () => {
+    expect(countSince(period, new Date("2026-10-20T00:00:00Z"))).toEqual(period.start);
+    expect(countSince(period, null)).toEqual(period.start);
   });
 });
 

@@ -127,6 +127,13 @@
       "when": 1793522837850,
       "tag": "0017_users",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793525724626,
+      "tag": "0018_credits_reset_at",
+      "breakpoints": true
     }
   ]
 }
