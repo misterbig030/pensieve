@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import type { LanguageModel } from "ai";
 import { estimateCostUsd } from "./models";
 
 vi.mock("ai", () => ({ generateObject: vi.fn() }));
 
 import { generateObject } from "ai";
-import { loggedGenerateObject, type GenerationLogRow, type ModelCall } from "./logged";
+import { effortSettings, loggedGenerateObject, type GenerationLogRow, type ModelCall } from "./logged";
 
 const mockedGenerateObject = vi.mocked(generateObject);
 
@@ -93,6 +94,18 @@ describe("loggedGenerateObject", () => {
     expect(rows[0].effort).toBe("low");
   });
 
+  it("records the effort on the log row whatever the provider, sending other providers the portable setting", async () => {
+    mockedGenerateObject.mockResolvedValue(mockResult());
+    const rows: GenerationLogRow[] = [];
+    await loggedGenerateObject(
+      { model: "openai/gpt-5.4", schema, prompt: "hi", effort: "high" },
+      { caller: "research", onLog: (row) => void rows.push(row) },
+    );
+    expect(mockedGenerateObject).toHaveBeenCalledWith(expect.objectContaining({ reasoning: "high" }));
+    expect(mockedGenerateObject.mock.calls[0][0]).not.toHaveProperty("providerOptions");
+    expect(rows[0].effort).toBe("high");
+  });
+
   it("records who paid: the app by default, the user when the context or the call says so", async () => {
     mockedGenerateObject.mockResolvedValue(mockResult());
     const rows: GenerationLogRow[] = [];
@@ -131,6 +144,43 @@ describe("loggedGenerateObject", () => {
       facts: [],
       inputTokens: 1_000,
     });
+  });
+
+  it("hands a failed call that carries usage to onCall with its cost and the error message, then rethrows", async () => {
+    const usage = { inputTokens: 1_000, outputTokens: 500, totalTokens: 1_500 };
+    mockedGenerateObject.mockRejectedValue(
+      Object.assign(new Error("No object generated: response did not match schema."), { usage, finishReason: "length" }),
+    );
+    const calls: ModelCall[] = [];
+    const rows: GenerationLogRow[] = [];
+    await expect(
+      loggedGenerateObject(
+        { model: "anthropic/claude-haiku-4.5", schema, prompt: "hi", label: "Allocate" },
+        { caller: "outline", onCall: (call) => void calls.push(call), onLog: (row) => void rows.push(row) },
+      ),
+    ).rejects.toThrow("No object generated");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      label: "Allocate",
+      prompt: "hi",
+      response: "No object generated: response did not match schema.",
+      finishReason: "length",
+      inputTokens: 1_000,
+      outputTokens: 500,
+      costUsd: estimateCostUsd("anthropic/claude-haiku-4.5", { inputTokens: 1_000, outputTokens: 500 }),
+    });
+    expect(calls[0].costUsd).toBeGreaterThan(0);
+    // The app's own log is unchanged: a failed call is still not written to generation_log.
+    expect(rows).toEqual([]);
+  });
+
+  it("reports nothing for a failure that carries no usage (a timeout, a refused request)", async () => {
+    mockedGenerateObject.mockRejectedValue(new Error("The operation was aborted due to timeout"));
+    const onCall = vi.fn();
+    await expect(
+      loggedGenerateObject({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi" }, { caller: "outline", onCall }),
+    ).rejects.toThrow("aborted");
+    expect(onCall).not.toHaveBeenCalled();
   });
 
   it("labels the call by its caller when no label is given", async () => {
@@ -203,5 +253,21 @@ describe("loggedGenerateObject", () => {
       loggedGenerateObject({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi" }, { caller: "outline", onLog }),
     ).rejects.toThrow("gateway 500");
     expect(onLog).not.toHaveBeenCalled();
+  });
+});
+
+describe("effortSettings", () => {
+  it("sends Anthropic models their effort as a provider option, as before", () => {
+    expect(effortSettings("high", "anthropic/claude-opus-5.5")).toEqual({ providerOptions: { anthropic: { effort: "high" } } });
+  });
+
+  it("sends other providers the portable reasoning setting", () => {
+    expect(effortSettings("medium", "google/gemini-3-flash")).toEqual({ reasoning: "medium" });
+    expect(effortSettings("high", "openai/gpt-5.4-mini")).toEqual({ reasoning: "high" });
+  });
+
+  it("treats a direct Anthropic instance (a user's key) as Anthropic", () => {
+    const instance = { modelId: "claude-sonnet-5-5", provider: "anthropic.messages" } as unknown as LanguageModel;
+    expect(effortSettings("low", instance)).toEqual({ providerOptions: { anthropic: { effort: "low" } } });
   });
 });

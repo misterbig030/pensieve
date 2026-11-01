@@ -1,0 +1,1077 @@
+{
+  "id": "sde-1",
+  "topic": "sde",
+  "sourceRun": "draft-2026-10-30T20-32-37-532Z-sde-1",
+  "commit": "ee5c43b",
+  "input": {
+    "topic": "Senior software engineer interview preparation",
+    "weeks": 8,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6,
+    "materials": [
+      {
+        "id": "M1",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Gayle Laakmann McDowell",
+        "year": 2010,
+        "why": "All-in-one reference for process, behavioural prep and 189 coding questions with solutions.",
+        "recommendedBy": [
+          "https://rockstardeveloperuniversity.com/best-coding-interview-books"
+        ],
+        "url": "https://openlibrary.org/works/OL16816263W",
+        "title": "Cracking the Coding Interview",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:33:30.175Z",
+        "fetchedTitle": "Cracking The Coding Interview",
+        "sig": "SKnpkaumoMFicuNRggLSQqc4vdB9ZnWWe11uvKEA2H4",
+        "minutes": 1260,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": {
+          "source": "catalogue",
+          "url": "https://openlibrary.org/books/OL25442597M",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": 1,
+              "title": "Arrays and Strings",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 2,
+              "title": "Linked Lists",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 3,
+              "title": "Stacks and Queues",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 4,
+              "title": "Trees and Graphs",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 5,
+              "title": "Bit Manipulation",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 6,
+              "title": "Brain Teasers",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 7,
+              "title": "Mathematics and Probability",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 8,
+              "title": "Object-Orented Design",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 9,
+              "title": "Recursion and Dynamic Programming",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 10,
+              "title": "Scalability and Memoty Limits",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 11,
+              "title": "Sorting and Searching",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 12,
+              "title": "Testing",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 13,
+              "title": "C and C++",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 14,
+              "title": "Java",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 15,
+              "title": "Databases",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 16,
+              "title": "Threads and Lock",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 17,
+              "title": "Moderate",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            },
+            {
+              "n": 18,
+              "title": "Hard",
+              "page": null,
+              "minutes": 70,
+              "sections": []
+            }
+          ]
+        },
+        "practice": {
+          "format": "problem-set",
+          "items": 189,
+          "perItemMinutes": 10,
+          "minutes": 1890,
+          "answers": true
+        },
+        "catalogued": true,
+        "note": "The Open Library page is only a catalogue record. It has no table of contents, chapter list or list of the questions, so there are no separate practice units to place."
+      },
+      {
+        "id": "M2",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Alex Xu",
+        "year": 2020,
+        "why": "Step-by-step worked system design interview problems, Vol. 1 and 2.",
+        "recommendedBy": [
+          "https://rockstardeveloperuniversity.com/best-coding-interview-books",
+          "https://reddit.com/r/softwarearchitecture/comments/1rbltmo/i_need_a_book_on_systems_design_on_which_i_can"
+        ],
+        "url": "https://openlibrary.org/works/OL21947791W",
+        "title": "System Design Interview",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:33:30.176Z",
+        "fetchedTitle": "System Design Interview - an Insider's Guide",
+        "sig": "KvIEfs47MGzZlXVmmsmquDJ6TZaenra6rrilFrtvbNM",
+        "minutes": 690,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": {
+          "source": "page",
+          "url": "https://www.goodreads.com/book/show/60631342-system-design-interview-an-insider-s-guide",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": null,
+              "title": "Chapter 1: Proximity Service",
+              "page": null,
+              "minutes": 138,
+              "sections": [],
+              "url": null,
+              "group": "Volume 2"
+            },
+            {
+              "n": null,
+              "title": "Chapter 2: Nearby Friends",
+              "page": null,
+              "minutes": 138,
+              "sections": [],
+              "url": null,
+              "group": "Volume 2"
+            },
+            {
+              "n": null,
+              "title": "Chapter 3: Google Maps",
+              "page": null,
+              "minutes": 138,
+              "sections": [],
+              "url": null,
+              "group": "Volume 2"
+            },
+            {
+              "n": null,
+              "title": "Chapter 4: Distributed Message Queue",
+              "page": null,
+              "minutes": 138,
+              "sections": [],
+              "url": null,
+              "group": "Volume 2"
+            },
+            {
+              "n": null,
+              "title": "Chapter 5: Metrics Monitoring",
+              "page": null,
+              "minutes": 138,
+              "sections": [],
+              "url": null,
+              "group": "Volume 2"
+            }
+          ]
+        },
+        "catalogued": true,
+        "note": "Volume 2 only (13 chapters, each a standalone design problem); the fetched pages did not show Volume 1's table of contents. Best for working through interview problems one at a time."
+      },
+      {
+        "id": "M3",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Adnan Aziz, Tsung-Hsien Lee and Amit Prakash",
+        "year": 2017,
+        "why": "Strongest pure practice book for hard algorithm rounds.",
+        "recommendedBy": [
+          "https://rockstardeveloperuniversity.com/best-coding-interview-books"
+        ],
+        "url": "https://openlibrary.org/works/OL19730500W",
+        "title": "Elements of Programming Interviews",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:33:30.176Z",
+        "fetchedTitle": "Elements of programming interviews",
+        "sig": "fs_WEX1lwbxpiAn3_wcXUVnkui4iJCnFp4wgc-ig6I4",
+        "minutes": 1290,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": {
+          "source": "catalogue",
+          "url": "https://openlibrary.org/books/OL26943598M",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": null,
+              "title": "[pt.] 1. The interview.",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Getting ready",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Strategies for a great interview",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Conducting an interview",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "[pt.] II. Data structures and algorithms.",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Primitive types",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Arrays",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Strings",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Linked lists",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Stacks and queues",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Binary trees",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Heaps",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Searching",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Hash tables",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Sorting",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Binary search trees",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Recursion",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Dynamic programming",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Greedy algorithms and invariants",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Graphs",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Parallel computing",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "[pt.] III. Domain specific problems.",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Design problems",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Language questions",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Object-oriented design",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Common tools",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "[pt.] IV. The honors class.",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Honors class",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "[pt.] V. Notation and index.",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Notation",
+              "page": null,
+              "minutes": 43,
+              "sections": []
+            }
+          ]
+        },
+        "catalogued": true
+      },
+      {
+        "id": "M4",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Roberto Vitillo",
+        "year": 2021,
+        "why": "Easier lead-in to DDIA on distributed systems.",
+        "recommendedBy": [
+          "https://newsletter.techworld-with-milan.com/p/best-software-engineering-books-2026"
+        ],
+        "url": "https://openlibrary.org/works/OL37484548W",
+        "title": "Understanding Distributed Systems",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:33:30.176Z",
+        "fetchedTitle": "Understanding Distributed Systems",
+        "sig": "LhvnHHTlfdO1tLB4fK7DTMnQzxznkaEVOPWYvleM9uY",
+        "minutes": 633,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true,
+        "note": "The fetched pages gave no chapter list: the Open Library page is catalog data only, and the book's site and sample PDF showed no headings. I can't place chapters without inventing them."
+      },
+      {
+        "id": "M5",
+        "origin": "research",
+        "type": "link",
+        "kind": "repo",
+        "author": "Donne Martin",
+        "year": null,
+        "why": "Free organized overview of system design topics with sample problems, solutions and Anki flashcards; a foundation, not enough alone for senior judgment.",
+        "recommendedBy": [
+          "https://prachub.com/resources/is-github-s-system-design-primer-enough-for-senior-interviews"
+        ],
+        "url": "https://github.com/donnemartin/system-design-primer",
+        "title": "GitHub - donnemartin/system-design-primer: Learn how to design large-scale systems. Prep for the system design interview. Includes Anki flashcards.",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:32:44.644Z",
+        "fetchedTitle": "GitHub - donnemartin/system-design-primer: Learn how to design large-scale systems. Prep for the system design interview. Includes Anki flashcards. · GitHub",
+        "sig": "hHbKUBPBo2n4WTftNz03BC5Jf5FHOmUgON-Sy4l2AEY",
+        "minutes": 49,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 49,
+        "hub": true,
+        "toc": {
+          "source": "page",
+          "url": "https://github.com/donnemartin/system-design-primer",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": null,
+              "title": "Study guide",
+              "page": null,
+              "minutes": 1,
+              "sections": [],
+              "url": "https://github.com/donnemartin/system-design-primer#study-guide",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "How to approach a system design interview question",
+              "page": null,
+              "minutes": 2,
+              "sections": [
+                "Step 1: Outline use cases, constraints, and assumptions",
+                "Step 2: Create a high level design",
+                "Step 3: Design core components",
+                "Step 4: Scale the design",
+                "Back-of-the-envelope calculations",
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#how-to-approach-a-system-design-interview-question",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "System design topics: start here",
+              "page": null,
+              "minutes": 1,
+              "sections": [
+                "Step 1: Review the scalability video lecture",
+                "Step 2: Review the scalability article",
+                "Next steps"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#system-design-topics-start-here",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Performance vs scalability",
+              "page": null,
+              "minutes": 1,
+              "sections": [
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#performance-vs-scalability",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Latency vs throughput",
+              "page": null,
+              "minutes": 1,
+              "sections": [
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#latency-vs-throughput",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Availability vs consistency",
+              "page": null,
+              "minutes": 1,
+              "sections": [
+                "CAP theorem",
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#availability-vs-consistency",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Consistency patterns",
+              "page": null,
+              "minutes": 1,
+              "sections": [
+                "Weak consistency",
+                "Eventual consistency",
+                "Strong consistency",
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#consistency-patterns",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Availability patterns",
+              "page": null,
+              "minutes": 2,
+              "sections": [
+                "Fail-over",
+                "Disadvantage(s): failover",
+                "Replication",
+                "Availability in numbers"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#availability-patterns",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Domain name system",
+              "page": null,
+              "minutes": 1,
+              "sections": [
+                "Disadvantage(s): DNS",
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#domain-name-system",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Content delivery network",
+              "page": null,
+              "minutes": 2,
+              "sections": [
+                "Push CDNs",
+                "Pull CDNs",
+                "Disadvantage(s): CDN",
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#content-delivery-network",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Load balancer",
+              "page": null,
+              "minutes": 3,
+              "sections": [
+                "Layer 4 load balancing",
+                "Layer 7 load balancing",
+                "Horizontal scaling",
+                "Disadvantage(s): load balancer",
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#load-balancer",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Reverse proxy (web server)",
+              "page": null,
+              "minutes": 1,
+              "sections": [
+                "Load balancer vs reverse proxy",
+                "Disadvantage(s): reverse proxy",
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#reverse-proxy-web-server",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Application layer",
+              "page": null,
+              "minutes": 1,
+              "sections": [
+                "Microservices",
+                "Service Discovery",
+                "Disadvantage(s): application layer",
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#application-layer",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Database",
+              "page": null,
+              "minutes": 10,
+              "sections": [
+                "Relational database management system (RDBMS)",
+                "NoSQL",
+                "SQL or NoSQL"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#database",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Cache",
+              "page": null,
+              "minutes": 5,
+              "sections": [
+                "Client caching",
+                "CDN caching",
+                "Web server caching",
+                "Database caching",
+                "Application caching",
+                "Caching at the database query level",
+                "Caching at the object level",
+                "When to update the cache",
+                "Disadvantage(s): cache",
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#cache",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Asynchronism",
+              "page": null,
+              "minutes": 2,
+              "sections": [
+                "Message queues",
+                "Task queues",
+                "Back pressure",
+                "Disadvantage(s): asynchronism",
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#asynchronism",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Communication",
+              "page": null,
+              "minutes": 7,
+              "sections": [
+                "Hypertext transfer protocol (HTTP)",
+                "Transmission control protocol (TCP)",
+                "User datagram protocol (UDP)",
+                "Remote procedure call (RPC)",
+                "Representational state transfer (REST)",
+                "RPC and REST calls comparison"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#communication",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Security",
+              "page": null,
+              "minutes": 1,
+              "sections": [
+                "Source(s) and further reading"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#security",
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Appendix",
+              "page": null,
+              "minutes": 6,
+              "sections": [
+                "Powers of two table",
+                "Latency numbers every programmer should know",
+                "Additional system design interview questions",
+                "Real world architectures",
+                "Company architectures",
+                "Company engineering blogs"
+              ],
+              "url": "https://github.com/donnemartin/system-design-primer#appendix",
+              "group": null
+            }
+          ]
+        },
+        "practice": {
+          "format": "design-exercise",
+          "items": 8,
+          "perItemMinutes": null,
+          "minutes": 50,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Design Pastebin.com (or Bit.ly)",
+                "number": null,
+                "group": "System design interview questions with solutions",
+                "difficulty": null,
+                "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/pastebin/README.md",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design the Twitter timeline and search (or Facebook feed and search)",
+                "number": null,
+                "group": "System design interview questions with solutions",
+                "difficulty": null,
+                "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/twitter/README.md",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design a web crawler",
+                "number": null,
+                "group": "System design interview questions with solutions",
+                "difficulty": null,
+                "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/web_crawler/README.md",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design Mint.com",
+                "number": null,
+                "group": "System design interview questions with solutions",
+                "difficulty": null,
+                "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/mint/README.md",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design the data structures for a social network",
+                "number": null,
+                "group": "System design interview questions with solutions",
+                "difficulty": null,
+                "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/social_graph/README.md",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design a key-value store for a search engine",
+                "number": null,
+                "group": "System design interview questions with solutions",
+                "difficulty": null,
+                "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/query_cache/README.md",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design Amazon's sales ranking by category feature",
+                "number": null,
+                "group": "System design interview questions with solutions",
+                "difficulty": null,
+                "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/sales_rank/README.md",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design a system that scales to millions of users on AWS",
+                "number": null,
+                "group": "System design interview questions with solutions",
+                "difficulty": null,
+                "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/scaling_aws/README.md",
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://github.com/donnemartin/system-design-primer"
+          },
+          "totalItems": 8
+        },
+        "foundBy": [
+          "canonical"
+        ],
+        "note": "One long README: study guide, interview approach, topic sections (scalability to security), plus 8 system design exercise solution pages. Best as a free overview and practice prompts."
+      },
+      {
+        "id": "M6",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": null,
+        "year": null,
+        "why": "Curated topic-grouped list of 250 coding problems (includes NeetCode 150 and Blind 75 subsets) for algorithm rounds.",
+        "recommendedBy": [],
+        "url": "https://neetcode.io/practice/practice/neetcode250",
+        "title": "NeetCode 250 - Complete Beginner Study Plan",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:32:49.148Z",
+        "fetchedTitle": "NeetCode 250 - Complete Beginner Study Plan",
+        "sig": "Tganht9oW4b7fcqrV1FPCRTiQMbKIiD56RhrN_vIuz8",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 1,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "problem-set",
+          "items": 250,
+          "perItemMinutes": 10,
+          "minutes": 2500,
+          "answers": true
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "Script-drawn list of 250 problems in 18 topic groups; the repo data file lists 450 problems and doesn't match the 250 list, so I give the topic groups (names from memory), which are the next level up. Best for topic-by-topic interview practice."
+      },
+      {
+        "id": "M7",
+        "origin": "research",
+        "type": "youtube",
+        "kind": "video",
+        "author": "NeetCode",
+        "year": null,
+        "why": "Full video walkthrough of every NeetCode 150 problem across the main algorithm patterns.",
+        "recommendedBy": [],
+        "url": "https://youtube.com/watch?v=T0u5nwSA0w0",
+        "title": "Neetcode 150 Course - All Coding Interview Questions Solved",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:32:45.339Z",
+        "fetchedTitle": "Neetcode 150 Course - All Coding Interview Questions Solved - YouTube",
+        "sig": "grPKcIc0X_rFWD15MIyXqRSXoBqwpJh37sTNKFV-CYI",
+        "minutes": 2337,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 2337,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "problem-set",
+          "items": 150,
+          "perItemMinutes": 10,
+          "minutes": 1500,
+          "answers": true
+        },
+        "foundBy": [
+          "canonical"
+        ],
+        "note": "One 2337-minute video; the tools showed no chapters or headings, so I couldn't split it into parts."
+      },
+      {
+        "id": "M8",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": null,
+        "year": null,
+        "why": "32 expert-written system design breakdowns with solutions by difficulty; medium and hard suit senior prep.",
+        "recommendedBy": [],
+        "url": "https://hellointerview.com/learn/system-design/in-a-hurry/problem-breakdowns",
+        "title": "Hello Interview",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:32:49.802Z",
+        "fetchedTitle": "Hello Interview",
+        "sig": "8ro-ObcOZhssh8cPL9gKEcNC26q4NOMP0PFdk7HI_aw",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 2,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "design-exercise",
+          "items": 32,
+          "perItemMinutes": null,
+          "minutes": 50,
+          "answers": true
+        },
+        "foundBy": [
+          "practice"
+        ]
+      },
+      {
+        "id": "M9",
+        "origin": "research",
+        "type": "link",
+        "kind": "essay",
+        "author": "Vinit Shahdeo",
+        "year": 2026,
+        "why": "Explains how AI-assisted coding interviews work in 2026 and what is being assessed.",
+        "recommendedBy": [],
+        "url": "https://vinitshahdeo.substack.com/p/ai-assisted-coding-interviews-what-it-means-to-be-an-engineer",
+        "title": "The Future of Hiring: AI-Assisted Coding Interviews Are Changing What It Means to Be an Engineer",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:32:43.653Z",
+        "fetchedTitle": "The Future of Hiring: AI-Assisted Coding Interviews Are Changing What It Means to Be an Engineer",
+        "sig": "NEfQbtaOjZRo0KT4iJjjF5ruPtsve0BfZSz9cBTyR-8",
+        "minutes": 19,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 19,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "current"
+        ]
+      },
+      {
+        "id": "M10",
+        "origin": "research",
+        "type": "youtube",
+        "kind": "video",
+        "author": null,
+        "year": 2026,
+        "why": "Mock of an AI-enabled coding interview with a Meta staff engineer.",
+        "recommendedBy": [],
+        "url": "https://youtube.com/watch?v=A1kX8fJx53c",
+        "title": "AI Coding Interview w/ Meta Staff Engineer",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:32:44.401Z",
+        "fetchedTitle": "AI Coding Interview w/ Meta Staff Engineer - YouTube",
+        "sig": "JRPrPwkDeU3ZBRV_Yf46nRjKHNW_MjaXzsp3LfGfZgI",
+        "minutes": 53,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 53,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "current"
+        ]
+      },
+      {
+        "id": "M11",
+        "origin": "research",
+        "type": "link",
+        "kind": "essay",
+        "author": "PracHub",
+        "year": null,
+        "why": "Argues what the Primer lacks for senior-level judgment.",
+        "recommendedBy": [],
+        "url": "https://prachub.com/resources/is-github-s-system-design-primer-enough-for-senior-interviews",
+        "title": "Is GitHub's System Design Primer Enough for Senior Interviews? | PracHub Knowledge Hub",
+        "backbone": false,
+        "verifiedAt": "2026-10-30T20:33:25.569Z",
+        "fetchedTitle": "Is GitHub's System Design Primer Enough for Senior Interviews? | PracHub Knowledge Hub",
+        "sig": "xMHfIG6s2uZg7w7J2CBpe75ld_aFhzPI8LfEaOBIzNI",
+        "minutes": 8,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 8,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      }
+    ]
+  },
+  "baseline": {
+    "inputTokens": 6183,
+    "outputTokens": 2660,
+    "ms": 26099
+  }
+}

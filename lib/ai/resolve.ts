@@ -41,6 +41,7 @@ export function appModel(id: AiModelId): ResolvedModel {
 /** Gateway ids use dots; Anthropic's API uses hyphens. Only ids listed here can run on a user's key. */
 export const ANTHROPIC_API_IDS: Partial<Record<AiModelId, string>> = {
   "anthropic/claude-haiku-4.5": "claude-haiku-4-5",
+  "anthropic/claude-haiku-5.5": "claude-haiku-5-5",
   "anthropic/claude-sonnet-5": "claude-sonnet-5",
   "anthropic/claude-sonnet-5.5": "claude-sonnet-5-5",
   "anthropic/claude-opus-5": "claude-opus-5",

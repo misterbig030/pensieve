@@ -1,6 +1,6 @@
 import type { ModelProvider } from "./models";
 
-export const PROVIDER_NAMES: Record<ModelProvider, string> = { anthropic: "Anthropic", google: "Google", openai: "OpenAI" };
+export const PROVIDER_NAMES: Record<ModelProvider, string> = { anthropic: "Anthropic", google: "Google", openai: "OpenAI", deepseek: "DeepSeek" };
 
 /** The vendor a key belongs to, from its prefix. Anthropic's "sk-ant-" is checked before OpenAI's "sk-". */
 export function detectProvider(key: string): ModelProvider | null {
