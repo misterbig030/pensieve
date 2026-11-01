@@ -68,4 +68,19 @@ describe("getCreditStatus", () => {
     expect(status).toMatchObject({ left: 500, resetsAt: new Date("2026-12-01T00:00:00Z") });
     expect((await db.select().from(users).where(eq(users.id, "u6")))[0]?.signedUpAt ?? null).toBeNull();
   });
+
+  it("is back to the full allowance after a manual reset, which lapses with the period", async () => {
+    await db.insert(users).values({ id: "u7", signedUpAt: new Date("2026-09-14T17:30:00Z") });
+    const spend = (costUsd: number, at: string) =>
+      db.insert(generationLog).values({ caller: "outline", model: "anthropic/claude-opus-5.5", costUsd, latencyMs: 1, userId: "u7", keyOwner: "app", createdAt: new Date(at) });
+    await spend(5, "2026-11-15T09:00:00Z");
+    expect(await getCreditStatus("u7", new Date("2026-11-20T10:00:00Z"))).toMatchObject({ left: 0, paused: true });
+
+    await db.update(users).set({ creditsResetAt: new Date("2026-11-16T00:00:00Z") }).where(eq(users.id, "u7"));
+    await spend(1, "2026-11-17T09:00:00Z");
+    expect(await getCreditStatus("u7", new Date("2026-11-20T10:00:00Z"))).toMatchObject({ left: 400, paused: false });
+
+    await spend(4.5, "2026-12-15T09:00:00Z");
+    expect(await getCreditStatus("u7", new Date("2026-12-20T10:00:00Z"))).toMatchObject({ left: 50 });
+  });
 });

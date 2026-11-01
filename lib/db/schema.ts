@@ -28,6 +28,12 @@ export const users = pgTable("users", {
   id: text("id").primaryKey(),
   /** When the user signed up with Clerk: their credit periods turn on this day of the month. Empty until first read. */
   signedUpAt: timestamp("signed_up_at"),
+  /**
+   * A manual credit reset: spend before it no longer counts this period, so the user is back to the full allowance.
+   * Set it by hand (`UPDATE users SET credits_reset_at = now() WHERE id = …`); a reset before the period started does
+   * nothing, so it never carries into later periods.
+   */
+  creditsResetAt: timestamp("credits_reset_at"),
   /** Staff: debug call bodies, the admin dock, and no credit limit. */
   isAdmin: boolean("is_admin").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),

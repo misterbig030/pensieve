@@ -37,6 +37,18 @@ Besides the database, Clerk and AI Gateway keys:
   them share one pace per server: with a contact, up to 3 a second; without it, 1 a second. Going faster gets the
   server's address blocked, and every book then fails its catalogue check.
 
+## Users and credits
+
+Every user gets 500 free credits ($5 of model cost Pensieve pays) a period; a period starts at 00:00 UTC on their signup
+day of the month (`lib/credits.ts`). There is no stored balance: credits left are worked out from `generation_log`.
+Run these in the database (the Neon SQL editor), with the user's Clerk id:
+
+- Give a user their full allowance back for the rest of this period:
+  `UPDATE users SET credits_reset_at = now() WHERE id = 'user_…';` Spend before it stops counting; the next period
+  starts fresh as usual, and their reset day does not change.
+- Make a user an admin (no credit limit, the admin menu and the model-calls panel):
+  `UPDATE users SET is_admin = true WHERE id = 'user_…';`
+
 ## Deployment checklist
 
 There is no cloud deployment yet: the app runs locally against the production database hosted on Vercel. Before the

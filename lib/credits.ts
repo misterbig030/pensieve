@@ -35,6 +35,11 @@ export function monthStart(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
+/** Where this period's spend is counted from: its start, or a manual reset made since (`users.credits_reset_at`). */
+export function countSince(period: { start: Date }, resetAt: Date | null): Date {
+  return resetAt && resetAt > period.start ? resetAt : period.start;
+}
+
 /** Whole credits left, rounded down and never below zero. Rounded first so float error never costs a credit. */
 export function creditsLeft(spentUsd: number, allowanceUsd: number = MONTHLY_FREE_CREDIT_USD): number {
   const exact = Math.round((allowanceUsd - spentUsd) * CREDITS_PER_USD * 1e6) / 1e6;
