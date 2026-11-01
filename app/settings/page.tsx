@@ -1,7 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { PROVIDER_NAMES } from "@/lib/ai/providerKeys";
-import { getCreditStatus } from "@/lib/db/creditStatus";
+import { creditStatusFor } from "@/lib/db/creditStatus";
 import { getUserApiKeys } from "@/lib/db/userApiKeys";
 import { AccountCard } from "./AccountCard";
 import { ApiKeyCard, type StoredKey } from "./ApiKeyCard";
@@ -18,7 +18,7 @@ function ago(from: Date, now = new Date()): string {
 export default async function SettingsPage() {
   const { userId } = await auth();
   if (!userId) return null;
-  const [rows, user, credits] = await Promise.all([getUserApiKeys(userId), currentUser(), getCreditStatus(userId)]);
+  const [rows, user, credits] = await Promise.all([getUserApiKeys(userId), currentUser(), creditStatusFor(userId)]);
   const row = rows.find((r) => r.provider === "anthropic") ?? null;
   const stored: StoredKey | null = row
     ? {

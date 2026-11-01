@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { Coins, Flame } from "lucide-react";
-import { getCreditStatus } from "@/lib/db/creditStatus";
+import { creditStatusFor } from "@/lib/db/creditStatus";
 import { getCheckInDatesForUser } from "@/lib/db/queries";
 import { isAdminUserId } from "@/lib/admin";
 import { computeStreak } from "@/lib/streak";
@@ -12,7 +12,10 @@ import { NavTabs } from "@/components/pensieve/NavTabs";
 /** The full-width bar on every signed-in page: brand, section tabs, streak and the account menu. */
 export async function TopBar() {
   const { userId } = await auth();
-  const [dates, credits] = userId ? await Promise.all([getCheckInDatesForUser(userId), getCreditStatus(userId)]) : [[], null];
+  // The credits pill is extra: a failed lookup hides it rather than taking down every page's bar.
+  const [dates, credits] = userId
+    ? await Promise.all([getCheckInDatesForUser(userId), creditStatusFor(userId).catch(() => null)])
+    : [[], null];
   const streak = computeStreak(dates);
 
   return (

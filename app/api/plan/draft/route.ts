@@ -23,8 +23,8 @@ export async function POST(request: Request) {
   const body = parsed.data;
   const debug = body.debug === true && isAdminUserId(userId);
   const models = await resolveModels(userId);
-  // A new draft is checked against the month's free credits; the draft gets the whole set, so every role counts.
-  const refused = await creditRefusal(userId, [models.outline, models.content, models.chat, models.research, models.allocate]);
+  // A new draft is checked against the month's free credits: the roles it runs are research, allocation and outline.
+  const refused = await creditRefusal(userId, [models.research, models.allocate, models.outline]);
   if (refused) return refused;
   const deadline = Date.now() + DRAFT_BUDGET_MS;
 

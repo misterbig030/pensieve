@@ -57,11 +57,13 @@ export function ConversationRail({
   const undoId = undoableChangeId(messages);
   const showSuggestions = !busy && !hasUserTurn(messages);
   const canSend = !busy && input.trim().length > 0;
+  // Whether a notice shows, not the element: the parent builds a new one each render, keystrokes included.
+  const hasNotice = notice != null;
 
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, notice]);
+  }, [messages, hasNotice]);
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {

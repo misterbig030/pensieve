@@ -4,7 +4,7 @@ import type { CreditStatus } from "@/lib/db/creditStatus";
 import { cn } from "@/lib/utils";
 
 /** The month's free credits (docs/mockups/free-credits.html, section 2). The top bar's pill and the alert link here. */
-export function CreditsCard({ left, allowance, resetsAt, keyCoversAll }: CreditStatus) {
+export function CreditsCard({ left, allowance, resetsAt, keyCoversAll, paused }: CreditStatus) {
   const reset = formatReset(resetsAt);
   return (
     <div id="credits" className="scroll-mt-6 rounded-xl bg-card p-5 text-sm text-card-foreground ring-1 ring-foreground/10">
@@ -21,7 +21,7 @@ export function CreditsCard({ left, allowance, resetsAt, keyCoversAll }: CreditS
         </p>
       ) : (
         <>
-          {left === 0 && (
+          {paused && (
             <p className="mt-3 text-[13px] text-muted-foreground">
               New plans and plan chat are paused until {reset}. Your plans, lessons and filling in weeks keep working. Add an API key below to keep going
               now.
