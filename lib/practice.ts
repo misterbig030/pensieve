@@ -177,6 +177,11 @@ export function isBlockFormat(format: PracticeFormat): boolean {
   return PRACTICE_REGISTRY[format].fixedMinutes !== null;
 }
 
+/** A block format's block on days of `dayMinutes`: its fixed size, cut to a day so one always fits a day. */
+export function blockMinutes(format: PracticeFormat, dayMinutes: number): number {
+  return Math.min(PRACTICE_REGISTRY[format].fixedMinutes ?? dayMinutes, dayMinutes);
+}
+
 /** One practice format the plan's split picked, with its share of the practice time and what it is aimed at. */
 export const practicePickSchema = z.object({
   format: z.enum(PRACTICE_FORMATS),

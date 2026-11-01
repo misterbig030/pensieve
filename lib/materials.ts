@@ -3,6 +3,7 @@ import { budgetFor, cloneTree, daysInWeekOf, fullLabelOf, parentOf, walk, weeksO
 import {
   PRACTICE_FORMATS,
   PRACTICE_REGISTRY,
+  blockMinutes,
   formatRuns,
   isBlockFormat,
   itemMinutes,
@@ -680,6 +681,53 @@ export function weekPracticeTime(
   return { reading: budgets.reading, practice };
 }
 
+/**
+ * A week's time fitted to its `days` days of `dayBudget` minutes each, so its figures never ask for more than the days
+ * hold. With `wholeBlocks` (days inside a week that reserves listed runs, `weekPracticeTime`), each block format
+ * without a run gets at most the whole blocks of `blockMinutes` its minutes round to and the days have room for beside
+ * reading and the other formats (the format furthest past its minutes gives one up first); `blocks` counts them. What
+ * the days still have goes to the formats they write themselves without a run, by their minutes, else to reading, so
+ * the days are filled. Past the days' total, reading and the per-item formats without a run give way by their minutes;
+ * the formats with a run are the items the week reserved, so they stay whole.
+ */
+export function fitWeekToDays(
+  budgets: { reading: number; practice: Partial<Record<PracticeFormat, number>> },
+  runs: Partial<Record<PracticeFormat, number>>,
+  dayBudget: number,
+  days: number,
+  wholeBlocks: boolean,
+): { reading: number; practice: Partial<Record<PracticeFormat, number>>; blocks: Partial<Record<PracticeFormat, number>> } {
+  const practice = { ...budgets.practice };
+  const formats = PRACTICE_FORMATS.filter((f) => practice[f] !== undefined);
+  const sum = (fs: PracticeFormat[]) => fs.reduce((total, f) => total + practice[f]!, 0);
+  const free = wholeBlocks ? formats.filter((f) => runs[f] === undefined && isBlockFormat(f)) : [];
+  const blocks: Partial<Record<PracticeFormat, number>> = {};
+  const size = (f: PracticeFormat) => blockMinutes(f, dayBudget);
+  const room = dayBudget * days - budgets.reading - sum(formats.filter((f) => !free.includes(f)));
+  for (const f of free) blocks[f] = Math.round(practice[f]! / size(f));
+  const past = (f: PracticeFormat) => blocks[f]! * size(f) - practice[f]!;
+  const placed = () => free.reduce((total, f) => total + blocks[f]! * size(f), 0);
+  while (placed() > Math.max(0, room)) {
+    const f = free.filter((f) => blocks[f]! > 0).reduce((a, b) => (past(b) > past(a) ? b : a));
+    blocks[f] = blocks[f]! - 1;
+  }
+  for (const f of free) practice[f] = blocks[f]! * size(f);
+  const left = room - placed();
+  const loose = formats.filter((f) => runs[f] === undefined && !isBlockFormat(f));
+  let reading = budgets.reading;
+  if (left > 0 && wholeBlocks) {
+    const written = loose.filter((f) => PRACTICE_REGISTRY[f].generated !== "never");
+    if (written.length === 0) return { reading: reading + left, practice, blocks };
+    const weights = written.some((f) => practice[f]! > 0) ? written.map((f) => practice[f]!) : written.map(() => 1);
+    shareOut(left, weights).forEach((n, i) => (practice[written[i]] = practice[written[i]]! + n));
+  } else if (left < 0) {
+    const cut = shareOut(Math.min(-left, reading + sum(loose)), [reading, ...loose.map((f) => practice[f]!)]);
+    reading -= cut[0];
+    loose.forEach((f, i) => (practice[f] = practice[f]! - cut[i + 1]));
+  }
+  return { reading, practice, blocks };
+}
+
 /** A pick on the time card: its percent of the plan's time, or none with `toReading` when it can't be assigned and its time is reading. */
 export interface PickPercent {
   format: PracticeFormat;
@@ -1230,13 +1278,14 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
    * without one gives its slice to them, shared by their picks' shares. Block formats have no budget of their own in
    * a week; the week's practice as a whole is held to its total instead.
    * Days inside a week that reserves listed runs are the exception: they do exactly those items, so each format,
-   * blocks included, has the week's minutes of its own (`weekPracticeTime`) and a block the days leave unwritten is short.
+   * blocks included, has the week's minutes of its own (`weekPracticeTime`), fitted to the days in whole blocks as the
+   * prompt gives them (`fitWeekToDays`), and a block the days leave unwritten is short.
    */
   const weekRule = (units: PlanNode[], index: number, unit: string, weekMinutes: number) => {
     const plain = practiceBudgets(input.split, weekMinutes, input.materials);
     const runs = units[0]?.level === "day" ? reservedRuns(parentNode, input.materials, input.root) : {};
     const held = Object.keys(runs).length > 0;
-    const budgets = held ? weekPracticeTime(plain, runs) : plain;
+    const budgets = held ? fitWeekToDays(weekPracticeTime(plain, runs), runs, dayMinutes(input.hoursPerWeek, units.length), units.length, true) : plain;
     let must = 0;
     let should = 0;
     const assigned = new Map<PracticeFormat, number>();

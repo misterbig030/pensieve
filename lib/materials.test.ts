@@ -28,6 +28,7 @@ import {
   reservedRunMinutes,
   reservedRuns,
   weekPracticeTime,
+  fitWeekToDays,
   practiceRowKey,
   sizeChapterRows,
   tierMinutes,
@@ -1638,6 +1639,36 @@ describe("a week's practice time inside its reservation", () => {
     expect(reservedRuns(root.children![0], materials)).toEqual({ "problem-set": 195 });
   });
 
+  it("fits a week's time to its days, with at most the whole blocks that fit and none longer than a day", () => {
+    // Five 70-min days are 350 min. Run 3's Week 1: design's 52 min are one 50-min block, mock's 31 no 70-min block;
+    // recall, written from the reading, takes what the days still have: 76 + 195 + 50 + 29.
+    expect(fitWeekToDays(weekPracticeTime(budgets, { "problem-set": 195 }), { "problem-set": 195 }, 70, 5, true)).toEqual({
+      reading: 76,
+      practice: { "problem-set": 195, "design-exercise": 50, mock: 0, recall: 29 },
+      blocks: { "design-exercise": 1, mock: 0 },
+    });
+    // The 2026-10-31 Week 1: 65 + 170 + 77 + 30 + 18 is 360. Two designs round past the 97 min the days leave beside
+    // reading, problems and session, so one; the session takes the 47 left.
+    const oct = { reading: 65, practice: { "problem-set": 170, "design-exercise": 77, mock: 30, session: 18 } };
+    expect(fitWeekToDays(oct, { "problem-set": 170 }, 70, 5, true)).toEqual({
+      reading: 65,
+      practice: { "problem-set": 170, "design-exercise": 50, mock: 0, session: 65 },
+      blocks: { "design-exercise": 1, mock: 0 },
+    });
+    // Without whole blocks only the excess goes, from reading and the formats without a run, by their minutes.
+    expect(fitWeekToDays({ reading: 180, practice: { "problem-set": 108, recall: 72 } }, {}, 70, 5, false)).toEqual({
+      reading: 175,
+      practice: { "problem-set": 105, recall: 70 },
+      blocks: {},
+    });
+    // A run past the days leaves nothing for blocks; reading and recall give way by size: 37 + 300 + 13.
+    expect(fitWeekToDays({ reading: 60, practice: { "problem-set": 300, mock: 40, recall: 20 } }, { "problem-set": 300 }, 70, 5, true)).toEqual({
+      reading: 37,
+      practice: { "problem-set": 300, mock: 0, recall: 13 },
+      blocks: { mock: 0 },
+    });
+  });
+
   it("gives what a run frees to reading when no block can take it", () => {
     const perItem = { ...split, formats: [split.formats[0], { ...split.formats[3], share: 44 }] };
     const plain = practiceBudgets(perItem, 360, materials);
@@ -1669,7 +1700,8 @@ describe("a week's practice time inside its reservation", () => {
         { practice: [item(8), item(9)] },
       ]);
       expect(out.breaches).toEqual([]);
-      expect(out.facts.filter((f) => f.includes("short"))).toEqual(["Week 1 practice short: Design 0 of about 52 min, Mock 0 of about 31 min"]);
+      // Design's 52 min are one 50-min block and Mock's 31 none; recall takes the 23 min the days still have.
+      expect(out.facts.filter((f) => f.includes("short"))).toEqual(["Week 1 practice short: Recall 0 of about 29 min, Design 0 of about 50 min"]);
     });
 
     it("passes a week whose days write a design block in the time its run leaves", () => {
