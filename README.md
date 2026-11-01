@@ -47,10 +47,12 @@ first deployment, in this order:
   them unreadable, and every user would have to re-enter their key. Read it from the file so it never shows on screen:
   `grep '^USER_KEY_ENCRYPTION_SECRET=' .env.local | cut -d= -f2- > /tmp/s && vercel env add USER_KEY_ENCRYPTION_SECRET production preview < /tmp/s; rm -f /tmp/s`
 - [ ] Set the rest of the local environment the same way: the database URL, the Clerk keys, `AI_GATEWAY_API_KEY`,
-  `TAVILY_API_KEY`, `MATERIALS_SIGNING_SECRET`, `ADMIN_USER_IDS`, `OPEN_LIBRARY_CONTACT`, and `RESEARCH_ARM` if it is set
-  locally.
+  `TAVILY_API_KEY`, `MATERIALS_SIGNING_SECRET`, `OPEN_LIBRARY_CONTACT`, and `RESEARCH_ARM` if it is set locally.
+  Admins are not an environment variable: they are `users.is_admin` in the database.
 - [ ] Apply any pending migrations with `npx drizzle-kit migrate` **before** the deploy that needs them. New columns
   must exist before the new code inserts into them; old code tolerates new columns because they carry defaults.
+  A migration that adds a foreign key is the exception: old code can insert rows it rejects (0017's `users` links
+  need a user's row before their first track or key), so ship the code that keeps it satisfied right after.
 - [ ] After the first deploy, run one plan draft on a stored user key and confirm the admin model-calls panel shows
   "user's key" on every row and the usage appears on that user's Anthropic Console, not the gateway.
 

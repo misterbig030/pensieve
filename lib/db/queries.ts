@@ -7,6 +7,7 @@ import { numberedToc, remapTreeRefs } from "@/lib/materials";
 import { type Granularity, type PlanNode } from "@/lib/planTree";
 import { clip, type Material } from "@/lib/schemas/material";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, clampHours, type PlanSplit } from "@/lib/studyTime";
+import { ensureUser } from "./users";
 
 export async function getTracksForUser(userId: string) {
   return db.query.tracks.findMany({
@@ -147,6 +148,7 @@ export async function createTrackWithPlan(input: {
   root: PlanNode;
 }): Promise<{ trackId: string; droppedRefs: number }> {
   return db.transaction(async (tx) => {
+    await ensureUser(tx, input.userId);
     const [track] = await tx
       .insert(tracks)
       .values({

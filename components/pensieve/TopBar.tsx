@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { Coins, Flame } from "lucide-react";
 import { creditStatusFor } from "@/lib/db/creditStatus";
 import { getCheckInDatesForUser } from "@/lib/db/queries";
-import { isAdminUserId } from "@/lib/admin";
+import { isAdmin } from "@/lib/admin";
 import { computeStreak } from "@/lib/streak";
 import { cn } from "@/lib/utils";
 import { AccountMenu } from "@/components/pensieve/AccountMenu";
@@ -13,9 +13,9 @@ import { NavTabs } from "@/components/pensieve/NavTabs";
 export async function TopBar() {
   const { userId } = await auth();
   // The credits pill is extra: a failed lookup hides it rather than taking down every page's bar.
-  const [dates, credits] = userId
-    ? await Promise.all([getCheckInDatesForUser(userId), creditStatusFor(userId).catch(() => null)])
-    : [[], null];
+  const [dates, credits, admin] = userId
+    ? await Promise.all([getCheckInDatesForUser(userId), creditStatusFor(userId).catch(() => null), isAdmin(userId)])
+    : [[], null, false];
   const streak = computeStreak(dates);
 
   return (
@@ -47,7 +47,7 @@ export async function TopBar() {
           <Flame className="size-3.5" />
           {streak}
         </span>
-        <AccountMenu admin={isAdminUserId(userId)} />
+        <AccountMenu admin={admin} />
       </div>
     </header>
   );

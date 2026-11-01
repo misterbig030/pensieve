@@ -1,9 +1,10 @@
 import { cache } from "react";
-import { isAdminUserId } from "@/lib/admin";
+import { isAdmin } from "@/lib/admin";
 import { keyCoversAll } from "@/lib/ai/resolve";
-import { CREDITS_PER_USD, creditsLeft, MONTHLY_FREE_CREDIT_USD, monthStart, nextReset } from "@/lib/credits";
+import { CREDITS_PER_USD, creditPeriod, creditsLeft, MONTHLY_FREE_CREDIT_USD, monthStart } from "@/lib/credits";
 import { getAppSpendUsd } from "./credits";
 import { getUserApiKeys } from "./userApiKeys";
+import { signedUpAtFor } from "./users";
 
 export interface CreditStatus {
   left: number;
@@ -15,17 +16,19 @@ export interface CreditStatus {
   paused: boolean;
 }
 
-/** What Settings and the top bar show: credits left this month, and whether they apply to this user at all. */
+/** What Settings and the top bar show: credits left this period, and whether they apply to this user at all. */
 export async function getCreditStatus(userId: string, now: Date = new Date()): Promise<CreditStatus> {
-  const [spent, keys] = await Promise.all([getAppSpendUsd(userId, monthStart(now)), getUserApiKeys(userId)]);
+  // Clerk down or slow: show the calendar month for now rather than fail the page; the next request asks again.
+  const period = creditPeriod(await signedUpAtFor(userId).catch(() => monthStart(now)), now);
+  const [spent, keys, admin] = await Promise.all([getAppSpendUsd(userId, period.start), getUserApiKeys(userId), isAdmin(userId)]);
   const left = creditsLeft(spent);
   const covered = keyCoversAll(keys.map((k) => k.provider));
   return {
     left,
     allowance: MONTHLY_FREE_CREDIT_USD * CREDITS_PER_USD,
-    resetsAt: nextReset(now),
+    resetsAt: period.end,
     keyCoversAll: covered,
-    paused: left === 0 && !covered && !isAdminUserId(userId),
+    paused: left === 0 && !covered && !admin,
   };
 }
 

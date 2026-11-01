@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { isAdminUserId } from "@/lib/admin";
+import { isAdmin } from "@/lib/admin";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { collectCalls } from "@/lib/ai/collectCalls";
@@ -84,7 +84,7 @@ export type ExpandNodeResult =
 export async function expandNodeAction(input: { trackId: string; nodeId: string; reason: "expand" | "split"; splitDays?: number }): Promise<ExpandNodeResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
-  const admin = isAdminUserId(userId);
+  const admin = await isAdmin(userId);
   const calls: ModelCall[] = [];
   const extra = admin ? { calls } : {};
   const detail = await getTrackDetail(input.trackId, userId);

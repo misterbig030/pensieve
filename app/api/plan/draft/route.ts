@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { isAdminUserId } from "@/lib/admin";
+import { isAdmin } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
 import { creditRefusal } from "@/lib/ai/creditGate";
 import { draftRequestBodySchema, researchedDraftInput } from "@/lib/ai/draftRequest";
@@ -21,9 +21,9 @@ export async function POST(request: Request) {
   const parsed = draftRequestBodySchema.safeParse(await request.json());
   if (!parsed.success) return new Response("Invalid request", { status: 400 });
   const body = parsed.data;
-  const debug = body.debug === true && isAdminUserId(userId);
+  const debug = body.debug === true && (await isAdmin(userId));
   const models = await resolveModels(userId);
-  // A new draft is checked against the month's free credits: the roles it runs are research, allocation and outline.
+  // A new draft is checked against the free credits: the roles it runs are research, allocation and outline.
   const refused = await creditRefusal(userId, [models.research, models.allocate, models.outline]);
   if (refused) return refused;
   const deadline = Date.now() + DRAFT_BUDGET_MS;

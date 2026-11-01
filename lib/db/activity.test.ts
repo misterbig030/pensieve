@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("./client", async () => {
   const { createTestDb } = await import("./testDb");
@@ -7,8 +7,13 @@ vi.mock("./client", async () => {
 });
 
 import { db } from "./client";
-import { checkIns, planNodes, tracks } from "./schema";
+import { checkIns, planNodes, tracks, users } from "./schema";
 import { getTrackCheckIns, getUserCheckIns } from "./activity";
+
+// Tracks point at their owner's row.
+beforeAll(async () => {
+  await db.insert(users).values([{ id: "u1" }, { id: "u2" }, { id: "u3" }]);
+});
 
 async function seed() {
   const [rust, music] = await db

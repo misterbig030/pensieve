@@ -5,15 +5,27 @@ vi.mock("./client", async () => {
   const { db } = await createTestDb();
   return { db };
 });
+vi.mock("@clerk/nextjs/server", () => ({ clerkClient: vi.fn() }));
 
+import { eq } from "drizzle-orm";
 import { db } from "./client";
 import { getCreditStatus } from "./creditStatus";
-import { generationLog } from "./schema";
+import { generationLog, users } from "./schema";
 import { upsertUserApiKey } from "./userApiKeys";
 
 describe("getCreditStatus", () => {
-  it("counts this month's app spend and says whether the user's key covers every role", async () => {
+  it("counts this period's app spend and says whether the user's key covers every role", async () => {
     const now = new Date("2026-11-20T10:00:00Z");
+    await db.insert(users).values({ id: "u1", signedUpAt: new Date("2026-09-14T17:30:00Z") });
+    await db.insert(generationLog).values({
+      caller: "outline",
+      model: "anthropic/claude-opus-5.5",
+      costUsd: 2,
+      latencyMs: 1,
+      userId: "u1",
+      keyOwner: "app",
+      createdAt: new Date("2026-11-13T23:00:00Z"),
+    });
     await db.insert(generationLog).values({
       caller: "outline",
       model: "anthropic/claude-opus-5.5",
@@ -21,10 +33,10 @@ describe("getCreditStatus", () => {
       latencyMs: 1,
       userId: "u1",
       keyOwner: "app",
-      createdAt: new Date("2026-11-03T09:00:00Z"),
+      createdAt: new Date("2026-11-15T09:00:00Z"),
     });
 
-    expect(await getCreditStatus("u1", now)).toEqual({ left: 376, allowance: 500, resetsAt: new Date("2026-12-01T00:00:00Z"), keyCoversAll: false, paused: false });
+    expect(await getCreditStatus("u1", now)).toEqual({ left: 376, allowance: 500, resetsAt: new Date("2026-12-14T00:00:00Z"), keyCoversAll: false, paused: false });
 
     await upsertUserApiKey({ userId: "u1", provider: "anthropic", ciphertext: "c", last4: "abcd", secretVersion: 1 });
     expect((await getCreditStatus("u1", now)).keyCoversAll).toBe(true);
@@ -32,6 +44,7 @@ describe("getCreditStatus", () => {
 
   it("is paused at zero, unless the user's key pays or they are an admin", async () => {
     const now = new Date("2026-11-20T10:00:00Z");
+    await db.insert(users).values({ id: "u2", signedUpAt: new Date("2026-11-01T08:00:00Z") });
     await db.insert(generationLog).values({
       caller: "outline",
       model: "anthropic/claude-opus-5.5",
@@ -43,10 +56,16 @@ describe("getCreditStatus", () => {
     });
 
     expect(await getCreditStatus("u2", now)).toMatchObject({ left: 0, paused: true });
-    vi.stubEnv("ADMIN_USER_IDS", "u2");
+    await db.update(users).set({ isAdmin: true }).where(eq(users.id, "u2"));
     expect(await getCreditStatus("u2", now)).toMatchObject({ left: 0, paused: false });
-    vi.unstubAllEnvs();
+    await db.update(users).set({ isAdmin: false }).where(eq(users.id, "u2"));
     await upsertUserApiKey({ userId: "u2", provider: "anthropic", ciphertext: "c", last4: "abcd", secretVersion: 1 });
     expect(await getCreditStatus("u2", now)).toMatchObject({ left: 0, paused: false });
+  });
+
+  it("uses the calendar month when Clerk can't give the signup date, and keeps nothing", async () => {
+    const status = await getCreditStatus("u6", new Date("2026-11-20T10:00:00Z"));
+    expect(status).toMatchObject({ left: 500, resetsAt: new Date("2026-12-01T00:00:00Z") });
+    expect((await db.select().from(users).where(eq(users.id, "u6")))[0]?.signedUpAt ?? null).toBeNull();
   });
 });
