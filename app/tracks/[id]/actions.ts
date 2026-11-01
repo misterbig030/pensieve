@@ -9,6 +9,7 @@ import type { ModelCall } from "@/lib/ai/logged";
 import { streamExpandNode } from "@/lib/ai/planDraft";
 import { resolveModels } from "@/lib/ai/resolve";
 import { UserKeyError, guardUserKey } from "@/lib/ai/userKeyError";
+import { GatewayFundsError } from "@/lib/ai/gatewayFunds";
 import type { KeyErrorKind } from "@/lib/ai/models";
 import { insertGenerationLog } from "@/lib/db/generationLog";
 import { getTrackDetail, updateTrackStudyTime, updateTrackSummary } from "@/lib/db/queries";
@@ -79,7 +80,7 @@ function lockedIds(root: PlanNode, lockBefore: number): string[] {
 /** `calls` is present only when the server confirmed the caller is an admin: the model calls behind this request, for the dock. */
 export type ExpandNodeResult =
   | { ok: true; costUsd: number; calls?: ModelCall[] }
-  | { ok: false; message: string; code: KeyErrorKind; calls?: ModelCall[] };
+  | { ok: false; message: string; code?: KeyErrorKind; calls?: ModelCall[] };
 
 export async function expandNodeAction(input: { trackId: string; nodeId: string; reason: "expand" | "split"; splitDays?: number }): Promise<ExpandNodeResult> {
   const { userId } = await auth();
@@ -122,6 +123,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
     }
   } catch (error) {
     if (error instanceof UserKeyError) return { ok: false, message: error.message, code: error.code, ...extra };
+    if (error instanceof GatewayFundsError) return { ok: false, message: error.message, ...extra };
     throw error;
   }
   if (!children) throw new Error("Planning ended early. Try again.");
