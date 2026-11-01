@@ -1,4 +1,5 @@
 import { KEY_ERRORS } from "@/lib/ai/models";
+import { OUT_OF_CREDITS } from "@/lib/credits";
 
 /**
  * Newline-delimited JSON over a streaming Response. Server side wraps an async iterable of events; client side
@@ -45,10 +46,22 @@ export function ndjsonResponse<T>(events: AsyncIterable<T>, init?: ResponseInit)
   });
 }
 
+/** The body of a route's out-of-credits refusal (lib/ai/creditGate), or null for any other failure body. */
+function outOfCredits(text: string): { resetsAt: string } | null {
+  try {
+    const body = JSON.parse(text) as { code?: unknown; resetsAt?: unknown } | null;
+    return body?.code === OUT_OF_CREDITS && typeof body.resetsAt === "string" ? { resetsAt: body.resetsAt } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Reads an NDJSON body, invoking `onEvent` per line. Resolves when the stream ends; rejects on a non-2xx status. */
 export async function readNdjson<T>(response: Response, onEvent: (event: T) => void): Promise<void> {
   if (!response.ok) {
     const text = await response.text().catch(() => "");
+    const refused = outOfCredits(text);
+    if (refused) throw Object.assign(new Error("You've used this month's free credits."), { code: OUT_OF_CREDITS, resetsAt: refused.resetsAt });
     throw new Error(text || `Request failed with status ${response.status}`);
   }
   if (!response.body) throw new Error("Response has no body");

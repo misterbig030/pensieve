@@ -5,10 +5,12 @@ import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConversationRail } from "@/components/pensieve/ConversationRail";
+import { OutOfCreditsAlert } from "@/components/pensieve/OutOfCreditsAlert";
 import { MaterialsList } from "@/components/pensieve/MaterialsList";
 import { ResearchProgress } from "@/components/pensieve/ResearchProgress";
 import { TimeSplitCard } from "@/components/pensieve/TimeSplitCard";
 import { KEY_ERRORS } from "@/lib/ai/models";
+import { OUT_OF_CREDITS } from "@/lib/credits";
 import type { Coverage, DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
 import { assignmentsOf, draftedSplit, removeMaterialRefs } from "@/lib/materials";
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
@@ -19,6 +21,7 @@ import { pushModelCalls } from "@/lib/modelCalls";
 import { readNdjson } from "@/lib/ndjson";
 import {
   applyDraftEvent,
+  chatLockHint,
   nextMessageId,
   toTranscript,
   type ChatMessage,
@@ -105,6 +108,12 @@ const codeOf = (e: unknown): string | null => {
   return typeof code === "string" && (KEY_ERRORS as readonly string[]).includes(code) ? code : null;
 };
 
+/** The reset date an out-of-credits refusal travels with (see lib/ndjson); null for every other failure. */
+const refusedResetsAt = (e: unknown): string | null => {
+  const { code, resetsAt } = (e as { code?: unknown; resetsAt?: unknown } | null) ?? {};
+  return code === OUT_OF_CREDITS && typeof resetsAt === "string" ? resetsAt : null;
+};
+
 export function PlanWorkspace(props: PlanWorkspaceProps) {
   const { mode, topic, weeks, granularity, instructions, sources, initialTree, lockBefore = 0, trackId } = props;
   const isAdjust = mode === "adjust";
@@ -129,6 +138,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [error, setError] = useState<string | null>(null);
   /** Set when the failure is a refused user key: the message then links to Settings. */
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  /** Set when a draft or chat turn was refused at zero free credits: the alert shows where that action lives. */
+  const [outOfCredits, setOutOfCredits] = useState<{ resetsAt: string; from: "draft" | "chat" } | null>(null);
   const [confirming, setConfirming] = useState(false);
   // Admin dock: it lives in PageShell. This page only pushes the `call` events the server sends (admins only) into the shared store.
   // Research runs first in create mode; its list is what every unit references.
@@ -178,6 +189,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setDrafting(true);
     setError(null);
     setErrorCode(null);
+    setOutOfCredits(null);
     setTree(makeRoot([]));
     setMaterials([]);
     setDropped([]);
@@ -272,8 +284,13 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       setAwaitingAllocation(false);
       setPending({});
       setResearch((r) => (r ? { ...r, running: false, reading: null } : r));
-      setError(err instanceof Error ? err.message : "Drafting failed. Try again.");
-      setErrorCode(codeOf(err));
+      const resetsAt = refusedResetsAt(err);
+      if (resetsAt) {
+        setOutOfCredits({ resetsAt, from: "draft" });
+      } else {
+        setError(err instanceof Error ? err.message : "Drafting failed. Try again.");
+        setErrorCode(codeOf(err));
+      }
     }
   }, [topic, weeks, granularity, instructions, sources, pushAssistant]);
 
@@ -309,6 +326,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setExpanding(true);
     setError(null);
     setErrorCode(null);
+    setOutOfCredits(null);
     setPending((p) => ({ ...p, [nodeId]: slots }));
     setCollapsed((c) => {
       const next = new Set(c);
@@ -403,7 +421,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
 
   async function send() {
     const text = input.trim();
-    if (!text || busy || drafting || expanding) return;
+    if (!text || busy || drafting || expanding || outOfCredits?.from === "draft") return;
     const userMessage: ChatMessage = { id: nextMessageId(), kind: "user", text };
     const history = [...messages, userMessage];
     setMessages(history);
@@ -411,6 +429,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setBusy(true);
     setError(null);
     setErrorCode(null);
+    setOutOfCredits(null);
 
     const body: PlanChatRequest = {
       mode,
@@ -512,8 +531,13 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       });
       if (activeKind === "change") setSummaryNote(latestChangeNote(changeText));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong. Try again.";
-      setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: message }]);
+      const resetsAt = refusedResetsAt(err);
+      if (resetsAt) {
+        setOutOfCredits({ resetsAt, from: "chat" });
+      } else {
+        const message = err instanceof Error ? err.message : "Something went wrong. Try again.";
+        setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: message }]);
+      }
     } finally {
       setRevising(false);
       setBusy(false);
@@ -578,6 +602,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setConfirming(true);
     setError(null);
     setErrorCode(null);
+    setOutOfCredits(null);
     try {
       await props.onConfirm(tree, summary, materials, { hoursPerWeek, daysPerWeek, split });
     } catch (err) {
@@ -597,6 +622,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         ? ["Why is month 2 before month 3?", "Last month should be 2 weeks", "Swap months 3 and 4"]
         : ["Why is week 2 before week 3?", "Expand week 2", "Swap weeks 3 and 4"];
   const streaming = drafting || expanding;
+  const chatLock = chatLockHint({ drafting, draftRefused: outOfCredits?.from === "draft" });
   const researching = drafting && !!research?.running;
   const canConfirm = !streaming && !revising && !busy && !confirming && tops.length > 0;
   const current = isAdjust ? currentLeaf(tree) : null;
@@ -631,7 +657,16 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         )}
       >
         <div className="flex min-w-0 flex-col gap-5 max-[900px]:pb-[72px]">
-          {researching && research ? (
+          {outOfCredits?.from === "draft" ? (
+            <>
+              <OutOfCreditsAlert resetsAt={outOfCredits.resetsAt} onRetry={() => void streamDraft()} />
+              <div className="flex flex-col gap-2.5">
+                <TreeLabel>Plan</TreeLabel>
+                <div className="h-16 rounded-[28px] bg-foreground/4" />
+                <div className="h-16 rounded-[28px] bg-foreground/3" />
+              </div>
+            </>
+          ) : researching && research ? (
             <>
               <ResearchProgress state={research} totalHours={totalHours(weeks, hoursPerWeek)} />
               <div className="flex flex-col gap-2.5">
@@ -745,8 +780,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           messages={messages}
           open={railOpen}
           unread={unread}
-          busy={busy || streaming}
-          disabledHint={drafting ? "Available once the plan is drafted" : undefined}
+          busy={busy || streaming || chatLock !== null}
+          disabledHint={chatLock ?? undefined}
           input={input}
           suggestions={suggestions}
           onToggle={() => {
@@ -756,6 +791,11 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           onInputChange={setInput}
           onSend={() => void send()}
           onUndo={undo}
+          notice={
+            outOfCredits?.from === "chat" ? (
+              <OutOfCreditsAlert resetsAt={outOfCredits.resetsAt} onClose={() => setOutOfCredits(null)} />
+            ) : undefined
+          }
         />
       </div>
     </div>

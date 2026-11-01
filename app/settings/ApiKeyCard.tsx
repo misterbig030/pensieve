@@ -112,7 +112,7 @@ export function ApiKeyCard({ stored }: { stored: StoredKey | null }) {
         </>
       )}
       <p className="mt-3 text-xs text-muted-foreground">
-        Without a key, Pensieve pays.{" "}
+        Without a key, your monthly credits pay.{" "}
         <Link className="underline" href="/">
           Back to your tracks
         </Link>

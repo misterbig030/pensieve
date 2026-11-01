@@ -203,6 +203,14 @@ export function undoableChangeId(messages: ChatMessage[]): string | null {
   return null;
 }
 
+/**
+ * Why the conversation is locked, or null when it's open. There's nothing to talk over while the plan drafts, nor after
+ * a draft refused at zero credits: the alert's Try again is the way on, and a chat turn would take its place.
+ */
+export function chatLockHint(state: { drafting: boolean; draftRefused: boolean }): string | null {
+  return state.drafting || state.draftRefused ? "Available once the plan is drafted" : null;
+}
+
 export function hasUserTurn(messages: ChatMessage[]): boolean {
   return messages.some((m) => m.kind === "user");
 }

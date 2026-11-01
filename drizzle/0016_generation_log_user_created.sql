@@ -1,0 +1,1 @@
+CREATE INDEX "generation_log_user_created_idx" ON "generation_log" USING btree ("user_id","created_at");
