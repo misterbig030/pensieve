@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { APICallError } from "ai";
+import { GatewayInternalServerError } from "@ai-sdk/gateway";
+import { GATEWAY_FUNDS_LOG_LINE, GATEWAY_FUNDS_MESSAGE, GatewayFundsError } from "./gatewayFunds";
 import type { ResolvedModels } from "./resolve";
 import { UserKeyError, classifyProviderError, guardUserKey, guardUserKeyCall, refusalLogLine, userKeyMessage } from "./userKeyError";
 
@@ -134,5 +136,36 @@ describe("the refusal in the server log", () => {
     report.mockClear();
     await expect(guardUserKeyCall(async () => { throw apiError(400, "bad request"); }, { userId: "u1", models: onApp, record, report })).rejects.toBeInstanceOf(APICallError);
     expect(report).not.toHaveBeenCalled();
+  });
+});
+
+describe("an empty gateway balance", () => {
+  const refusal = new GatewayInternalServerError({ message: "A positive credit balance is required for all requests, including BYOK.", statusCode: 402 });
+  async function* refused(): AsyncGenerator<string> {
+    yield "a";
+    throw refusal;
+  }
+
+  it("tells the user the service is unavailable, logs it for the operator and blames no key", async () => {
+    const record = vi.fn(async () => {});
+    const report = vi.fn();
+    for (const models of [onApp, { ...onApp, outline: userModel }]) {
+      await expect(async () => {
+        for await (const _ of guardUserKey(refused(), { userId: "u1", models, record, report })) void _;
+      }).rejects.toMatchObject({ name: "GatewayFundsError", message: GATEWAY_FUNDS_MESSAGE });
+    }
+    expect(record).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledWith(GATEWAY_FUNDS_LOG_LINE);
+  });
+
+  it("says the same from a server action", async () => {
+    const error = await guardUserKeyCall(
+      async () => {
+        throw refusal;
+      },
+      { userId: "u1", models: onApp, report: () => {} },
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(GatewayFundsError);
+    expect((error as Error).message).toBe(GATEWAY_FUNDS_MESSAGE);
   });
 });

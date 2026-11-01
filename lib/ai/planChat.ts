@@ -8,6 +8,7 @@ import { DEFAULT_CHAT_MODEL } from "./models";
 import { buildPlanChatSystemPrompt, renderTree } from "./planPrompt";
 import { revisePlanTree } from "./planRevision";
 import { appModel, type ResolvedModel } from "./resolve";
+import { GATEWAY_FUNDS_MESSAGE, isGatewayOutOfFunds } from "./gatewayFunds";
 
 export { DEFAULT_CHAT_MODEL } from "./models";
 
@@ -120,7 +121,10 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
         }
         break;
       case "tool-error":
-        yield { type: "error", message: part.error instanceof Error ? part.error.message : "Revision failed" };
+        yield {
+          type: "error",
+          message: isGatewayOutOfFunds(part.error) ? GATEWAY_FUNDS_MESSAGE : part.error instanceof Error ? part.error.message : "Revision failed",
+        };
         break;
       case "error":
         throw part.error instanceof Error ? part.error : new Error(String(part.error));
