@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { APICallError } from "ai";
 import { GatewayInternalServerError } from "@ai-sdk/gateway";
-import { GATEWAY_FUNDS_ADMIN_MESSAGE, GATEWAY_FUNDS_LOG_LINE, GATEWAY_FUNDS_MESSAGE, GatewayFundsError } from "./gatewayFunds";
+import { GATEWAY_FUNDS_LOG_LINE, GATEWAY_FUNDS_MESSAGE, GatewayFundsError } from "./gatewayFunds";
 import type { ResolvedModels } from "./resolve";
 import { UserKeyError, classifyProviderError, guardUserKey, guardUserKeyCall, refusalLogLine, userKeyMessage } from "./userKeyError";
 
@@ -149,24 +149,23 @@ describe("an empty gateway balance", () => {
   it("tells the user the service is unavailable, logs it for the operator and blames no key", async () => {
     const record = vi.fn(async () => {});
     const report = vi.fn();
-    const admin = vi.fn(async () => false);
     for (const models of [onApp, { ...onApp, outline: userModel }]) {
       await expect(async () => {
-        for await (const _ of guardUserKey(refused(), { userId: "u1", models, record, report, isAdmin: admin })) void _;
+        for await (const _ of guardUserKey(refused(), { userId: "u1", models, record, report })) void _;
       }).rejects.toMatchObject({ name: "GatewayFundsError", message: GATEWAY_FUNDS_MESSAGE });
     }
     expect(record).not.toHaveBeenCalled();
     expect(report).toHaveBeenCalledWith(GATEWAY_FUNDS_LOG_LINE);
   });
 
-  it("tells an admin what to top up, from a server action too", async () => {
+  it("says the same from a server action", async () => {
     const error = await guardUserKeyCall(
       async () => {
         throw refusal;
       },
-      { userId: "u1", models: onApp, report: () => {}, isAdmin: async () => true },
+      { userId: "u1", models: onApp, report: () => {} },
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(GatewayFundsError);
-    expect((error as Error).message).toBe(GATEWAY_FUNDS_ADMIN_MESSAGE);
+    expect((error as Error).message).toBe(GATEWAY_FUNDS_MESSAGE);
   });
 });

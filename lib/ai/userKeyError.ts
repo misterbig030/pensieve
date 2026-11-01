@@ -3,7 +3,7 @@
  * touched: the guard only acts when a model in the request runs on the user's key.
  */
 import { clearUserApiKeyError, recordUserApiKeyError } from "@/lib/db/userApiKeys";
-import { GATEWAY_FUNDS_ADMIN_MESSAGE, GATEWAY_FUNDS_LOG_LINE, GATEWAY_FUNDS_MESSAGE, GatewayFundsError, isGatewayOutOfFunds } from "./gatewayFunds";
+import { GATEWAY_FUNDS_LOG_LINE, GatewayFundsError, isGatewayOutOfFunds } from "./gatewayFunds";
 import { providerOf, type KeyErrorKind, type ModelProvider } from "./models";
 import { providerError } from "./providerError";
 import type { APICallError } from "ai";
@@ -65,14 +65,6 @@ export interface UserKeyGuard {
   record?: typeof recordUserApiKeyError;
   clear?: typeof clearUserApiKeyError;
   report?: (line: string) => void;
-  /** Whether the user is an admin, asked only when the gateway's balance is empty. */
-  isAdmin?: (userId: string) => Promise<boolean>;
-}
-
-/** The admin check, loaded only on the empty-balance path: it reads the users table. */
-async function lookUpAdmin(userId: string): Promise<boolean> {
-  const { isAdmin } = await import("@/lib/admin");
-  return isAdmin(userId);
 }
 
 /** The providers whose key the request runs on; empty when everything is on the app's gateway key. */
@@ -87,11 +79,10 @@ function userProviders(models: ResolvedModels): ModelProvider[] {
  * GatewayFundsError. Anything else passes through untouched.
  */
 async function translate(error: unknown, guard: UserKeyGuard): Promise<unknown> {
-  // Pensieve's gateway balance is empty: no key of the user's is at fault, and only an admin can fix it.
+  // Pensieve's gateway balance is empty: no key of the user's is at fault.
   if (isGatewayOutOfFunds(error)) {
     (guard.report ?? console.error)(GATEWAY_FUNDS_LOG_LINE);
-    const admin = await (guard.isAdmin ?? lookUpAdmin)(guard.userId).catch(() => false);
-    return new GatewayFundsError(admin ? GATEWAY_FUNDS_ADMIN_MESSAGE : GATEWAY_FUNDS_MESSAGE);
+    return new GatewayFundsError();
   }
   const providers = userProviders(guard.models);
   const api = providerError(error);

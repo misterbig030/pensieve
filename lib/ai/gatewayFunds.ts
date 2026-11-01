@@ -1,7 +1,7 @@
 /**
  * Pensieve's own Vercel AI Gateway balance running out: the gateway then refuses every call on Pensieve's key, the
- * user's free credits notwithstanding. Users cannot fix that, so they are told the service is unavailable and how to
- * keep going; admins are told what to top up. Dependency-free like `providerError`, so any module can ask.
+ * user's free credits notwithstanding. Everyone is told the service is unavailable and how to keep going; the server log
+ * says what to top up. Dependency-free like `providerError`, so any module can ask.
  */
 import { GatewayError } from "@ai-sdk/gateway";
 import { APICallError, RetryError } from "ai";
@@ -11,14 +11,12 @@ const OUT_OF_FUNDS = /positive credit balance is required/i;
 
 export const GATEWAY_FUNDS_MESSAGE =
   "Pensieve's AI service is unavailable right now, so this stopped. Try again later, or add your own API key in Settings to keep going.";
-export const GATEWAY_FUNDS_ADMIN_MESSAGE =
-  "Pensieve's Vercel AI Gateway balance is empty, so every call on Pensieve's key fails. Top it up in the Vercel dashboard (AI Gateway), then try again.";
 export const GATEWAY_FUNDS_LOG_LINE = "[gateway] The Vercel AI Gateway balance is empty: calls on Pensieve's key fail until it is topped up.";
 
 /** Thrown in place of the gateway's refusal, with the message the person should see. */
 export class GatewayFundsError extends Error {
-  constructor(message: string = GATEWAY_FUNDS_MESSAGE) {
-    super(message);
+  constructor() {
+    super(GATEWAY_FUNDS_MESSAGE);
     this.name = "GatewayFundsError";
   }
 }
