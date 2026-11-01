@@ -35,7 +35,7 @@ import {
   treeChecks,
   keptReadTable,
   keepPracticeCovers,
-  splitHours,
+  splitPercents,
   draftedSplit,
   shareRuns,
   sizeItemRuns,
@@ -794,17 +794,29 @@ describe("practice budgets", () => {
     expect(practiceBudgets(split, 360, dual)).toEqual({ reading: 225, practice: { "problem-set": 90, recall: 45 } });
     expect(noSourceFacts(split, dual)).toEqual(["no source for Lab: its time goes to reading"]);
   });
-  it("shows the time card a pick that can't be assigned as reading, not as hours of its own", () => {
-    // 72 h at 50% reading: 36 h of reading, then problems 18 h, recall 9 h and lab 9 h; the lab has no source.
-    expect(splitHours(split, 72, materials)).toEqual({
-      reading: 45,
+  it("shows the time card a pick that can't be assigned as reading, not as a share of its own", () => {
+    // 50% reading, then problems 25%, recall 12.5% and lab 12.5%; the lab has no source, so reading is 62.5%.
+    expect(splitPercents(split, materials)).toEqual({
+      reading: 63,
+      practice: 0,
       picks: [
-        { format: "problem-set", label: "Problems", hours: 18, focus: "arrays", toReading: false },
-        { format: "recall", label: "Recall", hours: 9, focus: "terms", toReading: false },
-        { format: "lab", label: "Lab", hours: 0, focus: "git", toReading: true },
+        { format: "problem-set", label: "Problems", percent: 25, focus: "arrays", toReading: false },
+        { format: "recall", label: "Recall", percent: 12, focus: "terms", toReading: false },
+        { format: "lab", label: "Lab", percent: 0, focus: "git", toReading: true },
       ],
     });
-    expect(splitHours({ readingShare: 60, practice: "projects", reason: "" }, 72, materials)).toEqual({ reading: 43, picks: [] });
+    expect(splitPercents({ readingShare: 60, practice: "projects", reason: "" }, materials)).toEqual({ reading: 60, practice: 40, picks: [] });
+  });
+  it("rounds the time card's shares so they add up to 100", () => {
+    // 25% reading, then 37.5% each: rounding each on its own would show 101%.
+    const even = { ...split, readingShare: 25, formats: split.formats!.slice(0, 2).map((p) => ({ ...p, share: 50 })) };
+    expect(splitPercents(even, materials).picks.map((p) => p.percent)).toEqual([38, 37]);
+    // 34/33/33 of 70%: 23.8%, 23.1% and 23.1%; the spare point goes to the largest remainder.
+    const thirds = { ...split, readingShare: 30, formats: split.formats!.map((p, i) => ({ ...p, share: i === 0 ? 34 : 33 })) };
+    const lab = [...materials, { id: "kata", practice: { format: "lab" as const, items: 4, perItemMinutes: 60, minutes: null, answers: false } }];
+    const shares = splitPercents(thirds, lab);
+    expect([shares.reading, ...shares.picks.map((p) => p.percent)]).toEqual([30, 24, 23, 23]);
+    expect(splitPercents({ ...split, readingShare: 100 }, materials)).toMatchObject({ reading: 100, practice: 0 });
   });
   it("states the split as drafted: a pick that can't be assigned is reading, and the others keep their proportions", () => {
     // Lab's 25% of the practice half is reading: 50 + 12.5 → 63%. Problems and recall split the rest 2:1.

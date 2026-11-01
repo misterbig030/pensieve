@@ -54,6 +54,6 @@ export async function confirmTrackAction(input: {
     console.info(`[materials] saved track ${trackId}: ${dropped.length} material(s) failed re-verification, ${droppedRefs} reference(s) to unknown ids dropped`);
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/");
   redirect(`/tracks/${trackId}`);
 }

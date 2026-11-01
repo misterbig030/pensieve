@@ -1,7 +1,8 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { PageShell } from "@/components/pensieve/PageShell";
 import { PROVIDER_NAMES } from "@/lib/ai/providerKeys";
 import { getUserApiKeys } from "@/lib/db/userApiKeys";
+import { AccountCard } from "./AccountCard";
 import { ApiKeyCard, type StoredKey } from "./ApiKeyCard";
 
 function ago(from: Date, now = new Date()): string {
@@ -15,7 +16,7 @@ function ago(from: Date, now = new Date()): string {
 export default async function SettingsPage() {
   const { userId } = await auth();
   if (!userId) return null;
-  const rows = await getUserApiKeys(userId);
+  const [rows, user] = await Promise.all([getUserApiKeys(userId), currentUser()]);
   const row = rows.find((r) => r.provider === "anthropic") ?? null;
   const stored: StoredKey | null = row
     ? {
@@ -29,13 +30,14 @@ export default async function SettingsPage() {
     : null;
 
   return (
-    <PageShell>
+    <PageShell className="mx-auto max-w-[960px]">
       <div className="pb-7">
         <h1 className="font-heading text-[26px]">Settings</h1>
         <p className="text-muted-foreground">Pay for your own usage with an API key. Without one, Pensieve pays.</p>
       </div>
-      <div className="max-w-[620px]">
+      <div className="flex max-w-[620px] flex-col gap-5">
         <ApiKeyCard stored={stored} />
+        <AccountCard email={user?.primaryEmailAddress?.emailAddress ?? null} />
       </div>
     </PageShell>
   );
