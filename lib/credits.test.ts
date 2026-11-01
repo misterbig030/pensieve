@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { creditPeriod, creditsLeft, formatReset } from "./credits";
+import { creditPeriod, creditsLeft, formatReset, monthStart } from "./credits";
 
 describe("creditPeriod", () => {
   const iso = (p: { start: Date; end: Date }) => [p.start.toISOString(), p.end.toISOString()];
@@ -26,6 +26,16 @@ describe("creditPeriod", () => {
   it("crosses a year end", () => {
     const signup = new Date("2026-08-20T00:00:00Z");
     expect(iso(creditPeriod(signup, new Date("2027-01-02T00:00:00Z")))).toEqual(["2026-12-20T00:00:00.000Z", "2027-01-20T00:00:00.000Z"]);
+  });
+
+  it("gives the first period when the clock reads before the signup", () => {
+    const signup = new Date("2026-11-20T08:00:00Z");
+    expect(iso(creditPeriod(signup, new Date("2026-11-10T00:00:00Z")))).toEqual(["2026-11-20T00:00:00.000Z", "2026-12-20T00:00:00.000Z"]);
+  });
+
+  it("falls back to the calendar month from the 1st", () => {
+    const now = new Date("2026-11-20T10:00:00Z");
+    expect(iso(creditPeriod(monthStart(now), now))).toEqual(["2026-11-01T00:00:00.000Z", "2026-12-01T00:00:00.000Z"]);
   });
 
   it("formats a reset date as the app shows it", () => {

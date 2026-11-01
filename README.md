@@ -51,6 +51,8 @@ first deployment, in this order:
   Admins are not an environment variable: they are `users.is_admin` in the database.
 - [ ] Apply any pending migrations with `npx drizzle-kit migrate` **before** the deploy that needs them. New columns
   must exist before the new code inserts into them; old code tolerates new columns because they carry defaults.
+  A migration that adds a foreign key is the exception: old code can insert rows it rejects (0017's `users` links
+  need a user's row before their first track or key), so ship the code that keeps it satisfied right after.
 - [ ] After the first deploy, run one plan draft on a stored user key and confirm the admin model-calls panel shows
   "user's key" on every row and the usage appears on that user's Anthropic Console, not the gateway.
 

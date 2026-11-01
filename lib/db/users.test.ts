@@ -33,6 +33,12 @@ describe("users", () => {
     expect(await getUserRow("u3")).toMatchObject({ signedUpAt: new Date("2026-10-01T08:00:00Z") });
   });
 
+  it("gives up on a Clerk lookup that takes too long, and keeps nothing", async () => {
+    const hangs = () => new Promise<Date>(() => {});
+    await expect(signedUpAt("u5", hangs, 20)).rejects.toThrow("timed out");
+    expect(await getUserRow("u5")).toBeNull();
+  });
+
   it("is admin only when the row says so", async () => {
     expect(await isAdmin("u4")).toBe(false);
     expect(await isAdmin(null)).toBe(false);

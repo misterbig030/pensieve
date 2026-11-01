@@ -2,17 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db/credits", () => ({ getAppSpendUsd: vi.fn() }));
 vi.mock("@/lib/admin", () => ({ isAdmin: vi.fn() }));
-vi.mock("@/lib/db/users", () => ({ signedUpAt: vi.fn() }));
+vi.mock("@/lib/db/users", () => ({ signedUpAtFor: vi.fn() }));
 
 import { isAdmin } from "@/lib/admin";
 import { getAppSpendUsd } from "@/lib/db/credits";
-import { signedUpAt } from "@/lib/db/users";
+import { signedUpAtFor } from "@/lib/db/users";
 import { creditRefusal } from "./creditGate";
 import type { ResolvedModel } from "./resolve";
 
 const spend = vi.mocked(getAppSpendUsd);
 const admin = vi.mocked(isAdmin);
-const signup = vi.mocked(signedUpAt);
+const signup = vi.mocked(signedUpAtFor);
 const app: ResolvedModel = { model: "anthropic/claude-haiku-4.5", id: "anthropic/claude-haiku-4.5", keyOwner: "app" };
 const user: ResolvedModel = { ...app, keyOwner: "user" };
 const now = new Date("2026-11-20T10:00:00Z");
@@ -35,6 +35,14 @@ describe("creditRefusal", () => {
   it("refuses when less than one whole credit is left", async () => {
     spend.mockResolvedValue(4.996);
     expect((await creditRefusal("u1", [app], now))?.status).toBe(402);
+  });
+
+  it("falls back to the calendar month when the signup date can't be had", async () => {
+    signup.mockRejectedValue(new Error("Clerk signup lookup timed out after 3000ms"));
+    spend.mockResolvedValue(5);
+    const res = await creditRefusal("u1", [app], now);
+    expect(await res?.json()).toEqual({ code: "out_of_credits", resetsAt: "2026-12-01T00:00:00.000Z" });
+    expect(spend).toHaveBeenCalledWith("u1", new Date("2026-11-01T00:00:00Z"));
   });
 
   it("allows one credit left", async () => {

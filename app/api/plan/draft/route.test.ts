@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn(async () => ({ userId: "u1" })) }));
 vi.mock("@/lib/admin", () => ({ isAdmin: vi.fn(async () => false) }));
-vi.mock("@/lib/db/users", () => ({ signedUpAt: vi.fn(async () => new Date("2026-09-14T00:00:00Z")) }));
+vi.mock("@/lib/db/users", () => ({ signedUpAtFor: vi.fn(async () => new Date("2026-09-14T00:00:00Z")) }));
 vi.mock("@/lib/ai/resolve", () => ({ resolveModels: vi.fn() }));
 vi.mock("@/lib/db/credits", () => ({ getAppSpendUsd: vi.fn() }));
 vi.mock("@/lib/db/generationLog", () => ({ insertGenerationLog: vi.fn() }));

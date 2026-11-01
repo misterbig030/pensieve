@@ -15,7 +15,10 @@ export async function getUserRow(userId: string): Promise<User | null> {
   return row ?? null;
 }
 
-/** `getUserRow` once per request: the admin check and the credits both read it. */
+/**
+ * `getUserRow` once per page render, where the admin check and the credits share it. React's `cache` only memoizes
+ * inside a server component render: in route handlers and server actions every call reads the row again.
+ */
 export const userRowFor = cache(getUserRow);
 
 /** The signup date as Clerk recorded it. */
@@ -24,11 +27,32 @@ export async function clerkSignupDate(userId: string): Promise<Date> {
   return new Date(user.createdAt);
 }
 
-/** When the user signed up: from their row, or asked of Clerk once and kept there. */
-export async function signedUpAt(userId: string, lookup: (userId: string) => Promise<Date> = clerkSignupDate): Promise<Date> {
+/** How long a page or route waits on Clerk for a signup date before going on without it. */
+export const CLERK_LOOKUP_TIMEOUT_MS = 3000;
+
+function withinTime<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Clerk signup lookup timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * When the user signed up: from their row, or asked of Clerk once and kept there. Rejects when Clerk fails or is slower
+ * than `timeoutMs`; nothing is kept then, so the next request asks again.
+ */
+export async function signedUpAt(
+  userId: string,
+  lookup: (userId: string) => Promise<Date> = clerkSignupDate,
+  timeoutMs: number = CLERK_LOOKUP_TIMEOUT_MS,
+): Promise<Date> {
   const stored = (await userRowFor(userId))?.signedUpAt;
   if (stored) return stored;
-  const at = await lookup(userId);
+  const at = await withinTime(lookup(userId), timeoutMs);
   await db.insert(users).values({ id: userId, signedUpAt: at }).onConflictDoUpdate({ target: users.id, set: { signedUpAt: at } });
   return at;
 }
+
+/** `signedUpAt` once per page render: a second caller in the same render neither asks Clerk nor writes again. */
+export const signedUpAtFor = cache((userId: string) => signedUpAt(userId));

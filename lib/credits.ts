@@ -30,6 +30,11 @@ export function creditPeriod(signedUpAt: Date, now: Date): { start: Date; end: D
   return { start: onDay(year, month, day, n), end: onDay(year, month, day, n + 1) };
 }
 
+/** 00:00 UTC on the 1st of `now`'s month. The anchor to fall back on when a user's signup date can't be had. */
+export function monthStart(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
 /** Whole credits left, rounded down and never below zero. Rounded first so float error never costs a credit. */
 export function creditsLeft(spentUsd: number, allowanceUsd: number = MONTHLY_FREE_CREDIT_USD): number {
   const exact = Math.round((allowanceUsd - spentUsd) * CREDITS_PER_USD * 1e6) / 1e6;

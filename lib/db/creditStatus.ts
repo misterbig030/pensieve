@@ -1,10 +1,10 @@
 import { cache } from "react";
 import { isAdmin } from "@/lib/admin";
 import { keyCoversAll } from "@/lib/ai/resolve";
-import { CREDITS_PER_USD, creditPeriod, creditsLeft, MONTHLY_FREE_CREDIT_USD } from "@/lib/credits";
+import { CREDITS_PER_USD, creditPeriod, creditsLeft, MONTHLY_FREE_CREDIT_USD, monthStart } from "@/lib/credits";
 import { getAppSpendUsd } from "./credits";
 import { getUserApiKeys } from "./userApiKeys";
-import { signedUpAt } from "./users";
+import { signedUpAtFor } from "./users";
 
 export interface CreditStatus {
   left: number;
@@ -18,7 +18,8 @@ export interface CreditStatus {
 
 /** What Settings and the top bar show: credits left this period, and whether they apply to this user at all. */
 export async function getCreditStatus(userId: string, now: Date = new Date()): Promise<CreditStatus> {
-  const period = creditPeriod(await signedUpAt(userId), now);
+  // Clerk down or slow: show the calendar month for now rather than fail the page; the next request asks again.
+  const period = creditPeriod(await signedUpAtFor(userId).catch(() => monthStart(now)), now);
   const [spent, keys, admin] = await Promise.all([getAppSpendUsd(userId, period.start), getUserApiKeys(userId), isAdmin(userId)]);
   const left = creditsLeft(spent);
   const covered = keyCoversAll(keys.map((k) => k.provider));

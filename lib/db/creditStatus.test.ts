@@ -62,4 +62,10 @@ describe("getCreditStatus", () => {
     await upsertUserApiKey({ userId: "u2", provider: "anthropic", ciphertext: "c", last4: "abcd", secretVersion: 1 });
     expect(await getCreditStatus("u2", now)).toMatchObject({ left: 0, paused: false });
   });
+
+  it("uses the calendar month when Clerk can't give the signup date, and keeps nothing", async () => {
+    const status = await getCreditStatus("u6", new Date("2026-11-20T10:00:00Z"));
+    expect(status).toMatchObject({ left: 500, resetsAt: new Date("2026-12-01T00:00:00Z") });
+    expect((await db.select().from(users).where(eq(users.id, "u6")))[0]?.signedUpAt ?? null).toBeNull();
+  });
 });

@@ -3,9 +3,9 @@
  * before any model call. Continuing work (expands, lessons) is never checked; an action that started always finishes.
  */
 import { isAdmin } from "@/lib/admin";
-import { creditPeriod, creditsLeft, OUT_OF_CREDITS } from "@/lib/credits";
+import { creditPeriod, creditsLeft, monthStart, OUT_OF_CREDITS } from "@/lib/credits";
 import { getAppSpendUsd } from "@/lib/db/credits";
-import { signedUpAt } from "@/lib/db/users";
+import { signedUpAtFor } from "@/lib/db/users";
 import type { ResolvedModel } from "./resolve";
 
 /**
@@ -14,7 +14,8 @@ import type { ResolvedModel } from "./resolve";
  */
 export async function creditRefusal(userId: string, roles: readonly ResolvedModel[], now: Date = new Date()): Promise<Response | null> {
   if (roles.every((r) => r.keyOwner === "user") || (await isAdmin(userId))) return null;
-  const period = creditPeriod(await signedUpAt(userId), now);
+  // Clerk down or slow: this request counts the calendar month rather than failing the draft or chat turn.
+  const period = creditPeriod(await signedUpAtFor(userId).catch(() => monthStart(now)), now);
   const spent = await getAppSpendUsd(userId, period.start);
   if (creditsLeft(spent) >= 1) return null;
   return Response.json({ code: OUT_OF_CREDITS, resetsAt: period.end.toISOString() }, { status: 402 });
