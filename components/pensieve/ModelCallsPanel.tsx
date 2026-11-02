@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Check, Copy, Download, Maximize2, Minimize2, Trash2, X } from "lucide-react";
 import { callCost, formatCallCost, formatCostUsd, sumCallCosts } from "@/lib/formatCost";
-import { modelTimeMs } from "@/lib/modelCalls";
+import { callSpan, modelTimeMs } from "@/lib/modelCalls";
 import type { ModelCall } from "@/lib/planChat";
 import { cn } from "@/lib/utils";
 
@@ -174,6 +174,7 @@ function CallRow({ index, call, selected, onSelect }: { index: number; call: Mod
         <span className="font-mono opacity-50">#{index + 1}</span>
         <CallerBadge caller={call.caller} />
         <span className="min-w-0 truncate">{call.label}</span>
+        <span className="ml-auto shrink-0 font-mono text-[11px] opacity-50">{clock(callSpan(call)?.startedAt)}</span>
       </span>
       <span className="font-mono text-[11px] opacity-60">
         {shortModel(call.model)} · {fmt(call.inputTokens)} → {fmt(call.outputTokens)} · {formatCallCost(callCost(call))} ·{" "}
@@ -196,6 +197,7 @@ function MetaStrip({ call }: { call: ModelCall }) {
       <Chip>reasoning {call.reasoningTokens === null ? "—" : fmt(call.reasoningTokens)}</Chip>
       <CostChip call={call} />
       <Chip>{fmt(call.latencyMs)} ms</Chip>
+      <CallTimes call={call} />
       <Chip>finish: {call.finishReason ?? "—"}</Chip>
     </div>
   );
@@ -218,6 +220,11 @@ function CostTotals({ chargedUsd, estimatedUsd, estimatedCalls, calls }: ReturnT
       </Chip>
     </>
   );
+}
+
+function CallTimes({ call }: { call: ModelCall }) {
+  const span = callSpan(call);
+  return <Chip>{span ? `${clock(span.startedAt)} → ${clock(span.endedAt)}` : "time —"}</Chip>;
 }
 
 function CostChip({ call }: { call: ModelCall }) {
@@ -383,6 +390,12 @@ function fmt(n: number | null): string {
 
 function seconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
+}
+
+/** A time of day on the admin's clock, to the second ("14:32:05"); a dash when unknown. */
+function clock(ms: number | undefined): string {
+  if (ms === undefined) return "—";
+  return new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 }
 
 /** A total that can run to minutes: "41.3 s", "2 min 14 s". */

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ModelCall } from "@/lib/ai/logged";
-import { STORAGE_KEY, createModelCallStore, modelTimeMs, type StorageLike } from "./modelCalls";
+import { STORAGE_KEY, callSpan, createModelCallStore, modelTimeMs, type StorageLike } from "./modelCalls";
 
 function call(label: string, pad = ""): ModelCall {
   return {
@@ -171,5 +171,15 @@ describe("modelTimeMs", () => {
 
   it("is zero with no calls", () => {
     expect(modelTimeMs([])).toBe(0);
+  });
+});
+
+describe("callSpan", () => {
+  it("runs from the finish time less the duration to the finish time", () => {
+    expect(callSpan({ ...call("t"), endedAt: 60_000, latencyMs: 15_500 })).toEqual({ startedAt: 44_500, endedAt: 60_000 });
+  });
+
+  it("is unknown for a call stored before calls had a finish time", () => {
+    expect(callSpan(call("t"))).toBeNull();
   });
 });

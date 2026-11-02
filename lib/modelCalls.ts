@@ -170,6 +170,11 @@ export function useModelCalls(): ModelCall[] {
   return useSyncExternalStore(modelCallStore.subscribe, modelCallStore.getSnapshot, getServerSnapshot);
 }
 
+/** When a call ran (ms since the epoch); null for a call stored before calls had a finish time. */
+export function callSpan(call: ModelCall): { startedAt: number; endedAt: number } | null {
+  return call.endedAt === undefined ? null : { startedAt: call.endedAt - call.latencyMs, endedAt: call.endedAt };
+}
+
 /**
  * How long the models were at work for these calls: each call runs from `endedAt - latencyMs` to `endedAt`, and time
  * covered by several calls at once (research workers run side by side) counts once, time with none running not at all.
@@ -177,10 +182,11 @@ export function useModelCalls(): ModelCall[] {
  */
 export function modelTimeMs(calls: ModelCall[]): number {
   const spans = calls
-    .filter((c) => c.endedAt !== undefined)
-    .map((c) => [c.endedAt! - c.latencyMs, c.endedAt!] as const)
+    .map(callSpan)
+    .filter((span) => span !== null)
+    .map((span) => [span.startedAt, span.endedAt] as const)
     .sort((a, b) => a[0] - b[0]);
-  let total = calls.filter((c) => c.endedAt === undefined).reduce((t, c) => t + c.latencyMs, 0);
+  let total = calls.filter((c) => callSpan(c) === null).reduce((t, c) => t + c.latencyMs, 0);
   let open: [number, number] | null = null;
   for (const [start, end] of spans) {
     if (open && start <= open[1]) open[1] = Math.max(open[1], end);
