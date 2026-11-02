@@ -25,6 +25,8 @@ import {
   noSourceFacts,
   pickSources,
   practiceBudgets,
+  unitBudgets,
+  planTotals,
   reservedRunMinutes,
   reservedRuns,
   weekPracticeTime,
@@ -1718,3 +1720,59 @@ describe("a week's practice time inside its reservation", () => {
   });
 });
 
+
+describe("unitBudgets and planTotals", () => {
+  const practice = (format: "problem-set" | "design-exercise"): MaterialPractice => ({ format, items: 10, perItemMinutes: 10, minutes: null, answers: true });
+  const materials = [
+    { id: "ddia", minutes: 210 },
+    { id: "sdi", minutes: 360 },
+    { id: "essay", minutes: 6 },
+    { id: "neet", minutes: null, practice: practice("problem-set") },
+    { id: "tool", minutes: null, practice: practice("design-exercise") },
+  ];
+  const raw = {
+    readingShare: 20,
+    practice: "problems, design, mocks and recall",
+    reason: "",
+    formats: [
+      { format: "problem-set" as const, share: 55, focus: "arrays", reason: "" },
+      { format: "design-exercise" as const, share: 24, focus: "systems", reason: "" },
+      { format: "mock" as const, share: 13, focus: "interviews", reason: "" },
+      { format: "recall" as const, share: 8, focus: "terms", reason: "" },
+    ],
+  };
+  const split = draftedSplit(raw, materials);
+  const week = makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 7 });
+  const root = layout(makeRoot([week]));
+
+  it("reads the minutes a unit states, as stated", () => {
+    const stated = { ...week, time: { reading: 150, practice: { "problem-set": 180, "design-exercise": 30 } } };
+    expect(unitBudgets(root, stated, { split, hoursPerWeek: 6, daysPerWeek: 7, materials })).toEqual({
+      reading: 150,
+      practice: { "problem-set": 180, "design-exercise": 30 },
+      stated: true,
+    });
+  });
+
+  it("falls back to the even split of the week when a unit states none", () => {
+    const ctx = { split, hoursPerWeek: 6, daysPerWeek: 7, materials };
+    expect(unitBudgets(root, week, ctx)).toEqual({ ...practiceBudgets(split, 360, materials), stated: false });
+  });
+
+  it("totals the plan: the reading kept, in list order, and the practice of the whole span", () => {
+    const totals = planTotals({ split, hoursPerWeek: 6, daysPerWeek: 7, materials, weeks: 8 });
+    // The practice-only sources have no minutes of their own to read.
+    expect(totals.reading).toEqual([
+      { id: "ddia", minutes: 210 },
+      { id: "sdi", minutes: 360 },
+      { id: "essay", minutes: 6 },
+    ]);
+    expect(totals.practice).toEqual(practiceBudgets(split, 8 * 6 * 60, materials).practice);
+  });
+
+  it("leaves a source with no minutes out of the reading, and counts one that is also practice", () => {
+    const both = { id: "book", minutes: 120, practice: practice("problem-set") };
+    const totals = planTotals({ split, hoursPerWeek: 6, daysPerWeek: 7, materials: [both, { id: "x", minutes: null }], weeks: 2 });
+    expect(totals.reading).toEqual([{ id: "book", minutes: 120 }]);
+  });
+});

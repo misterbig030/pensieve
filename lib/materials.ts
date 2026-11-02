@@ -582,6 +582,43 @@ export function practiceBudgets(
   return budgets;
 }
 
+/** What a unit's budgets are read against: the plan's split and time setting, and the materials the budgets are shared over. */
+export interface BudgetContext {
+  split?: PlanSplit | null;
+  hoursPerWeek?: number;
+  daysPerWeek: number;
+  materials: Pick<Material, "id" | "practice" | "minutes">[];
+}
+
+/** A unit's budgets, and whether the outline stated them (`stated`) or they are today's even split of its share of the weeks. */
+export interface UnitBudgets {
+  reading: number;
+  practice: Partial<Record<PracticeFormat, number>>;
+  stated: boolean;
+}
+
+/**
+ * The one reader of a unit's budgets: the minutes its `time` states, or, for a unit with none (a plan from before the
+ * outline decided them), the plan-wide split of its share of the weeks (`practiceBudgets`).
+ */
+export function unitBudgets(root: PlanNode, node: PlanNode, ctx: BudgetContext): UnitBudgets {
+  if (node.time) return { reading: node.time.reading, practice: { ...node.time.practice }, stated: true };
+  const minutes = budgetFor(weeksOf(root, node, ctx.daysPerWeek), ctx.hoursPerWeek) * 60;
+  return { ...practiceBudgets(ctx.split, minutes, ctx.materials), stated: false };
+}
+
+/**
+ * The plan's totals over `weeks`: the reading each source is kept for (its budget, for a source that is read rather
+ * than only practised, in list order, as the `budget-miss` check holds it), and each format's minutes of practice.
+ */
+export function planTotals(ctx: BudgetContext & { weeks: number }): {
+  reading: { id: string; minutes: number }[];
+  practice: Partial<Record<PracticeFormat, number>>;
+} {
+  const reading = ctx.materials.flatMap((m) => (typeof m.minutes === "number" && !isPracticeOnly(m) ? [{ id: m.id, minutes: m.minutes }] : []));
+  return { reading, practice: practiceBudgets(ctx.split, budgetFor(ctx.weeks, ctx.hoursPerWeek) * 60, ctx.materials).practice };
+}
+
 /**
  * The doing minutes of the listed items a heading reserves for one format, less those `done` says a unit outside it
  * already did: what its units have of that format to do. Only reservations with a run of items count, and an item two
