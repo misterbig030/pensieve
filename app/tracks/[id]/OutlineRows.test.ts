@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { findNode, type PlanNode } from "@/lib/planTree";
 import { day, sampleDayPlan, sampleWeekPlan } from "@/lib/testPlans";
+import { makeNode } from "@/lib/planTree";
 import { Row, openUnits, type Ctx } from "./OutlineRows";
 
 const planning = { isPending: false, planning: false, pending: {}, run: () => {} } as unknown as Ctx["planning"];
@@ -24,6 +25,33 @@ describe("outline rows on a week track", () => {
     const html = render(sampleWeekPlan(), "w2", "w1");
     expect(html).toContain('data-state="current"');
     expect(html).toContain("This week");
+  });
+});
+
+describe("a week's time and problems", () => {
+  const planned = (extra: Partial<Parameters<typeof makeNode>[0]> = {}) => {
+    const root = sampleDayPlan();
+    const w3 = findNode(root, "w3")!;
+    Object.assign(w3, makeNode({ id: "w3", level: "week", title: "Week w3", summary: "", len: 3, ...extra }));
+    return root;
+  };
+
+  it("shows each problem on its own line under the row", () => {
+    const html = render(planned({ problems: ["Week 3 plans 2 h of reading in a week that gave itself 1 h.", "Problems run 1 h over."] }), "w3", "b2");
+    expect(html).toContain("Week 3 plans 2 h of reading in a week that gave itself 1 h.");
+    expect(html).toContain("Problems run 1 h over.");
+    expect(html.match(/<p[^>]*>/g)).toHaveLength(2);
+  });
+
+  it("shows nothing for a week without problems", () => {
+    const html = render(planned(), "w3", "b2");
+    expect(html).not.toMatch(/<p[ >]/);
+    expect(html).not.toContain("reading");
+  });
+
+  it("shows the week's time", () => {
+    const html = render(planned({ time: { reading: 150, practice: { "problem-set": 180 } } }), "w3", "b2");
+    expect(html).toContain("2 h 30 min reading · 3 h Problems");
   });
 });
 

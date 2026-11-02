@@ -82,6 +82,15 @@ export function PlanOutline({ trackId, root, granularity, daysPerWeek, selectedI
 
   return (
     <nav aria-label="Plan outline" className="flex flex-col gap-0.5">
+      {(root.problems?.length ?? 0) > 0 && (
+        <div className="flex flex-col gap-0.5 px-3 pb-2 text-[11.5px] text-muted-foreground">
+          {root.problems!.map((line, i) => (
+            <p key={i} className="m-0">
+              {line}
+            </p>
+          ))}
+        </div>
+      )}
       {(root.children ?? []).map((node) => (
         <Row key={node.id} node={node} depth={0} ctx={ctx} />
       ))}

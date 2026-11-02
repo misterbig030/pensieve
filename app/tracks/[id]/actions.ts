@@ -96,6 +96,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
 
   const models = await resolveModels(userId);
   let children: PlanNode[] | null = null;
+  let problems: string[] = [];
   try {
     for await (const event of guardUserKey(
       streamExpandNode({
@@ -118,6 +119,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
     )) {
       if (event.type === "finish") {
         children = event.children;
+        problems = event.problems;
       } else if (event.type === "error") {
         throw new Error(event.message);
       }
@@ -129,7 +131,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
   }
   if (!children) throw new Error("Planning ended early. Try again.");
 
-  await insertChildren(input.trackId, userId, input.nodeId, children, input.reason === "split");
+  await insertChildren(input.trackId, userId, input.nodeId, children, input.reason === "split", problems);
   const fresh = await getTrackDetail(input.trackId, userId);
   await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title, fresh!.track.daysPerWeek));
   revalidatePath(`/tracks/${input.trackId}`);

@@ -9,8 +9,8 @@ vi.mock("./actions", () => ({ expandNodeAction: vi.fn() }));
 
 const { PlanOutline } = await import("./PlanOutline");
 
-const render = () =>
-  renderToStaticMarkup(createElement(PlanOutline, { trackId: "t", root: sampleDayPlan(), granularity: "day", daysPerWeek: 5, selectedId: "b2", currentLeafId: "b2" }));
+const render = (root = sampleDayPlan()) =>
+  renderToStaticMarkup(createElement(PlanOutline, { trackId: "t", root, granularity: "day", daysPerWeek: 5, selectedId: "b2", currentLeafId: "b2" }));
 
 describe("PlanOutline while the pane is planning", () => {
   afterEach(() => setPlanning("pane", false));
@@ -25,5 +25,20 @@ describe("PlanOutline while the pane is planning", () => {
     expect(render()).toContain("Plan Week 3");
     setPlanning("pane", true);
     expect(render()).not.toContain("Plan Week 3");
+  });
+});
+
+describe("PlanOutline root problems", () => {
+  it("shows the plan's problems above the outline, one per line", () => {
+    const root = sampleDayPlan();
+    root.problems = ["Problems add up to 21 h; the time split gave them 26 h.", "Another top-level problem."];
+    const html = render(root);
+    expect(html).toContain("Problems add up to 21 h; the time split gave them 26 h.");
+    expect(html).toContain("Another top-level problem.");
+    expect(html.indexOf("Another top-level problem.")).toBeLessThan(html.indexOf("Week w1"));
+  });
+
+  it("shows none when the plan has no problems", () => {
+    expect(render()).not.toMatch(/<p[ >]/);
   });
 });

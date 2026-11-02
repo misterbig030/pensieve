@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { doneDays, findNode, initialOpen, isHeading, labelOf, type PlanNode } from "@/lib/planTree";
+import { formatUnitTime } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 import type { usePlanning } from "./usePlanning";
 
@@ -101,6 +102,23 @@ function LeafRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx
   );
 }
 
+/** A unit's time, and its problems one to a line, muted under its row and lined up with its title. */
+function UnitNotes({ node, depth, leaf }: { node: PlanNode; depth: number; leaf: boolean }) {
+  const time = node.time ? formatUnitTime(node.time) : "";
+  const problems = node.problems ?? [];
+  if (!time && problems.length === 0) return null;
+  return (
+    <div className="-mt-1 flex min-w-0 flex-col gap-0.5 pr-3 pb-1 text-[11.5px] text-muted-foreground" style={{ paddingLeft: 12 + depth * 16 + 60 + (leaf ? 24 : 0) }}>
+      {time && <p className="m-0">{time}</p>}
+      {problems.map((line, i) => (
+        <p key={i} className="m-0">
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function UnitRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx }) {
   const { planning } = ctx;
   const hasChildren = (node.children?.length ?? 0) > 0;
@@ -171,6 +189,7 @@ function UnitRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx
           </button>
         )}
       </div>
+      <UnitNotes node={node} depth={depth} leaf={leaf} />
       {open && node.children!.map((child) => <Row key={child.id} node={child} depth={depth + 1} ctx={ctx} />)}
       {planning.pending[node.id] && <Skeletons count={planning.pending[node.id].count} depth={depth + 1} />}
     </>
