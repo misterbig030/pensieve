@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { unstable_rethrow } from "next/navigation";
+import { unstable_rethrow, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConversationRail } from "@/components/pensieve/ConversationRail";
 import { OutOfCreditsAlert } from "@/components/pensieve/OutOfCreditsAlert";
@@ -162,6 +162,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
 
   const railOpenRef = useRef(railOpen);
   const draftStarted = useRef(false);
+  const router = useRouter();
+  // Model calls spend credits: re-render the server parts (the top bar's pill) once one is over. Client state stays.
+  const refreshCredits = useCallback(() => router.refresh(), [router]);
 
   useEffect(() => {
     railOpenRef.current = railOpen;
@@ -291,8 +294,10 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         setError(err instanceof Error ? err.message : "Drafting failed. Try again.");
         setErrorCode(codeOf(err));
       }
+    } finally {
+      refreshCredits();
     }
-  }, [topic, weeks, granularity, instructions, sources, pushAssistant]);
+  }, [topic, weeks, granularity, instructions, sources, pushAssistant, refreshCredits]);
 
   useEffect(() => {
     if (initialTree || draftStarted.current) return;
@@ -416,6 +421,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       setErrorCode(codeOf(err));
     } finally {
       setExpanding(false);
+      refreshCredits();
     }
   }
 
@@ -541,6 +547,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     } finally {
       setRevising(false);
       setBusy(false);
+      refreshCredits();
       const id = activeId;
       if (id) {
         setMessages((ms) =>
