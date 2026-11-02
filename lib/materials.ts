@@ -448,7 +448,7 @@ export interface SizeItemRunsInput {
  * units take a source (any run it wrote is ignored); code gives each of them a contiguous run, in unit order, over the
  * source's available items: the parent's reserved run (the whole list at the top, or under a parent that reserved it
  * without one), less the items units outside this level hold or did. Runs follow each unit's time for that format
- * (`practiceBudgets` over its weeks), cut by `shareRuns`; a unit whose share crosses an item held elsewhere gets one
+ * (`unitBudgets`: what the outline gave it, else its share of the weeks), cut by `shareRuns`; a unit whose share crosses an item held elsewhere gets one
  * reservation per stretch. When the model chose no unit for a source that is the level's own (the top level's, or the
  * parent's reservation) and the level has the format's time, every unit with time takes it. A source the checks will
  * refuse here (the parent reserved others of its format, or a heading elsewhere holds it) is left to them. Changes
@@ -477,8 +477,7 @@ export function sizeItemRuns(input: SizeItemRunsInput): string[] {
     });
     return found;
   };
-  const weight = (n: PlanNode, format: PracticeFormat) =>
-    practiceBudgets(input.split, budgetFor(weeksOf(input.root, n, input.daysPerWeek), input.hoursPerWeek) * 60, input.materials).practice[format] ?? 0;
+  const weight = (n: PlanNode, format: PracticeFormat) => unitBudgets(input.root, n, input).practice[format] ?? 0;
 
   for (const { pick, sources } of pickSources(input.split, input.materials)) {
     const format = pick.format;
@@ -505,6 +504,15 @@ export function sizeItemRuns(input: SizeItemRunsInput): string[] {
         chosen = withTime;
         facts.push(`no unit chose ${aliases.alias(id)} for ${name}: it is shared out over every unit with ${name} time`);
       }
+      // A unit the outline gave no minutes of this format gets no run, whatever the model wrote for it.
+      const untimed = chosen.filter((n) => unitBudgets(input.root, n, input).stated && weight(n, format) === 0);
+      for (const n of untimed) {
+        const rest = (n.practiceCovers ?? []).filter((c) => !theirs(c));
+        if (rest.length > 0) n.practiceCovers = rest;
+        else delete n.practiceCovers;
+      }
+      chosen = chosen.filter((n) => !untimed.includes(n));
+      if (chosen.length === 0) continue;
       const counts = shareRuns(
         available.map((n) => itemMinutes(format, aliases.item(id, n)!)),
         chosen.map((n) => weight(n, format)),

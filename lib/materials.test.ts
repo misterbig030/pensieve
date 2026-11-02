@@ -1474,6 +1474,24 @@ describe("sizeItemRuns: code sizes a listed source's runs on headings", () => {
     expect(nodes[4].practiceCovers).toBeUndefined();
   });
 
+  it("sizes runs by each unit's own Problems minutes, and gives a unit with none no run", () => {
+    // 52 problems of 10 minutes each; four weeks the outline gave 180, 180, 60 and 0 minutes of Problems (3 : 3 : 1).
+    const items = Array.from({ length: 52 }, (_, i) => ({ title: `Problem ${i + 1}`, number: String(i + 1), group: null, difficulty: null, url: null, solutionUrl: null, minutes: 10 }));
+    const neet = [{ id: "P", practice: { format: "problem-set" as const, items: 52, totalItems: 52, perItemMinutes: 10, minutes: 520, answers: true, list: { items, source: "file" as const, url: "https://example.com/p.json" } } }];
+    const nodes = weeks(4, () => [chosen()]).map((n, i) => ({ ...n, time: { reading: 60, practice: { "problem-set": [180, 180, 60, 0][i] } } }));
+    expect(size(nodes, layout(makeRoot(nodes)), neet)).toEqual([]);
+    expect(nodes.map((n) => positionsOf(n).length)).toEqual([22, 23, 7, 0]);
+    expect(nodes.flatMap(positionsOf)).toEqual(Array.from({ length: 52 }, (_, i) => i + 1));
+    expect(nodes[3].practiceCovers).toBeUndefined();
+  });
+
+  it("sizes a tree without unit time as before: by each unit's share of the weeks", () => {
+    const nodes = [10, 20, 5, 15].map((len, i) => makeNode({ id: `m${i + 1}`, level: "month", title: `M${i + 1}`, summary: "s", len, practiceCovers: [chosen()] }));
+    expect(size(nodes)).toEqual([]);
+    // Captured from the code before units carried their own time: 2, 4, 1 and 3 weeks share out 50 problems 10, 20, 5 and 15.
+    expect(nodes.map((n) => [positionsOf(n)[0], positionsOf(n).length])).toEqual([[1, 10], [11, 20], [31, 5], [36, 15]]);
+  });
+
   it("shares a month's run among its weeks only, around items other units hold", () => {
     // Month 1 reserved items 1–20 and Month 2 21–50; a week of Month 2 already did item 12 (a row from before the runs),
     // so Month 1's weeks share 1–11 and 13–20, and none of them takes a run past Month 1's, whatever the model wrote.
