@@ -4,9 +4,8 @@ import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ActionError } from "@/components/pensieve/leaf/ActionError";
-import { formatCostUsd } from "@/lib/formatCost";
 import type { Granularity, PlanNode } from "@/lib/planTree";
-import { STEP_COST_USD, usePlanning } from "./usePlanning";
+import { usePlanning } from "./usePlanning";
 import { Row, Skeletons, openUnits, type Ctx, type Planning } from "./OutlineRows";
 
 interface Props {
@@ -35,12 +34,12 @@ function PlanEverything({ planning }: { planning: Planning }) {
         </>
       ) : planAll ? (
         <span aria-live="polite">
-          Planned {planAll.done} unit{planAll.done === 1 ? "" : "s"} · {formatCostUsd(planAll.costUsd)}
+          Planned {planAll.done} unit{planAll.done === 1 ? "" : "s"}
         </span>
       ) : planning.confirming ? (
         <>
           <span className="text-foreground">
-            Plan {stepsLeft} unit{stepsLeft === 1 ? "" : "s"} in one go, about {formatCostUsd(stepsLeft * STEP_COST_USD)}?
+            Plan {stepsLeft} unit{stepsLeft === 1 ? "" : "s"} in one go?
           </span>
           <span className="ml-auto flex gap-2">
             <Button size="sm" onClick={planning.startAll} disabled={planning.isPending}>
@@ -88,7 +87,6 @@ export function PlanOutline({ trackId, root, granularity, daysPerWeek, selectedI
       ))}
       {planning.pending[root.id] && <Skeletons count={planning.pending[root.id].count} depth={0} />}
       <PlanEverything planning={planning} />
-      {planning.lastCost !== null && <p className="px-3 pt-1 text-xs text-muted-foreground">Estimated cost: {formatCostUsd(planning.lastCost)}</p>}
       {planning.error && (
         <div className="px-3 pt-1">
           <ActionError message={planning.error} settingsLink={planning.errorLink} />

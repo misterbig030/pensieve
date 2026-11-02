@@ -79,7 +79,7 @@ function lockedIds(root: PlanNode, lockBefore: number): string[] {
 /** A refused user key comes back as a value: a thrown error's message does not survive to the browser in production. */
 /** `calls` is present only when the server confirmed the caller is an admin: the model calls behind this request, for the dock. */
 export type ExpandNodeResult =
-  | { ok: true; costUsd: number; calls?: ModelCall[] }
+  | { ok: true; calls?: ModelCall[] }
   | { ok: false; message: string; code?: KeyErrorKind; calls?: ModelCall[] };
 
 export async function expandNodeAction(input: { trackId: string; nodeId: string; reason: "expand" | "split"; splitDays?: number }): Promise<ExpandNodeResult> {
@@ -93,7 +93,6 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
 
   const models = await resolveModels(userId);
   let children: PlanNode[] | null = null;
-  let costUsd = 0;
   try {
     for await (const event of guardUserKey(
       streamExpandNode({
@@ -116,7 +115,6 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
     )) {
       if (event.type === "finish") {
         children = event.children;
-        costUsd = event.costUsd;
       } else if (event.type === "error") {
         throw new Error(event.message);
       }
@@ -132,7 +130,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
   const fresh = await getTrackDetail(input.trackId, userId);
   await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title, fresh!.track.daysPerWeek));
   revalidatePath(`/tracks/${input.trackId}`);
-  return { ok: true, costUsd, ...extra };
+  return { ok: true, ...extra };
 }
 
 export async function markCompleteAction(nodeId: string): Promise<void> {
