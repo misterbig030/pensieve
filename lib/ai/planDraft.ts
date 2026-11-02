@@ -395,8 +395,12 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
       drafted: kept.length > 0 ? (node) => drafted.has(node.id) : true,
       ...(kept.length > 0 ? { saved: (node: PlanNode) => keptIds.has(node.id) } : {}),
     });
-    problems = checks.problems;
-    const facts = [...checks.facts, ...sizing, ...practiceFacts, ...checks.breaches.map((b) => `breach: ${b.text}`)];
+    // A breach of a kept unit's own (its index among the kept, which come first) is the learner's to see nowhere: the unit
+    // can't change, and it is measured against today's settings. It stays a fact for the admin panel. Plan-wide
+    // breaches (index -1) count the kept units' time and stay problems.
+    const fixed = (index: number) => index >= 0 && index < kept.length;
+    problems = checks.problems.filter((_, i) => !fixed(checks.breaches[i].index));
+    const facts = [...checks.facts, ...sizing, ...practiceFacts, ...checks.breaches.map((b) => `${fixed(b.index) ? "kept unit" : "breach"}: ${b.text}`)];
     // After the checks, which read notes as written: ids the model copied from its prompt are put in words for the learner.
     const plain = final.reduce((sum, node) => sum + plainUnitText(node, ctx.materials, aliases), 0);
     if (plain > 0) facts.push(`ids put in words in ${plain} field${plain === 1 ? "" : "s"}`);

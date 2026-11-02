@@ -44,6 +44,19 @@ export interface RedraftInput {
   outlineModel?: ResolvedModel;
   log?: GenerationLogContext;
   signal?: AbortSignal;
+  /** When the re-draft must be done (epoch ms): the first branch is planned only while there is time, as in a new draft. */
+  deadline?: number;
+}
+
+/**
+ * Nothing in the plan is left to re-draft: every unit is done or started, or the plan's weeks have shrunk to the units
+ * kept. The message is the learner's.
+ */
+export class NothingToRedraftError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NothingToRedraftError";
+  }
 }
 
 export interface RedraftResult {
@@ -53,9 +66,12 @@ export interface RedraftResult {
   costUsd: number;
 }
 
-/** Whether a unit is done or started: completed, locked, reaching into the locked days, or holding a completed unit. */
+/**
+ * Whether a unit is done or started: completed, starting on or before the last locked day (a locked unit does too), or
+ * holding a completed unit.
+ */
 function isStarted(unit: PlanNode, lockBefore: number): boolean {
-  let started = unit.status === "completed" || isLocked(unit, lockBefore) || (lockBefore > 0 && unit.start <= lockBefore);
+  let started = unit.status === "completed" || (lockBefore > 0 && unit.start <= lockBefore);
   walk(unit, (n) => {
     if (n.status === "completed") started = true;
   });
@@ -105,6 +121,7 @@ export async function redraftPlan(input: RedraftInput): Promise<RedraftResult> {
     split: input.split,
     outlineModel,
     signal: input.signal,
+    deadline: input.deadline,
   };
   const { scope } = input;
 
@@ -135,7 +152,8 @@ export async function redraftPlan(input: RedraftInput): Promise<RedraftResult> {
   const keep = tops.slice(0, last + 1);
   const level = tops[0]?.level ?? topLevelFor(input.weeks);
   const spans = restSpans(root, keep, level, input.weeks, input.daysPerWeek);
-  if (spans.length === 0) throw new Error("Every unit of the plan is done or started: there is nothing left to re-draft.");
+  if (spans.length === 0 && keep.length === tops.length) throw new NothingToRedraftError("Every unit of the plan is done or started, so there is nothing left to re-draft.");
+  if (spans.length === 0) throw new NothingToRedraftError("The plan is no longer than the units already done or started, so there is nothing left to re-draft. Make the plan longer to plan more.");
   root.children = keep;
   layout(root);
   const top = await draftWhole({ ctx, level, spans, keep, log: input.log });

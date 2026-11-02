@@ -349,17 +349,10 @@ export interface UnitsPromptInput extends PlanPromptContext {
   unitsAreLeaves: boolean;
 }
 
-const keptTrees = new WeakMap<PlanNode[], PlanNode>();
-
 /** The fixed units (`keep`) in a tree of their own, for their labels and what they hold; null without any. */
 function keptTree(input: UnitsPromptInput): PlanNode | null {
   if (input.parentId || !input.keep || input.keep.length === 0) return null;
-  let tree = keptTrees.get(input.keep);
-  if (!tree) {
-    tree = makeRoot(input.keep.map((n) => cloneTree(n)));
-    keptTrees.set(input.keep, tree);
-  }
-  return tree;
+  return makeRoot(input.keep.map((n) => cloneTree(n)));
 }
 
 /**
@@ -409,16 +402,17 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   parts.push(...contextLines(input, { sections: true }));
   parts.push(`The whole plan is ${weeksLabel(input.weeks)} long. Each week's days are numbered from Day 1.`);
 
+  const kept = keptTree(input);
   if (input.tree && input.parentId) {
     parts.push(`Here is the plan so far. Lines marked done are behind the learner; use what they covered to plan what comes next.${hasMaterials ? " Braces show the materials each unit reserves or reads." : ""}`);
     parts.push(renderTree(input.tree, { daysPerWeek: input.daysPerWeek, markId: input.parentId, aliases: hasMaterials ? aliases : undefined }));
     parts.push(`Plan the ${noun}s inside the unit marked ">>" in detail. Its ${n} ${noun}s cover, in order:`);
-  } else if (keptTree(input)) {
+  } else if (kept) {
     const k = input.keep!.length;
     parts.push(
       `The plan's first ${k} ${noun}${k === 1 ? " is" : "s are"} fixed: the learner has done or started ${k === 1 ? "it" : "them"}, and ${k === 1 ? "it stays" : "they stay"} as ${k === 1 ? "it is" : "they are"}. Use what ${k === 1 ? "it covers" : "they cover"} to plan what comes next.${hasMaterials ? " Braces show the materials each unit reserves or reads." : ""}`,
     );
-    parts.push(renderTree(keptTree(input)!, { daysPerWeek: input.daysPerWeek, aliases: hasMaterials ? aliases : undefined }));
+    parts.push(renderTree(kept, { daysPerWeek: input.daysPerWeek, aliases: hasMaterials ? aliases : undefined }));
     parts.push(`Split the rest of the plan into ${n} ${noun}${n === 1 ? "" : "s"}, picking up where the fixed ${noun}${k === 1 ? "" : "s"} leave${k === 1 ? "s" : ""} off, easiest and most foundational first, hardest and most applied last. They cover, in order:`);
   } else {
     parts.push(`Split the plan into ${n} ${noun}${n === 1 ? "" : "s"}, easiest and most foundational first, hardest and most applied last. They cover, in order:`);
@@ -429,7 +423,7 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
   // Each line gives the unit's hours only: how it spends them is the unit's own, out of the totals the time rules state.
   // After fixed units, the lines are numbered on from them.
-  const offset = keptTree(input) ? input.keep!.length : 0;
+  const offset = kept ? input.keep!.length : 0;
   input.spans.forEach((len, i) => {
     const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, daysInWeek, input.hoursPerWeek) : budgetFor(unitWeeks(input.level, len, input.daysPerWeek), input.hoursPerWeek) * 60;
     const budget = hasMaterials || picks.length > 0 ? ` — budget about ${formatMinutes(minutes)}` : "";
@@ -601,14 +595,16 @@ function reservedPractice(input: UnitsPromptInput, format: PracticeFormat): Prac
   return (parent?.practiceCovers ?? []).filter((c) => c.format === format);
 }
 
-/** The units outside the line of the heading being planned: every node but the root, the parent and its ancestors. */
-function otherUnits(input: UnitsPromptInput): PlanNode[] {
+/**
+ * The units outside the line of the heading being planned: every node but the root, the parent and its ancestors; at the
+ * top level, the fixed units and everything in them. They are `tree`'s own nodes (`contextTree`), so they can be
+ * labelled in it.
+ */
+function otherUnits(input: UnitsPromptInput, tree: PlanNode | null = contextTree(input)): PlanNode[] {
   const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
   if (!input.tree || !parent) {
-    // At the top level, the fixed units and everything in them.
-    const kept = keptTree(input);
     const out: PlanNode[] = [];
-    if (kept) walk(kept, (n) => void (n.id !== kept.id && out.push(n)));
+    if (tree) walk(tree, (n) => void (n.id !== tree.id && out.push(n)));
     return out;
   }
   const skip = new Set<string>([input.tree.id, parent.id]);
@@ -631,7 +627,8 @@ function positionsText(aliases: MaterialAliases, id: string, positions: number[]
  */
 function practiceHeld(input: UnitsPromptInput, aliases: MaterialAliases, format: PracticeFormat): string {
   const held: string[] = [];
-  for (const n of otherUnits(input)) {
+  const tree = contextTree(input);
+  for (const n of otherUnits(input, tree)) {
     const items = (n.practiceCovers ?? []).filter((r) => r.format === format && r.id !== null).map((r) => practiceItem(r, aliases));
     const done = new Map<string, number[]>();
     for (const r of (n.practice ?? []).filter((r) => r.format === format && r.id !== null)) {
@@ -642,7 +639,7 @@ function practiceHeld(input: UnitsPromptInput, aliases: MaterialAliases, format:
       if (aliases.alias(id)) items.push(positionsText(aliases, id, positions));
     }
     const named = items.filter((s): s is string => s !== null);
-    if (named.length > 0) held.push(`${named.join("; ")} in ${fullLabelOf(contextTree(input)!, n)}`);
+    if (named.length > 0) held.push(`${named.join("; ")} in ${fullLabelOf(tree!, n)}`);
   }
   return held.length > 0 ? ` Other units have: ${held.join("; ")}.` : "";
 }
