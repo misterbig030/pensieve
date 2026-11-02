@@ -138,6 +138,13 @@ describe("buildPlanChatSystemPrompt", () => {
     expect(prompt).toContain('Week 2 (7 days): "GPUs"');
     expect(prompt).toContain("call revisePlan exactly once");
   });
+  it("sends requests to regenerate to redraftPlan and targeted edits to revisePlan", () => {
+    const prompt = buildPlanChatSystemPrompt({ mode: "create", topic: "AI infra", materials: [], granularity: "day", daysPerWeek: 7, tree: tree(), lockBefore: 0 });
+    expect(prompt).toContain(
+      'Requests to regenerate, redo or re-draft the plan or part of it ("redo the plan", "start over from Week 3", "re-draft the days in Week 2"): call redraftPlan exactly once, with scope "plan" for the whole plan, or scope "level" and the heading\'s label as the unit (null for the top level). Targeted edits stay with revisePlan.',
+    );
+    expect(prompt).toContain("There are three kinds of turns.");
+  });
   it("shows the chat each heading's time", () => {
     const root = tree();
     root.children![1].time = { reading: 60, practice: {} };
