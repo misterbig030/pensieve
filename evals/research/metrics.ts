@@ -197,7 +197,7 @@ export function runMetrics(input: {
     ...sizeMetrics(outcome.materials),
     totalHours: totalHours(draftRequestOf(record.input).weeks, record.input.hoursPerWeek),
     coverage: outcome.coverage ? { covered: outcome.coverage.covered.length, open: outcome.coverage.open.length } : null,
-    costUsd: input.rows.reduce((sum, r) => sum + r.costUsd, 0) + (input.extraCostUsd ?? 0),
+    costUsd: input.rows.reduce((sum, r) => sum + (r.costUsd ?? 0), 0) + (input.extraCostUsd ?? 0),
     latencyMs: input.latencyMs,
     researchMs: input.researchMs,
     toolCalls: outcome.arm?.counts ?? { searches: 0, fetches: 0, steps: 0 },

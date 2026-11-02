@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Check, Copy, Download, Maximize2, Minimize2, Trash2, X } from "lucide-react";
-import { formatCostUsd } from "@/lib/formatCost";
+import { callCost, formatCallCost, formatCostUsd, sumCallCosts } from "@/lib/formatCost";
 import type { ModelCall } from "@/lib/planChat";
 import { cn } from "@/lib/utils";
 
@@ -50,10 +50,10 @@ export function ModelCallsPanel({ calls, onClear, onClose }: ModelCallsPanelProp
       inputTokens: t.inputTokens + (c.inputTokens ?? 0),
       outputTokens: t.outputTokens + (c.outputTokens ?? 0),
       cacheReadTokens: t.cacheReadTokens + (c.cacheReadTokens ?? 0),
-      costUsd: t.costUsd + c.costUsd,
     }),
-    { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 },
+    { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 },
   );
+  const costs = sumCallCosts(calls);
 
   const list = (
     <div className="flex min-h-0 flex-col">
@@ -110,7 +110,7 @@ export function ModelCallsPanel({ calls, onClear, onClose }: ModelCallsPanelProp
             {fmt(totals.inputTokens)} in · {fmt(totals.outputTokens)} out
           </Chip>
           <Chip>{fmt(totals.cacheReadTokens)} cached</Chip>
-          <Chip>{formatCostUsd(totals.costUsd)}</Chip>
+          <CostTotals {...costs} calls={calls.length} />
         </div>
       </div>
 
@@ -171,7 +171,7 @@ function CallRow({ index, call, selected, onSelect }: { index: number; call: Mod
         <span className="min-w-0 truncate">{call.label}</span>
       </span>
       <span className="font-mono text-[11px] opacity-60">
-        {shortModel(call.model)} · {fmt(call.inputTokens)} → {fmt(call.outputTokens)} · {formatCostUsd(call.costUsd)} ·{" "}
+        {shortModel(call.model)} · {fmt(call.inputTokens)} → {fmt(call.outputTokens)} · {formatCallCost(callCost(call))} ·{" "}
         {seconds(call.latencyMs)}
       </span>
     </button>
@@ -189,10 +189,39 @@ function MetaStrip({ call }: { call: ModelCall }) {
       <Chip>out {fmt(call.outputTokens)}</Chip>
       <Chip>cache read {fmt(call.cacheReadTokens)}</Chip>
       <Chip>reasoning {call.reasoningTokens === null ? "—" : fmt(call.reasoningTokens)}</Chip>
-      <Chip>{formatCostUsd(call.costUsd)}</Chip>
+      <CostChip call={call} />
       <Chip>{fmt(call.latencyMs)} ms</Chip>
       <Chip>finish: {call.finishReason ?? "—"}</Chip>
     </div>
+  );
+}
+
+/**
+ * What the tab's calls cost in all. Calls on Pensieve's key add up what the gateway charged; calls on the user's own key
+ * never reach the gateway, so theirs is a list-price estimate, shown apart.
+ */
+function CostTotals({ chargedUsd, estimatedUsd, estimatedCalls, calls }: ReturnType<typeof sumCallCosts> & { calls: number }) {
+  const total = chargedUsd + estimatedUsd;
+  if (estimatedCalls === 0) return <Chip>total {formatCostUsd(total)}</Chip>;
+  const own = `${estimatedCalls === calls ? "all" : estimatedCalls} on the user's key`;
+  return (
+    <>
+      <Chip>total ≈ {formatCostUsd(total)}</Chip>
+      {estimatedCalls < calls && <Chip>{formatCostUsd(chargedUsd)} charged</Chip>}
+      <Chip>
+        ≈ {formatCostUsd(estimatedUsd)} estimated · {own}
+      </Chip>
+    </>
+  );
+}
+
+function CostChip({ call }: { call: ModelCall }) {
+  const cost = callCost(call);
+  if (cost.usd === null) return <Chip>{cost.estimated ? "no price to estimate" : "no charge reported"}</Chip>;
+  return (
+    <Chip>
+      {formatCallCost(cost)} {cost.estimated ? "estimated" : "charged"}
+    </Chip>
   );
 }
 

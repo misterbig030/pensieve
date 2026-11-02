@@ -55,7 +55,7 @@ function isModelCall(value: unknown): value is ModelCall {
     typeof c.response === "string" &&
     isStringOrNull(c.system) &&
     isStringOrNull(c.finishReason) &&
-    typeof c.costUsd === "number" &&
+    isNumberOrNull(c.costUsd) &&
     typeof c.latencyMs === "number" &&
     isNumberOrNull(c.inputTokens) &&
     isNumberOrNull(c.outputTokens) &&
