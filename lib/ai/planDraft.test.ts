@@ -565,9 +565,6 @@ describe("breaches while drafting", () => {
     const retryPrompt = (mockedStreamObject.mock.calls[1][0] as { prompt: string }).prompt;
     expect(retryPrompt).toContain("Your previous answer broke these rules; return all 7 units again, corrected:\n- ");
     expect(retryPrompt).toContain("- Week 1 · Day 5 reads M1.3, which Week 1 did not reserve");
-    // Sized before the check, the rows take their chapters' 466 minutes, against the week's 144 of reading.
-    expect(retryPrompt).toContain("- Week 1's must-reading is 466 min against a budget of about 144 min");
-    expect(retryPrompt).not.toContain("Day 1's must-reading");
     expect(calls.map((c) => c.label)).toEqual(["Week 1 · 7 days", "Week 1 · 7 days (retry)"]);
     expect(calls[0].facts).toContain("breach: Week 1 · Day 5 reads M1.3, which Week 2 holds");
     const finish = events.at(-1);
@@ -587,13 +584,13 @@ describe("breaches while drafting", () => {
   });
   it("sizes chapter rows from the list before judging the budget", async () => {
     const week = (title: string, ids: string[], minutes: number[]) => ({ title, summary: "s", materials: ids.map((id, i) => ({ id, tier: "must" as const, minutes: minutes[i] })) });
-    // The model wrote flat 60-minute rows; the chapters are 107 and 140 minutes.
-    const weeks = [week("W1", ["M1.1", "M1.2"], [60, 60]), week("W2", ["M1.3"], [60]), week("W3", ["M1.4"], [60]), week("W4", ["M1.5"], [60])];
+    // The model wrote flat 60-minute rows, 240 min in week 1; its chapters are 107, 140, 93 and 126 minutes.
+    const weeks = [week("W1", ["M1.1", "M1.2", "M1.3", "M1.4"], [60, 60, 60, 60]), week("W2", ["M1.5"], [60]), week("W3", ["M1.6"], [60]), week("W4", ["M1.7"], [60])];
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks)).mockReturnValueOnce(fakeStream(weeks));
     const calls: ModelCall[] = [];
     for await (const _ of streamPlanDraft({ ...ctx, weeks: 4, daysPerWeek: 7, granularity: "week", log: { onCall: (c) => void calls.push(c) } })) void _;
     expect(mockedStreamObject).toHaveBeenCalledTimes(2);
-    expect(calls[0].facts).toContain("breach: Week 1's must-reading is 247 min against a budget of about 144 min");
+    expect(calls[0].facts).toContain("breach: Week 1 plans 466 min in a week of 360 min.");
   });
   it("drops rows that still breach after the retry and records the drops", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(dayUnits([1, 3]))).mockReturnValueOnce(fakeStream(dayUnits([1, 3])));
@@ -605,12 +602,12 @@ describe("breaches while drafting", () => {
   });
   it("an over-budget leaf triggers the retry and then stays a fact", async () => {
     const week = (title: string, ids: string[], minutes: number[]) => ({ title, summary: "s", materials: ids.map((id, i) => ({ id, tier: "must" as const, minutes: minutes[i] })) });
-    const weeks = [week("W1", ["M1.1", "M1.2"], [107, 140]), week("W2", ["M1.3"], [93]), week("W3", ["M1.4"], [126]), week("W4", ["M1.5"], [98])];
+    const weeks = [week("W1", ["M1.1", "M1.2", "M1.3", "M1.4"], [107, 140, 93, 126]), week("W2", ["M1.5"], [98]), week("W3", ["M1.6"], [127]), week("W4", ["M1.7"], [126])];
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks)).mockReturnValueOnce(fakeStream(weeks));
     const calls: ModelCall[] = [];
     for await (const _ of streamPlanDraft({ ...ctx, weeks: 4, daysPerWeek: 7, granularity: "week", log: { onCall: (c) => void calls.push(c) } })) void _;
     expect(mockedStreamObject).toHaveBeenCalledTimes(2);
-    expect(calls[1].facts).toContain("breach: Week 1's must-reading is 247 min against a budget of about 144 min");
+    expect(calls[1].facts).toContain("breach: Week 1 plans 466 min in a week of 360 min.");
     expect(calls[1].facts.some((f) => f.startsWith("dropped"))).toBe(false);
   });
   it("a budget the outline misses is quoted in the retry, and after a second miss it stays a fact", async () => {
