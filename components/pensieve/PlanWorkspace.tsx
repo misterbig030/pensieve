@@ -21,7 +21,9 @@ import { readNdjson } from "@/lib/ndjson";
 import {
   applyDraftEvent,
   chatLockHint,
+  collectProblems,
   nextMessageId,
+  problemsText,
   toTranscript,
   type ChatMessage,
   type DraftMaterials,
@@ -87,7 +89,12 @@ export interface PlanWorkspaceProps {
   backLabel: string;
   heading: string;
   subtext: string;
-  onConfirm: (tree: PlanNode, summary: string, materials: Material[], time: { hoursPerWeek: number; daysPerWeek: number; split: PlanSplit | null }) => Promise<void>;
+  onConfirm: (
+    tree: PlanNode,
+    summary: string,
+    materials: Material[],
+    time: { hoursPerWeek: number; daysPerWeek: number; split: PlanSplit | null; problems?: string[] },
+  ) => Promise<void>;
 }
 
 function leafLevel(level: PlanLevel, granularity: Granularity): boolean {
@@ -160,6 +167,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
 
   const railOpenRef = useRef(railOpen);
   const draftStarted = useRef(false);
+  // Set once the chat has revised the plan: from then on the tree's root holds the top level's problems.
+  const revisedRef = useRef(false);
   const router = useRouter();
   // Model calls spend credits: re-render the server parts (the top bar's pill) once one is over. Client state stays.
   const refreshCredits = useCallback(() => router.refresh(), [router]);
@@ -273,7 +282,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           setTree(layout(event.root));
           setPending({});
           setDrafting(false);
-          pushAssistant(draftedText(layout(event.root), weeks, held.materials, decided));
+          pushAssistant(withProblems(draftedText(layout(event.root), weeks, held.materials, decided), collectProblems(event.root)));
         } else if (event.type === "error") {
           throw Object.assign(new Error(event.message), { code: event.code });
         }
@@ -386,6 +395,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             const parent = findNode(next, nodeId);
             if (!parent) return t;
             parent.children = event.children;
+            // The level planned inside this node: its problems are replaced with the ones just found.
+            if (event.problems.length > 0) parent.problems = event.problems;
+            else delete parent.problems;
             if (reason === "split") splitWeek(parent);
             return layout(next);
           });
@@ -399,7 +411,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           if (reason === "split") {
             setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: `You split ${label} into ${planned.length} day${planned.length === 1 ? "" : "s"} by hand. The rest of the plan stays in weeks.` }]);
           } else {
-            pushAssistant(`Planned ${label}: ${shown}${more}. Say "collapse ${label.toLowerCase()} back" if you would rather leave it for later.`);
+            pushAssistant(withProblems(`Planned ${label}: ${shown}${more}. Say "collapse ${label.toLowerCase()} back" if you would rather leave it for later.`, event.problems));
           }
         } else if (event.type === "error") {
           throw Object.assign(new Error(event.message), { code: event.code });
@@ -518,6 +530,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             changeText = "";
             treeBefore = next;
             setTree(next);
+            revisedRef.current = true;
+            const found = problemsText(event.problems);
+            if (found) setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: found }]);
             setHighlight(event.changed.ids);
             setSummaryNote("");
             noteBefore = "";
@@ -605,7 +620,10 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setErrorCode(null);
     setOutOfCredits(null);
     try {
-      await props.onConfirm(tree, summary, materials, { hoursPerWeek, daysPerWeek, split });
+      // The latest tree's root says what is wrong with the top level. A plan adjusted without a revision has not been
+      // checked here, so its saved problems are left as they are.
+      const problems = mode === "create" || revisedRef.current ? (tree.problems ?? []) : undefined;
+      await props.onConfirm(tree, summary, materials, { hoursPerWeek, daysPerWeek, split, problems });
     } catch (err) {
       unstable_rethrow(err);
       setError(err instanceof Error ? err.message : "Could not save the plan. Try again.");
@@ -855,6 +873,12 @@ function materialsText(materials: Material[]): string {
   }
   if (researched > 0) return `No textbook stood out, so units draw on the ${materials.length} materials above directly. `;
   return "";
+}
+
+/** A message with the plan's problems after it, a blank line between; with none, the message as it is. */
+function withProblems(text: string, problems: string[]): string {
+  const found = problemsText(problems);
+  return found ? `${text}\n\n${found}` : text;
 }
 
 function draftedText(root: PlanNode, weeks: number, materials: Material[] = [], split: PlanSplit | null = null): string {

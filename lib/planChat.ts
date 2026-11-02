@@ -1,7 +1,7 @@
 import type { KeyErrorKind } from "@/lib/ai/models";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { Coverage, DroppedMaterial, ResearchEvent } from "@/lib/ai/research/events";
-import type { Granularity, PlanLevel, PlanNode } from "@/lib/planTree";
+import { walk, type Granularity, type PlanLevel, type PlanNode } from "@/lib/planTree";
 import type { ChangedNodes } from "@/lib/planSummary";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanTreeInput } from "@/lib/schemas/plan";
@@ -216,4 +216,19 @@ export function chatLockHint(state: { drafting: boolean; draftRefused: boolean }
 
 export function hasUserTurn(messages: ChatMessage[]): boolean {
   return messages.some((m) => m.kind === "user");
+}
+
+/** What the conversation says when the checks found problems in the plan; nothing when they found none. */
+export function problemsText(problems: string[]): string {
+  if (problems.length === 0) return "";
+  return `A few things in this plan don't add up:\n${problems.map((p) => `- ${p}`).join("\n")}\nAsk me to fix any of them, or to re-draft the plan.`;
+}
+
+/** The problems on the root and on every node under it, in tree order, each line once. */
+export function collectProblems(root: PlanNode): string[] {
+  const seen = new Set<string>();
+  walk(root, (node) => {
+    for (const line of node.problems ?? []) seen.add(line);
+  });
+  return [...seen];
 }

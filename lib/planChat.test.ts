@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyDraftEvent, chatLockHint, type DraftMaterials, type PlanDraftEvent } from "@/lib/planChat";
+import { applyDraftEvent, chatLockHint, collectProblems, problemsText, type DraftMaterials, type PlanDraftEvent } from "@/lib/planChat";
+import { makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 
 const material = (title: string): Material => ({ title, url: `https://example.com/${title}` }) as unknown as Material;
@@ -67,5 +68,28 @@ describe("chatLockHint", () => {
     expect(chatLockHint({ drafting: true, draftRefused: false })).toBe("Available once the plan is drafted");
     expect(chatLockHint({ drafting: false, draftRefused: true })).toBe("Available once the plan is drafted");
     expect(chatLockHint({ drafting: false, draftRefused: false })).toBeNull();
+  });
+});
+
+describe("problemsText", () => {
+  it("is empty when the plan has no problems", () => {
+    expect(problemsText([])).toBe("");
+  });
+  it("lists each problem on its own line and says what the learner can do", () => {
+    expect(problemsText(["Week 3 plans too much reading.", "Problems add up to 21 h."])).toBe(
+      "A few things in this plan don't add up:\n- Week 3 plans too much reading.\n- Problems add up to 21 h.\nAsk me to fix any of them, or to re-draft the plan.",
+    );
+  });
+});
+
+describe("collectProblems", () => {
+  const node = (id: string, problems?: string[], children: PlanNode[] | null = null): PlanNode => makeNode({ id, level: "week", title: id, summary: "s", len: 1, problems, children });
+  it("gathers the root's and every node's problems in tree order, once each", () => {
+    const root = makeRoot([node("a", ["A1", "shared"], [node("a1", ["A1b"])]), node("b", undefined), node("c", ["shared", "C1"])]);
+    root.problems = ["R1", "shared"];
+    expect(collectProblems(root)).toEqual(["R1", "shared", "A1", "A1b", "C1"]);
+  });
+  it("is empty for a tree with no problems", () => {
+    expect(collectProblems(makeRoot([node("a")]))).toEqual([]);
   });
 });

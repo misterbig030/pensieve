@@ -53,6 +53,7 @@ export function NewTrackForm() {
             materials,
             tree: toTreeInput(tree),
             summary,
+            problems: time.problems,
           })
         }
       />
