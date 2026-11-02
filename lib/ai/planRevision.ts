@@ -174,7 +174,8 @@ export function spanFor(level: PlanLevel, days: number, kept: PlanNode | undefin
   return Math.max(1, Math.round(days / daysPerWeek)) * daysPerWeek;
 }
 
-function describe(root: PlanNode, node: PlanNode): string {
+/** How a locked unit is named to the learner: a day by its label, anything larger by its title. */
+export function describe(root: PlanNode, node: PlanNode): string {
   return node.level === "day" ? fullLabelOf(root, node) : `"${node.title}"`;
 }
 

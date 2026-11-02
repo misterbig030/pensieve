@@ -27,6 +27,7 @@ import {
   makeRoot,
   topLevelFor,
   topSpans,
+  walk,
   type Granularity,
   type PlanLevel,
   type PlanNode,
@@ -250,7 +251,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
   yield { type: "done", units: object.units, costUsd: row.costUsd ?? 0 };
 }
 
-interface DraftLevelInput {
+export interface DraftLevelInput {
   ctx: {
     topic: string;
     instructions?: string;
@@ -270,33 +271,45 @@ interface DraftLevelInput {
   spans: number[];
   tree?: PlanNode;
   parentId?: string;
+  /**
+   * Top level only (no `parentId`): the plan's first units, done or started, kept as they are before the ones drafted
+   * (a re-draft). The prompt lists them as fixed and gives the drafted units what is left of the plan; what they reserve
+   * or do is taken; the checks see them in the tree, and hold the drafted units alone to stating their time. `spans`
+   * covers only the rest of the plan. The drafted nodes come back without them.
+   */
+  keep?: PlanNode[];
   log?: GenerationLogContext;
   /** The signal the level's call runs under; the request's with the draft's deadline when omitted. */
   signal?: AbortSignal;
 }
 
-/** The level's final nodes placed in a copy of the tree, so checks can name them by label. */
-function placeForChecks(tree: PlanNode | undefined, parentId: string | undefined, nodes: PlanNode[]): { root: PlanNode; placed: PlanNode[] } {
+/**
+ * The level's final nodes placed in a copy of the tree, so checks can name them by label. At the top level, units kept
+ * before them (`keep`) come first, copied too, as `kept`.
+ */
+function placeForChecks(tree: PlanNode | undefined, parentId: string | undefined, nodes: PlanNode[], keep: PlanNode[] = []): { root: PlanNode; placed: PlanNode[]; kept: PlanNode[] } {
   const copies = nodes.map((n) => cloneTree(n));
   if (!tree || !parentId) {
-    const root = makeRoot(copies);
-    return { root, placed: copies };
+    const kept = keep.map((n) => cloneTree(n));
+    const root = makeRoot([...kept, ...copies]);
+    return { root, placed: copies, kept };
   }
   const root = cloneTree(tree);
   const parent = findNode(root, parentId);
-  if (!parent) return { root, placed: [] };
+  if (!parent) return { root, placed: [], kept: [] };
   parent.children = copies;
   layout(root);
-  return { root, placed: copies };
+  return { root, placed: copies, kept: [] };
 }
 
 /**
  * Drafts one level of units under `parentId` (or the top level) in one call, yielding each node as it lands. The level
  * is checked once and kept as written: what breaks a rule comes back as the learner's `problems`, never fixed in code.
  */
-async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; problems: string[]; costUsd: number }> {
+export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; problems: string[]; costUsd: number }> {
   const { ctx, level } = input;
   const leaf = unitsAreLeaves(level, ctx.granularity);
+  const keep = input.parentId ? [] : (input.keep ?? []);
   // References are resolved when there are materials, or practice to assign (rows written without a source).
   const aliases = ctx.materials.length > 0 || (ctx.split?.formats ?? []).length > 0 ? aliasMaterials(ctx.materials) : undefined;
   const promptInput: UnitsPromptInput = {
@@ -312,6 +325,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     weeks: ctx.weeks,
     tree: input.tree,
     parentId: input.parentId,
+    ...(keep.length > 0 ? { keep } : {}),
     unitsAreLeaves: leaf,
   };
   const parentNode = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
@@ -354,7 +368,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     // The checks run without materials too: a plan with no sources can still have practice written without one.
     // Chapter rows take their minutes from the list before the budget is judged, so the checks see real sizes.
     if (leaf) sizeChapterRows(final, ctx.materials);
-    const { root, placed } = placeForChecks(input.tree, input.parentId, final);
+    const { root, placed, kept } = placeForChecks(input.tree, input.parentId, final, keep);
     // Headings: each listed source's runs are sized by the units' time before the checks, which then hold by construction.
     const sizing = leaf ? [] : sizeItemRuns({ root, nodes: placed, materials: ctx.materials, split: ctx.split, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek });
     if (!leaf) {
@@ -363,7 +377,24 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
         else delete final[i].practiceCovers;
       });
     }
-    const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, split: ctx.split, drafted: true });
+    // Kept units are checked with the level, so the plan's totals count them; their rows were saved, and only the
+    // drafted units are held to stating their time.
+    const drafted = new Set(placed.map((n) => n.id));
+    const keptIds = new Set<string>();
+    for (const n of kept) walk(n, (d) => void keptIds.add(d.id));
+    const checks = levelChecks({
+      root,
+      nodes: [...kept, ...placed],
+      leaves: leaf,
+      top: !input.parentId,
+      materials: ctx.materials,
+      unknownIds: unknown,
+      hoursPerWeek: ctx.hoursPerWeek,
+      daysPerWeek: ctx.daysPerWeek,
+      split: ctx.split,
+      drafted: kept.length > 0 ? (node) => drafted.has(node.id) : true,
+      ...(kept.length > 0 ? { saved: (node: PlanNode) => keptIds.has(node.id) } : {}),
+    });
     problems = checks.problems;
     const facts = [...checks.facts, ...sizing, ...practiceFacts, ...checks.breaches.map((b) => `breach: ${b.text}`)];
     // After the checks, which read notes as written: ids the model copied from its prompt are put in words for the learner.
@@ -393,6 +424,55 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
 export function setProblems(node: PlanNode, problems: string[]): void {
   if (problems.length > 0) node.problems = problems;
   else delete node.problems;
+}
+
+/**
+ * Plans `first` down to the plan's finest units along its first branch: its children, then its first child's, while
+ * the branch is still made of headings and the draft's time allows. Each planned parent keeps its level's problems.
+ * Yields each node as it lands and returns the calls' cost. Past the deadline the unit being planned stays a heading.
+ */
+export async function* draftFirstBranch(
+  ctx: DraftLevelInput["ctx"],
+  root: PlanNode,
+  first: PlanNode | undefined,
+  log?: GenerationLogContext,
+): AsyncGenerator<{ type: "node"; parentId: string; node: PlanNode }, number> {
+  let costUsd = 0;
+  let parent = first;
+  while (parent && !unitsAreLeaves(parent.level, ctx.granularity)) {
+    const left = timeLeft(ctx.deadline);
+    if (left !== null && left < STEP_MIN_MS) break;
+    const level = childLevel(parent.level)!;
+    const spans = childSpans(parent, ctx.daysPerWeek);
+    const kids: PlanNode[] = [];
+    const signal = within(ctx.signal, left);
+    try {
+      for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: parent.id, log, signal })) {
+        if (event.type === "node") {
+          kids.push(event.node);
+          parent.children = kids;
+          layout(root);
+          yield { type: "node", parentId: parent.id, node: event.node };
+        } else {
+          parent.children = event.nodes;
+          setProblems(parent, event.problems);
+          layout(root);
+          costUsd += event.costUsd;
+        }
+      }
+    } catch (error) {
+      // Past the deadline the unit stays a heading, its streamed children dropped; any other failure is the draft's.
+      if (ctx.signal?.aborted || ctx.deadline === undefined || Date.now() < ctx.deadline) throw error;
+      // A level the draft's deadline cut off did not fail on Anthropic.
+      reportServiceFailure(log, error, "outline level", signal);
+      console.error(`[draft] out of time planning ${parent.title}; it stays a heading`, error);
+      parent.children = null;
+      layout(root);
+      break;
+    }
+    parent = parent.children?.[0];
+  }
+  return costUsd;
 }
 
 export interface StreamPlanDraftInput extends Omit<PlanDraftRequest, "materials"> {
@@ -462,40 +542,7 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
   }
 
   // The first unit's children, while the draft's time allows: a unit left as a heading is planned when it is reached.
-  let parent: PlanNode | undefined = root.children?.[0];
-  while (parent && !unitsAreLeaves(parent.level, input.granularity)) {
-    const left = timeLeft(input.deadline);
-    if (left !== null && left < STEP_MIN_MS) break;
-    const level = childLevel(parent.level)!;
-    const spans = childSpans(parent, input.daysPerWeek);
-    const kids: PlanNode[] = [];
-    const signal = within(input.signal, left);
-    try {
-      for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: parent.id, log: input.log, signal })) {
-        if (event.type === "node") {
-          kids.push(event.node);
-          parent.children = kids;
-          layout(root);
-          yield { type: "node", parentId: parent.id, node: event.node };
-        } else {
-          parent.children = event.nodes;
-          setProblems(parent, event.problems);
-          layout(root);
-          costUsd += event.costUsd;
-        }
-      }
-    } catch (error) {
-      // Past the deadline the unit stays a heading, its streamed children dropped; any other failure is the draft's.
-      if (input.signal?.aborted || input.deadline === undefined || Date.now() < input.deadline) throw error;
-      // A level the draft's deadline cut off did not fail on Anthropic.
-      reportServiceFailure(input.log, error, "outline level", signal);
-      console.error(`[draft] out of time planning ${parent.title}; it stays a heading`, error);
-      parent.children = null;
-      layout(root);
-      break;
-    }
-    parent = parent.children?.[0];
-  }
+  costUsd += yield* draftFirstBranch(ctx, root, root.children?.[0], input.log);
 
   yield { type: "finish", root: layout(root), costUsd };
 }
