@@ -59,6 +59,9 @@ function resolveUnit(root: PlanNode, unit: string, granularity: PlanChatInput["g
   return { node };
 }
 
+/** What a second plan change in one turn is told: the turn's first change has the tree. */
+const TURN_ALREADY_CHANGED = "This turn already changed the plan. Tell the learner what changed, and ask them to send the next change as a new message.";
+
 export interface RunPlanChatOptions {
   log?: GenerationLogContext;
   /** The model that answers; the app's chat model when omitted. */
@@ -80,9 +83,15 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
   const tree = layout(cloneTree(req.tree));
   const lockBefore = req.mode === "adjust" ? (req.lockBefore ?? 0) : 0;
 
-  /** What the latest tool run changed, held until its result is streamed; a later call that changes nothing leaves none. */
+  /** What the turn's plan change did, held until its tool result is streamed, then sent once. */
   let revised: { tree: PlanNode; changed: ChangedNodes; problems: string[] } | null = null;
   let revisionCostUsd = 0;
+  /**
+   * One plan change a turn: both tools draft from the turn's own tree, so a second change would drop the first. The
+   * first call to start claims the turn, synchronously (the SDK may run calls at once); a call that comes back with
+   * only a message for the model (an unknown unit, locked work, nothing to re-draft) releases it.
+   */
+  let claimed = false;
 
   /** The tool's answer to the chat model for a revised tree; the tree itself goes to the client as a `revised` event. */
   const settle = (result: { tree: PlanNode; problems: string[]; costUsd: number }) => {
@@ -102,6 +111,8 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
       "Revise the plan. Call this only when the learner asks for the plan to change. Do not call it to answer questions.",
     inputSchema: revisePlanInput,
     execute: async ({ changeRequest }) => {
+      if (claimed) return TURN_ALREADY_CHANGED;
+      claimed = true;
       const result = await revisePlanTree({
         topic: req.topic,
         instructions: req.instructions,
@@ -125,12 +136,17 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
       "Re-draft the plan, or one level of it, from scratch, as a new plan is drafted: units already done or started stay. Call this only when the learner asks to regenerate, redo or re-draft the plan or part of it. For a targeted edit, call revisePlan.",
     inputSchema: redraftPlanInput,
     execute: async ({ scope, unit }) => {
+      if (claimed) return TURN_ALREADY_CHANGED;
+      claimed = true;
       let target: RedraftScope = { kind: "plan" };
       if (scope === "level") {
         if (unit === null) target = { kind: "level", parentId: null };
         else {
           const found = resolveUnit(tree, unit, req.granularity);
-          if ("error" in found) return found.error;
+          if ("error" in found) {
+            claimed = false;
+            return found.error;
+          }
           target = { kind: "level", parentId: found.node.id };
         }
       }
@@ -140,6 +156,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
           instructions: req.instructions,
           materials: req.materials,
           granularity: req.granularity,
+          // Mirrors the route, which sets the request's weeks from the tree.
           weeks: Math.round(weeksOf(tree, tree, req.daysPerWeek)),
           daysPerWeek: req.daysPerWeek,
           hoursPerWeek: req.hoursPerWeek,
@@ -152,7 +169,10 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
         });
         return settle(result);
       } catch (error) {
-        if (error instanceof LockedNodeError || error instanceof NothingToRedraftError) return error.message;
+        if (error instanceof LockedNodeError || error instanceof NothingToRedraftError) {
+          claimed = false;
+          return error.message;
+        }
         throw error;
       }
     },

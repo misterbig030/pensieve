@@ -21,28 +21,64 @@ const mockedRevise = vi.mocked(revisePlanTree);
 const chat: ResolvedModel = { model: "anthropic/claude-haiku-4.5", id: "anthropic/claude-haiku-4.5", keyOwner: "app" };
 const usage = { inputTokens: 10, outputTokens: 5, totalTokens: 15, inputTokenDetails: {}, outputTokenDetails: {} };
 
-type Call = { tool: "redraftPlan" | "revisePlan"; input: unknown };
+type ToolName = "redraftPlan" | "revisePlan";
+type Tools = Record<ToolName, { execute: (input: unknown, options: unknown) => Promise<unknown> }>;
+type Call = { tool: ToolName; input: unknown };
 
-/** A turn in which the model makes `calls` in order, then answers `answer`. */
-function script(calls: Call[], answer = "Done.") {
-  mockedStream.mockImplementationOnce(((opts: { tools: Record<string, { execute: (input: unknown, o: unknown) => Promise<unknown> }> }) => ({
-    fullStream: (async function* () {
-      for (const [i, c] of calls.entries()) {
-        const toolCallId = `c${i}`;
-        yield { type: "tool-call", toolCallId, toolName: c.tool, input: c.input };
-        try {
-          const output = await opts.tools[c.tool].execute(c.input, { toolCallId, messages: [] });
-          yield { type: "tool-result", toolCallId, toolName: c.tool, input: c.input, output };
-        } catch (error) {
-          yield { type: "tool-error", toolCallId, toolName: c.tool, input: c.input, error };
-        }
-      }
-      yield { type: "text-delta", id: "t", text: answer };
-      yield { type: "finish-step", providerMetadata: undefined };
-      yield { type: "finish", totalUsage: usage, finishReason: "stop" };
-    })(),
-  })) as never);
+/** Runs one tool as the SDK does: its execute, with the options it passes. */
+const exec = (tools: Tools, tool: ToolName, input: unknown) => tools[tool].execute(input, { toolCallId: tool, messages: [] });
+
+/** The next streamText call: `body` gets the tools and returns the parts the turn streams. */
+function stub(body: (tools: Tools) => AsyncGenerator<Record<string, unknown>>) {
+  mockedStream.mockImplementationOnce(((opts: { tools: Tools }) => ({ fullStream: body(opts.tools) })) as never);
 }
+
+const finish = { type: "finish", totalUsage: usage, finishReason: "stop" };
+
+/** A turn in which the model makes `calls` one after another, then answers `answer`. */
+function script(calls: Call[], answer = "Done.") {
+  stub(async function* (tools) {
+    for (const [i, c] of calls.entries()) {
+      const toolCallId = `c${i}`;
+      yield { type: "tool-call", toolCallId, toolName: c.tool, input: c.input };
+      try {
+        const output = await exec(tools, c.tool, c.input);
+        yield { type: "tool-result", toolCallId, toolName: c.tool, input: c.input, output };
+      } catch (error) {
+        yield { type: "tool-error", toolCallId, toolName: c.tool, input: c.input, error };
+      }
+    }
+    yield { type: "text-delta", id: "t", text: answer };
+    yield { type: "finish-step", providerMetadata: undefined };
+    yield finish;
+  });
+}
+
+/** A turn that runs `calls` at once (all started before any is awaited), then streams their results in order. */
+function scriptConcurrent(calls: Call[]) {
+  stub(async function* (tools) {
+    const runs = calls.map((c) => exec(tools, c.tool, c.input));
+    for (const [i, c] of calls.entries()) yield { type: "tool-call", toolCallId: `c${i}`, toolName: c.tool, input: c.input };
+    for (const [i, c] of calls.entries()) yield { type: "tool-result", toolCallId: `c${i}`, toolName: c.tool, input: c.input, output: await runs[i] };
+    yield finish;
+  });
+}
+
+/** A turn that makes `calls` one after another and keeps what each answers, for the answers the model reads. */
+function answerOf(...calls: Call[]): { answers: unknown[] } {
+  const seen: { answers: unknown[] } = { answers: [] };
+  stub(async function* (tools) {
+    for (const [i, c] of calls.entries()) {
+      const output = await exec(tools, c.tool, c.input);
+      seen.answers.push(output);
+      yield { type: "tool-result", toolCallId: `c${i}`, toolName: c.tool, input: c.input, output };
+    }
+    yield finish;
+  });
+  return seen;
+}
+
+const revisedIn = (events: PlanChatEvent[]) => events.filter((e): e is Extract<PlanChatEvent, { type: "revised" }> => e.type === "revised");
 
 const week = (id: string, title: string, children: PlanNode[] | null = null) => makeNode({ id, level: "week", title, summary: "s", len: 2, children });
 const day = (id: string, title: string) => makeNode({ id, level: "day", title, summary: "s", len: 1 });
@@ -126,7 +162,6 @@ describe("the redraftPlan tool", () => {
   });
 
   it("yields no revised, and makes no model call, for an unknown unit", async () => {
-    mockedStream.mockClear();
     script([{ tool: "redraftPlan", input: { scope: "level", unit: "Week 99" } }]);
     const events = await run(request(weeksTree()));
     expect(mockedRedraft).not.toHaveBeenCalled();
@@ -135,19 +170,9 @@ describe("the redraftPlan tool", () => {
   });
 
   it("says what is wrong when the unit is a day or a unit without a level below it", async () => {
-    const tree = weeksTree();
-    let result: unknown;
-    mockedStream.mockImplementationOnce(((opts: { tools: Record<string, { execute: (i: unknown, o: unknown) => Promise<unknown> }> }) => ({
-      fullStream: (async function* () {
-        result = [
-          await opts.tools.redraftPlan.execute({ scope: "level", unit: "Week 3 · Day 1" }, { toolCallId: "a", messages: [] }),
-          await opts.tools.redraftPlan.execute({ scope: "level", unit: "Week 99" }, { toolCallId: "b", messages: [] }),
-        ];
-        yield { type: "finish", totalUsage: usage, finishReason: "stop" };
-      })(),
-    })) as never);
-    await run(request(tree, { granularity: "week" }));
-    expect(result).toEqual([expect.stringMatching(/Day 1.*no level below/), expect.stringMatching(/No unit "Week 99"/)]);
+    const seen = answerOf({ tool: "redraftPlan", input: { scope: "level", unit: "Week 3 · Day 1" } }, { tool: "redraftPlan", input: { scope: "level", unit: "Week 99" } });
+    await run(request(weeksTree(), { granularity: "week" }));
+    expect(seen.answers).toEqual([expect.stringMatching(/Day 1.*no level below/), expect.stringMatching(/No unit "Week 99"/)]);
     expect(mockedRedraft).not.toHaveBeenCalled();
   });
 
@@ -158,15 +183,9 @@ describe("the redraftPlan tool", () => {
     await run(request(tree));
     expect(mockedRedraft.mock.calls[0][0].scope).toEqual({ kind: "level", parentId: "m2" });
     mockedRedraft.mockClear();
-    let result: unknown;
-    mockedStream.mockImplementationOnce(((opts: { tools: Record<string, { execute: (i: unknown, o: unknown) => Promise<unknown> }> }) => ({
-      fullStream: (async function* () {
-        result = await opts.tools.redraftPlan.execute({ scope: "level", unit: "Week 1" }, { toolCallId: "a", messages: [] });
-        yield { type: "finish", totalUsage: usage, finishReason: "stop" };
-      })(),
-    })) as never);
+    const seen = answerOf({ tool: "redraftPlan", input: { scope: "level", unit: "Week 1" } });
     await run(request(tree, { granularity: "week" }));
-    expect(result).toMatch(/more than one.*Month 1 · Week 1.*Month 2 · Week 1/);
+    expect(seen.answers[0]).toMatch(/more than one.*Month 1 · Week 1.*Month 2 · Week 1/);
     expect(mockedRedraft).not.toHaveBeenCalled();
   });
 
@@ -174,17 +193,10 @@ describe("the redraftPlan tool", () => {
     const tree = weeksTree();
     for (const err of [new LockedNodeError('"Three"'), new NothingToRedraftError("Every unit of the plan is done or started, so there is nothing left to re-draft.")]) {
       mockedRedraft.mockRejectedValueOnce(err);
-      let result: unknown;
-      mockedStream.mockImplementationOnce(((opts: { tools: Record<string, { execute: (i: unknown, o: unknown) => Promise<unknown> }> }) => ({
-        fullStream: (async function* () {
-          result = await opts.tools.redraftPlan.execute({ scope: "plan", unit: null }, { toolCallId: "a", messages: [] });
-          yield { type: "tool-result", toolCallId: "a", toolName: "redraftPlan", input: {}, output: result };
-          yield { type: "finish", totalUsage: usage, finishReason: "stop" };
-        })(),
-      })) as never);
+      const seen = answerOf({ tool: "redraftPlan", input: { scope: "plan", unit: null } });
       const events = await run(request(tree));
-      expect(result).toContain(err.message);
-      expect(events.some((e) => e.type === "revised" || e.type === "error")).toBe(false);
+      expect(seen.answers[0]).toBe(err.message);
+      expect(events.filter((e) => e.type === "revised" || e.type === "error")).toEqual([]);
     }
   });
 
@@ -207,20 +219,53 @@ describe("the redraftPlan tool", () => {
     expect(calls[0].facts).toContain("tool: redraftPlan");
   });
 
-  it("when both tools are called, the later result is the one revised tree, and a failed later call leaves the first standing", async () => {
+});
+
+describe("one plan change a turn", () => {
+  const redraft: Call = { tool: "redraftPlan", input: { scope: "plan", unit: null } };
+  const revise: Call = { tool: "revisePlan", input: { changeRequest: "rename week 1" } };
+
+  it("lets the first of two calls started together change the plan and tells the second to wait for a new message", async () => {
     const tree = weeksTree();
-    const first = redrafted(tree);
-    const second = cloneTree(first);
-    second.children![0].title = "Renamed";
-    mockedRedraft.mockResolvedValue({ tree: first, problems: [], costUsd: 0.1 });
-    mockedRevise.mockResolvedValue({ tree: second, problems: [], costUsd: 0.2 });
-    script([
-      { tool: "redraftPlan", input: { scope: "plan", unit: null } },
-      { tool: "revisePlan", input: { changeRequest: "rename week 1" } },
-    ]);
+    mockedRedraft.mockResolvedValue({ tree: redrafted(tree), problems: [], costUsd: 0.1 });
+    mockedRevise.mockResolvedValue({ tree, problems: [], costUsd: 0.2 });
+    for (const calls of [[redraft, revise], [revise, redraft]]) {
+      mockedRedraft.mockClear();
+      mockedRevise.mockClear();
+      scriptConcurrent(calls);
+      const events = await run(request(tree));
+      expect(revisedIn(events)).toHaveLength(1);
+      const [first, second] = calls[0].tool === "redraftPlan" ? [mockedRedraft, mockedRevise] : [mockedRevise, mockedRedraft];
+      expect(first).toHaveBeenCalledOnce();
+      expect(second).not.toHaveBeenCalled();
+    }
+  });
+
+  it("answers a second call, one after another, with the turn's message", async () => {
+    const tree = weeksTree();
+    mockedRedraft.mockResolvedValue({ tree: redrafted(tree), problems: [], costUsd: 0 });
+    const seen = answerOf(redraft, revise);
+    await run(request(tree));
+    expect(seen.answers[1]).toMatch(/already changed the plan/);
+    expect(mockedRevise).not.toHaveBeenCalled();
+  });
+
+  it("lets a later call run after the first came back with only a message", async () => {
+    const tree = weeksTree();
+    mockedRedraft.mockResolvedValue({ tree: redrafted(tree), problems: [], costUsd: 0 });
+    script([{ tool: "redraftPlan", input: { scope: "level", unit: "Week 99" } }, redraft]);
     const events = await run(request(tree));
-    const revised = events.filter((e) => e.type === "revised") as Extract<PlanChatEvent, { type: "revised" }>[];
-    expect(revised.at(-1)!.tree.children![0].title).toBe("Renamed");
-    expect(events.at(-1)).toMatchObject({ type: "finish" });
+    expect(revisedIn(events)).toHaveLength(1);
+    expect(mockedRedraft).toHaveBeenCalledOnce();
+  });
+
+  it("releases the turn after locked work too", async () => {
+    const tree = weeksTree();
+    mockedRedraft.mockRejectedValueOnce(new LockedNodeError('"Three"'));
+    mockedRevise.mockResolvedValue({ tree: redrafted(tree), problems: [], costUsd: 0 });
+    script([redraft, revise]);
+    const events = await run(request(tree));
+    expect(revisedIn(events)).toHaveLength(1);
+    expect(mockedRevise).toHaveBeenCalledOnce();
   });
 });
