@@ -16,7 +16,6 @@ import { assignmentsOf, draftedSplit, removeMaterialRefs } from "@/lib/materials
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
-import { formatCostUsd } from "@/lib/formatCost";
 import { pushModelCalls } from "@/lib/modelCalls";
 import { readNdjson } from "@/lib/ndjson";
 import {
@@ -124,7 +123,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [expanding, setExpanding] = useState(false);
   const [revising, setRevising] = useState(false);
   const [summaryNote, setSummaryNote] = useState("");
-  const [costUsd, setCostUsd] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages(props));
   const [highlight, setHighlight] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -274,7 +272,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           setAwaitingAllocation(false);
           setTree(layout(event.root));
           setPending({});
-          setCostUsd((c) => c + event.costUsd);
           setDrafting(false);
           pushAssistant(draftedText(layout(event.root), weeks, held.materials, decided));
         } else if (event.type === "error") {
@@ -397,7 +394,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             delete next[nodeId];
             return next;
           });
-          setCostUsd((c) => c + event.costUsd);
           const shown = planned.slice(0, 3).map(lowerFirst).join(", ");
           const more = planned.length > 3 ? ` and ${planned.length - 3} more` : "";
           if (reason === "split") {
@@ -494,7 +490,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             break;
           case "revised": {
             setRevising(false);
-            setCostUsd((c) => c + event.costUsd);
             const emptyAnswerId = activeKind === "answer" ? activeId : null;
             const changeId = nextMessageId();
             const prevTree = treeBefore;
@@ -529,7 +524,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             break;
           }
           case "finish":
-            setCostUsd((c) => c + event.costUsd);
             break;
           case "error":
             throw Object.assign(new Error(event.message), { code: event.code });
@@ -765,7 +759,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
                 Try again
               </Button>
             )}
-            <p className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(costUsd)}</p>
           </div>
           {error && (
             <p className="text-sm text-red-600">

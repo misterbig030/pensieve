@@ -20,7 +20,7 @@ import { insertGenerationLog } from "@/lib/db/generationLog";
 
 /** `calls` is present only when the server confirmed the caller is an admin: the model call behind this lesson, for the dock. */
 export type GenerateLeafContentResult =
-  | { ok: true; contentMarkdown: string; citations: { title: string; url: string }[]; costUsd: number; calls?: ModelCall[] }
+  | { ok: true; contentMarkdown: string; citations: { title: string; url: string }[]; calls?: ModelCall[] }
   | { ok: false; message: string; code?: KeyErrorKind; calls?: ModelCall[] };
 
 export async function generateLeafContentAction(input: {
@@ -74,7 +74,7 @@ export async function generateLeafContentAction(input: {
     if (error instanceof GatewayFundsError) return { ok: false, message: error.message, ...extra };
     throw error;
   }
-  const { content, costUsd } = generated;
+  const { content } = generated;
 
   await upsertLeafContent(node.id, {
     contentMarkdown: content.contentMarkdown,
@@ -85,5 +85,5 @@ export async function generateLeafContentAction(input: {
   revalidatePath(`/tracks/${input.trackId}`);
   revalidatePath(`/tracks/${input.trackId}/nodes/${input.nodeId}`);
 
-  return { ok: true, ...content, costUsd, ...extra };
+  return { ok: true, ...content, ...extra };
 }

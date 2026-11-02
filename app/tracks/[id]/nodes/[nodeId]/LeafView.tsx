@@ -14,7 +14,6 @@ import { LogSessionForm } from "@/components/pensieve/leaf/LogSessionForm";
 import { MarkCompleteButton } from "@/components/pensieve/leaf/MarkCompleteButton";
 import { LESSON_TASK, lessonMinutes, type DayTask } from "@/lib/dayTasks";
 import { doneCount, toggleStep, toggleTask } from "@/lib/dayTicks";
-import { formatCostUsd } from "@/lib/formatCost";
 import { splitLesson, stepKey } from "@/lib/lessonSteps";
 import { pushModelCalls } from "@/lib/modelCalls";
 import { cn } from "@/lib/utils";
@@ -89,7 +88,6 @@ export function LeafView({
   const [error, setError] = useState<string | null>(null);
   /** True when the error is a refused user key, so the message links to Settings. */
   const [errorLink, setErrorLink] = useState(false);
-  const [costUsd, setCostUsd] = useState<number | null>(null);
   const { ticks, set: setTicks } = useDayTicks(nodeId);
 
   const isWeek = unit === "week";
@@ -127,7 +125,6 @@ export function LeafView({
           contentMarkdown: result.contentMarkdown,
           citations: result.citations,
         });
-        setCostUsd(result.costUsd);
       }
     } catch (err) {
       setError(
@@ -208,11 +205,6 @@ export function LeafView({
           <RefreshCw />
           {isPending ? "Rewriting…" : "Rewrite this lesson"}
         </Button>
-        {costUsd !== null && (
-          <span className="text-xs text-muted-foreground">
-            Estimated cost: {formatCostUsd(costUsd)}
-          </span>
-        )}
       </div>
       {error && <ActionError message={error} settingsLink={errorLink} />}
       {provenance}

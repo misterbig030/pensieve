@@ -7,13 +7,9 @@ import { usePlanningLock } from "@/lib/planningLock";
 import { childLevel, childSpans, findNode, nextPlanningStep, planningStepsLeft, type Granularity, type PlanNode } from "@/lib/planTree";
 import { expandNodeAction } from "./actions";
 
-/** What one planning step is likely to cost, for the estimate shown before planning everything. */
-export const STEP_COST_USD = 0.01;
-
 export interface PlanAll {
   total: number;
   done: number;
-  costUsd: number;
 }
 
 /** Planning a saved track: one unit at a time, or everything in a run. Each step saves and the page refreshes. */
@@ -22,7 +18,6 @@ export function usePlanning({ trackId, root, granularity, daysPerWeek }: { track
   const [error, setError] = useState<string | null>(null);
   /** True when the error is a refused user key, so the message links to Settings. */
   const [errorLink, setErrorLink] = useState(false);
-  const [lastCost, setLastCost] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
   /** Planning everything: one step at a time, the next taken from the refreshed tree once the last has landed. */
   const [planAll, setPlanAll] = useState<PlanAll | null>(null);
@@ -54,8 +49,7 @@ export function usePlanning({ trackId, root, granularity, daysPerWeek }: { track
             setErrorLink(true);
             setPlanAll(null);
           } else {
-            setLastCost(result.costUsd);
-            setPlanAll((p) => (p ? { ...p, done: p.done + 1, costUsd: p.costUsd + result.costUsd } : p));
+            setPlanAll((p) => (p ? { ...p, done: p.done + 1 } : p));
           }
         } catch (err) {
           setError(err instanceof Error ? err.message : "Planning failed. Try again.");
@@ -81,7 +75,7 @@ export function usePlanning({ trackId, root, granularity, daysPerWeek }: { track
   function startAll() {
     setConfirming(false);
     lastStep.current = null;
-    setPlanAll({ total: stepsLeft, done: 0, costUsd: 0 });
+    setPlanAll({ total: stepsLeft, done: 0 });
   }
 
   return {
@@ -91,7 +85,6 @@ export function usePlanning({ trackId, root, granularity, daysPerWeek }: { track
     isPending: isPending || blocked,
     error,
     errorLink,
-    lastCost,
     stepsLeft,
     planAll,
     planning,
