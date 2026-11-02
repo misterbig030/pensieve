@@ -110,6 +110,18 @@ describe("withCallEvents", () => {
     now.mockRestore();
   });
 
+  it("stamps a call with when it finished, so the panel can tell calls that ran side by side", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(5_000);
+    async function* reporting(log: GenerationLogContext): AsyncGenerator<Ev> {
+      log.onCall?.(call("timed"));
+      now.mockReturnValue(9_000);
+      yield { type: "finish" };
+    }
+    const events = await collect(withCallEvents(true, {}, reporting));
+    expect(events[0]).toMatchObject({ type: "call", call: { label: "timed", endedAt: 5_000 } });
+    now.mockRestore();
+  });
+
   it("streams service events in order beside call events when enabled, and none when disabled", async () => {
     const service = (ms: number): ServiceEvent => ({ type: "service", name: "anthropic", ok: false, final: false, ms, status: 529 });
     const onService = vi.fn();

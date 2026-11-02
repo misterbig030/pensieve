@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ModelCall } from "@/lib/ai/logged";
-import { STORAGE_KEY, createModelCallStore, type StorageLike } from "./modelCalls";
+import { STORAGE_KEY, callSpan, createModelCallStore, modelTimeMs, type StorageLike } from "./modelCalls";
 
 function call(label: string, pad = ""): ModelCall {
   return {
@@ -150,5 +150,36 @@ describe("createModelCallStore", () => {
     const store = createModelCallStore({ storage: null });
     store.push([call("a")]);
     expect(store.getSnapshot()).toHaveLength(1);
+  });
+});
+
+describe("modelTimeMs", () => {
+  const timed = (endedAt: number | undefined, latencyMs: number): ModelCall => ({ ...call("t"), endedAt, latencyMs });
+
+  it("counts calls that ran side by side once", () => {
+    // Three workers from 0 to 10 s, 2 to 8 s and 5 to 12 s: models were busy from 0 to 12 s.
+    expect(modelTimeMs([timed(10_000, 10_000), timed(8_000, 6_000), timed(12_000, 7_000)])).toBe(12_000);
+  });
+
+  it("leaves out the time between calls, when nothing was running", () => {
+    expect(modelTimeMs([timed(4_000, 4_000), timed(60_000, 3_000)])).toBe(7_000);
+  });
+
+  it("adds a call with no finish time (stored before calls had one) on its own", () => {
+    expect(modelTimeMs([timed(10_000, 10_000), timed(undefined, 2_500)])).toBe(12_500);
+  });
+
+  it("is zero with no calls", () => {
+    expect(modelTimeMs([])).toBe(0);
+  });
+});
+
+describe("callSpan", () => {
+  it("runs from the finish time less the duration to the finish time", () => {
+    expect(callSpan({ ...call("t"), endedAt: 60_000, latencyMs: 15_500 })).toEqual({ startedAt: 44_500, endedAt: 60_000 });
+  });
+
+  it("is unknown for a call stored before calls had a finish time", () => {
+    expect(callSpan(call("t"))).toBeNull();
   });
 });

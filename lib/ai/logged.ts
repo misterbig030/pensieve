@@ -43,6 +43,8 @@ export interface ModelCall extends GenerationLogRow {
   finishReason: string | null;
   /** Short checks the generator can state about the response ("4 of 4 units", "spans kept"). */
   facts: string[];
+  /** When the call finished (ms since the epoch), stamped as it is handed to the admin; with `latencyMs` it places the call in time. */
+  endedAt?: number;
 }
 
 export type OnModelCall = (call: ModelCall) => void;

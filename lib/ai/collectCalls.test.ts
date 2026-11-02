@@ -44,6 +44,20 @@ describe("collectCalls", () => {
     expect(log).toMatchObject({ userId: "u1", trackId: "t1", keyOwner: "user", onLog });
   });
 
+  it("stamps each call with when it finished", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(7_000);
+    const sink: ModelCall[] = [];
+    collectCalls(true, {}, sink).onCall?.(call("a"));
+    expect(sink[0].endedAt).toBe(7_000);
+    now.mockRestore();
+  });
+
+  it("keeps the finish time a call already carries (one handed over late)", () => {
+    const sink: ModelCall[] = [];
+    collectCalls(true, {}, sink).onCall?.({ ...call("late"), endedAt: 3_000 });
+    expect(sink[0].endedAt).toBe(3_000);
+  });
+
   it("keeps calls pushed before the work throws", async () => {
     const sink: ModelCall[] = [];
     const log = collectCalls(true, {}, sink);

@@ -460,6 +460,8 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
         flush();
         pending = {
           ...row,
+          // Handed over a step late (see `flush`), so it carries its own finish time.
+          endedAt: Date.now(),
           label: `${label} · step ${index + 1}`,
           system: null,
           prompt: index === 0 ? prompt : `(step ${index + 1}: the conversation so far, plus the tool results from step ${index})\n\n${previousResults ?? ""}`,

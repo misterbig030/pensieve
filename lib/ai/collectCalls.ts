@@ -11,7 +11,7 @@ export function collectCalls(enabled: boolean, log: GenerationLogContext, sink: 
     ...log,
     onCall: (call) => {
       log.onCall?.(call);
-      sink.push(call);
+      sink.push({ ...call, endedAt: call.endedAt ?? Date.now() });
     },
   };
 }

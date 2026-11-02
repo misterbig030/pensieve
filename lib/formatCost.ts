@@ -36,8 +36,8 @@ export function sumCallCosts(calls: CostedCall[]): { chargedUsd: number; estimat
   );
 }
 
-/** A call's cost as the admin reads it: an estimate marked with ≈. */
+/** A call's cost as the admin reads it: an estimate marked with ≈, kept on the amount's line. */
 export function formatCallCost(cost: CallCost): string {
   const amount = formatCostUsd(cost.usd);
-  return cost.estimated && cost.usd !== null ? `≈ ${amount}` : amount;
+  return cost.estimated && cost.usd !== null ? `≈\u00a0${amount}` : amount;
 }

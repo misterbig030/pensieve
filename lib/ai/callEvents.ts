@@ -20,7 +20,7 @@ export function withCallEvents<T>(
     ...log,
     onCall: (call) => {
       log.onCall?.(call);
-      queue.push({ type: "call", call });
+      queue.push({ type: "call", call: { ...call, endedAt: call.endedAt ?? Date.now() } });
     },
     onService: (event) => {
       log.onService?.(event);
