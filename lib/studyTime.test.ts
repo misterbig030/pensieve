@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { layout, makeNode, makeRoot } from "@/lib/planTree";
-import { clampHours, dayMinutes, formatDayTime, hoursInText, isAllReading, normalizeSplit, planSplitSchema, practiceLabelOf, presetFor, readingShareOf, rebudget, shareAdjustable, totalHours, weeksLabel } from "./studyTime";
+import { clampHours, dayMinutes, formatDayTime, formatUnitTime, hoursInText, isAllReading, normalizeSplit, planSplitSchema, practiceLabelOf, presetFor, readingShareOf, rebudget, shareAdjustable, totalHours, weeksLabel } from "./studyTime";
 
 describe("hours", () => {
   it("totals the plan's hours over its weeks", () => {
@@ -26,6 +26,13 @@ describe("hours", () => {
     expect(formatDayTime(45)).toBe("45 min");
     expect(weeksLabel(1)).toBe("1 week");
     expect(weeksLabel(5.8)).toBe("6 weeks");
+  });
+
+  it("writes a unit's time reading first, then each format in registry order, leaving out zeros", () => {
+    expect(formatUnitTime({ reading: 150, practice: { "design-exercise": 30, "problem-set": 180 } })).toBe("2 h 30 min reading · 3 h Problems · 30 min Design");
+    expect(formatUnitTime({ reading: 0, practice: { mock: 150, "problem-set": 90, recall: 0 } })).toBe("1 h 30 min Problems · 2 h 30 min Mock");
+    expect(formatUnitTime({ reading: 45, practice: {} })).toBe("45 min reading");
+    expect(formatUnitTime({ reading: 0, practice: { lab: 0 } })).toBe("0 min");
   });
 
   it("clamps and names presets", () => {

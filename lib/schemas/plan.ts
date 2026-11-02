@@ -51,7 +51,8 @@ export type UnitDraft = z.infer<typeof unitDraftSchema>;
 
 /**
  * The revised tree the model returns from a change request. Depth is fixed at three levels (month → week → day) so
- * the schema stays plain JSON with no recursion. `ref` echoes the node's ref from the prompt when a node is kept.
+ * the schema stays plain JSON with no recursion. `ref` echoes the node's ref from the prompt when a node is kept; `time`
+ * is a heading's minutes per activity, written when the model changes them or adds the heading.
  */
 const revisedLeafSchema = z.object({
   ref: z.string().optional(),
@@ -62,6 +63,7 @@ const revisedLeafSchema = z.object({
   materials: z.array(materialRefDraftSchema).optional(),
   practiceCovers: z.array(practiceCoverDraftSchema).optional(),
   practice: z.array(practiceRefDraftSchema).optional(),
+  time: unitTimeDraftSchema.optional(),
 });
 const revisedMidSchema = revisedLeafSchema.extend({
   children: z.array(revisedLeafSchema).min(1).max(40).optional(),

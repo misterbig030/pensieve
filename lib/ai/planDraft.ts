@@ -95,7 +95,7 @@ export function toUnitTime(draft: z.infer<typeof unitTimeDraftSchema>, picked: r
 }
 
 /** The formats a heading's time may name: the split's picks the units can be given, or, without the materials to tell, all its picks. */
-function pickedFormats(split: PlanSplit | null | undefined, materials?: Pick<Material, "id" | "practice" | "minutes">[]): PracticeFormat[] {
+export function pickedFormats(split: PlanSplit | null | undefined, materials?: Pick<Material, "id" | "practice" | "minutes">[]): PracticeFormat[] {
   if (!materials) return activePicks(split).map((p) => p.format);
   return pickSources(split, materials)
     .filter((p) => p.assignable)

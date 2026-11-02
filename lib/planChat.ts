@@ -145,7 +145,8 @@ export interface PlanChatRequest extends PlanContext {
 export type PlanChatEvent =
   | { type: "text"; text: string }
   | { type: "revising" }
-  | { type: "revised"; tree: PlanNode; changed: ChangedNodes; costUsd: number }
+  /** `problems`: what the checks found in the revised tree, in the learner's words (none: empty). */
+  | { type: "revised"; tree: PlanNode; changed: ChangedNodes; problems: string[]; costUsd: number }
   | { type: "finish"; costUsd: number }
   | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;

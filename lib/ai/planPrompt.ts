@@ -35,7 +35,7 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialPractice, type MaterialRef, type PracticeCover, type PracticeList, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
-import { dayMinutes, formatDayTime, isAllReading, practiceLabelOf, weeksLabel, type PlanSplit } from "@/lib/studyTime";
+import { dayMinutes, formatDayTime, formatUnitTime, isAllReading, practiceLabelOf, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 
 export interface PlanPromptContext {
   topic: string;
@@ -137,7 +137,10 @@ export function renderRefs(node: Pick<PlanNode, "covers" | "materials" | "practi
   return parts.join(" · ");
 }
 
-/** Renders the tree as indented text the model can read: labels, spans, titles, summaries, done/locked marks. */
+/**
+ * Renders the tree as indented text the model can read: labels, spans, titles, summaries, done/locked marks, a
+ * heading's time ("<time: 2 h 30 min reading · 3 h Problems>") and, with aliases, its references.
+ */
 export function renderTree(root: PlanNode, opts: RenderTreeOptions): string {
   const lines: string[] = [];
   walk(root, (node, parent) => {
@@ -154,8 +157,9 @@ export function renderTree(root: PlanNode, opts: RenderTreeOptions): string {
     const prefix = opts.markId === node.id ? ">> " : "";
     const label = labelOf(root, node);
     const span = node.level === "day" ? "" : ` (${spanOf(root, node, opts.daysPerWeek)})`;
+    const time = node.time ? ` <time: ${formatUnitTime(node.time)}>` : "";
     const refs = opts.aliases ? renderRefs(node, opts.aliases) : "";
-    lines.push(`${indent}${prefix}${label}${ref ? ` [${ref}]` : ""}${span}: "${node.title}" — ${node.summary}${mark}${refs ? ` {${refs}}` : ""}`);
+    lines.push(`${indent}${prefix}${label}${ref ? ` [${ref}]` : ""}${span}: "${node.title}" — ${node.summary}${mark}${time}${refs ? ` {${refs}}` : ""}`);
     void parent;
   });
   return lines.join("\n");
@@ -940,11 +944,24 @@ export function buildRevisionPrompt(input: RevisionPromptInput): string {
         ? [
             `- Materials: return "covers" (headings: { id, note }) and "materials" (units without children: { id, tier, minutes, note }) for every unit that has them, changed only as the request asks. Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit. A request like "make the talk optional" changes that row's tier to "should"; it does not add or drop other rows. Leave both fields out only for units with no materials. Use only ids from the list.`,
             `- Practice: return "practiceCovers" (headings: { format, id, note }) and "practice" (units without children: { format, id, task, done, minutes }) for every unit that has them, changed only as the request asks. Keep each row's format and source id; leave id out only for a row you wrote.${items}`,
+            revisionTimeRule(input),
           ]
         : []),
     ].join("\n"),
   );
   return parts.join("\n");
+}
+
+/**
+ * The revision rule on a heading's time: what "<time: …>" in the tree means, that the model may change it, and that a
+ * heading it adds or reshapes writes its own (code never fills it in; one left without is reported).
+ */
+function revisionTimeRule(input: RevisionPromptInput): string {
+  const formats = pickSources(input.split, input.materials)
+    .filter((p) => p.assignable)
+    .map((p) => pickName(p.pick.format));
+  const named = formats.length > 0 ? ` The practice formats are ${formats.join(", ")}.` : " This plan has no practice formats: practice is [].";
+  return `- Time: a heading's "<time: …>" is its minutes per activity: must-reading, and each practice format. You may change them as the request needs: return "time" ({ reading, practice: [{ format, minutes }] }, in minutes) on that heading. Every heading you add or reshape (merged, re-lengthened, or reserving other materials) needs its own "time", within its hours. Leave "time" out on a heading you keep as it was: it keeps its own. Units without children have no "time".${named} ${MUST_ONLY}`;
 }
 
 /** "6 weeks, usually 5 study days a week": the plan's length as prompts state it. */

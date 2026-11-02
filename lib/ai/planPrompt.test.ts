@@ -43,6 +43,13 @@ describe("renderTree", () => {
     const root = makeRoot([makeNode({ id: "w", level: "week", title: "A", summary: "b", len: 7, budgetHours: 6 })]);
     expect(renderTree(root, { daysPerWeek: 7 })).toContain("[week-sized unit, logged as sessions]");
   });
+  it("shows a heading's time, and nothing for one without", () => {
+    const root = tree();
+    root.children![1].time = { reading: 150, practice: { "problem-set": 180 } };
+    const text = renderTree(root, { daysPerWeek: 7 });
+    expect(text).toContain('Week 2 (7 days): "GPUs" — Where time goes. [not yet planned in detail] <time: 2 h 30 min reading · 3 h Problems>');
+    expect(text.split("\n")[0]).not.toContain("<time:");
+  });
 });
 
 describe("buildUnitsPrompt", () => {
@@ -100,6 +107,21 @@ describe("buildRevisionPrompt", () => {
     expect(prompt).toContain("[done]");
     expect(prompt).toContain("Keep the ref of every unit you keep");
   });
+  it("shows each heading's time and lets the model change it, naming the picked formats", () => {
+    const root = layout(
+      makeRoot([
+        makeNode({ id: "w1", level: "week", title: "A", summary: "a", len: 7, covers: [{ id: "aie", chapter: 1, note: null }], time: { reading: 150, practice: { "problem-set": 180 } } }),
+        makeNode({ id: "w2", level: "week", title: "B", summary: "b", len: 7 }),
+      ]),
+    );
+    const split = { readingShare: 50, practice: "problems", reason: "", formats: [{ format: "problem-set" as const, share: 100, focus: "arrays", reason: "" }] };
+    const materials = [...AIE_MATERIALS, { ...AIE_MATERIALS[1], id: "P", title: "NeetCode 150", practice: LISTED_PROBLEMS }];
+    const prompt = buildRevisionPrompt({ topic: "AI", materials, granularity: "day", daysPerWeek: 7, split, tree: root, refs: assignRefs(root), lockBefore: 0, changeRequest: "x" });
+    expect(prompt).toContain('Week 1 [n1] (7 days): "A" — a [not yet planned in detail] <time: 2 h 30 min reading · 3 h Problems> {covers M1.1}');
+    expect(prompt).toContain('a heading\'s "<time: …>" is its minutes per activity');
+    expect(prompt).toContain('Problems (format "problem-set")');
+    expect(prompt).toContain("Every heading you add or reshape");
+  });
 });
 
 describe("buildPlanChatSystemPrompt", () => {
@@ -109,6 +131,12 @@ describe("buildPlanChatSystemPrompt", () => {
     expect(prompt).toContain("Plan length: 2 weeks, usually 7 study days a week");
     expect(prompt).toContain('Week 2 (7 days): "GPUs"');
     expect(prompt).toContain("call revisePlan exactly once");
+  });
+  it("shows the chat each heading's time", () => {
+    const root = tree();
+    root.children![1].time = { reading: 60, practice: {} };
+    const prompt = buildPlanChatSystemPrompt({ mode: "create", topic: "AI infra", materials: [], granularity: "day", daysPerWeek: 7, tree: root, lockBefore: 0 });
+    expect(prompt).toContain("<time: 1 h reading>");
   });
 });
 

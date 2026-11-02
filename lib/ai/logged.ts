@@ -76,7 +76,7 @@ export interface LoggedGenerateObjectOptions<T> {
   label?: string;
   /** Short checks shown beside the raw response in the admin panel. */
   facts?: string[];
-  /** More checks computed from the validated object, appended to `facts`. */
+  /** More checks computed from the validated object, appended to `facts`. Runs on every call, logged or not. */
   check?: (object: T) => string[];
   abortSignal?: AbortSignal;
   /** Retries on a failed request; the AI SDK's default (2) when omitted. */
@@ -179,6 +179,8 @@ export async function loggedGenerateObject<T>(
     userId: meta.userId,
   });
   await emitGenerationLog(meta.onLog, row);
+  // Run whether or not anyone collects the call: a caller's check may do the work it reports on (a revision applies its tree there).
+  const checked = opts.check?.(object as T) ?? [];
   meta.onCall?.({
     ...row,
     label: opts.label ?? meta.caller,
@@ -186,7 +188,7 @@ export async function loggedGenerateObject<T>(
     prompt: opts.prompt,
     response: JSON.stringify(object, null, 2),
     finishReason: finishReason ?? null,
-    facts: [...(opts.facts ?? []), ...(opts.check?.(object as T) ?? [])],
+    facts: [...(opts.facts ?? []), ...checked],
   });
   const costUsd = row.costUsd ?? 0;
 

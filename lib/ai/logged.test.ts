@@ -201,6 +201,13 @@ describe("loggedGenerateObject", () => {
     errorSpy.mockRestore();
   });
 
+  it("runs the check on every call, whether or not anyone collects the call", async () => {
+    mockedGenerateObject.mockResolvedValue(mockResult());
+    const check = vi.fn(() => ["checked"]);
+    await loggedGenerateObject({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi", check }, { caller: "outline_revision" });
+    expect(check).toHaveBeenCalledWith({ answer: "42" });
+  });
+
   it("does not log when generateObject rejects", async () => {
     mockedGenerateObject.mockRejectedValue(new Error("gateway 500"));
     const onLog = vi.fn();

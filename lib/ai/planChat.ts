@@ -42,7 +42,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
   const tree = layout(cloneTree(req.tree));
   const lockBefore = req.mode === "adjust" ? (req.lockBefore ?? 0) : 0;
 
-  let revised: { tree: PlanNode; changed: ChangedNodes } | null = null;
+  let revised: { tree: PlanNode; changed: ChangedNodes; problems: string[] } | null = null;
   let revisionCostUsd = 0;
 
   const revisePlan = tool({
@@ -66,7 +66,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
       });
       revisionCostUsd += result.costUsd;
       const changed = diffChangedNodes(tree, result.tree);
-      revised = { tree: result.tree, changed };
+      revised = { tree: result.tree, changed, problems: result.problems };
       return {
         weeks: Math.round(weeksOf(result.tree, result.tree, req.daysPerWeek)),
         changedLevel: changed.level,
@@ -118,8 +118,8 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
         break;
       case "tool-result":
         if (revised) {
-          const r: { tree: PlanNode; changed: ChangedNodes } = revised;
-          yield { type: "revised", tree: r.tree, changed: r.changed, costUsd: revisionCostUsd };
+          const r: { tree: PlanNode; changed: ChangedNodes; problems: string[] } = revised;
+          yield { type: "revised", tree: r.tree, changed: r.changed, problems: r.problems, costUsd: revisionCostUsd };
         }
         break;
       case "tool-error":

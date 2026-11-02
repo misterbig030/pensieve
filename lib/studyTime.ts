@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { MAX_PRACTICE_PICKS, PRACTICE_REGISTRY, normalizePicks, practicePickDraftSchema, practicePickSchema } from "@/lib/practice";
+import { MAX_PRACTICE_PICKS, PRACTICE_FORMATS, PRACTICE_REGISTRY, normalizePicks, practicePickDraftSchema, practicePickSchema } from "@/lib/practice";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, MAX_DAYS_PER_WEEK, budgetFor, cloneTree, isLocked, walk, type PlanNode } from "@/lib/planTree";
+import type { UnitTime } from "@/lib/schemas/plan";
 
 /**
  * The learner's time: hours a week, what that comes to over the plan, and how the plan divides it between reading
@@ -53,6 +54,19 @@ export function formatDayTime(minutes: number): string {
   const m = minutes % 60;
   if (h === 0) return `${m} min`;
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
+/**
+ * "2 h 30 min reading · 3 h Problems · 30 min Design": a heading's time as the prompts and the plan tree show it.
+ * Reading first, then each format in registry order by its label; activities with no minutes are left out.
+ */
+export function formatUnitTime(time: UnitTime): string {
+  const parts = time.reading > 0 ? [`${formatDayTime(time.reading)} reading`] : [];
+  for (const format of PRACTICE_FORMATS) {
+    const minutes = time.practice[format] ?? 0;
+    if (minutes > 0) parts.push(`${formatDayTime(minutes)} ${PRACTICE_REGISTRY[format].label}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : "0 min";
 }
 
 const PER = String.raw`(?:\/|a|an|per|each|every)`;

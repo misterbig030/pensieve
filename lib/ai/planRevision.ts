@@ -16,14 +16,30 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import { aliasMaterials, dropBreaches, keepCoverTiers, keepPracticeCovers, plainUnitText, resolveCoverRefs, resolveMaterialRefs, resolvePracticeCovers, resolvePracticeRefs, treeChecks, type MaterialAliases } from "@/lib/materials";
+import {
+  aliasMaterials,
+  keepCoverTiers,
+  keepPracticeCovers,
+  plainUnitText,
+  practiceRowKey,
+  refKey,
+  resolveCoverRefs,
+  resolveMaterialRefs,
+  resolvePracticeCovers,
+  resolvePracticeRefs,
+  treeChecks,
+  type MaterialAliases,
+} from "@/lib/materials";
+import type { PracticeFormat } from "@/lib/practice";
 import type { CoverRefDraft, MaterialRefDraft, PracticeCover, PracticeCoverDraft, PracticeRef, PracticeRefDraft } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
-import { revisedTreeSchema, type RevisedTree } from "@/lib/schemas/plan";
+import { revisedTreeSchema, type RevisedTree, type unitTimeDraftSchema } from "@/lib/schemas/plan";
+import type { z } from "zod";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
 import { appModel, type ResolvedModel } from "./resolve";
 import { assignRefs, buildRevisionPrompt, type PlanPromptContext } from "./planPrompt";
+import { pickedFormats, toUnitTime } from "./planDraft";
 
 /** Resolved with itemless rows kept, so `keptItemless` can tell the unit's saved ones from new ones. */
 const SAVED = { keepUnitemized: true } as const;
@@ -54,6 +70,7 @@ interface RevisedUnit {
   materials?: MaterialRefDraft[];
   practiceCovers?: PracticeCoverDraft[];
   practice?: PracticeRefDraft[];
+  time?: z.infer<typeof unitTimeDraftSchema>;
   children?: RevisedUnit[];
 }
 
@@ -64,7 +81,8 @@ interface RevisedUnit {
  * headings keep `covers`, leaves keep `materials`, and ids not in the list are dropped. Practice follows the same
  * rules: leaves keep `practice` (a rewritten list goes through `resolvePracticeRefs`, which drops refused and unknown
  * rows), headings keep `practiceCovers`, and a split week's reservations keep their `task` and `minutes`, its generated
- * ones whatever the model wrote.
+ * ones whatever the model wrote. A heading takes the `time` the model wrote (for the formats in `picked`, as drafting
+ * does), else keeps its own; a new heading the model gave none has none, which the checks report. Leaves have none.
  */
 export function applyRevision(
   original: PlanNode,
@@ -76,6 +94,7 @@ export function applyRevision(
   hoursPerWeek?: number,
   daysPerWeek: number = MAX_DAYS_PER_WEEK,
   split?: PlanSplit | null,
+  picked: readonly PracticeFormat[] = pickedFormats(split),
 ): PlanNode {
   const byRef = new Map<string, PlanNode>();
   for (const [id, ref] of refs) {
@@ -104,6 +123,7 @@ export function applyRevision(
       aliases && unit.practice !== undefined
         ? keptItemless(resolvePracticeRefs(unit.practice, aliases, split, (materials ?? []).map((r) => r.id), SAVED).refs, kept?.practice, aliases)
         : kept?.practice;
+    const time = unit.time ? toUnitTime(unit.time, picked).time : kept?.time;
     return makeNode({
       id: kept?.id,
       level,
@@ -118,6 +138,7 @@ export function applyRevision(
       materials: leaf ? materials : undefined,
       practiceCovers: leaf ? undefined : practiceCovers,
       practice: leaf ? practice : undefined,
+      time: leaf ? undefined : time,
     });
   };
 
@@ -161,35 +182,64 @@ export interface RevisePlanInput extends PlanPromptContext {
 export interface RevisePlanResult {
   tree: PlanNode;
   costUsd: number;
+  /** What the checks found in the revised tree, in the learner's words; the tree is kept as the model wrote it. */
+  problems: string[];
 }
 
 /**
- * Runs one revision: the model returns the whole tree with refs, and `applyRevision` reconciles it. The reference
- * checks run tree-wide inside the call's `check` hook, so breaches and the rows dropped for them land on the call's
- * log row; a revision is one large call, so there is no retry.
+ * The units a revision added or reshaped: not in the saved tree, or with another level, span or reservations
+ * (materials and practice sources) than the saved unit. These are held to drafting's rule that a heading states its
+ * time (`no-time`); a kept unit that came back as it was, such as a heading of a plan saved before unit time, is not.
+ */
+export function reshapedUnits(original: PlanNode, revised: PlanNode): (node: PlanNode) => boolean {
+  const shape = (n: PlanNode) => JSON.stringify([n.level, n.len, (n.covers ?? []).map(refKey), (n.practiceCovers ?? []).map((c) => practiceRowKey("", c))]);
+  const saved = new Map<string, string>();
+  walk(original, (n) => void saved.set(n.id, shape(n)));
+  const changed = new Set<string>();
+  walk(revised, (n) => {
+    if (saved.get(n.id) !== shape(n)) changed.add(n.id);
+  });
+  return (node) => changed.has(node.id);
+}
+
+/**
+ * Runs one revision: the model returns the whole tree with refs, and `applyRevision` reconciles it. The checks run
+ * tree-wide inside the call's `check` hook, so their facts land on the call's log row; what breaks a rule is kept as
+ * written and comes back as `problems`. A revision is one large call, so there is no retry.
  */
 export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlanResult> {
   const tree = layout(cloneTree(input.tree));
   const refs = assignRefs(tree);
   const model = input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL);
   const aliases = input.materials.length > 0 ? aliasMaterials(input.materials) : undefined;
+  // The formats a heading's time may name, as drafting has them: the split's picks the plan's sources can be given.
+  const picked = pickedFormats(input.split, input.materials.length > 0 ? input.materials : undefined);
   let revised: PlanNode | null = null;
+  let problems: string[] = [];
   let failure: unknown;
   const check = (object: RevisedTree): string[] => {
     try {
-      revised = applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek, input.daysPerWeek, input.split);
+      revised = applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek, input.daysPerWeek, input.split, picked);
     } catch (error) {
       failure = error;
       return [];
     }
     if (!aliases) return [];
-    // Practice rows unchanged from the saved tree keep the item and reserved-source rules as facts; new or changed ones breach.
-    const checks = treeChecks(revised, input.materials, { granularity: input.granularity, hoursPerWeek: input.hoursPerWeek, daysPerWeek: input.daysPerWeek, split: input.split, original: tree });
-    const dropped = dropBreaches(checks.nodes, checks.breaches);
+    // Practice rows unchanged from the saved tree keep the item and reserved-source rules as facts; new or changed ones
+    // breach. Only the units the revision added or reshaped are reported for lacking time.
+    const checks = treeChecks(revised, input.materials, {
+      granularity: input.granularity,
+      hoursPerWeek: input.hoursPerWeek,
+      daysPerWeek: input.daysPerWeek,
+      split: input.split,
+      original: tree,
+      drafted: reshapedUnits(tree, revised),
+    });
+    problems = checks.problems;
     let plain = 0;
     walk(revised, (node) => void (plain += plainUnitText(node, input.materials, aliases)));
     const words = plain > 0 ? [`ids put in words in ${plain} field${plain === 1 ? "" : "s"}`] : [];
-    return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...dropped, ...words];
+    return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...words];
   };
   const { costUsd } = await loggedGenerateObject(
     {
@@ -206,5 +256,5 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
   );
   if (failure !== undefined) throw failure;
   if (!revised) throw new Error("Revision ended without a tree");
-  return { tree: revised, costUsd };
+  return { tree: revised, costUsd, problems };
 }

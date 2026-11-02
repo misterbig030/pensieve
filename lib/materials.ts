@@ -982,9 +982,6 @@ export type BreachKind =
   | "reading-over-stated"
   | "no-time";
 
-/** The breaches a drop can cure: the row goes, the unit keeps the rest. Over-budget and unread reservations stay facts. */
-export const DROPPABLE: ReadonlySet<BreachKind> = new Set<BreachKind>(["outside", "overlap", "whole-book", "review-before-read", "practice-outside", "practice-overlap", "practice-generated"]);
-
 export interface Breach {
   kind: BreachKind;
   /** Position among the checked units; -1 for the parent's (its unread reservation, or its week's budget). */
@@ -996,13 +993,10 @@ export interface Breach {
   names: string;
   /** The sentence the admin dock shows, in minutes and aliases; `learnerProblems` puts it in the learner's words. */
   text: string;
-  /** The practice rows a practice breach names, which a drop removes: one row each. */
+  /** The practice rows a practice breach names: one row each. */
   practice?: (Pick<PracticeRef, "format" | "id" | "task"> & { itemFrom?: number | null })[];
-  /**
-   * The practice reservations a practice breach names, which a drop removes: one each. With `keep`, the drop trims
-   * the run to those items instead (its free stretch), and removes it only when it has none.
-   */
-  practiceCovers?: (Pick<PracticeCover, "format" | "id" | "itemFrom" | "itemTo"> & { keep?: { itemFrom: number; itemTo: number } })[];
+  /** The practice reservations a practice breach names: one each. */
+  practiceCovers?: Pick<PracticeCover, "format" | "id" | "itemFrom" | "itemTo">[];
 }
 
 export interface LevelChecks {
@@ -1041,15 +1035,17 @@ export interface LevelCheckInput {
   split?: PlanSplit | null;
   /**
    * Which practice rows and reservations were saved before this call (revision's whole-tree checks): for those, the
-   * rules on item lists and on reserved sources state facts and never breaches, so a saved row is never dropped for
+   * rules on item lists and on reserved sources state facts and never breaches, so a saved row is never reported for
    * them. Rows a call adds or changes are held to the rules as drafted ones are. Left out, nothing is saved.
    */
   saved?: (node: PlanNode, row: PracticeRef | PracticeCover) => boolean;
   /**
    * Whether this level was just drafted or revised, after the outline gave headings their `time`: a heading without one
-   * is then reported. Left out (a saved tree checked as it is), a heading's missing time is a plan's from before.
+   * is then reported. A revision passes a predicate, true for the units it added or reshaped (`reshapedUnits`), so a
+   * kept unit it left as it was is not. Left out (a saved tree checked as it is), a heading's missing time is a plan's
+   * from before.
    */
-  drafted?: boolean;
+  drafted?: boolean | ((node: PlanNode) => boolean);
 }
 
 /**
@@ -1451,7 +1447,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
           breach("reading-over-stated", index, unit, [], `${unit} plans ${known} min of reading in a ${node.level} that gave itself ${node.time.reading} min for it.`);
         }
         overCapacity(node, index, unit, node.time.reading + sumPractice(node.time));
-      } else if (input.drafted) breach("no-time", index, unit, [], `${unit} has no time set for its activities.`);
+      } else if (typeof input.drafted === "function" ? input.drafted(node) : input.drafted) breach("no-time", index, unit, [], `${unit} has no time set for its activities.`);
       // Practice reservations: the parent's sources only, a listed source by a run inside the parent's, each item once.
       for (const c of (node.practiceCovers ?? []).filter((c) => c.id !== null)) {
         const covers = parentCovers(c);
@@ -1480,15 +1476,13 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
           for (const n of own) if (!heldBy.has(key(n))) heldBy.set(key(n), unit);
           continue;
         }
-        // Past the parent's runs or into another unit's: a drop keeps the run's longest free stretch, and the run claims
-        // only that, so one edge off by one does not empty this unit or the next. Nothing free, and the run goes.
+        // Past the parent's runs or into another unit's: the run claims only its longest free stretch, so one edge off
+        // by one does not report the next unit too. Nothing free, and it claims nothing.
         const free = own.filter((n) => !outside.includes(n) && !holderOf(n));
         const keep = numberRuns(free).reduce<[number, number] | null>((best, r) => (!best || r[1] - r[0] > best[1] - best[0] ? r : best), null);
         const text =
           outside.length > 0 ? notReserved() : `${unit} reserves ${name}, but ${[...held].map(([holder, ns]) => `${holder} holds ${itemAliases(aliases, c.id!, ns)}`).join(" and ")}`;
-        const b = coverBreach(outside.length > 0 ? "practice-outside" : "practice-overlap", index, unit, c, text);
-        if (keep) b.practiceCovers![0].keep = { itemFrom: keep[0], itemTo: keep[1] };
-        newRule(b, node, c);
+        newRule(coverBreach(outside.length > 0 ? "practice-outside" : "practice-overlap", index, unit, c, text), node, c);
         // A saved run claimed what was free before this level's new ones.
         if (input.saved?.(node, c) || !keep) continue;
         for (let n = keep[0]; n <= keep[1]; n++) heldBy.set(key(n), unit);
@@ -1534,8 +1528,8 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   }
 
   // The top level reserves each material whose units are all sized toward its budget: its units' minutes at headings,
-  // its rows' at leaves. An unsized unit would count nothing, so a list with one is not held to its budget. No row can
-  // be dropped to cure a miss, so after the retry it stays a fact. A book whose size is an estimate is not held either:
+  // its rows' at leaves. An unsized unit would count nothing, so a list with one is not held to its budget. A book
+  // whose size is an estimate is not held either:
   // its chapters' minutes are shares of that estimate, which never cap its budget (`budgetCap`), so no set of chapters
   // need add up to it.
   if (input.top) {
@@ -1698,14 +1692,14 @@ function chaptersBefore(root: PlanNode, node: PlanNode | undefined, backbone: Ch
 
 /**
  * Every sibling group of a tree through `levelChecks`, in walk order. `nodes` is that walk order without the root, and
- * each breach's `index` points into it, so `dropBreaches(nodes, breaches)` works on the whole tree. With `original`
+ * each breach's `index` points into it. With `original`
  * (revision), a practice row or reservation unchanged from it is saved and the rules on item lists and reserved sources
  * state facts only for it, while a row added or changed breaches as a drafted one does; without it, every row is saved.
  */
 export function treeChecks(
   root: PlanNode,
   materials: CheckMaterial[],
-  opts: { granularity: Granularity; hoursPerWeek?: number; daysPerWeek: number; split?: PlanSplit | null; original?: PlanNode; drafted?: boolean },
+  opts: { granularity: Granularity; hoursPerWeek?: number; daysPerWeek: number; split?: PlanSplit | null; original?: PlanNode; drafted?: LevelCheckInput["drafted"] },
 ): LevelChecks & { nodes: PlanNode[] } {
   const { granularity, original, ...shares } = opts;
   const saved = original ? savedPracticeRows(original) : () => true;
@@ -1731,55 +1725,6 @@ export function treeChecks(
     problems.push(...out.problems);
   });
   return { facts, breaches, problems, nodes };
-}
-
-/**
- * Removes the rows of droppable breaches from `nodes[breach.index]`, or trims a reservation's run to the stretch its
- * breach keeps; one line per breach for the facts.
- */
-export function dropBreaches(nodes: PlanNode[], breaches: Breach[]): string[] {
-  const out: string[] = [];
-  for (const b of breaches) {
-    if (!DROPPABLE.has(b.kind) || b.index < 0) continue;
-    const node = nodes[b.index];
-    if (!node) continue;
-    if (b.practice || b.practiceCovers) {
-      // One row or reservation per entry, the last that matches: a repeated item keeps its first use.
-      for (const p of b.practice ?? []) {
-        const rows = node.practice ?? [];
-        const at = rows.findLastIndex((r) => p.format === r.format && p.id === r.id && p.task === r.task && (p.itemFrom ?? null) === (r.itemFrom ?? null));
-        if (at >= 0) rows.splice(at, 1);
-      }
-      let trimmed: { itemFrom: number; itemTo: number } | undefined;
-      for (const p of b.practiceCovers ?? []) {
-        const covers = node.practiceCovers ?? [];
-        const at = covers.findLastIndex((c) => p.format === c.format && p.id === c.id && (p.itemFrom ?? null) === (c.itemFrom ?? null) && (p.itemTo ?? null) === (c.itemTo ?? null));
-        if (at < 0) continue;
-        if (p.keep) {
-          covers[at] = { ...covers[at], itemFrom: p.keep.itemFrom, itemTo: p.keep.itemTo };
-          trimmed = p.keep;
-        } else covers.splice(at, 1);
-      }
-      if (node.practice?.length === 0) delete node.practice;
-      if (node.practiceCovers?.length === 0) delete node.practiceCovers;
-      if (trimmed) {
-        const { itemFrom: a, itemTo: z } = trimmed;
-        out.push(`trimmed ${b.names} in ${b.unit} to ${a === z ? `item ${a}` : `items ${a}–${z}`}: ${b.kind}`);
-      } else out.push(`dropped ${b.names} from ${b.unit}: ${b.kind}`);
-      continue;
-    }
-    const keys = new Set(b.refs.map(refKey));
-    if (node.covers) {
-      node.covers = node.covers.filter((r) => !keys.has(refKey(r)));
-      if (node.covers.length === 0) delete node.covers;
-    }
-    if (node.materials) {
-      node.materials = node.materials.filter((r) => !keys.has(refKey(r)));
-      if (node.materials.length === 0) delete node.materials;
-    }
-    out.push(`dropped ${b.names} from ${b.unit}: ${b.kind}`);
-  }
-  return out;
 }
 
 /**

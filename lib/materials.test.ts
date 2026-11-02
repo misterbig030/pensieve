@@ -8,8 +8,6 @@ import {
   assignmentsOf,
   chapterGaps,
   chapterRegressions,
-  DROPPABLE,
-  dropBreaches,
   formatAliases,
   learnerMaterials,
   levelChecks,
@@ -356,13 +354,6 @@ describe("levelChecks", () => {
     const out = levelChecks({ root, nodes: weeks[0].children, leaves: true, top: false, materials, unknownIds: [], ...share });
     expect(out.breaches.filter((b) => b.kind === "overlap")).toEqual([]);
   });
-  it("dropBreaches removes the rows of droppable breaches and reports them", () => {
-    const root = aiePlan();
-    const placed = days(root, [{ chapter: 1 }, { chapter: 3 }]);
-    const { breaches } = check(root, placed);
-    expect(dropBreaches(placed, breaches)).toEqual(["dropped M1.3 from Week 1 · Day 2: outside", "dropped M1.3 from Week 1 · Day 2: overlap"]);
-    expect(placed[1].materials).toBeUndefined();
-  });
   it("treeChecks judges a mixed group of leaf weeks by level and granularity, not by children", () => {
     const root = aiePlan();
     const [m1, m2] = root.children!;
@@ -452,12 +443,6 @@ describe("budget-miss", () => {
     const hub = primer([3, 5, 2, 10, null, 8, 4, 8], 60);
     expect(misses(check([[1, 2, 3], [4, 5], [6, 7, 8]], hub))).toEqual([]);
     expect(misses(check([[1], [2]], hub))).toEqual([]);
-  });
-  it("is not droppable: no row can be removed to cure it", () => {
-    expect(DROPPABLE.has("budget-miss")).toBe(false);
-    const out = check([[1, 2], [3, 4]]);
-    expect(dropBreaches(out.nodes, out.breaches)).toEqual([]);
-    expect(out.nodes.map((n) => n.covers!.map((c) => c.chapter))).toEqual([[1, 2], [3, 4]]);
   });
   it("a material with units of any kind reserved as a whole is a whole-book breach naming its units", () => {
     const repo = { id: "R", kind: "repo" as const, minutes: null, toc: tocOf([20, 20]) };
@@ -884,12 +869,10 @@ describe("checks over the week", () => {
     const out = levelChecks({ root, nodes: days, leaves: true, top: false, materials, unknownIds: [], hoursPerWeek: 3, daysPerWeek: 7, split });
     expect(out.breaches.filter((b) => b.kind === "over-budget").map((b) => [b.unit, b.text])).toEqual([["Week 1 · Day 3", "Week 1 · Day 3 is 60 min of reading and practice against a budget of about 25 min"]]);
   });
-  it("a sourced row outside the week's practice reservation is practice-outside, and dropBreaches removes it", () => {
+  it("a sourced row outside the week's practice reservation is practice-outside", () => {
     const { root, days } = week([{ practice: [solve("Arrays 1–3", 30), solve("Graphs 1–3", 30, "Q")] }, { materials: [must("R1", 60)] }]);
     const out = check(root, days);
     expect(out.breaches.map((b) => [b.kind, b.index, b.text])).toEqual([["practice-outside", 0, 'Week 1 · Day 1 assigns Problems "Graphs 1–3" from M6, which Week 1 did not reserve']]);
-    expect(dropBreaches(days, out.breaches)).toEqual(['dropped Problems "Graphs 1–3" from Week 1 · Day 1: practice-outside']);
-    expect(days[0].practice).toEqual([solve("Arrays 1–3", 30)]);
   });
   it("binds only the formats the week reserved: a sourced row of a format it reserved nothing of may use any source", () => {
     const design = { format: "design-exercise" as const, items: 20, perItemMinutes: 45, minutes: null, answers: true };
@@ -912,8 +895,6 @@ describe("checks over the week", () => {
       'Week 1 · Day 1 writes Problems "Five array problems" itself, which is never written',
       'Week 1 · Day 1 writes Recall "Questions on R2" itself, not from its own reading',
     ]);
-    dropBreaches(days, out.breaches);
-    expect(days[0].practice).toEqual([recall("R1")]);
   });
 });
 
@@ -1078,13 +1059,11 @@ describe("practice item lists: weeks reserve runs, days assign items", () => {
     // Three weeks reserving the list in order, every item once: nothing to report.
     const weeks = [week("w1", [reserve(1, 9)]), week("w2", [reserve(10, 14)]), week("w3", [reserve(15, 21)])];
     expect(check(layout(makeRoot(weeks)), weeks, false, true)).toEqual({ facts: [], breaches: [], problems: [] });
-    // Out of order is a fact; an item two weeks reserve is practice-overlap, which trims the later reservation to its free part.
+    // Out of order is a fact; an item two weeks reserve is practice-overlap.
     const swapped = [week("w1", [reserve(10, 14)]), week("w2", [reserve(1, 9)]), week("w3", [reserve(14, 19)])];
     const out = check(layout(makeRoot(swapped)), swapped, false, true);
     expect(out.facts).toEqual(["M2 items 1–9 after item 14 (Week 2)", "M2 items 20–21 not reserved"]);
     expect(out.breaches.map((b) => [b.kind, b.index, b.text])).toEqual([["practice-overlap", 2, "Week 3 reserves Problems M2 items 14–19, but Week 1 holds M2.14"]]);
-    expect(dropBreaches(swapped, out.breaches)).toEqual(["trimmed Problems M2 items 14–19 in Week 3 to items 15–19: practice-overlap"]);
-    expect(swapped[2].practiceCovers).toEqual([reserve(15, 19)]);
   });
 
   it("refuses an item alias outside the list", () => {
@@ -1120,8 +1099,6 @@ describe("practice item lists: weeks reserve runs, days assign items", () => {
     const out = check(layout(makeRoot([w1])), days, true);
     expect(out.breaches.map((b) => [b.kind, b.index, b.text])).toEqual([["practice-outside", 1, 'Week 1 · Day 2 assigns Problems M2.5 "Top K Frequent Elements", which Week 1 did not reserve']]);
     expect(out.facts).toEqual(["item 4 of M2 reserved by Week 1 but not assigned"]);
-    expect(dropBreaches(days, out.breaches)).toEqual(['dropped Problems M2.5 "Top K Frequent Elements" from Week 1 · Day 2: practice-outside']);
-    expect(days[1].practice).toEqual([item(3)]);
   });
 
   it("breaches an item an earlier week already used", () => {
@@ -1134,9 +1111,6 @@ describe("practice item lists: weeks reserve runs, days assign items", () => {
       ["practice-overlap", 0, 'Week 2 · Day 1 assigns Problems M2.3 "Two Sum", which Week 1 · Day 2 already assigns'],
       ["practice-overlap", 2, 'Week 2 · Day 3 assigns Problems M2.4 "Group Anagrams", which Week 2 · Day 2 already assigns'],
     ]);
-    // A drop takes the repeated row only, never the first use.
-    dropBreaches(second, out.breaches);
-    expect(second.map((d) => d.practice?.map((r) => r.itemFrom))).toEqual([undefined, [4], [5]]);
   });
 
   it("keeps a source reserved elsewhere out of an unreserved week", () => {
@@ -1196,7 +1170,6 @@ describe("practice item lists: weeks reserve runs, days assign items", () => {
         'Week 2 · Day 1 assigns Problems M2.1 "Contains Duplicate", which Week 1 · Day 1 already assigns',
       ]),
     );
-    expect(dropBreaches(out.nodes, out.breaches)).toEqual([]);
     expect(first[1].practice).toEqual([old]);
     // The same rows drafted now breach.
     expect(check(root, second, true).breaches.map((b) => b.kind)).toEqual(["practice-overlap"]);
@@ -1210,8 +1183,6 @@ describe("practice item lists: weeks reserve runs, days assign items", () => {
     revised.children![0].children![0].practice!.push(item(4));
     const out = treeChecks(revised, materials, { granularity: "day", daysPerWeek: 5, split, original });
     expect(out.breaches.map((b) => [b.kind, b.text])).toEqual([["practice-overlap", 'Week 1 · Day 1 assigns Problems M2.4 "Group Anagrams", which Week 1 · Day 2 already assigns']]);
-    dropBreaches(out.nodes, out.breaches);
-    expect(revised.children![0].children!.map((d) => d.practice?.map((r) => r.itemFrom))).toEqual([[1], [4]]);
   });
 
   it("counts saved rows: an exact copy of an unchanged row past the saved count is new", () => {
@@ -1221,9 +1192,7 @@ describe("practice item lists: weeks reserve runs, days assign items", () => {
     revised.children![0].children![1].practice!.push(item(4));
     const out = treeChecks(revised, materials, { granularity: "day", daysPerWeek: 5, split, original });
     expect(out.breaches.map((b) => [b.kind, b.text])).toEqual([["practice-overlap", 'Week 1 · Day 2 assigns Problems M2.4 "Group Anagrams", which Week 1 · Day 2 already assigns']]);
-    expect(dropBreaches(out.nodes, out.breaches)).toEqual(['dropped Problems M2.4 "Group Anagrams" from Week 1 · Day 2: practice-overlap']);
-    expect(revised.children![0].children!.map((d) => d.practice?.map((r) => r.itemFrom))).toEqual([[1], [4]]);
-    // A repeat the saved plan already held is two saved rows: a fact, never a drop.
+    // A repeat the saved plan already held is two saved rows: a fact, never a breach.
     const twice = () => layout(makeRoot([week("w1", [reserve(1, 6)], [day("d1", [item(4)]), day("d2", [item(4)])])]));
     const kept = treeChecks(twice(), materials, { granularity: "day", daysPerWeek: 5, split, original: twice() });
     expect(kept.breaches).toEqual([]);
@@ -1236,8 +1205,6 @@ describe("practice item lists: weeks reserve runs, days assign items", () => {
     revised.children![0].practiceCovers = [reserve(1, 12)];
     const out = treeChecks(revised, materials, { granularity: "day", daysPerWeek: 5, split, original: saved() });
     expect(out.breaches.map((b) => [b.kind, b.text])).toEqual([["practice-overlap", "Week 1 reserves Problems M2 items 1–12, but Week 2 holds M2.10–M2.12"]]);
-    expect(dropBreaches(out.nodes, out.breaches)).toEqual(["trimmed Problems M2 items 1–12 in Week 1 to items 1–9: practice-overlap"]);
-    expect(revised.children!.map((w) => w.practiceCovers)).toEqual([[reserve(1, 9)], [reserve(10, 17)]]);
   });
 
   it("keys a saved item row by its item, so a reworded task stays saved; an itemless row by its task", () => {
@@ -1248,44 +1215,30 @@ describe("practice item lists: weeks reserve runs, days assign items", () => {
     expect(practiceRowKey("d1", { ...plain, task: "Graphs 4–6" })).not.toBe(practiceRowKey("d1", plain));
   });
 
-  it("trims a week's run that overlaps a neighbour by its edge to its free part, so the next week keeps its run too", () => {
+  it("lets a week's run that overlaps a neighbour by its edge claim only its free part, so the next week is held to that", () => {
     const weeks = [week("w1", [reserve(1, 9)]), week("w2", [{ ...reserve(9, 17), note: "Two pointers" }]), week("w3", [reserve(17, 21)])];
     const out = check(layout(makeRoot(weeks)), weeks, false, true);
-    // Week 2 claims only 10–17, so Week 3 loses only item 17.
+    // Week 2 claims only 10–17, so Week 3 is reported for item 17 alone.
     expect(out.breaches.map((b) => [b.kind, b.index, b.text])).toEqual([
       ["practice-overlap", 1, "Week 2 reserves Problems M2 items 9–17, but Week 1 holds M2.9"],
       ["practice-overlap", 2, "Week 3 reserves Problems M2 items 17–21, but Week 2 holds M2.17"],
     ]);
-    expect(dropBreaches(weeks, out.breaches)).toEqual([
-      "trimmed Problems M2 items 9–17 in Week 2 to items 10–17: practice-overlap",
-      "trimmed Problems M2 items 17–21 in Week 3 to items 18–21: practice-overlap",
-    ]);
-    expect(weeks.map((w) => w.practiceCovers)).toEqual([[reserve(1, 9)], [{ ...reserve(10, 17), note: "Two pointers" }], [reserve(18, 21)]]);
-    // Trimmed, the weeks pass.
-    expect(check(layout(makeRoot(weeks)), weeks, false, true).breaches).toEqual([]);
   });
 
-  it("drops a week's run that lies wholly inside a neighbour's, and it claims nothing", () => {
+  it("reports a week's run that lies wholly inside a neighbour's, and it claims nothing", () => {
     const weeks = [week("w1", [reserve(1, 9)]), week("w2", [reserve(3, 5)]), week("w3", [reserve(10, 21)])];
     const out = check(layout(makeRoot(weeks)), weeks, false, true);
     expect(out.breaches.map((b) => [b.kind, b.index])).toEqual([["practice-overlap", 1]]);
-    expect(dropBreaches(weeks, out.breaches)).toEqual(["dropped Problems M2 items 3–5 from Week 2: practice-overlap"]);
-    expect(weeks[1].practiceCovers).toBeUndefined();
   });
 
-  it("trims a week's run that pokes past its month's to the month's", () => {
+  it("reports a week's run that pokes past its month's, or lies wholly outside it, as practice-outside", () => {
     const weeks = [week("w1", [reserve(1, 9)]), week("w2", [reserve(10, 16)])];
     const m1 = makeNode({ id: "m1", level: "month", title: "M", summary: "s", len: 10, practiceCovers: [reserve(1, 14)], children: weeks });
     const root = layout(makeRoot([m1, makeNode({ id: "m2", level: "month", title: "M", summary: "s", len: 10, practiceCovers: [reserve(15, 21)] })]));
     const out = check(root, weeks, false);
     expect(out.breaches.map((b) => [b.kind, b.index])).toEqual([["practice-outside", 1]]);
-    expect(dropBreaches(weeks, out.breaches)).toEqual(["trimmed Problems M2 items 10–16 in Week 2 to items 10–14: practice-outside"]);
-    expect(weeks[1].practiceCovers).toEqual([reserve(10, 14)]);
-    // A run wholly outside the month's is dropped.
     weeks[1].practiceCovers = [reserve(15, 18)];
-    const outside = check(root, weeks, false);
-    expect(dropBreaches(weeks, outside.breaches)).toEqual(["dropped Problems M2 items 15–18 from Week 2: practice-outside"]);
-    expect(weeks[1].practiceCovers).toBeUndefined();
+    expect(check(root, weeks, false).breaches.map((b) => [b.kind, b.index])).toEqual([["practice-outside", 1]]);
   });
 
   it("keeps a split week's item reservations when they are written back by id or by item", () => {
@@ -1871,9 +1824,5 @@ describe("checks held to each unit's own time", () => {
       "AI Engineering's units reserved add up to about 3 h against its budget of about 45 min.",
       "Week 1 has no time set for its activities.",
     ]);
-  });
-
-  it("none of the new kinds is droppable", () => {
-    for (const kind of ["over-capacity", "format-total-miss", "parent-miss", "reading-over-stated", "no-time"] as const) expect(DROPPABLE.has(kind)).toBe(false);
   });
 });
