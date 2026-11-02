@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Check, Copy, Download, Maximize2, Minimize2, Trash2, X } from "lucide-react";
 import { callCost, formatCallCost, formatCostUsd, sumCallCosts } from "@/lib/formatCost";
+import { modelTimeMs } from "@/lib/modelCalls";
 import type { ModelCall } from "@/lib/planChat";
 import { cn } from "@/lib/utils";
 
@@ -55,8 +56,9 @@ export function ModelCallsPanel({ calls, onClear, onClose }: ModelCallsPanelProp
   );
   const costs = sumCallCosts(calls);
 
+  // Never shrinks: in the expanded column a shrunk list would let the note below it ride over the calls.
   const list = (
-    <div className="flex min-h-0 flex-col">
+    <div className="flex shrink-0 flex-col">
       {calls.length === 0 && (
         <p className="m-0 px-5 py-4 text-[12.5px] leading-relaxed opacity-60">
           No model calls yet in this tab. Draft a plan, expand or split a unit, ask the plan a question or generate a lesson, and each call shows up here.
@@ -110,6 +112,9 @@ export function ModelCallsPanel({ calls, onClear, onClose }: ModelCallsPanelProp
             {fmt(totals.inputTokens)} in · {fmt(totals.outputTokens)} out
           </Chip>
           <Chip>{fmt(totals.cacheReadTokens)} cached</Chip>
+          <Chip title="Time with at least one call running: calls that ran side by side count once, the gaps between them not at all.">
+            total time {duration(modelTimeMs(calls))}
+          </Chip>
           <CostTotals {...costs} calls={calls.length} />
         </div>
       </div>
@@ -324,8 +329,12 @@ function CallerBadge({ caller, large = false }: { caller: ModelCall["caller"]; l
   );
 }
 
-function Chip({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-full bg-background/10 px-2.5 py-1">{children}</span>;
+function Chip({ children, title }: { children: React.ReactNode; title?: string }) {
+  return (
+    <span title={title} className="rounded-full bg-background/10 px-2.5 py-1">
+      {children}
+    </span>
+  );
 }
 
 function IconButton({
@@ -374,6 +383,13 @@ function fmt(n: number | null): string {
 
 function seconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
+}
+
+/** A total that can run to minutes: "41.3 s", "2 min 14 s". */
+function duration(ms: number): string {
+  if (ms < 60_000) return seconds(ms);
+  const total = Math.round(ms / 1000);
+  return `${Math.floor(total / 60)} min ${total % 60} s`;
 }
 
 function shortModel(model: string): string {

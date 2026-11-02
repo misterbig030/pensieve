@@ -61,7 +61,7 @@ describe("sumCallCosts", () => {
 
 describe("formatCallCost", () => {
   it("marks an estimate with ≈ and leaves a charge as it is", () => {
-    expect(formatCallCost({ usd: 0.0524, estimated: true })).toBe("≈ $0.0524");
+    expect(formatCallCost({ usd: 0.0524, estimated: true })).toBe("≈\u00a0$0.0524");
     expect(formatCallCost({ usd: 0.0524, estimated: false })).toBe("$0.0524");
     expect(formatCallCost({ usd: null, estimated: false })).toBe("—");
     expect(formatCallCost({ usd: null, estimated: true })).toBe("—");

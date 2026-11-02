@@ -56,6 +56,7 @@ function isModelCall(value: unknown): value is ModelCall {
     isStringOrNull(c.system) &&
     isStringOrNull(c.finishReason) &&
     isNumberOrNull(c.costUsd) &&
+    (c.endedAt === undefined || typeof c.endedAt === "number") &&
     typeof c.latencyMs === "number" &&
     isNumberOrNull(c.inputTokens) &&
     isNumberOrNull(c.outputTokens) &&
@@ -167,4 +168,27 @@ const getServerSnapshot = () => EMPTY;
 /** The tab's calls, for client components. The server snapshot is a constant empty list so hydration agrees. */
 export function useModelCalls(): ModelCall[] {
   return useSyncExternalStore(modelCallStore.subscribe, modelCallStore.getSnapshot, getServerSnapshot);
+}
+
+/**
+ * How long the models were at work for these calls: each call runs from `endedAt - latencyMs` to `endedAt`, and time
+ * covered by several calls at once (research workers run side by side) counts once, time with none running not at all.
+ * A call without `endedAt` (stored before calls had one) adds its own duration.
+ */
+export function modelTimeMs(calls: ModelCall[]): number {
+  const spans = calls
+    .filter((c) => c.endedAt !== undefined)
+    .map((c) => [c.endedAt! - c.latencyMs, c.endedAt!] as const)
+    .sort((a, b) => a[0] - b[0]);
+  let total = calls.filter((c) => c.endedAt === undefined).reduce((t, c) => t + c.latencyMs, 0);
+  let open: [number, number] | null = null;
+  for (const [start, end] of spans) {
+    if (open && start <= open[1]) open[1] = Math.max(open[1], end);
+    else {
+      if (open) total += open[1] - open[0];
+      open = [start, end];
+    }
+  }
+  if (open) total += open[1] - open[0];
+  return total;
 }
