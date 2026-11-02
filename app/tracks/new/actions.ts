@@ -9,7 +9,7 @@ import { createTrackWithPlan } from "@/lib/db/queries";
 import { removeMaterialRefs } from "@/lib/materials";
 import { fromTreeInput } from "@/lib/planInput";
 import { materialListSchema, type Material } from "@/lib/schemas/material";
-import { granularitySchema, planTreeInputSchema, type PlanTreeInput } from "@/lib/schemas/plan";
+import { granularitySchema, planTreeInputSchema, problemsSchema, type PlanTreeInput } from "@/lib/schemas/plan";
 import type { Granularity } from "@/lib/planTree";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema, planSplitSchema, type PlanSplit } from "@/lib/studyTime";
 
@@ -25,6 +25,8 @@ export async function confirmTrackAction(input: {
   materials: Material[];
   tree: PlanTreeInput;
   summary?: string;
+  /** Learner lines for the top level's code-checked problems. */
+  problems?: string[];
 }): Promise<void> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
@@ -46,6 +48,7 @@ export async function confirmTrackAction(input: {
     hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK),
     daysPerWeek: daysPerWeekSchema.parse(input.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK),
     split: planSplitSchema.nullable().parse(input.split ?? null),
+    problems: problemsSchema.parse(input.problems ?? []),
     materials,
     root,
   });

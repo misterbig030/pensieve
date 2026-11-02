@@ -9,11 +9,26 @@ import {
   practiceRefDraftSchema,
   practiceRefSchema,
 } from "./material";
+import { PRACTICE_FORMATS, type PracticeFormat } from "@/lib/practice";
 
 export const PLAN_LEVELS = ["month", "week", "day"] as const;
 export const planLevelSchema = z.enum(PLAN_LEVELS);
 export const granularityChoiceSchema = z.enum(["day", "week", "auto"]);
 export const granularitySchema = z.enum(["day", "week"]);
+
+/** Minutes the outline gave one heading unit per activity: reading, and each practice format. */
+export const unitTimeSchema = z.object({
+  reading: z.number().int().min(0).max(30000),
+  practice: z.partialRecord(z.enum(PRACTICE_FORMATS), z.number().int().min(0).max(30000)),
+});
+export type UnitTime = { reading: number; practice: Partial<Record<PracticeFormat, number>> };
+/** The same as the model writes it: practice as an array, for a plainer JSON schema. */
+export const unitTimeDraftSchema = z.object({
+  reading: z.number().int().min(0),
+  practice: z.array(z.object({ format: z.enum(PRACTICE_FORMATS), minutes: z.number().int().min(0) })),
+});
+/** Learner-facing lines for code-checked problems, saved on the node whose level they belong to. */
+export const problemsSchema = z.array(z.string().min(1).max(500)).max(40);
 
 /**
  * What the model writes for one unit whose span the server already decided. Headings reserve materials (`covers`) and
@@ -73,6 +88,8 @@ const nodeInputBase = z.object({
   materials: z.array(materialRefSchema).max(40).optional(),
   practice: z.array(practiceRefSchema).max(40).optional(),
   practiceCovers: z.array(practiceCoverSchema).max(40).optional(),
+  time: unitTimeSchema.optional(),
+  problems: problemsSchema.optional(),
 });
 const leafInputSchema = nodeInputBase.extend({ children: z.null().optional() });
 const midInputSchema = nodeInputBase.extend({ children: z.array(leafInputSchema).max(60).nullable().optional() });

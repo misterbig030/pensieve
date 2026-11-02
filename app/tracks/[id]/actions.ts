@@ -12,12 +12,12 @@ import { UserKeyError, guardUserKey } from "@/lib/ai/userKeyError";
 import { GatewayFundsError } from "@/lib/ai/gatewayFunds";
 import type { KeyErrorKind } from "@/lib/ai/models";
 import { insertGenerationLog } from "@/lib/db/generationLog";
-import { getTrackDetail, updateTrackStudyTime, updateTrackSummary } from "@/lib/db/queries";
+import { getTrackDetail, updateTrackProblems, updateTrackStudyTime, updateTrackSummary } from "@/lib/db/queries";
 import { insertChildren, logSession, markLeafComplete, replacePlanTree } from "@/lib/db/planQueries";
 import { fromTreeInput } from "@/lib/planInput";
 import { summarizePlan } from "@/lib/planSummary";
 import { findNode, lockBoundary, weeksOf, type PlanNode } from "@/lib/planTree";
-import { planTreeInputSchema, type PlanTreeInput } from "@/lib/schemas/plan";
+import { planTreeInputSchema, problemsSchema, type PlanTreeInput } from "@/lib/schemas/plan";
 import { daysPerWeekSchema, hoursPerWeekSchema, planSplitSchema, type PlanSplit } from "@/lib/studyTime";
 import { z } from "zod";
 
@@ -34,6 +34,8 @@ export async function confirmRevisionAction(input: {
   /** The learner's usual study days a week as the adjust page left it; left out, it stays as saved. */
   daysPerWeek?: number;
   split?: PlanSplit | null;
+  /** Learner lines for the top level's code-checked problems; left out, they stay as saved. */
+  problems?: string[];
 }): Promise<void> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
@@ -49,6 +51,7 @@ export async function confirmRevisionAction(input: {
 
   const materialIds = z.array(z.string().uuid()).max(200).parse(input.materialIds);
   await replacePlanTree(input.trackId, userId, root, materialIds);
+  if (input.problems !== undefined) await updateTrackProblems(input.trackId, userId, problemsSchema.parse(input.problems));
   if (input.hoursPerWeek !== undefined) {
     await updateTrackStudyTime(input.trackId, userId, {
       hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek),

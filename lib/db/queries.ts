@@ -54,7 +54,11 @@ export async function getTrackDetail(trackId: string, userId: string) {
     getTrackNodePractice(trackId),
   ]);
 
-  return { track, root: rowsToTree(nodeRows, materialRows, practiceRows), materials: trackSources.map(sourceToMaterial) };
+  const root = rowsToTree(nodeRows, materialRows, practiceRows);
+  // The top level's problems live on the track; on the tree they belong to the root.
+  if (track.problems?.length) root.problems = track.problems;
+
+  return { track, root, materials: trackSources.map(sourceToMaterial) };
 }
 
 /**
@@ -143,6 +147,8 @@ export async function createTrackWithPlan(input: {
   hoursPerWeek?: number;
   daysPerWeek?: number;
   split?: PlanSplit | null;
+  /** Learner lines for the top level's code-checked problems. */
+  problems?: string[];
   /** Already vetted (signatures checked). Node references use these materials' ids. */
   materials: Material[];
   root: PlanNode;
@@ -161,6 +167,7 @@ export async function createTrackWithPlan(input: {
         hoursPerWeek: clampHours(input.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK),
         daysPerWeek: input.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK,
         split: input.split ?? null,
+        problems: input.problems?.length ? input.problems : null,
         status: "active",
       })
       .returning({ id: tracks.id });
@@ -174,6 +181,14 @@ export async function createTrackWithPlan(input: {
 
     return { trackId: track.id, droppedRefs: dropped };
   });
+}
+
+/** Stores the learner lines for the top level's problems; none clears them. */
+export async function updateTrackProblems(trackId: string, userId: string, problems: string[]): Promise<void> {
+  await db
+    .update(tracks)
+    .set({ problems: problems.length > 0 ? problems : null })
+    .where(and(eq(tracks.id, trackId), eq(tracks.userId, userId)));
 }
 
 /** Stores the plan summary shown on the track page. Recomputed whenever the plan changes. */
