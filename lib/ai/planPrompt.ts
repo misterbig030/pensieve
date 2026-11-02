@@ -409,15 +409,30 @@ function formatTotal(format: PracticeFormat, minutes: number): string {
 }
 
 /**
- * The totals the units share out, in one sentence: below the top level the parent's own minutes; at the top level the
- * plan's, with each sized material's reading by alias and title (`planTotals`). Null when there is nothing to share.
+ * The must-reading the weeks or months being planned share: at the top level the allocation's reading per material
+ * (`planTotals`), summed, so the total is the materials' own; with no sized material, and below the top level, the
+ * parent's reading (`parentBudgetsOf`). Days keep their week's.
  */
-function totalsSentence(input: UnitsPromptInput, aliases: MaterialAliases | undefined): string | null {
+function readingTotal(input: UnitsPromptInput): number {
+  if (input.level !== "day" && !parentNodeOf(input)) {
+    const sized = planTotals(input).reading;
+    if (sized.length > 0) return sized.reduce((sum, r) => sum + r.minutes, 0);
+  }
+  return parentBudgetsOf(input).reading;
+}
+
+/**
+ * The totals the units share out, in one sentence: below the top level the parent's own minutes; at the top level the
+ * plan's, with each sized material's reading by alias and title (`planTotals`), their sum the reading total. With
+ * `withoutBlocks`, block formats are left out: the practice rules state them over the plan. Null when there is nothing
+ * to share.
+ */
+function totalsSentence(input: UnitsPromptInput, aliases: MaterialAliases | undefined, withoutBlocks = false): string | null {
   const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
   if (input.materials.length === 0 && picks.length === 0) return null;
   const budgets = parentBudgetsOf(input);
-  const practice = picks.map((p) => formatTotal(p.pick.format, budgets.practice[p.pick.format] ?? 0));
-  const reading = `reading about ${formatTime(budgets.reading)}`;
+  const practice = picks.filter((p) => !(withoutBlocks && isBlockFormat(p.pick.format))).map((p) => formatTotal(p.pick.format, budgets.practice[p.pick.format] ?? 0));
+  const reading = `reading about ${formatTime(readingTotal(input))}`;
   if (parentNodeOf(input)) return `The unit marked ">>" gives its ${UNIT_NOUN[input.level]}s these totals: ${[reading, ...practice].join("; ")}.`;
   const sized = planTotals(input).reading.flatMap(({ id, minutes }) => {
     const alias = aliases?.alias(id);
@@ -460,7 +475,8 @@ export function headingTimeRules(input: UnitsPromptInput, aliases: MaterialAlias
  * unit within its hours. Null when there is nothing to share.
  */
 function leafTimeRules(input: UnitsPromptInput, aliases: MaterialAliases | undefined): string | null {
-  const totals = totalsSentence(input, aliases);
+  // Under a parent with no time of its own, block formats keep today's plan-wide budget, which the practice rules state.
+  const totals = totalsSentence(input, aliases, !!parentNodeOf(input) && !parentBudgetsOf(input).stated);
   if (!totals) return null;
   const noun = UNIT_NOUN[input.level];
   return [
@@ -650,7 +666,7 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const total = days ? day * daysInWeek : budgetFor(span, input.hoursPerWeek) * 60;
   const half = Math.round(day / 2 / 5) * 5;
   const scope = days ? "this week" : `across the ${noun}s`;
-  const lines = [`Practice: ${days ? "the week's time" : `the ${noun}s' time together`}, about ${formatTime(total)}, is about ${formatTime(budgets.reading)} of reading and, by format:`];
+  const lines = [`Practice: ${days ? "the week's time" : `the ${noun}s' time together`}, about ${formatTime(total)}, is about ${formatTime(days ? budgets.reading : readingTotal(input))} of reading and, by format:`];
   // A block is never split to fit a week's slice: it is budgeted over the plan, less what earlier units placed.
   const planBlocks = planBlockBudgets(input.split, budgetFor(input.weeks, input.hoursPerWeek) * 60, input.materials);
   let firstItem: string | null = null;
@@ -694,11 +710,12 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   if (firstItem) {
     lines.push(`A listed item is one row: id is the item's own ("${firstItem}"), task may restate its title, minutes are its minutes; never an item not listed for the unit, and never one item twice.`);
   }
-  // Days held to reserved runs fit their blocks round the items. Days that share an even split of their week (a week
-  // from before units stated their time) take a block format's minutes from the plan's, so a week's follow its blocks.
+  // Days held to reserved runs fit their blocks round the items. Units that share an even split (a parent from before
+  // units stated their time, or the plan's at the top) take a block format's minutes from the plan's, so a week's
+  // follow its blocks; under a parent that states its time, blocks are its minutes like any format's.
   const blocks = picks.filter((p) => isBlockFormat(p.pick.format) && budgets.blocks[p.pick.format] !== 0).map((p) => `${PRACTICE_REGISTRY[p.pick.format].label}'s`);
   const except =
-    blocks.length === 0 || !days
+    blocks.length === 0
       ? ""
       : held
         ? `: the reserved items take exactly theirs, and ${blocks.join(" and ")} time is at most its blocks, written by the days when the week reserves none`
@@ -861,7 +878,7 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const B = `M${backbone + 1}`;
   const where = reserved.length > 0 ? "where the reservation has material for it" : "where the list has material for it";
   // The units share their parent's must-reading (the plan's at the top): days their week's, weeks their month's.
-  const reading = formatTime(parentBudgetsOf(input).reading);
+  const reading = formatTime(readingTotal(input));
   const noun = UNIT_NOUN[input.level];
   const rules =
     input.level === "day"

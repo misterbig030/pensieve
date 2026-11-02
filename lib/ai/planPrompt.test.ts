@@ -283,7 +283,9 @@ describe("time and the split in prompts", () => {
     const prompt = buildUnitsPrompt({ ...base, hoursPerWeek: 6, split });
     expect(prompt).toContain("How this plan spends that time: about 85% reading or watching the materials, the rest on writing summaries.");
     expect(prompt).toContain("1. Week 1 (7 study days) — budget about 6 h\n");
-    expect(prompt).toContain("The plan's totals over its 2 weeks: reading about 10 h 12 min");
+    // The reading total is the materials' own budgets summed, never a figure the parts in brackets could exceed.
+    expect(prompt).toContain(`The plan's totals over its 2 weeks: reading about 27 h (M1 "AI Engineering" about 22 h, M2 "Intro talk" about 5 h).`);
+    expect(prompt).toContain("Across the weeks, must minutes add up to about 27 h;");
     expect(prompt).toContain("its must and practice minutes fit within its hours on its line, and the rest of its time is for writing summaries");
     expect(prompt).not.toContain('as "split"');
   });
@@ -869,9 +871,12 @@ describe("unit time in prompts", () => {
   const base = { topic: "Senior SWE interviews", materials, daysPerWeek: 5, hoursPerWeek: 6, split };
   const totals = planTotals({ ...base, weeks: 8 });
   const formatTotal = (f: keyof typeof totals.practice) => `${PRACTICE_REGISTRY[f].label} (format "${f}") about ${formatDayTime(totals.practice[f]!)}`;
+  // Reading is DDIA's 210 and SDI's 360 summed: the parts in brackets add up to the total.
+  const totalsLine = `The plan's totals over its 8 weeks: reading about 9 h 30 min (M1 "Designing Data-Intensive Applications" about 3 h 30 min, M2 "System Design Interview" about 6 h); ${formatTotal("problem-set")}; ${formatTotal("design-exercise")}, in whole blocks of about 50 min; ${formatTotal("mock")}, in whole blocks of about 75 min; ${formatTotal("recall")}.`;
 
   it("gives the top-level headings the plan's totals and asks each for its own time", () => {
     const prompt = buildUnitsPrompt({ ...base, granularity: "day", level: "week", spans: Array(8).fill(5), weeks: 8, unitsAreLeaves: false });
+    expect(prompt).toContain(totalsLine);
     expect(prompt).toContain('M1 "Designing Data-Intensive Applications" about 3 h 30 min');
     expect(prompt).toContain('M2 "System Design Interview" about 6 h');
     for (const f of ["problem-set", "design-exercise", "mock", "recall"] as const) expect(prompt).toContain(formatTotal(f));
@@ -898,9 +903,21 @@ describe("unit time in prompts", () => {
     const prompt = buildUnitsPrompt({ ...base, granularity: "week", level: "week", spans: Array(8).fill(5), weeks: 8, unitsAreLeaves: true });
     const unitLines = prompt.split("\n").filter((l) => /^\d+\. /.test(l));
     expect(unitLines).toEqual(Array.from({ length: 8 }, (_, i) => `${i + 1}. Week ${i + 1} (5 study days) — budget about 6 h`));
-    expect(prompt).toContain('M1 "Designing Data-Intensive Applications" about 3 h 30 min');
-    expect(prompt).toContain(formatTotal("problem-set"));
+    expect(prompt).toContain(`Time: what the weeks' rows share out. ${totalsLine}`);
+    expect(prompt).toContain("Practice: the weeks' time together, about 48 h, is about 9 h 30 min of reading and, by format:");
+    expect(prompt).toContain("Across the weeks, must minutes add up to about 9 h 30 min;");
     expect(prompt).not.toContain('give "time"');
+  });
+
+  it("keeps block formats on the plan-wide wording, stated once, for week leaves under a month with no time of its own", () => {
+    const month = (id: string) => makeNode({ id, level: "month", title: id, summary: "s", len: 20 });
+    const tree = layout(makeRoot([month("m1"), month("m2")]));
+    const prompt = buildUnitsPrompt({ ...base, granularity: "week", level: "week", spans: [5, 5, 5, 5], weeks: 8, tree, parentId: "m1", unitsAreLeaves: true });
+    expect(prompt.match(/Mock \(format "mock"\):? about/g)).toEqual(['Mock (format "mock"): about']);
+    expect(prompt).toContain(`- Mock (format "mock"): about ${formatDayTime(totals.practice.mock!)} over the whole plan, none placed so far, aimed at full loops.`);
+    expect(prompt).not.toContain('Mock (format "mock") about');
+    // Per-item formats are the month's even split, and a week that holds a block takes its minutes from them.
+    expect(prompt).toContain("Across the weeks, each format's minutes add up to about its time, except Design's and Mock's: a week that holds a block takes its minutes from the other formats, and a week without one gives its time to them.");
   });
 
   it("gives a week's days the week's own time", () => {
