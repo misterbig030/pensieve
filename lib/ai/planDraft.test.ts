@@ -36,6 +36,7 @@ function respondAllocate(object: unknown = ALLOCATION) {
     object,
     usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 },
     finishReason: "stop",
+    providerMetadata: { gateway: { cost: "0.002" } },
   } as unknown as Awaited<ReturnType<typeof generateObject>>);
 }
 
@@ -47,6 +48,7 @@ function fakeStream(units: UnitDraft[]) {
     object: Promise.resolve({ units }),
     usage: Promise.resolve({ inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 }),
     finishReason: Promise.resolve("stop"),
+    providerMetadata: Promise.resolve({ gateway: { cost: "0.004" } }),
   } as unknown as ReturnType<typeof streamObject>;
 }
 
@@ -234,14 +236,13 @@ describe("streamPlanDraft and the allocation", () => {
 
   it("adds the allocation's cost to the finish event", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
-    const rows: number[] = [];
+    const rows: (number | null)[] = [];
     let finish: PlanDraftEvent | undefined;
     for await (const event of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, granularity: "week", materials: [], log: { onLog: (row) => void rows.push(row.costUsd) } })) {
       if (event.type === "finish") finish = event;
     }
-    expect(rows).toHaveLength(2);
-    expect(rows.every((cost) => cost > 0)).toBe(true);
-    expect(finish?.type === "finish" && finish.costUsd).toBeCloseTo(rows[0] + rows[1], 10);
+    expect(rows).toEqual([0.002, 0.004]);
+    expect(finish?.type === "finish" && finish.costUsd).toBeCloseTo(0.006, 10);
   });
 
   it("drafts the weeks on Opus 5.5 at high effort, and records the effort", async () => {
@@ -444,13 +445,13 @@ describe("streamResearchedPlanDraft", () => {
 
   it("adds the allocation's cost to the finish event", async () => {
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks(4)));
-    const rows: number[] = [];
+    const rows: (number | null)[] = [];
     let finish: PlanDraftEvent | undefined;
     for await (const event of streamResearchedPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 7, materials: [], granularity: "week", arm: null, research: offline, log: { onLog: (row) => void rows.push(row.costUsd) } })) {
       if (event.type === "finish") finish = event;
     }
-    expect(rows).toHaveLength(2);
-    expect(finish?.type === "finish" && finish.costUsd).toBeCloseTo(rows[0] + rows[1], 10);
+    expect(rows).toEqual([0.002, 0.004]);
+    expect(finish?.type === "finish" && finish.costUsd).toBeCloseTo(0.006, 10);
   });
 
   it("keeps a split it is given and makes no allocation call", async () => {

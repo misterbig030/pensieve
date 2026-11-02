@@ -237,7 +237,8 @@ export const generationLog = pgTable(
     outputTokens: integer("output_tokens"),
     cacheReadTokens: integer("cache_read_tokens"), // usage.inputTokenDetails.cacheReadTokens
     reasoningTokens: integer("reasoning_tokens"), // usage.outputTokenDetails.reasoningTokens
-    costUsd: doublePrecision("cost_usd").notNull(),
+    // What the AI Gateway charged; null for a call on the user's own key, which the gateway never sees.
+    costUsd: doublePrecision("cost_usd"),
     latencyMs: integer("latency_ms").notNull(),
     trackId: uuid("track_id"), // nullable: draft outlines have no track yet
     userId: text("user_id"), // nullable: eval-harness rows have no user

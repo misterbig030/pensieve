@@ -134,6 +134,13 @@
       "when": 1793525724626,
       "tag": "0018_credits_reset_at",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793606846573,
+      "tag": "0019_gateway_cost",
+      "breakpoints": true
     }
   ]
 }

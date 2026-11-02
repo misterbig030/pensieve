@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { estimateCostUsd } from "./models";
 
 vi.mock("ai", () => ({ generateObject: vi.fn() }));
 
 import { generateObject } from "ai";
-import { loggedGenerateObject, type GenerationLogRow, type ModelCall } from "./logged";
+import { buildGenerationLogRow, loggedGenerateObject, type GenerationLogRow, type ModelCall } from "./logged";
 
 const mockedGenerateObject = vi.mocked(generateObject);
 
@@ -22,6 +21,7 @@ function mockResult(overrides: Partial<{ inputTokens: number; outputTokens: numb
       totalTokens: 1_500,
       ...overrides,
     },
+    providerMetadata: { gateway: { cost: "0.0123", marketCost: "0.0123", generationId: "gen_1" } },
   } as unknown as Awaited<ReturnType<typeof generateObject>>;
 }
 
@@ -43,9 +43,7 @@ describe("loggedGenerateObject", () => {
 
     expect(result.object).toEqual({ answer: "42" });
     expect(result.latencyMs).toBeGreaterThan(0);
-    expect(result.costUsd).toBe(
-      estimateCostUsd("anthropic/claude-haiku-4.5", { inputTokens: 1_000, outputTokens: 500 }),
-    );
+    expect(result.costUsd).toBe(0.0123);
     expect(mockedGenerateObject).toHaveBeenCalledWith(
       expect.objectContaining({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi" }),
     );
@@ -77,9 +75,7 @@ describe("loggedGenerateObject", () => {
       userId: "user-1",
     });
     expect(row.latencyMs).toBeGreaterThan(0);
-    expect(row.costUsd).toBe(
-      estimateCostUsd("anthropic/claude-sonnet-5", { inputTokens: 1_000, outputTokens: 500 }),
-    );
+    expect(row.costUsd).toBe(0.0123);
   });
 
   it("sends an effort as the Anthropic provider option and records it on the row", async () => {
@@ -165,8 +161,18 @@ describe("loggedGenerateObject", () => {
       reasoningTokens: null,
       trackId: null,
       userId: null,
-      costUsd: 0,
     });
+  });
+
+  it("records no cost for a call on the user's own key, which never goes through the gateway", async () => {
+    mockedGenerateObject.mockResolvedValue({ ...mockResult(), providerMetadata: { anthropic: {} } } as unknown as Awaited<ReturnType<typeof generateObject>>);
+    const rows: GenerationLogRow[] = [];
+    const result = await loggedGenerateObject(
+      { model: "anthropic/claude-sonnet-5.5", schema, prompt: "hi", keyOwner: "user" },
+      { caller: "daily", onLog: (row) => void rows.push(row) },
+    );
+    expect(rows[0].costUsd).toBeNull();
+    expect(result.costUsd).toBe(0);
   });
 
   it("has no side effect when onLog is omitted", async () => {
@@ -203,5 +209,31 @@ describe("loggedGenerateObject", () => {
       loggedGenerateObject({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi" }, { caller: "outline", onLog }),
     ).rejects.toThrow("gateway 500");
     expect(onLog).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildGenerationLogRow", () => {
+  const usage = { inputTokens: 10, outputTokens: 5 } as Parameters<typeof buildGenerationLogRow>[0]["usage"];
+
+  it("adds up what the gateway charged for each request a row covers", () => {
+    const row = buildGenerationLogRow({
+      caller: "chat",
+      model: "anthropic/claude-sonnet-5.5",
+      usage,
+      latencyMs: 1,
+      providerMetadata: [{ gateway: { cost: "0.002" } }, undefined, { gateway: { cost: "0.0005" } }],
+    });
+    expect(row.costUsd).toBeCloseTo(0.0025, 10);
+  });
+
+  it("says so when the gateway reports no charge for a call Pensieve pays for", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const row = buildGenerationLogRow({ caller: "outline", model: "anthropic/claude-sonnet-5.5", usage, latencyMs: 1, providerMetadata: { gateway: {} } });
+    expect(row.costUsd).toBeNull();
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockClear();
+    buildGenerationLogRow({ caller: "outline", model: "anthropic/claude-sonnet-5.5", usage, latencyMs: 1, keyOwner: "user" });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

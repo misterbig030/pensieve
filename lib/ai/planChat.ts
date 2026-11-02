@@ -1,4 +1,4 @@
-import { streamText, tool, stepCountIs, type LanguageModelUsage, type ModelMessage } from "ai";
+import { streamText, tool, stepCountIs, type LanguageModelUsage, type ModelMessage, type ProviderMetadata } from "ai";
 import { z } from "zod";
 import type { PlanChatEvent, PlanChatRequest } from "@/lib/planChat";
 import { diffChangedNodes, type ChangedNodes } from "@/lib/planSummary";
@@ -102,6 +102,8 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
   let text = "";
   let changeRequest: string | null = null;
   let finishReason: string | null = null;
+  /** Each request's metadata: answering after a revision is a second request, charged on its own. */
+  const charged: (ProviderMetadata | undefined)[] = [];
   for await (const part of result.fullStream) {
     switch (part.type) {
       case "text-delta":
@@ -128,6 +130,9 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
         break;
       case "error":
         throw part.error instanceof Error ? part.error : new Error(String(part.error));
+      case "finish-step":
+        charged.push(part.providerMetadata);
+        break;
       case "finish":
         usage = part.totalUsage;
         finishReason = part.finishReason;
@@ -140,8 +145,8 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
   const latencyMs = Math.round(performance.now() - startedAt);
   let chatCostUsd = 0;
   if (usage) {
-    const row = buildGenerationLogRow({ caller: "chat", model: chat.id, keyOwner: chat.keyOwner, usage, latencyMs, trackId: log?.trackId, userId: log?.userId });
-    chatCostUsd = row.costUsd;
+    const row = buildGenerationLogRow({ caller: "chat", model: chat.id, keyOwner: chat.keyOwner, usage, latencyMs, providerMetadata: charged, trackId: log?.trackId, userId: log?.userId });
+    chatCostUsd = row.costUsd ?? 0;
     await emitGenerationLog(log?.onLog, row);
     log?.onCall?.({
       ...row,

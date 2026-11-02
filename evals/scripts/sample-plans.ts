@@ -191,7 +191,7 @@ async function runOne(record: GoldenRecord, trial: number): Promise<Sample> {
     calls,
     checkFacts,
     breaches,
-    costUsd: calls.reduce((sum, c) => sum + c.costUsd, 0),
+    costUsd: calls.reduce((sum, c) => sum + (c.costUsd ?? 0), 0),
     latencyMs: Math.round(performance.now() - startedAt),
     facts,
   };

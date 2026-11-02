@@ -76,6 +76,12 @@ describe("createModelCallStore", () => {
     expect(createModelCallStore({ storage }).getSnapshot().map((c) => c.label)).toEqual(["kept"]);
   });
 
+  it("keeps a stored call with no cost: one on the user's own key", () => {
+    const storage = fakeStorage();
+    storage.items.set(STORAGE_KEY, JSON.stringify({ v: 1, calls: [{ ...call("own key"), keyOwner: "user", costUsd: null }] }));
+    expect(createModelCallStore({ storage }).getSnapshot().map((c) => c.label)).toEqual(["own key"]);
+  });
+
   it("starts empty when every stored element is malformed", () => {
     const storage = fakeStorage();
     storage.items.set(STORAGE_KEY, JSON.stringify({ v: 1, calls: [{}] }));

@@ -50,7 +50,7 @@ export function ModelCallsPanel({ calls, onClear, onClose }: ModelCallsPanelProp
       inputTokens: t.inputTokens + (c.inputTokens ?? 0),
       outputTokens: t.outputTokens + (c.outputTokens ?? 0),
       cacheReadTokens: t.cacheReadTokens + (c.cacheReadTokens ?? 0),
-      costUsd: t.costUsd + c.costUsd,
+      costUsd: t.costUsd + (c.costUsd ?? 0),
     }),
     { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 },
   );

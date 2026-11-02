@@ -20,6 +20,7 @@ import { researchMaterials, type ResearchOutcome } from "@/lib/ai/research/pipel
 import { searchProviderFromEnv } from "@/lib/ai/research/tools";
 import { createWorkersArm } from "@/lib/ai/research/workers";
 import { EFFORTS, type Effort, type ExportedCall, briefFromPrompt, pickCall } from "./bench";
+import { formatCostUsd } from "@/lib/formatCost";
 
 config({ path: ".env.local" });
 
@@ -95,7 +96,7 @@ async function runAt(effort: Effort, b: ResearchBrief, model: AiModelId): Promis
   return {
     effort,
     researchMs,
-    costUsd: calls.reduce((sum, c) => sum + c.costUsd, 0),
+    costUsd: calls.reduce((sum, c) => sum + (c.costUsd ?? 0), 0),
     stoppedBy: outcome.arm?.stoppedBy ?? null,
     counts: outcome.arm?.counts ?? null,
     workers: outcome.arm?.workers ?? null,
@@ -118,7 +119,7 @@ function report(r: EffortRun) {
   if (r.candidateStep) console.log(`  candidates: ${(r.candidateStep.latencyMs / 1000).toFixed(1)} s, ${r.candidateStep.outputTokens} out, ${r.candidateStep.reasoningTokens ?? 0} reasoning`);
   console.log(`  gate: ${r.verified}/${r.proposed} verified${r.dropped.length ? `; dropped: ${r.dropped.map((d) => `"${d.title}" (${d.reason})`).join(", ")}` : ""}`);
   for (const m of r.materials) console.log(`    [${m.kind}${m.backbone ? " · backbone" : ""}] "${m.title}" <${m.url}>${m.minutes ? ` · ${m.minutes} min` : ""}`);
-  for (const c of r.calls) console.log(`    ${c.label.padEnd(34)} ${(c.latencyMs / 1000).toFixed(1).padStart(6)} s  out ${String(c.outputTokens).padStart(5)}  reason ${String(c.reasoningTokens ?? 0).padStart(5)}  $${c.costUsd.toFixed(4)}  ${c.facts.join(" · ")}`);
+  for (const c of r.calls) console.log(`    ${c.label.padEnd(34)} ${(c.latencyMs / 1000).toFixed(1).padStart(6)} s  out ${String(c.outputTokens).padStart(5)}  reason ${String(c.reasoningTokens ?? 0).padStart(5)}  ${formatCostUsd(c.costUsd)}  ${c.facts.join(" · ")}`);
 }
 
 async function main() {

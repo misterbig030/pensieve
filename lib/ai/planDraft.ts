@@ -200,13 +200,14 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     }
   }
   if (failure !== undefined) throw failure;
-  const [object, usage, finishReason] = await Promise.all([result.object, result.usage, result.finishReason]);
+  const [object, usage, finishReason, providerMetadata] = await Promise.all([result.object, result.usage, result.finishReason, result.providerMetadata]);
   const row = buildGenerationLogRow({
     caller: "outline",
     model: input.model.id,
     effort: OUTLINE_EFFORT,
     keyOwner: input.model.keyOwner,
     usage,
+    providerMetadata,
     latencyMs: Math.round(performance.now() - startedAt),
     trackId: input.log?.trackId,
     userId: input.log?.userId,
@@ -222,7 +223,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     finishReason: finishReason ?? null,
     facts: [...unitFacts(object.units.length, input.expected), ...checks],
   });
-  yield { type: "done", units: object.units, costUsd: row.costUsd };
+  yield { type: "done", units: object.units, costUsd: row.costUsd ?? 0 };
 }
 
 interface DraftLevelInput {

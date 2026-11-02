@@ -14,4 +14,8 @@ describe("formatCostUsd", () => {
     expect(formatCostUsd(0.0012)).toBe("$0.0012");
     expect(formatCostUsd(1.5)).toBe("$1.5000");
   });
+
+  it("shows a call with no charge, one on the user's own key, as a dash", () => {
+    expect(formatCostUsd(null)).toBe("—");
+  });
 });

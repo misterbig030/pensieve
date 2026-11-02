@@ -1,7 +1,7 @@
-import { generateObject, type FlexibleSchema, type LanguageModel, type LanguageModelUsage } from "ai";
+import { generateObject, type FlexibleSchema, type LanguageModel, type LanguageModelUsage, type ProviderMetadata } from "ai";
 import type { GenerationCaller } from "@/lib/db/schema";
 import type { OnServiceEvent } from "./serviceEvents";
-import { estimateCostUsd, type AiModelId, type KeyOwner, type ReasoningEffort } from "./models";
+import type { AiModelId, KeyOwner, ReasoningEffort } from "./models";
 
 export type { GenerationCaller };
 
@@ -21,7 +21,8 @@ export interface GenerationLogRow {
   outputTokens: number | null;
   cacheReadTokens: number | null;
   reasoningTokens: number | null;
-  costUsd: number;
+  /** What the AI Gateway charged for the call. Null when it didn't go through the gateway (the user's own key). */
+  costUsd: number | null;
   latencyMs: number;
   trackId: string | null;
   userId: string | null;
@@ -88,6 +89,7 @@ export interface LoggedGenerateObjectResult<T> {
   object: T;
   usage: LanguageModelUsage;
   latencyMs: number;
+  /** What Pensieve paid: the gateway's charge, 0 on the user's own key. */
   costUsd: number;
 }
 
@@ -100,21 +102,35 @@ export interface BuildGenerationLogRowInput {
   userId?: string;
   effort?: ReasoningEffort | null;
   keyOwner?: KeyOwner;
+  /** The provider metadata of each request the row covers (a chat answer can take two). */
+  providerMetadata?: ProviderMetadata | readonly (ProviderMetadata | undefined)[];
+}
+
+/** What the AI Gateway charged for these requests, from the `cost` it reports on each; null when none reports one. */
+export function gatewayCostUsd(metadata: ProviderMetadata | readonly (ProviderMetadata | undefined)[] | undefined): number | null {
+  const each = Array.isArray(metadata) ? metadata : [metadata as ProviderMetadata | undefined];
+  const costs = each.map((m) => Number(m?.gateway?.cost ?? NaN)).filter(Number.isFinite);
+  return costs.length > 0 ? costs.reduce((a, b) => a + b, 0) : null;
 }
 
 /** Normalizes the AI SDK usage shape into a flat `generation_log` row. Shared by the object wrapper and the streaming routes. */
 export function buildGenerationLogRow(input: BuildGenerationLogRowInput): GenerationLogRow {
   const { usage } = input;
+  const keyOwner = input.keyOwner ?? "app";
+  const costUsd = gatewayCostUsd(input.providerMetadata);
+  if (costUsd === null && keyOwner === "app") {
+    console.warn("[generation_log] the gateway reported no cost for a call on Pensieve's key: it counts as nothing against credits", { caller: input.caller, model: input.model });
+  }
   return {
     caller: input.caller,
     model: input.model,
     effort: input.effort ?? null,
-    keyOwner: input.keyOwner ?? "app",
+    keyOwner,
     inputTokens: usage.inputTokens ?? null,
     outputTokens: usage.outputTokens ?? null,
     cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? null,
     reasoningTokens: usage.outputTokenDetails?.reasoningTokens ?? null,
-    costUsd: estimateCostUsd(input.model, usage),
+    costUsd,
     latencyMs: input.latencyMs,
     trackId: input.trackId ?? null,
     userId: input.userId ?? null,
@@ -132,7 +148,7 @@ export async function emitGenerationLog(onLog: OnGenerationLog | undefined, row:
 }
 
 /**
- * Wraps `generateObject`: times the call, computes list-price cost, and hands a normalized row to `meta.onLog`.
+ * Wraps `generateObject`: times the call, records what the gateway charged, and hands a normalized row to `meta.onLog`.
  * A failing `onLog` is reported and swallowed so telemetry never breaks a user-facing generation.
  */
 export async function loggedGenerateObject<T>(
@@ -140,7 +156,7 @@ export async function loggedGenerateObject<T>(
   meta: GenerationLogMeta,
 ): Promise<LoggedGenerateObjectResult<T>> {
   const startedAt = performance.now();
-  const { object, usage, finishReason } = await generateObject({
+  const { object, usage, finishReason, providerMetadata } = await generateObject({
     model: opts.languageModel ?? opts.model,
     schema: opts.schema,
     prompt: opts.prompt,
@@ -154,6 +170,7 @@ export async function loggedGenerateObject<T>(
     model: opts.model,
     usage,
     latencyMs,
+    providerMetadata,
     effort: opts.effort ?? null,
     keyOwner: opts.keyOwner ?? meta.keyOwner,
     trackId: meta.trackId,
@@ -169,7 +186,7 @@ export async function loggedGenerateObject<T>(
     finishReason: finishReason ?? null,
     facts: [...(opts.facts ?? []), ...(opts.check?.(object as T) ?? [])],
   });
-  const costUsd = row.costUsd;
+  const costUsd = row.costUsd ?? 0;
 
   return { object: object as T, usage, latencyMs, costUsd };
 }
