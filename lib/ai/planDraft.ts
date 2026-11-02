@@ -4,7 +4,7 @@ import {
   aliasMaterials,
   levelChecks,
   noSourceFacts,
-  pickSources,
+  pickedFormats,
   plainUnitText,
   resolveCoverRefs,
   resolveMaterialRefs,
@@ -34,7 +34,7 @@ import {
 import type { PracticeFormat } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
 import { unitListSchema, type UnitDraft, type UnitTime, type unitTimeDraftSchema } from "@/lib/schemas/plan";
-import { DEFAULT_HOURS_PER_WEEK, activePicks, type PlanSplit } from "@/lib/studyTime";
+import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { reportServiceFailure } from "./serviceEvents";
 import { allocatePlan } from "./allocate";
@@ -92,14 +92,6 @@ export function toUnitTime(draft: z.infer<typeof unitTimeDraftSchema>, picked: r
     practice[format] = (practice[format] ?? 0) + minutes;
   }
   return { time: { reading: draft.reading, practice }, unpicked };
-}
-
-/** The formats a heading's time may name: the split's picks the units can be given, or, without the materials to tell, all its picks. */
-export function pickedFormats(split: PlanSplit | null | undefined, materials?: Pick<Material, "id" | "practice" | "minutes">[]): PracticeFormat[] {
-  if (!materials) return activePicks(split).map((p) => p.format);
-  return pickSources(split, materials)
-    .filter((p) => p.assignable)
-    .map((p) => p.pick.format);
 }
 
 /** Builds a node for a drafted unit: leaves get a time budget when they are week-sized. */
@@ -398,7 +390,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
 }
 
 /** Puts a level's problems on the node it was planned inside; none leaves the node without `problems`. */
-function setProblems(node: PlanNode, problems: string[]): void {
+export function setProblems(node: PlanNode, problems: string[]): void {
   if (problems.length > 0) node.problems = problems;
   else delete node.problems;
 }

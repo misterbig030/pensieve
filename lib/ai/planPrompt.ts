@@ -6,6 +6,7 @@ import {
   itemAliases,
   itemRun,
   pickSources,
+  pickedFormats,
   placedMinutes,
   planBlockBudgets,
   planTotals,
@@ -957,11 +958,11 @@ export function buildRevisionPrompt(input: RevisionPromptInput): string {
  * heading it adds or reshapes writes its own (code never fills it in; one left without is reported).
  */
 function revisionTimeRule(input: RevisionPromptInput): string {
-  const formats = pickSources(input.split, input.materials)
-    .filter((p) => p.assignable)
-    .map((p) => pickName(p.pick.format));
+  // The formats the revision keeps a heading's time for (`applyRevision`'s `picked`), so the prompt names no other.
+  const formats = pickedFormats(input.split, input.materials).map(pickName);
   const named = formats.length > 0 ? ` The practice formats are ${formats.join(", ")}.` : " This plan has no practice formats: practice is [].";
-  return `- Time: a heading's "<time: …>" is its minutes per activity: must-reading, and each practice format. You may change them as the request needs: return "time" ({ reading, practice: [{ format, minutes }] }, in minutes) on that heading. Every heading you add or reshape (merged, re-lengthened, or reserving other materials) needs its own "time", within its hours. Leave "time" out on a heading you keep as it was: it keeps its own. Units without children have no "time".${named} ${MUST_ONLY}`;
+  const finest = input.granularity === "week" ? "Days, and weeks (this plan's finest units, logged as sessions), have" : "Days have";
+  return `- Time: a heading's "<time: …>" is its minutes per activity: must-reading, and each practice format. You may change them as the request needs: return "time" ({ reading, practice: [{ format, minutes }] }, in minutes) on that heading. Every heading you add or reshape (merged, re-lengthened, or reserving other materials) needs its own "time", within its hours, and so does a heading not yet planned in detail. Leave "time" out on a heading you keep as it was: it keeps its own. ${finest} no "time": they spend their minutes in their rows.${named} ${MUST_ONLY}`;
 }
 
 /** "6 weeks, usually 5 study days a week": the plan's length as prompts state it. */

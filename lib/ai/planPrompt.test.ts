@@ -121,6 +121,12 @@ describe("buildRevisionPrompt", () => {
     expect(prompt).toContain('a heading\'s "<time: …>" is its minutes per activity');
     expect(prompt).toContain('Problems (format "problem-set")');
     expect(prompt).toContain("Every heading you add or reshape");
+    // Only the finest units go without time; a heading not yet planned in detail carries it.
+    expect(prompt).toContain('needs its own "time", within its hours, and so does a heading not yet planned in detail.');
+    expect(prompt).toContain('Days have no "time": they spend their minutes in their rows.');
+    expect(prompt).not.toContain("Units without children");
+    const weekly = buildRevisionPrompt({ topic: "AI", materials, granularity: "week", daysPerWeek: 7, split, tree: root, refs: assignRefs(root), lockBefore: 0, changeRequest: "x" });
+    expect(weekly).toContain(`Days, and weeks (this plan's finest units, logged as sessions), have no "time"`);
   });
 });
 

@@ -20,6 +20,7 @@ import {
   aliasMaterials,
   keepCoverTiers,
   keepPracticeCovers,
+  pickedFormats,
   plainUnitText,
   practiceRowKey,
   refKey,
@@ -39,7 +40,7 @@ import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
 import { appModel, type ResolvedModel } from "./resolve";
 import { assignRefs, buildRevisionPrompt, type PlanPromptContext } from "./planPrompt";
-import { pickedFormats, toUnitTime } from "./planDraft";
+import { setProblems, toUnitTime } from "./planDraft";
 
 /** Resolved with itemless rows kept, so `keptItemless` can tell the unit's saved ones from new ones. */
 const SAVED = { keepUnitemized: true } as const;
@@ -82,7 +83,8 @@ interface RevisedUnit {
  * rules: leaves keep `practice` (a rewritten list goes through `resolvePracticeRefs`, which drops refused and unknown
  * rows), headings keep `practiceCovers`, and a split week's reservations keep their `task` and `minutes`, its generated
  * ones whatever the model wrote. A heading takes the `time` the model wrote (for the formats in `picked`, as drafting
- * does), else keeps its own; a new heading the model gave none has none, which the checks report. Leaves have none.
+ * does; the formats left out go into `unpicked`), else keeps its own; a new heading the model gave none has none, which
+ * the checks report. Leaves have none.
  */
 export function applyRevision(
   original: PlanNode,
@@ -95,6 +97,7 @@ export function applyRevision(
   daysPerWeek: number = MAX_DAYS_PER_WEEK,
   split?: PlanSplit | null,
   picked: readonly PracticeFormat[] = pickedFormats(split),
+  unpicked?: Set<PracticeFormat>,
 ): PlanNode {
   const byRef = new Map<string, PlanNode>();
   for (const [id, ref] of refs) {
@@ -123,7 +126,12 @@ export function applyRevision(
       aliases && unit.practice !== undefined
         ? keptItemless(resolvePracticeRefs(unit.practice, aliases, split, (materials ?? []).map((r) => r.id), SAVED).refs, kept?.practice, aliases)
         : kept?.practice;
-    const time = unit.time ? toUnitTime(unit.time, picked).time : kept?.time;
+    let time = leaf ? undefined : kept?.time;
+    if (unit.time && !leaf) {
+      const written = toUnitTime(unit.time, picked);
+      time = written.time;
+      for (const f of written.unpicked) unpicked?.add(f);
+    }
     return makeNode({
       id: kept?.id,
       level,
@@ -138,7 +146,7 @@ export function applyRevision(
       materials: leaf ? materials : undefined,
       practiceCovers: leaf ? undefined : practiceCovers,
       practice: leaf ? practice : undefined,
-      time: leaf ? undefined : time,
+      time,
     });
   };
 
@@ -218,13 +226,15 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
   let problems: string[] = [];
   let failure: unknown;
   const check = (object: RevisedTree): string[] => {
+    const unpicked = new Set<PracticeFormat>();
     try {
-      revised = applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek, input.daysPerWeek, input.split, picked);
+      revised = applyRevision(tree, refs, object, input.lockBefore, input.granularity, aliases, input.hoursPerWeek, input.daysPerWeek, input.split, picked, unpicked);
     } catch (error) {
       failure = error;
       return [];
     }
-    if (!aliases) return [];
+    const dropped = unpicked.size > 0 ? [`dropped time for unpicked ${[...unpicked].join(", ")}`] : [];
+    if (!aliases) return dropped;
     // Practice rows unchanged from the saved tree keep the item and reserved-source rules as facts; new or changed ones
     // breach. Only the units the revision added or reshaped are reported for lacking time.
     const checks = treeChecks(revised, input.materials, {
@@ -239,7 +249,7 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
     let plain = 0;
     walk(revised, (node) => void (plain += plainUnitText(node, input.materials, aliases)));
     const words = plain > 0 ? [`ids put in words in ${plain} field${plain === 1 ? "" : "s"}`] : [];
-    return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...words];
+    return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...dropped, ...words];
   };
   const { costUsd } = await loggedGenerateObject(
     {
@@ -256,5 +266,7 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
   );
   if (failure !== undefined) throw failure;
   if (!revised) throw new Error("Revision ended without a tree");
+  // The revision's problems stay with the tree, as a draft's do, so confirming the plan saves them.
+  setProblems(revised, problems);
   return { tree: revised, costUsd, problems };
 }

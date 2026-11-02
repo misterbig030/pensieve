@@ -507,6 +507,26 @@ describe("revisions see and edit unit time", () => {
     const { tree, problems } = await revise(weeks(true));
     expect(tree.children!.map((w) => w.covers?.map((c) => c.chapter))).toEqual([[1], [1, 2], [3]]);
     expect(problems).toEqual(expect.arrayContaining([expect.stringMatching(/^Week 2 reserves AI Engineering.* ch\. 1, which Week 1 holds\.$/)]));
+    // The problems stay with the tree, as a draft's do, so confirming the plan saves them.
+    expect(tree.problems).toEqual(problems);
+  });
+
+  it("leaves the tree without problems when the checks find none", async () => {
+    const one = layout(makeRoot([makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, materials: [{ id: "agents", tier: "must", minutes: 12, note: null }] })]));
+    one.problems = ["Stale."];
+    respond({ units: [{ ref: "n1", title: "A, renamed", summary: "a", days: 1 }] });
+    const { tree, problems } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS.filter((m) => m.id === "agents"), granularity: "day", hoursPerWeek: 6, daysPerWeek: 7, tree: one, lockBefore: 0, changeRequest: "x" });
+    expect(problems).toEqual([]);
+    expect(tree).not.toHaveProperty("problems");
+  });
+
+  it("states the minutes it dropped for a format the plan did not pick", async () => {
+    const neet = { ...AIE_MATERIALS[1], id: "neet", title: "NeetCode 150", minutes: null, practice: LISTED_PROBLEMS };
+    respond({ units: [echo("n1", "W1"), echo("n2", "W2"), echo("n3", "W3", { time: { reading: 60, practice: [{ format: "problem-set", minutes: 200 }, { format: "mock", minutes: 40 }] } })] });
+    const calls: ModelCall[] = [];
+    const { tree } = await revisePlanTree({ topic: "t", materials: [...AIE_MATERIALS, neet], granularity: "day", hoursPerWeek: 6, daysPerWeek: 5, split, tree: weeks(true), lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
+    expect(tree.children![2].time).toEqual({ reading: 60, practice: { "problem-set": 200 } });
+    expect(calls[0].facts).toContain("dropped time for unpicked mock");
   });
 
   it("reports a heading without time only when the revision added or reshaped it", async () => {

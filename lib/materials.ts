@@ -567,6 +567,14 @@ export function pickSources(split: PlanSplit | null | undefined, materials: Pick
   });
 }
 
+/** The formats a heading's time may name: the split's picks the units can be given, or, without the materials to tell, all its picks. */
+export function pickedFormats(split: PlanSplit | null | undefined, materials?: Pick<Material, "id" | "practice" | "minutes">[]): PracticeFormat[] {
+  if (!materials) return activePicks(split).map((p) => p.format);
+  return pickSources(split, materials)
+    .filter((p) => p.assignable)
+    .map((p) => p.pick.format);
+}
+
 /**
  * A week's budgets as the drafter is given them and the checks hold it to: `weekBudgets`, with the minutes of a pick
  * that can't be assigned moved to reading. Without picks nothing is practice and reading is the split's share of the
