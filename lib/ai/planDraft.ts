@@ -2,7 +2,6 @@ import { streamObject } from "ai";
 import type { z } from "zod";
 import {
   aliasMaterials,
-  dropBreaches,
   levelChecks,
   noSourceFacts,
   pickSources,
@@ -13,7 +12,6 @@ import {
   resolvePracticeRefs,
   sizeChapterRows,
   sizeItemRuns,
-  type Breach,
   type MaterialAliases,
 } from "@/lib/materials";
 import type { PlanDraftEvent, PlanDraftRequest, PlanExpandEvent, PlanExpandRequest } from "@/lib/planChat";
@@ -41,7 +39,6 @@ import { buildGenerationLogRow, effortOptions, emitGenerationLog, type Generatio
 import { reportServiceFailure } from "./serviceEvents";
 import { allocatePlan } from "./allocate";
 import { DEFAULT_ALLOCATE_MODEL, DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
-import { providerError } from "./providerError";
 import { appModel, type ResolvedModel } from "./resolve";
 import { buildUnitsPrompt, type UnitsPromptInput } from "./planPrompt";
 import type { ResearchArm } from "./research/agent";
@@ -57,7 +54,7 @@ export const DRAFT_BUDGET_MS = 285_000;
 export const ALLOCATE_TIMEOUT_MS = 90_000;
 /** Kept back from the allocation for the top-level outline, which the draft cannot do without. */
 export const OUTLINE_RESERVE_MS = 90_000;
-/** The least time left to start a retry or the first unit's children; with less, the step is skipped. */
+/** The least time left to start the first unit's children; with less, the step is skipped. */
 export const STEP_MIN_MS = 60_000;
 /** Outline calls retry a failed request once at most: a second Opus attempt eats the time the next level needs. */
 const OUTLINE_MAX_RETRIES = 1;
@@ -191,8 +188,6 @@ interface StreamUnitsInput {
   expected: number;
   /** Runs on the validated units before the call is reported; returns the checks to show beside the response. */
   check?: (units: UnitDraft[]) => string[];
-  /** A retry: the units are not streamed, only the validated list is returned. */
-  silent?: boolean;
   /** The model that drafts the units, and who pays for it. */
   model: ResolvedModel;
   /** Stops the call: the request going away, or the draft's deadline. */
@@ -233,7 +228,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
       const unit = units[sent];
       if (typeof unit.title !== "string" || typeof unit.summary !== "string") break;
       sent += 1;
-      if (!input.silent) yield { type: "unit", unit: unit as UnitDraft };
+      yield { type: "unit", unit: unit as UnitDraft };
     }
   }
   if (failure !== undefined) throw failure;
@@ -284,7 +279,7 @@ interface DraftLevelInput {
   tree?: PlanNode;
   parentId?: string;
   log?: GenerationLogContext;
-  /** The signal the level's first call runs under; the request's with the draft's deadline when omitted. */
+  /** The signal the level's call runs under; the request's with the draft's deadline when omitted. */
   signal?: AbortSignal;
 }
 
@@ -303,8 +298,11 @@ function placeForChecks(tree: PlanNode | undefined, parentId: string | undefined
   return { root, placed: copies };
 }
 
-/** Drafts one level of units under `parentId` (or the top level), yielding each node as it lands. */
-async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; costUsd: number }> {
+/**
+ * Drafts one level of units under `parentId` (or the top level) in one call, yielding each node as it lands. The level
+ * is checked once and kept as written: what breaks a rule comes back as the learner's `problems`, never fixed in code.
+ */
+async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; problems: string[]; costUsd: number }> {
   const { ctx, level } = input;
   const leaf = unitsAreLeaves(level, ctx.granularity);
   // References are resolved when there are materials, or practice to assign (rows written without a source).
@@ -331,11 +329,10 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   const picked = pickedFormats(ctx.split, ctx.materials);
   const nodes: PlanNode[] = [];
   let final: PlanNode[] = [];
-  let breaches: Breach[] = [];
-  let attempt = 1;
+  let problems: string[] = [];
 
-  // Reconciles spans and references once the whole level has validated, and states the checks in code. On the
-  // retry, rows that still breach are dropped; on either attempt, chapter rows take their minutes from the list.
+  // Reconciles spans and references once the whole level has validated, sizes chapter rows and item runs, and states
+  // the checks in code: the facts for the admin panel, the breaches as the learner's problems.
   const check = (units: UnitDraft[]): string[] => {
     const spans = reconcileSpans(input.spans, units.length, level, ctx.daysPerWeek);
     const unknown: string[] = [];
@@ -374,14 +371,9 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
         else delete final[i].practiceCovers;
       });
     }
-    const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, split: ctx.split });
-    breaches = checks.breaches;
-    const facts = [...checks.facts, ...sizing, ...practiceFacts, ...breaches.map((b) => `breach: ${b.text}`)];
-    if (attempt === 2) {
-      // Rows that still breach are dropped, the drops recorded, and the surviving chapter rows resized.
-      facts.push(...dropBreaches(final, breaches));
-      if (leaf) sizeChapterRows(final, ctx.materials);
-    }
+    const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, split: ctx.split, drafted: true });
+    problems = checks.problems;
+    const facts = [...checks.facts, ...sizing, ...practiceFacts, ...checks.breaches.map((b) => `breach: ${b.text}`)];
     // After the checks, which read notes as written: ids the model copied from its prompt are put in words for the learner.
     const plain = final.reduce((sum, node) => sum + plainUnitText(node, ctx.materials, aliases), 0);
     if (plain > 0) facts.push(`ids put in words in ${plain} field${plain === 1 ? "" : "s"}`);
@@ -389,9 +381,9 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   };
 
   const prompt = buildUnitsPrompt(promptInput);
-  const base = { expected: n, check, model: ctx.outlineModel, log: input.log };
   let costUsd = 0;
-  for await (const event of streamUnits({ ...base, prompt, label, signal: input.signal ?? within(ctx.signal, timeLeft(ctx.deadline)) })) {
+  const signal = input.signal ?? within(ctx.signal, timeLeft(ctx.deadline));
+  for await (const event of streamUnits({ prompt, label, expected: n, check, model: ctx.outlineModel, log: input.log, signal })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
       const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split, picked);
@@ -402,40 +394,14 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       costUsd = event.costUsd;
     }
   }
-
-  // One retry with the breaches quoted, its units not streamed; the first answer stays on screen until it lands. With
-  // too little of the draft's time left for it, the first answer stands, its breaching rows dropped.
-  const left = timeLeft(ctx.deadline);
-  if (breaches.length > 0 && left !== null && left < STEP_MIN_MS) {
-    console.error(`[draft] no time left to retry ${label}; breaching rows dropped`);
-    dropBreaches(final, breaches);
-    if (leaf) sizeChapterRows(final, ctx.materials);
-  } else if (breaches.length > 0) {
-    attempt = 2;
-    const corrections = [RETRY_HEADER(n), ...breaches.map((b) => `- ${b.text}`)].join("\n");
-    const signal = within(ctx.signal, left);
-    try {
-      for await (const event of streamUnits({ ...base, prompt: `${prompt}\n${corrections}`, label: `${label} (retry)`, silent: true, signal })) {
-        if (event.type === "done") {
-          costUsd += event.costUsd;
-        }
-      }
-    } catch (error) {
-      // A request that went away stops here. On the user's own key a provider refusal is theirs to hear about;
-      // otherwise (the deadline included) the first answer stands, pruned.
-      if (ctx.signal?.aborted) throw error;
-      // A retry the draft's deadline cut short did not fail on Anthropic.
-      reportServiceFailure(input.log, error, "outline retry", signal);
-      if (ctx.outlineModel.keyOwner === "user" && providerError(error)) throw error;
-      console.error(`[draft] retry failed for ${label}`, error);
-      dropBreaches(final, breaches);
-      if (leaf) sizeChapterRows(final, ctx.materials);
-    }
-  }
-  yield { type: "done", nodes: final, costUsd };
+  yield { type: "done", nodes: final, problems, costUsd };
 }
 
-export const RETRY_HEADER = (n: number) => `Your previous answer broke these rules; return all ${n} units again, corrected:`;
+/** Puts a level's problems on the node it was planned inside; none leaves the node without `problems`. */
+function setProblems(node: PlanNode, problems: string[]): void {
+  if (problems.length > 0) node.problems = problems;
+  else delete node.problems;
+}
 
 export interface StreamPlanDraftInput extends Omit<PlanDraftRequest, "materials"> {
   /** The materials list research produced (the learner's own included). */
@@ -497,6 +463,7 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
       yield { type: "node", parentId: root.id, node: event.node };
     } else {
       root.children = event.nodes;
+      setProblems(root, event.problems);
       layout(root);
       costUsd += event.costUsd;
     }
@@ -520,6 +487,7 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
           yield { type: "node", parentId: parent.id, node: event.node };
         } else {
           parent.children = event.nodes;
+          setProblems(parent, event.problems);
           layout(root);
           costUsd += event.costUsd;
         }
@@ -584,7 +552,7 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
       kids.push(event.node);
       yield { type: "child", node: event.node };
     } else {
-      yield { type: "finish", children: event.nodes, costUsd: event.costUsd };
+      yield { type: "finish", children: event.nodes, problems: event.problems, costUsd: event.costUsd };
     }
   }
 }

@@ -74,6 +74,7 @@ export type PlanDraftEvent =
   | { type: "allocated"; materials: Material[]; dropped: DroppedMaterial[]; coverage: Coverage | null }
   /** Sent right after `allocated`, before any node: how the drafter divides the learner's time. */
   | { type: "split"; split: PlanSplit }
+  /** The drafted tree: its root's `problems` are the top level's, each planned parent's its own level's. */
   | { type: "finish"; root: PlanNode; costUsd: number }
   | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
@@ -123,7 +124,8 @@ export interface PlanExpandRequest extends PlanContext {
 
 export type PlanExpandEvent =
   | { type: "child"; node: PlanNode }
-  | { type: "finish"; children: PlanNode[]; costUsd: number }
+  /** `problems`: the planned level's rule breaks, one learner line each; empty when it keeps every rule. */
+  | { type: "finish"; children: PlanNode[]; problems: string[]; costUsd: number }
   | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
 
