@@ -42,7 +42,8 @@ Besides the database, Clerk and AI Gateway keys:
 Every user gets 500 free credits ($5 of model cost Pensieve pays) a period; a period starts at 00:00 UTC on their signup
 day of the month (`lib/credits.ts`). There is no stored balance: credits left are worked out from `generation_log`,
 whose `cost_usd` is what the AI Gateway charged for each call. Calls on a user's own key never reach the gateway: they
-record no cost and use no credits.
+record no cost and use no credits. The admin's model-calls panel shows them at a list-price estimate (`pricing` in
+`lib/ai/models.ts`), marked ≈, beside the gateway's charges for the rest.
 Run these in the database (the Neon SQL editor), with the user's Clerk id:
 
 - Give a user their full allowance back for the rest of this period:

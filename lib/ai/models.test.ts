@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AVAILABLE_MODELS, CANDIDATE_STEP_EFFORT, OUTLINE_EFFORT, DEFAULT_CHAT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_RESEARCH_MODEL, MODEL_PROVIDERS, RESEARCH_LOOP_EFFORT, providerOf } from "./models";
+import { AVAILABLE_MODELS, CANDIDATE_STEP_EFFORT, OUTLINE_EFFORT, DEFAULT_CHAT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_RESEARCH_MODEL, MODEL_PROVIDERS, RESEARCH_LOOP_EFFORT, estimateCostUsd, providerOf } from "./models";
 
 describe("AVAILABLE_MODELS", () => {
   it("every model id matches the provider/model gateway format", () => {
@@ -35,5 +35,25 @@ describe("AVAILABLE_MODELS", () => {
     expect(providerOf("google/gemini-3-flash")).toBe("google");
     expect(providerOf("openai/gpt-5.4-mini")).toBe("openai");
     expect(AVAILABLE_MODELS.map((m) => m.id)).toContain(DEFAULT_CHAT_MODEL);
+  });
+});
+
+describe("estimateCostUsd", () => {
+  it("prices fresh input, cached input and output at the model's list price", () => {
+    // Opus 5.5: $4 in, $0.20 cached in, $20 out per million tokens.
+    const usd = estimateCostUsd("anthropic/claude-opus-5.5", { inputTokens: 10_000, cacheReadTokens: 2_000, outputTokens: 1_000 });
+    expect(usd).toBeCloseTo(8_000 * 4e-6 + 2_000 * 0.2e-6 + 1_000 * 20e-6, 10);
+  });
+
+  it("counts missing token counts as none", () => {
+    expect(estimateCostUsd("anthropic/claude-haiku-4.5", { inputTokens: null, cacheReadTokens: null, outputTokens: 1_000_000 })).toBeCloseTo(5, 10);
+  });
+
+  it("has no estimate for a model it has no price for", () => {
+    expect(estimateCostUsd("anthropic/claude-gone" as never, { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 })).toBeNull();
+  });
+
+  it("knows a price for every model in the list", () => {
+    for (const model of AVAILABLE_MODELS) expect(estimateCostUsd(model.id, { inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0 })).toBeGreaterThan(0);
   });
 });
