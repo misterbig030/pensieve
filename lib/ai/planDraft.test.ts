@@ -11,7 +11,7 @@ import type { ModelCall } from "./logged";
 import type { ServiceEvent } from "./serviceEvents";
 import { STRUCTURE_ALLOCATE_MIN_MS, STRUCTURE_RESERVE_MS, type StructureFinder } from "./research/structureFinder";
 import { SourceFetcher } from "./research/tools";
-import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
+import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, toUnitTime, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
 import type { ResolvedModel } from "./resolve";
 import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
 import { aliasMaterials } from "@/lib/materials";
@@ -638,7 +638,7 @@ describe("breaches while drafting", () => {
     expect(prompt).toContain("Its 3 days cover, in order:");
     // Six hours over three days is two hours a day; must-reading is budgeted over the week, 40% of its 6 h.
     expect(prompt).toContain("3. Day 3 — budget about 2 h\n");
-    expect(prompt).toContain("Across the week, the days' must minutes add up to no more than about 2.4 h.");
+    expect(prompt).toContain("Across the week, the days' must minutes add up to no more than about 2 h 24 min.");
     expect(prompt).not.toContain("4. Day 4");
     expect(children.map((c) => c.len)).toEqual([1, 1, 1]);
     expect(calls[0].facts).toContain("3 of 3 units");
@@ -745,6 +745,55 @@ describe("practice while drafting", () => {
     );
     expect(node.practiceCovers).toEqual([{ format: "problem-set", id: "M2", note: "Arrays & Hashing" }]);
     expect(node.practice).toBeUndefined();
+  });
+});
+
+describe("unit time while drafting", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+  });
+  const problems = material("M2", { kind: "course", practice: { format: "problem-set", items: 150, perItemMinutes: 10, minutes: null, answers: true } });
+  const materials = [material("M1", { minutes: 300 }), problems];
+  const split = {
+    readingShare: 40,
+    practice: "problems and design",
+    reason: "r",
+    formats: [
+      { format: "problem-set" as const, share: 80, focus: "arrays", reason: "" },
+      { format: "design-exercise" as const, share: 20, focus: "systems", reason: "" },
+    ],
+  };
+  const ctx = { topic: "Interviews", weeks: 8, daysPerWeek: 5, granularity: "day" as const, materials, hoursPerWeek: 6, split };
+
+  it("keeps a heading's time for the picked formats, leaves a heading without one unset, and names a format the split never picked", async () => {
+    const month = makeNode({ id: "m1", level: "month", title: "Foundations", summary: "s", len: 10 });
+    mockedStreamObject.mockReturnValueOnce(
+      fakeStream([
+        { title: "W1", summary: "s", time: { reading: 150, practice: [{ format: "problem-set", minutes: 180 }, { format: "lab", minutes: 30 }] } },
+        { title: "W2", summary: "s" },
+      ]),
+    );
+    const calls: ModelCall[] = [];
+    let children: PlanNode[] = [];
+    for await (const e of streamExpandNode({ ...ctx, tree: makeRoot([month]), nodeId: "m1", reason: "expand", log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") children = e.children;
+    expect(children[0].time).toEqual({ reading: 150, practice: { "problem-set": 180 } });
+    expect(children[1].time).toBeUndefined();
+    expect(calls[0].facts.filter((f) => f.includes("lab"))).toEqual(["dropped time for unpicked lab"]);
+  });
+
+  it("puts no time on leaves", async () => {
+    const week = makeNode({ id: "w1", level: "week", title: "Arrays", summary: "s", len: 2 });
+    mockedStreamObject.mockReturnValueOnce(fakeStream([1, 2].map((n) => ({ title: `D${n}`, summary: "s", time: { reading: 30, practice: [{ format: "problem-set" as const, minutes: 40 }] } }))));
+    let children: PlanNode[] = [];
+    for await (const e of streamExpandNode({ ...ctx, tree: makeRoot([week]), nodeId: "w1", reason: "expand" })) if (e.type === "finish") children = e.children;
+    expect(children.map((c) => c.time)).toEqual([undefined, undefined]);
+  });
+});
+
+describe("toUnitTime", () => {
+  it("sums a format given twice and returns the formats the split never picked", () => {
+    const draft = { reading: 60, practice: [{ format: "problem-set" as const, minutes: 40 }, { format: "mock" as const, minutes: 75 }, { format: "problem-set" as const, minutes: 20 }] };
+    expect(toUnitTime(draft, ["problem-set", "recall"])).toEqual({ time: { reading: 60, practice: { "problem-set": 60 } }, unpicked: ["mock"] });
   });
 });
 

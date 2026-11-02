@@ -1,9 +1,11 @@
 import { streamObject } from "ai";
+import type { z } from "zod";
 import {
   aliasMaterials,
   dropBreaches,
   levelChecks,
   noSourceFacts,
+  pickSources,
   plainUnitText,
   resolveCoverRefs,
   resolveMaterialRefs,
@@ -31,9 +33,10 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
+import type { PracticeFormat } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
-import { unitListSchema, type UnitDraft } from "@/lib/schemas/plan";
-import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
+import { unitListSchema, type UnitDraft, type UnitTime, type unitTimeDraftSchema } from "@/lib/schemas/plan";
+import { DEFAULT_HOURS_PER_WEEK, activePicks, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { reportServiceFailure } from "./serviceEvents";
 import { allocatePlan } from "./allocate";
@@ -76,6 +79,32 @@ export function unitsAreLeaves(level: PlanLevel, granularity: Granularity): bool
   return level === "day" || (level === "week" && granularity === "week");
 }
 
+/**
+ * A heading's time as the model wrote it, as the node keeps it: practice by format, a format given twice summed. Formats
+ * not in `picked` (the split's picks the units can be given) are left out and returned.
+ */
+export function toUnitTime(draft: z.infer<typeof unitTimeDraftSchema>, picked: readonly PracticeFormat[]): { time: UnitTime; unpicked: PracticeFormat[] } {
+  const practice: UnitTime["practice"] = {};
+  const unpicked: PracticeFormat[] = [];
+  // A streamed unit is not validated yet: its practice may be missing until the level is in.
+  for (const { format, minutes } of draft.practice ?? []) {
+    if (!picked.includes(format)) {
+      if (!unpicked.includes(format)) unpicked.push(format);
+      continue;
+    }
+    practice[format] = (practice[format] ?? 0) + minutes;
+  }
+  return { time: { reading: draft.reading, practice }, unpicked };
+}
+
+/** The formats a heading's time may name: the split's picks the units can be given, or, without the materials to tell, all its picks. */
+function pickedFormats(split: PlanSplit | null | undefined, materials?: Pick<Material, "id" | "practice" | "minutes">[]): PracticeFormat[] {
+  if (!materials) return activePicks(split).map((p) => p.format);
+  return pickSources(split, materials)
+    .filter((p) => p.assignable)
+    .map((p) => p.pick.format);
+}
+
 /** Builds a node for a drafted unit: leaves get a time budget when they are week-sized. */
 export function nodeFor(
   unit: UnitDraft,
@@ -85,6 +114,7 @@ export function nodeFor(
   aliases?: MaterialAliases,
   hoursPerWeek?: number,
   split?: PlanSplit | null,
+  picked?: readonly PracticeFormat[],
 ): PlanNode {
   const leaf = unitsAreLeaves(level, granularity);
   const node = makeNode({
@@ -95,15 +125,17 @@ export function nodeFor(
     budgetHours: leaf && level !== "day" ? budgetFor(1, hoursPerWeek) : null,
     children: null,
   });
-  if (aliases) applyUnitRefs(node, unit, leaf, aliases, split);
+  if (aliases) applyUnitRefs(node, unit, leaf, aliases, split, picked);
   return node;
 }
 
 /**
  * Puts what the model wrote for references onto the node: leaves keep `materials` (their Read table) and `practice`
  * (their practice rows), headings keep `covers` and `practiceCovers` (their reservations; a listed source's without a
- * run, which `sizeItemRuns` sizes once the level is in). Returns the ids that are not in the list and the practice rows
- * the rules refuse; both are dropped.
+ * run, which `sizeItemRuns` sizes once the level is in) and `time` (the minutes the unit gives each activity, for the
+ * formats in `picked`, the split's picks by default). Leaves never carry `time`. Returns the ids that are not in the
+ * list, the practice rows the rules refuse and the formats a heading's time named that the split did not pick; all are
+ * dropped.
  */
 export function applyUnitRefs(
   node: PlanNode,
@@ -111,24 +143,29 @@ export function applyUnitRefs(
   leaf: boolean,
   aliases: MaterialAliases,
   split?: PlanSplit | null,
-): { unknown: string[]; refused: string[] } {
+  picked: readonly PracticeFormat[] = pickedFormats(split),
+): { unknown: string[]; refused: string[]; unpicked: PracticeFormat[] } {
   delete node.covers;
   delete node.materials;
   delete node.practice;
   delete node.practiceCovers;
+  delete node.time;
   if (leaf) {
     const reading = resolveMaterialRefs(unit.materials, aliases);
     if (reading.refs.length > 0) node.materials = reading.refs;
     const practice = resolvePracticeRefs(unit.practice, aliases, split, reading.refs.map((r) => r.id));
     if (practice.refs.length > 0) node.practice = practice.refs;
-    return { unknown: [...reading.unknown, ...practice.unknown], refused: practice.refused };
+    return { unknown: [...reading.unknown, ...practice.unknown], refused: practice.refused, unpicked: [] };
   }
   const reading = resolveCoverRefs(unit.covers, aliases);
   if (reading.refs.length > 0) node.covers = reading.refs;
   // A listed source's runs are sized in code once the level is in (`sizeItemRuns`): the model only chose the units.
   const practice = resolvePracticeCovers(unit.practiceCovers, aliases, split, { sized: true });
   if (practice.refs.length > 0) node.practiceCovers = practice.refs;
-  return { unknown: [...reading.unknown, ...practice.unknown], refused: [] };
+  // A heading the model gave no time stays without: the checks report it.
+  const time = unit.time ? toUnitTime(unit.time, picked) : null;
+  if (time) node.time = time.time;
+  return { unknown: [...reading.unknown, ...practice.unknown], refused: [], unpicked: time?.unpicked ?? [] };
 }
 
 /**
@@ -291,6 +328,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   const where = input.tree && parentNode ? fullLabelOf(input.tree, parentNode) : "Top level";
   const n = input.spans.length;
   const label = `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
+  const picked = pickedFormats(ctx.split, ctx.materials);
   const nodes: PlanNode[] = [];
   let final: PlanNode[] = [];
   let breaches: Breach[] = [];
@@ -302,6 +340,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     const spans = reconcileSpans(input.spans, units.length, level, ctx.daysPerWeek);
     const unknown: string[] = [];
     const refused: string[] = [];
+    const unpicked = new Set<PracticeFormat>();
     final = units.map((unit, i) => {
       const node = nodes[i] ?? nodeFor(unit, level, spans[i], ctx.granularity, undefined, ctx.hoursPerWeek);
       node.title = unit.title;
@@ -310,14 +349,19 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       node.end = node.start + node.len - 1;
       if (node.budgetHours !== null) node.budgetHours = budgetFor(1, ctx.hoursPerWeek);
       if (aliases) {
-        const out = applyUnitRefs(node, unit, leaf, aliases, ctx.split);
+        const out = applyUnitRefs(node, unit, leaf, aliases, ctx.split, picked);
         unknown.push(...out.unknown);
         refused.push(...out.refused);
+        for (const f of out.unpicked) unpicked.add(f);
       }
       return node;
     });
     if (!aliases) return [];
-    const practiceFacts = [...noSourceFacts(ctx.split, ctx.materials), ...(refused.length > 0 ? [`refused ${refused.join("; ")}`] : [])];
+    const practiceFacts = [
+      ...noSourceFacts(ctx.split, ctx.materials),
+      ...(refused.length > 0 ? [`refused ${refused.join("; ")}`] : []),
+      ...(unpicked.size > 0 ? [`dropped time for unpicked ${[...unpicked].join(", ")}`] : []),
+    ];
     // The checks run without materials too: a plan with no sources can still have practice written without one.
     // Chapter rows take their minutes from the list before the budget is judged, so the checks see real sizes.
     if (leaf) sizeChapterRows(final, ctx.materials);
@@ -350,7 +394,7 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   for await (const event of streamUnits({ ...base, prompt, label, signal: input.signal ?? within(ctx.signal, timeLeft(ctx.deadline)) })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
-      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split);
+      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split, picked);
       if (aliases) plainUnitText(node, ctx.materials, aliases);
       nodes.push(node);
       yield { type: "node", node };

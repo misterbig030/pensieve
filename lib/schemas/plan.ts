@@ -32,8 +32,8 @@ export const problemsSchema = z.array(z.string().min(1).max(500)).max(40);
 
 /**
  * What the model writes for one unit whose span the server already decided. Headings reserve materials (`covers`) and
- * practice sources (`practiceCovers`); leaves assign them (`materials`, `practice`). Each is left out when the plan has
- * nothing for it.
+ * practice sources (`practiceCovers`) and say how they spend their hours (`time`); leaves assign them (`materials`,
+ * `practice`). Each is left out when the plan has nothing for it.
  */
 export const unitDraftSchema = z.object({
   title: z.string().min(1),
@@ -42,6 +42,7 @@ export const unitDraftSchema = z.object({
   materials: z.array(materialRefDraftSchema).optional().describe("Leaves only: this unit's Read table"),
   practiceCovers: z.array(practiceCoverDraftSchema).optional().describe("Headings only: practice sources this unit reserves, by id"),
   practice: z.array(practiceRefDraftSchema).optional().describe("Leaves only: this unit's practice rows"),
+  time: unitTimeDraftSchema.optional().describe("Headings only: this unit's minutes of must-reading and of each practice format"),
 });
 export const unitListSchema = z.object({
   units: z.array(unitDraftSchema).min(1).max(40),
