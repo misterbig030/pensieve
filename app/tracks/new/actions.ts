@@ -31,12 +31,18 @@ export async function confirmTrackAction(input: {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
+  // Every input is checked before anything is written or vetted.
   const topic = topicSchema.parse(input.topic);
   let root = fromTreeInput(planTreeInputSchema.parse(input.tree));
   const granularity = granularitySchema.parse(input.granularity);
+  const hoursPerWeek = hoursPerWeekSchema.parse(input.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK);
+  const daysPerWeek = daysPerWeekSchema.parse(input.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK);
+  const split = planSplitSchema.nullable().parse(input.split ?? null);
+  const problems = problemsSchema.parse(input.problems ?? []);
+  const listed = materialListSchema.parse(input.materials);
 
   // A forged "verified" badge must not reach a saved plan: unsigned research materials are checked again.
-  const { materials, dropped } = await vetMaterials(materialListSchema.parse(input.materials));
+  const { materials, dropped } = await vetMaterials(listed);
   for (const m of dropped) root = removeMaterialRefs(root, m.id);
 
   const { trackId, droppedRefs } = await createTrackWithPlan({
@@ -45,10 +51,10 @@ export async function confirmTrackAction(input: {
     instructions: input.instructions,
     summary: input.summary,
     granularity,
-    hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK),
-    daysPerWeek: daysPerWeekSchema.parse(input.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK),
-    split: planSplitSchema.nullable().parse(input.split ?? null),
-    problems: problemsSchema.parse(input.problems ?? []),
+    hoursPerWeek,
+    daysPerWeek,
+    split,
+    problems,
     materials,
     root,
   });

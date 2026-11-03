@@ -40,25 +40,29 @@ export async function confirmRevisionAction(input: {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
+  // Every input is checked before anything is written, so a bad one never leaves the plan half-saved.
   const root = fromTreeInput(planTreeInputSchema.parse(input.tree));
+  const materialIds = z.array(z.string().uuid()).max(200).parse(input.materialIds);
+  const problems = input.problems === undefined ? undefined : problemsSchema.parse(input.problems);
   const detail = await getTrackDetail(input.trackId, userId);
   if (!detail) throw new Error("Track not found");
+  const studyTime =
+    input.hoursPerWeek === undefined
+      ? undefined
+      : {
+          hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek),
+          daysPerWeek: input.daysPerWeek === undefined ? undefined : daysPerWeekSchema.parse(input.daysPerWeek),
+          split: input.split === undefined ? detail.track.split : planSplitSchema.nullable().parse(input.split),
+        };
 
   // The client never changes locked nodes, but the server re-checks before writing.
   const lockBefore = lockBoundary(detail.root);
   const missingLocked = lockedIds(detail.root, lockBefore).filter((id) => !findNode(root, id));
   if (missingLocked.length > 0) throw new Error("The revised plan drops days you have already completed");
 
-  const materialIds = z.array(z.string().uuid()).max(200).parse(input.materialIds);
   await replacePlanTree(input.trackId, userId, root, materialIds);
-  if (input.problems !== undefined) await updateTrackProblems(input.trackId, userId, problemsSchema.parse(input.problems));
-  if (input.hoursPerWeek !== undefined) {
-    await updateTrackStudyTime(input.trackId, userId, {
-      hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek),
-      daysPerWeek: input.daysPerWeek === undefined ? undefined : daysPerWeekSchema.parse(input.daysPerWeek),
-      split: input.split === undefined ? detail.track.split : planSplitSchema.nullable().parse(input.split),
-    });
-  }
+  if (problems !== undefined) await updateTrackProblems(input.trackId, userId, problems);
+  if (studyTime) await updateTrackStudyTime(input.trackId, userId, studyTime);
   const fresh = await getTrackDetail(input.trackId, userId);
   await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title, fresh!.track.daysPerWeek));
   revalidatePath(`/tracks/${input.trackId}`);

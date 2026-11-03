@@ -16,6 +16,7 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
+import { capProblems } from "@/lib/schemas/plan";
 import type { PlanSplit } from "@/lib/studyTime";
 import type { GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
@@ -171,5 +172,5 @@ export async function redraftPlan(input: RedraftInput): Promise<RedraftResult> {
     costUsd += step.value;
     for (let p: PlanNode | undefined = first; p?.children; p = p.children[0]) problems.push(...(p.problems ?? []));
   }
-  return { tree: layout(root), problems, costUsd };
+  return { tree: layout(root), problems: capProblems(problems), costUsd };
 }

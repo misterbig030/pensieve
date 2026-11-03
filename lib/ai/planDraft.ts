@@ -34,7 +34,7 @@ import {
 } from "@/lib/planTree";
 import type { PracticeFormat } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
-import { unitListSchema, type UnitDraft, type UnitTime, type unitTimeDraftSchema } from "@/lib/schemas/plan";
+import { capProblems, MAX_UNIT_MINUTES, unitListSchema, type UnitDraft, type UnitTime, type unitTimeDraftSchema } from "@/lib/schemas/plan";
 import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortOptions, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { reportServiceFailure } from "./serviceEvents";
@@ -79,7 +79,8 @@ export function unitsAreLeaves(level: PlanLevel, granularity: Granularity): bool
 
 /**
  * A heading's time as the model wrote it, as the node keeps it: practice by format, a format given twice summed. Formats
- * not in `picked` (the split's picks the units can be given) are left out and returned.
+ * not in `picked` (the split's picks the units can be given) are left out and returned. Each activity is held to
+ * `MAX_UNIT_MINUTES`, what a saved unit may keep, so a slip does not fail the plan's save; `timeOverLimit` tells it.
  */
 export function toUnitTime(draft: z.infer<typeof unitTimeDraftSchema>, picked: readonly PracticeFormat[]): { time: UnitTime; unpicked: PracticeFormat[] } {
   const practice: UnitTime["practice"] = {};
@@ -90,9 +91,22 @@ export function toUnitTime(draft: z.infer<typeof unitTimeDraftSchema>, picked: r
       if (!unpicked.includes(format)) unpicked.push(format);
       continue;
     }
-    practice[format] = (practice[format] ?? 0) + minutes;
+    practice[format] = Math.min(MAX_UNIT_MINUTES, (practice[format] ?? 0) + minutes);
   }
-  return { time: { reading: draft.reading, practice }, unpicked };
+  return { time: { reading: Math.min(MAX_UNIT_MINUTES, draft.reading), practice }, unpicked };
+}
+
+/** Whether the model wrote more minutes for one of a heading's activities than a saved unit may keep (`toUnitTime` clamps them). */
+export function timeOverLimit(draft: z.infer<typeof unitTimeDraftSchema>): boolean {
+  const byFormat = new Map<PracticeFormat, number>();
+  for (const { format, minutes } of draft.practice ?? []) byFormat.set(format, (byFormat.get(format) ?? 0) + minutes);
+  return draft.reading > MAX_UNIT_MINUTES || [...byFormat.values()].some((m) => m > MAX_UNIT_MINUTES);
+}
+
+/** The admin fact for headings whose time was clamped: none when no unit's was. */
+export function clampedTimeFacts(times: (z.infer<typeof unitTimeDraftSchema> | undefined)[]): string[] {
+  const n = times.filter((t) => t && timeOverLimit(t)).length;
+  return n > 0 ? [`clamped time to ${MAX_UNIT_MINUTES} min an activity on ${n} unit${n === 1 ? "" : "s"}`] : [];
 }
 
 /** Builds a node for a drafted unit: leaves get a time budget when they are week-sized. */
@@ -364,6 +378,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
       ...noSourceFacts(ctx.split, ctx.materials),
       ...(refused.length > 0 ? [`refused ${refused.join("; ")}`] : []),
       ...(unpicked.size > 0 ? [`dropped time for unpicked ${[...unpicked].join(", ")}`] : []),
+      ...(leaf ? [] : clampedTimeFacts(units.map((u) => u.time))),
     ];
     // The checks run without materials too: a plan with no sources can still have practice written without one.
     // Chapter rows take their minutes from the list before the budget is judged, so the checks see real sizes.
@@ -399,7 +414,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
     // can't change, and it is measured against today's settings. It stays a fact for the admin panel. Plan-wide
     // breaches (index -1) count the kept units' time and stay problems.
     const fixed = (index: number) => index >= 0 && index < kept.length;
-    problems = checks.problems.filter((_, i) => !fixed(checks.breaches[i].index));
+    problems = capProblems(checks.problems.filter((_, i) => !fixed(checks.breaches[i].index)));
     const facts = [...checks.facts, ...sizing, ...practiceFacts, ...checks.breaches.map((b) => `${fixed(b.index) ? "kept unit" : "breach"}: ${b.text}`)];
     // After the checks, which read notes as written: ids the model copied from its prompt are put in words for the learner.
     const plain = final.reduce((sum, node) => sum + plainUnitText(node, ctx.materials, aliases), 0);
@@ -424,9 +439,9 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
   yield { type: "done", nodes: final, problems, costUsd };
 }
 
-/** Puts a level's problems on the node it was planned inside; none leaves the node without `problems`. */
+/** Puts a level's problems on the node it was planned inside, within their limits; none leaves the node without `problems`. */
 export function setProblems(node: PlanNode, problems: string[]): void {
-  if (problems.length > 0) node.problems = problems;
+  if (problems.length > 0) node.problems = capProblems(problems);
   else delete node.problems;
 }
 

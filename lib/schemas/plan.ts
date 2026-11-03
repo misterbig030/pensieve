@@ -16,10 +16,12 @@ export const planLevelSchema = z.enum(PLAN_LEVELS);
 export const granularityChoiceSchema = z.enum(["day", "week", "auto"]);
 export const granularitySchema = z.enum(["day", "week"]);
 
+/** The most minutes a saved unit gives one activity (`unitTimeSchema`); what the model writes past it is clamped. */
+export const MAX_UNIT_MINUTES = 30000;
 /** Minutes the outline gave one heading unit per activity: reading, and each practice format. */
 export const unitTimeSchema = z.object({
-  reading: z.number().int().min(0).max(30000),
-  practice: z.partialRecord(z.enum(PRACTICE_FORMATS), z.number().int().min(0).max(30000)),
+  reading: z.number().int().min(0).max(MAX_UNIT_MINUTES),
+  practice: z.partialRecord(z.enum(PRACTICE_FORMATS), z.number().int().min(0).max(MAX_UNIT_MINUTES)),
 });
 export type UnitTime = { reading: number; practice: Partial<Record<PracticeFormat, number>> };
 /** The same as the model writes it: practice as an array, for a plainer JSON schema. */
@@ -27,8 +29,23 @@ export const unitTimeDraftSchema = z.object({
   reading: z.number().int().min(0),
   practice: z.array(z.object({ format: z.enum(PRACTICE_FORMATS), minutes: z.number().int().min(0) })),
 });
+/** The most problem lines a node or track keeps, and the most characters in one. */
+export const MAX_PROBLEMS = 40;
+export const MAX_PROBLEM_CHARS = 500;
 /** Learner-facing lines for code-checked problems, saved on the node whose level they belong to. */
-export const problemsSchema = z.array(z.string().min(1).max(500)).max(40);
+export const problemsSchema = z.array(z.string().min(1).max(MAX_PROBLEM_CHARS)).max(MAX_PROBLEMS);
+
+/**
+ * Problem lines as they are kept, within `problemsSchema`: a line past the limit is shortened, its ellipsis inside it,
+ * and past the most lines the first ones stay with a last line saying how many more there were. Every writer of
+ * `problems` goes through it, so a long list never fails a save or a later request.
+ */
+export function capProblems(lines: readonly string[]): string[] {
+  const fit = (line: string) => (line.length > MAX_PROBLEM_CHARS ? `${line.slice(0, MAX_PROBLEM_CHARS - 1)}…` : line);
+  if (lines.length <= MAX_PROBLEMS) return lines.map(fit);
+  const kept = lines.slice(0, MAX_PROBLEMS - 1).map(fit);
+  return [...kept, `…and ${lines.length - kept.length} more.`];
+}
 
 /**
  * What the model writes for one unit whose span the server already decided. Headings reserve materials (`covers`) and

@@ -11,7 +11,8 @@ import type { ModelCall } from "./logged";
 import type { ServiceEvent } from "./serviceEvents";
 import { STRUCTURE_ALLOCATE_MIN_MS, STRUCTURE_RESERVE_MS, type StructureFinder } from "./research/structureFinder";
 import { SourceFetcher } from "./research/tools";
-import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, toUnitTime, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
+import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, timeOverLimit, toUnitTime, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
+import { MAX_UNIT_MINUTES, unitTimeSchema } from "@/lib/schemas/plan";
 import type { ResolvedModel } from "./resolve";
 import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
 import { aliasMaterials } from "@/lib/materials";
@@ -805,6 +806,15 @@ describe("toUnitTime", () => {
   it("sums a format given twice and returns the formats the split never picked", () => {
     const draft = { reading: 60, practice: [{ format: "problem-set" as const, minutes: 40 }, { format: "mock" as const, minutes: 75 }, { format: "problem-set" as const, minutes: 20 }] };
     expect(toUnitTime(draft, ["problem-set", "recall"])).toEqual({ time: { reading: 60, practice: { "problem-set": 60 } }, unpicked: ["mock"] });
+  });
+
+  it("holds each activity's minutes to what a saved unit may keep, so a slip does not fail the plan's save", () => {
+    const draft = { reading: 45000, practice: [{ format: "problem-set" as const, minutes: 20000 }, { format: "problem-set" as const, minutes: 20000 }, { format: "recall" as const, minutes: 90 }] };
+    const { time } = toUnitTime(draft, ["problem-set", "recall"]);
+    expect(time).toEqual({ reading: MAX_UNIT_MINUTES, practice: { "problem-set": MAX_UNIT_MINUTES, recall: 90 } });
+    expect(unitTimeSchema.safeParse(time).success).toBe(true);
+    expect(timeOverLimit(draft)).toBe(true);
+    expect(timeOverLimit({ reading: 60, practice: [{ format: "recall", minutes: 90 }] })).toBe(false);
   });
 });
 
