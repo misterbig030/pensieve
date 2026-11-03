@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layout, makeNode, makeRoot } from "@/lib/planTree";
-import { clampHours, dayMinutes, formatDayTime, formatUnitTime, hoursInText, isAllReading, normalizeSplit, planSplitSchema, practiceLabelOf, presetFor, readingShareOf, rebudget, shareAdjustable, totalHours, weeksLabel } from "./studyTime";
+import { clampHours, dayMinutes, formatDayTime, formatUnitTime, hoursInText, isAllReading, normalizeSplit, planSplitSchema, practiceLabelOf, presetFor, readingShareOf, shareAdjustable, totalHours, weeksLabel } from "./studyTime";
 
 describe("hours", () => {
   it("totals the plan's hours over its weeks", () => {
@@ -141,16 +140,5 @@ describe("split", () => {
   it("reads as a fraction, or null for plans without one", () => {
     expect(readingShareOf({ readingShare: 85, practice: "writing", reason: "" })).toBe(0.85);
     expect(readingShareOf(null)).toBeNull();
-  });
-});
-
-describe("rebudget", () => {
-  it("re-budgets open weeks and leaves completed and locked ones alone", () => {
-    const week = (id: string, status: "pending" | "completed" = "pending") => makeNode({ id, level: "week", title: id, summary: id, len: 7, budgetHours: 6, status });
-    const heading = makeNode({ id: "w4", level: "week", title: "w4", summary: "w4", len: 7 });
-    const root = layout(makeRoot([week("w1", "completed"), week("w2"), week("w3"), heading]));
-    const next = rebudget(root, 10, 14);
-    expect(next.children!.map((n) => n.budgetHours)).toEqual([6, 6, 10, null]);
-    expect(root.children![2].budgetHours).toBe(6);
   });
 });

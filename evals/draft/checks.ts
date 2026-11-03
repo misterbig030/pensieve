@@ -12,7 +12,7 @@ import type { DraftTopic } from "./topics";
 export type Verdict = { id: 1 | 2 | 3 | 4 | 5 | 6; name: string; status: "pass" | "fail" | "n/a"; evidence: string[] };
 
 export interface Warning {
-  kind: "expected-books" | "drop-reasons" | "refusal-rate" | "sizes" | "cost-time" | "retries";
+  kind: "expected-books" | "drop-reasons" | "refusal-rate" | "sizes" | "cost-time" | "retries" | "problems";
   text: string;
 }
 
@@ -485,7 +485,7 @@ function costTimeWarnings(record: RunRecord): Warning[] {
   return out;
 }
 
-/** Per service, the failed attempts and the calls that gave up; and levels re-asked after a breach (`breach:` facts). */
+/** Per service, the failed attempts and the calls that gave up. */
 function retryWarning(record: RunRecord): Warning | null {
   const counts = new Map<string, { attempts: number; finals: number }>();
   for (const e of record.events) {
@@ -495,14 +495,16 @@ function retryWarning(record: RunRecord): Warning | null {
     else c.attempts += 1;
     counts.set(e.name, c);
   }
-  const breaches = record.calls.reduce((sum, call) => sum + call.facts.filter((f) => f.startsWith("breach:")).length, 0);
-  if (counts.size === 0 && breaches === 0) return null;
+  if (counts.size === 0) return null;
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  const parts = [
-    ...[...counts].map(([name, c]) => `${name}: ${plural(c.attempts, "failed attempt")}, ${plural(c.finals, "call")} gave up`),
-    ...(breaches > 0 ? [`breach re-asks: ${breaches}`] : []),
-  ];
+  const parts = [...counts].map(([name, c]) => `${name}: ${plural(c.attempts, "failed attempt")}, ${plural(c.finals, "call")} gave up`);
   return { kind: "retries", text: parts.join("; ") };
+}
+
+/** The rule breaks the checks reported to the learner as problems (`breach:` facts); the draft keeps them as written. */
+function problemsWarning(record: RunRecord): Warning | null {
+  const reported = record.calls.reduce((sum, call) => sum + call.facts.filter((f) => f.startsWith("breach:")).length, 0);
+  return reported > 0 ? { kind: "problems", text: `reported problems: ${reported}` } : null;
 }
 
 function expectedBooksWarning(record: RunRecord, topic: DraftTopic): Warning | null {
@@ -534,6 +536,7 @@ export function checkRun(record: RunRecord, topic: DraftTopic): { verdicts: Verd
     ...sizeWarnings(record),
     ...costTimeWarnings(record),
     retryWarning(record),
+    problemsWarning(record),
   ].filter((w): w is Warning => w !== null);
   return { verdicts, warnings, passed: verdicts.every((v) => v.status !== "fail") };
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MAX_PRACTICE_PICKS, PRACTICE_FORMATS, PRACTICE_REGISTRY, normalizePicks, practicePickDraftSchema, practicePickSchema } from "@/lib/practice";
-import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, MAX_DAYS_PER_WEEK, budgetFor, cloneTree, isLocked, walk, type PlanNode } from "@/lib/planTree";
+import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, MAX_DAYS_PER_WEEK } from "@/lib/planTree";
 import type { UnitTime } from "@/lib/schemas/plan";
 
 /**
@@ -169,18 +169,4 @@ export function activePicks(split: PlanSplit | null | undefined): NonNullable<Pl
 /** The reading share as a fraction, or null when the plan has no split (older plans fall back to a fixed share). */
 export function readingShareOf(split: PlanSplit | null | undefined): number | null {
   return split ? split.readingShare / 100 : null;
-}
-
-/**
- * The tree with every open week-sized leaf budgeted for `hoursPerWeek`. Completed and locked weeks keep the budget
- * they were studied under.
- */
-export function rebudget<T extends PlanNode>(root: T, hoursPerWeek: number, lockBefore = 0): T {
-  const next = cloneTree(root);
-  walk(next, (node) => {
-    if (node.children !== null || node.budgetHours === null) return;
-    if (node.status === "completed" || isLocked(node, lockBefore)) return;
-    node.budgetHours = budgetFor(1, hoursPerWeek);
-  });
-  return next;
 }

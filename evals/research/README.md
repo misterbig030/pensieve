@@ -45,9 +45,7 @@ and practice. Each run now records:
   page's own length, against the model's estimates) and `unsizedShare`;
 - `coverage`: how many of the topic's main areas research named as covered and as left open;
 - `split`: the drafter's reading share, what the rest is spent on, and its reason, for the judges to score under
-  rubric dimension 5 (fit to the kind of topic);
-- `overShareLeaves`: weeks whose must-reading ran well past the week's reading budget (the drafting checks'
-  must-reading breach, counted on every call that raised it).
+  rubric dimension 5 (fit to the kind of topic).
 
 Four records at the end of `golden.v3.ts` exist for this: three hours a week, thirty hours a week, a history topic
 with nothing to build, and physical training.

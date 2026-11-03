@@ -47,8 +47,9 @@ import { researchMaterials, type ResearchMaterialsInput } from "./research/pipel
 
 /**
  * The draft's time budget, inside the route's 300 s with room for the last events. Measured on 2026-10-24 (SDE, 8
- * weeks, Opus at high effort): research 59 s, the allocation 20 s, the weeks 36 s and their retry 31 s, the first
- * week's days 47 s. Research runs first and takes what it takes; what is left is shared out below.
+ * weeks, Opus at high effort): research 59 s, the allocation 20 s, the weeks 36 s, the first week's days 47 s. A level
+ * is called once (what breaks a rule is reported, not re-asked). Research runs first and takes what it takes; what is
+ * left is shared out below.
  */
 export const DRAFT_BUDGET_MS = 285_000;
 /** The longest the allocation may run; past it, code allocates and the plan is all reading. */
