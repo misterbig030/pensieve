@@ -568,13 +568,17 @@ describe("the forced answer on Anthropic", () => {
     expect(beta).toContain("thinking-binding-controls-2026-08-01");
   });
 
+  it("sends no Anthropic options on the forced step for other providers", () => {
+    expect(answerStepOptions("medium", "google/gemini-3-flash")).toBeUndefined();
+    expect(answerStepOptions("medium", "mock-model-id")).toBeUndefined();
+  });
+
   it("leaves the thinking alone for a model that keeps every tool when forced, by gateway id or API id", () => {
     // Haiku 4.5 has no adaptive thinking and is sent the whole tool list with the forced choice, so nothing mismatches.
     expect(answerStepOptions("medium", "claude-haiku-4-5")).toEqual({ anthropic: { effort: "medium" } });
     expect(answerStepOptions("medium", "anthropic/claude-sonnet-5")).toEqual({ anthropic: { effort: "medium" } });
-    expect(answerStepOptions("medium", "mock-model-id")).toEqual({ anthropic: { effort: "medium" } });
     for (const id of ["anthropic/claude-sonnet-5.5", "claude-opus-5-5", "anthropic/claude-opus-5.5"]) {
-      expect(answerStepOptions("medium", id).anthropic).toHaveProperty("thinking", { type: "adaptive", blockBinding: { prefixMismatchBehavior: "drop_block" } });
+      expect(answerStepOptions("medium", id)?.anthropic).toHaveProperty("thinking", { type: "adaptive", blockBinding: { prefixMismatchBehavior: "drop_block" } });
     }
   });
 });

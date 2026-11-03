@@ -36,7 +36,7 @@ import type { PracticeFormat } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
 import { capProblems, MAX_UNIT_MINUTES, unitListSchema, type UnitDraft, type UnitTime, type unitTimeDraftSchema } from "@/lib/schemas/plan";
 import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
-import { buildGenerationLogRow, effortOptions, emitGenerationLog, type GenerationLogContext } from "./logged";
+import { buildGenerationLogRow, effortSettings, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { reportServiceFailure } from "./serviceEvents";
 import { allocatePlan } from "./allocate";
 import { DEFAULT_ALLOCATE_MODEL, DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
@@ -221,7 +221,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     model: input.model.model,
     schema: unitListSchema,
     prompt: input.prompt,
-    providerOptions: effortOptions(OUTLINE_EFFORT),
+    ...effortSettings(OUTLINE_EFFORT, input.model.id),
     maxRetries: OUTLINE_MAX_RETRIES,
     ...(input.signal ? { abortSignal: input.signal } : {}),
     onError: ({ error }) => {

@@ -24,7 +24,7 @@ import {
 import { normalizeSplit, practiceLabelOf, totalHours, type PlanSplit } from "@/lib/studyTime";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { reportServiceFailure } from "./serviceEvents";
-import { ALLOCATE_EFFORT } from "./models";
+import { ALLOCATE_EFFORT, type ReasoningEffort } from "./models";
 import { formatMinutes, practiceTag, sizingSentence } from "./planPrompt";
 import { providerError } from "./providerError";
 import type { Coverage, DroppedMaterial } from "./research/events";
@@ -480,6 +480,8 @@ export interface Allocation {
   facts: string[];
   /** What the plan covers of the topic and leaves open, as the allocation states it; null when it states none or code chose. */
   coverage: Coverage | null;
+  /** Why code chose instead of the model's answer ("no researched material mentioned", "no valid split from the allocation"); null when the answer was used. */
+  fallbackReason: string | null;
 }
 
 /** A part that keeps a material whole: every field null, no drop. */
@@ -536,7 +538,7 @@ export function applyAllocation(draft: AllocationDraft, input: AllocationInput):
   const researched = input.materials.filter((m) => m.origin !== "learner");
   if (researched.length > 0 && !researched.some((m) => parts.has(m.id) || m.id === namedBackbone)) {
     const fallback = fallbackAllocation(input);
-    return { ...fallback, facts: ["no researched material mentioned", ...fallback.facts] };
+    return { ...fallback, facts: ["no researched material mentioned", ...fallback.facts], fallbackReason: "no researched material mentioned" };
   }
 
   const materials: Material[] = [];
@@ -586,7 +588,7 @@ export function applyAllocation(draft: AllocationDraft, input: AllocationInput):
   // Nothing usable: no valid split comes out of normalisation, so code chooses instead.
   if (!provisional) {
     const fallback = fallbackAllocation(input);
-    return { ...fallback, facts: ["no valid split from the allocation", ...fallback.facts] };
+    return { ...fallback, facts: ["no valid split from the allocation", ...fallback.facts], fallbackReason: "no valid split from the allocation" };
   }
   const unassignable = pickSources(provisional, materials)
     .filter((s) => !s.assignable)
@@ -624,7 +626,7 @@ export function applyAllocation(draft: AllocationDraft, input: AllocationInput):
     const time = Math.round((practiceMinutes * p.share) / 100);
     if (time > 0 && Math.abs(kept - time) > time / 4) facts.push(`${p.format}: kept items take ${kept} min, its time is ${time} min`);
   }
-  return { split, materials: withBackbone(materials, backbone), dropped, facts, coverage: coverageOf(draft) };
+  return { split, materials: withBackbone(materials, backbone), dropped, facts, coverage: coverageOf(draft), fallbackReason: null };
 }
 
 /**
@@ -673,17 +675,23 @@ export function fallbackAllocation(input: AllocationInput): Allocation {
       ...skipped.map((m) => `dropped ${m.id} "${m.title}": did not fit the plan's hours`),
     ],
     coverage: null,
+    fallbackReason: null,
   };
 }
 
 /** The least time worth an allocation call; with less, code allocates. */
 export const MIN_ALLOCATE_MS = 15_000;
 
+/** The most of a failed call's error message that `allocatePlan` returns as the reason for the fallback. */
+const FALLBACK_REASON_CHARS = 200;
+
 /**
  * Asks the allocate model, after research, for the backbone, which part of each material the plan uses, how the
  * practice time is shared and what the plan covers, then applies it in code (`applyAllocation`). A call that fails
  * leaves the choice to code (`fallbackAllocation`) and makes the plan all reading, so the draft goes on; but a refusal
- * on the learner's own key is theirs to hear about, and a request that has gone away stops here.
+ * on the learner's own key is theirs to hear about, and a request that has gone away stops here. `fallback` says code
+ * allocated, for too little time or a failed call, so a caller can tell the model's own allocation from the code's;
+ * `fallbackReason` says why ("no time", or the error's message), and is null when the model's allocation stands.
  */
 export async function allocatePlan(
   input: AllocationInput & {
@@ -692,12 +700,14 @@ export async function allocatePlan(
     signal?: AbortSignal;
     /** The draft's time for the call; past it code allocates. Too little to be worth a call: code allocates at once. */
     timeoutMs?: number;
+    /** The reasoning effort of the call; the draft's own is `ALLOCATE_EFFORT`. */
+    effort?: ReasoningEffort;
   },
-): Promise<{ split: PlanSplit; materials: Material[]; dropped: DroppedMaterial[]; coverage: Coverage | null; costUsd: number }> {
+): Promise<{ split: PlanSplit; materials: Material[]; dropped: DroppedMaterial[]; coverage: Coverage | null; costUsd: number; fallback: boolean; fallbackReason: string | null }> {
   if (input.timeoutMs !== undefined && input.timeoutMs < MIN_ALLOCATE_MS) {
     const { split, materials, dropped, coverage, facts } = fallbackAllocation(input);
     console.error("[draft] no time left to allocate; code chose the materials and the plan is all reading", facts);
-    return { split, materials, dropped, coverage, costUsd: 0 };
+    return { split, materials, dropped, coverage, costUsd: 0, fallback: true, fallbackReason: "no time" };
   }
   const timeout = input.timeoutMs !== undefined ? AbortSignal.timeout(input.timeoutMs) : null;
   const abortSignal = timeout && input.signal ? AbortSignal.any([input.signal, timeout]) : (timeout ?? input.signal);
@@ -710,7 +720,7 @@ export async function allocatePlan(
         schema: allocationDraftSchema,
         prompt: buildAllocationPrompt(input),
         label: "Allocate",
-        effort: ALLOCATE_EFFORT,
+        effort: input.effort ?? ALLOCATE_EFFORT,
         check: (draft) => applyAllocation(draft, input).facts,
         abortSignal,
         // One retry at most: a second Opus attempt at high effort costs the time the outline needs.
@@ -718,14 +728,16 @@ export async function allocatePlan(
       },
       { ...input.log, caller: "outline" },
     );
-    const { split, materials, dropped, coverage } = applyAllocation(object, input);
-    return { split, materials, dropped, coverage, costUsd };
+    // An answer that gave nothing usable was replaced by the fallback in code: that is not the model's allocation.
+    const { split, materials, dropped, coverage, fallbackReason } = applyAllocation(object, input);
+    return { split, materials, dropped, coverage, costUsd, fallback: fallbackReason !== null, fallbackReason };
   } catch (error) {
     if (input.signal?.aborted) throw error;
     reportServiceFailure(input.log, error, "allocate", abortSignal);
     if (input.model.keyOwner === "user" && providerError(error)) throw error;
     const { split, materials, dropped, coverage, facts } = fallbackAllocation(input);
     console.error("[draft] allocation failed; code chose the materials and the plan is all reading", facts, error);
-    return { split, materials, dropped, coverage, costUsd: 0 };
+    const fallbackReason = (error instanceof Error ? error.message : String(error)).slice(0, FALLBACK_REASON_CHARS);
+    return { split, materials, dropped, coverage, costUsd: 0, fallback: true, fallbackReason };
   }
 }

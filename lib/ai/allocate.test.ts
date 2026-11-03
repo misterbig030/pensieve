@@ -460,6 +460,75 @@ describe("the allocation's backbone, coverage and fallback", () => {
     expect(call.providerOptions?.anthropic?.effort).toBe("high");
   });
 
+  it("runs at the effort it is given", async () => {
+    respond(draft({ parts: sixWhole }));
+    await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5"), effort: "medium" });
+    const call = mockedGenerateObject.mock.calls[0][0] as { providerOptions?: { anthropic?: { effort?: string } } };
+    expect(call.providerOptions?.anthropic?.effort).toBe("medium");
+  });
+
+  it("says it did not fall back on a usable answer", async () => {
+    respond(draft({ parts: sixWhole }));
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.fallback).toBe(false);
+    expect(out.fallbackReason).toBeNull();
+  });
+
+  it("says it fell back when the call fails, and why", async () => {
+    mockedGenerateObject.mockRejectedValueOnce(new Error("No object generated: response did not match schema."));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.fallback).toBe(true);
+    expect(out.fallbackReason).toBe("No object generated: response did not match schema.");
+    error.mockRestore();
+  });
+
+  it("says it fell back, and why, when the answer mentions no researched material", async () => {
+    respond(draft({ parts: [] }));
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.fallback).toBe(true);
+    expect(out.fallbackReason).toBe("no researched material mentioned");
+    // What the draft uses is the fallback's own, unchanged.
+    const expected = fallbackAllocation(six);
+    expect(out.materials).toEqual(expected.materials);
+    expect(out.dropped).toEqual(expected.dropped);
+    expect(out.split).toEqual(ALL_READING);
+    expect(out.coverage).toBeNull();
+  });
+
+  it("says it fell back, and why, when the answer gives no valid split", async () => {
+    // A plan with no readable length: the reading share is not a number, so no split comes out of the answer.
+    const zero: AllocationInput = { ...six, weeks: Number.NaN, materials: [material({ id: "M1", title: "Unsized" })] };
+    expect(applyAllocation(draft({ parts: [{ id: "M1" }] }), zero).fallbackReason).toBe("no valid split from the allocation");
+    respond(draft({ parts: [{ id: "M1" }] }));
+    const out = await allocatePlan({ ...zero, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.fallback).toBe(true);
+    expect(out.fallbackReason).toBe("no valid split from the allocation");
+    expect(out.split).toEqual(ALL_READING);
+  });
+
+  it("gives a usable answer no fallback reason", () => {
+    expect(applyAllocation(draft({ parts: sixWhole }), six).fallbackReason).toBeNull();
+    expect(fallbackAllocation(six).fallbackReason).toBeNull();
+  });
+
+  it("trims the reason a failed call gives to 200 characters", async () => {
+    mockedGenerateObject.mockRejectedValueOnce(new Error("x".repeat(500)));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5") });
+    expect(out.fallbackReason).toBe("x".repeat(200));
+    error.mockRestore();
+  });
+
+  it("says it fell back with too little time", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const out = await allocatePlan({ ...six, model: appModel("anthropic/claude-opus-5.5"), timeoutMs: 1000 });
+    expect(out.fallback).toBe(true);
+    expect(out.fallbackReason).toBe("no time");
+    expect(mockedGenerateObject).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
   it("shows the model each book's evidence and asks for a backbone and coverage", () => {
     const prompt = buildAllocationPrompt(six);
     const line = (id: string) => prompt.split("\n").find((l) => l.startsWith(`${id} `))!;

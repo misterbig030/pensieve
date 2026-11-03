@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import type { LanguageModel } from "ai";
+import { estimateCostUsd } from "./models";
 
 vi.mock("ai", () => ({ generateObject: vi.fn() }));
 
 import { generateObject } from "ai";
-import { buildGenerationLogRow, loggedGenerateObject, type GenerationLogRow, type ModelCall } from "./logged";
+import { buildGenerationLogRow, effortSettings, loggedGenerateObject, type GenerationLogRow, type ModelCall } from "./logged";
 
 const mockedGenerateObject = vi.mocked(generateObject);
 
@@ -89,6 +91,18 @@ describe("loggedGenerateObject", () => {
     expect(rows[0].effort).toBe("low");
   });
 
+  it("records the effort on the log row whatever the provider, sending other providers the portable setting", async () => {
+    mockedGenerateObject.mockResolvedValue(mockResult());
+    const rows: GenerationLogRow[] = [];
+    await loggedGenerateObject(
+      { model: "openai/gpt-5.4", schema, prompt: "hi", effort: "high" },
+      { caller: "research", onLog: (row) => void rows.push(row) },
+    );
+    expect(mockedGenerateObject).toHaveBeenCalledWith(expect.objectContaining({ reasoning: "high" }));
+    expect(mockedGenerateObject.mock.calls[0][0]).not.toHaveProperty("providerOptions");
+    expect(rows[0].effort).toBe("high");
+  });
+
   it("records who paid: the app by default, the user when the context or the call says so", async () => {
     mockedGenerateObject.mockResolvedValue(mockResult());
     const rows: GenerationLogRow[] = [];
@@ -127,6 +141,46 @@ describe("loggedGenerateObject", () => {
       facts: [],
       inputTokens: 1_000,
     });
+  });
+
+  it("logs a failed call that carries usage and hands it to onCall with the error message, then rethrows", async () => {
+    const usage = { inputTokens: 1_000, outputTokens: 500, totalTokens: 1_500 };
+    mockedGenerateObject.mockRejectedValue(
+      Object.assign(new Error("No object generated: response did not match schema."), { usage, finishReason: "length" }),
+    );
+    const calls: ModelCall[] = [];
+    const rows: GenerationLogRow[] = [];
+    await expect(
+      loggedGenerateObject(
+        { model: "anthropic/claude-haiku-4.5", schema, prompt: "hi", label: "Allocate" },
+        { caller: "outline", onCall: (call) => void calls.push(call), onLog: (row) => void rows.push(row) },
+      ),
+    ).rejects.toThrow("No object generated");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      label: "Allocate",
+      prompt: "hi",
+      response: "No object generated: response did not match schema.",
+      finishReason: "length",
+      inputTokens: 1_000,
+      outputTokens: 500,
+      costUsd: estimateCostUsd("anthropic/claude-haiku-4.5", { inputTokens: 1_000, outputTokens: 500, cacheReadTokens: null }),
+    });
+    expect(calls[0].costUsd).toBeGreaterThan(0);
+    // The spend is logged too, so generation_log totals what the provider billed.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ caller: "outline", inputTokens: 1_000, outputTokens: 500, costUsd: calls[0].costUsd });
+  });
+
+  it("reports nothing for a failure that carries no usage (a timeout, a refused request)", async () => {
+    mockedGenerateObject.mockRejectedValue(new Error("The operation was aborted due to timeout"));
+    const onCall = vi.fn();
+    const onLog = vi.fn();
+    await expect(
+      loggedGenerateObject({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi" }, { caller: "outline", onCall, onLog }),
+    ).rejects.toThrow("aborted");
+    expect(onCall).not.toHaveBeenCalled();
+    expect(onLog).not.toHaveBeenCalled();
   });
 
   it("labels the call by its caller when no label is given", async () => {
@@ -219,6 +273,22 @@ describe("loggedGenerateObject", () => {
   });
 });
 
+describe("effortSettings", () => {
+  it("sends Anthropic models their effort as a provider option, as before", () => {
+    expect(effortSettings("high", "anthropic/claude-opus-5.5")).toEqual({ providerOptions: { anthropic: { effort: "high" } } });
+  });
+
+  it("sends other providers the portable reasoning setting", () => {
+    expect(effortSettings("medium", "google/gemini-3-flash")).toEqual({ reasoning: "medium" });
+    expect(effortSettings("high", "openai/gpt-5.4-mini")).toEqual({ reasoning: "high" });
+  });
+
+  it("treats a direct Anthropic instance (a user's key) as Anthropic", () => {
+    const instance = { modelId: "claude-sonnet-5-5", provider: "anthropic.messages" } as unknown as LanguageModel;
+    expect(effortSettings("low", instance)).toEqual({ providerOptions: { anthropic: { effort: "low" } } });
+  });
+});
+
 describe("buildGenerationLogRow", () => {
   const usage = { inputTokens: 10, outputTokens: 5 } as Parameters<typeof buildGenerationLogRow>[0]["usage"];
 
@@ -242,5 +312,11 @@ describe("buildGenerationLogRow", () => {
     buildGenerationLogRow({ caller: "outline", model: "anthropic/claude-sonnet-5.5", usage, latencyMs: 1, keyOwner: "user" });
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it("falls back to the given cost only when no request reports a charge", () => {
+    expect(buildGenerationLogRow({ caller: "outline", model: "anthropic/claude-sonnet-5.5", usage, latencyMs: 1, fallbackCostUsd: 0.01 }).costUsd).toBe(0.01);
+    const charged = buildGenerationLogRow({ caller: "outline", model: "anthropic/claude-sonnet-5.5", usage, latencyMs: 1, providerMetadata: { gateway: { cost: "0.002" } }, fallbackCostUsd: 0.01 });
+    expect(charged.costUsd).toBe(0.002);
   });
 });
