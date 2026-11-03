@@ -3,6 +3,7 @@
  * touched: the guard only acts when a model in the request runs on the user's key.
  */
 import { clearUserApiKeyError, recordUserApiKeyError } from "@/lib/db/userApiKeys";
+import { GATEWAY_FUNDS_LOG_LINE, GatewayFundsError, isGatewayOutOfFunds } from "./gatewayFunds";
 import { providerOf, type KeyErrorKind, type ModelProvider } from "./models";
 import { providerError } from "./providerError";
 import type { APICallError } from "ai";
@@ -74,9 +75,15 @@ function userProviders(models: ResolvedModels): ModelProvider[] {
 
 /**
  * A provider refusal on a user-key request becomes a UserKeyError, recorded on the key before it is thrown so the
- * settings page learns of it even when the response ends right after. Anything else passes through untouched.
+ * settings page learns of it even when the response ends right after. An empty gateway balance becomes a
+ * GatewayFundsError. Anything else passes through untouched.
  */
 async function translate(error: unknown, guard: UserKeyGuard): Promise<unknown> {
+  // Pensieve's gateway balance is empty: no key of the user's is at fault.
+  if (isGatewayOutOfFunds(error)) {
+    (guard.report ?? console.error)(GATEWAY_FUNDS_LOG_LINE);
+    return new GatewayFundsError();
+  }
   const providers = userProviders(guard.models);
   const api = providerError(error);
   if (providers.length === 0 || !api) return error;

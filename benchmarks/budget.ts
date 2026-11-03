@@ -3,10 +3,10 @@
  * cost runs past that. The estimate is a planning figure: contestants are priced at the saved allocation call's tokens
  * and judging at a typical rendered length.
  */
-import { estimateCostUsd } from "@/lib/ai/models";
 import { BASELINE } from "./contestants";
 import type { AllocateFixture } from "./fixtures";
 import { JUDGE, SECOND_JUDGE } from "./judge";
+import { listPriceUsd } from "./price";
 import type { Contestant } from "./types";
 
 export interface Estimate {
@@ -48,14 +48,14 @@ export function estimateAllocateRun(args: {
   let contestantsUsd = 0;
   for (const contestant of contestants) {
     const model = (contestant.roles.allocate ?? BASELINE.roles.allocate)!.model;
-    for (const usage of perFixture) contestantsUsd += epochs * estimateCostUsd(model, usage);
+    for (const usage of perFixture) contestantsUsd += epochs * listPriceUsd(model, usage);
   }
 
   const judgeCall = { inputTokens: renderedChars / CHARS_PER_TOKEN + JUDGE_PROMPT_TOKENS, outputTokens: JUDGE_OUTPUT_TOKENS };
   const samplesPerContestant = fixtures.length * epochs;
   const secondOpinions = contestants.length * Math.ceil(samplesPerContestant / SECOND_JUDGE_EVERY);
   const judgingUsd =
-    judgeDimensions * (contestants.length * samplesPerContestant * estimateCostUsd(JUDGE.model, judgeCall) + secondOpinions * estimateCostUsd(SECOND_JUDGE.model, judgeCall));
+    judgeDimensions * (contestants.length * samplesPerContestant * listPriceUsd(JUDGE.model, judgeCall) + secondOpinions * listPriceUsd(SECOND_JUDGE.model, judgeCall));
 
   return { contestantsUsd, judgingUsd, totalUsd: contestantsUsd + judgingUsd };
 }

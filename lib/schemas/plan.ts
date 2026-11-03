@@ -9,16 +9,48 @@ import {
   practiceRefDraftSchema,
   practiceRefSchema,
 } from "./material";
+import { PRACTICE_FORMATS, type PracticeFormat } from "@/lib/practice";
 
 export const PLAN_LEVELS = ["month", "week", "day"] as const;
 export const planLevelSchema = z.enum(PLAN_LEVELS);
 export const granularityChoiceSchema = z.enum(["day", "week", "auto"]);
 export const granularitySchema = z.enum(["day", "week"]);
 
+/** The most minutes a saved unit gives one activity (`unitTimeSchema`); what the model writes past it is clamped. */
+export const MAX_UNIT_MINUTES = 30000;
+/** Minutes the outline gave one heading unit per activity: reading, and each practice format. */
+export const unitTimeSchema = z.object({
+  reading: z.number().int().min(0).max(MAX_UNIT_MINUTES),
+  practice: z.partialRecord(z.enum(PRACTICE_FORMATS), z.number().int().min(0).max(MAX_UNIT_MINUTES)),
+});
+export type UnitTime = { reading: number; practice: Partial<Record<PracticeFormat, number>> };
+/** The same as the model writes it: practice as an array, for a plainer JSON schema. */
+export const unitTimeDraftSchema = z.object({
+  reading: z.number().int().min(0),
+  practice: z.array(z.object({ format: z.enum(PRACTICE_FORMATS), minutes: z.number().int().min(0) })),
+});
+/** The most problem lines a node or track keeps, and the most characters in one. */
+export const MAX_PROBLEMS = 40;
+export const MAX_PROBLEM_CHARS = 500;
+/** Learner-facing lines for code-checked problems, saved on the node whose level they belong to. */
+export const problemsSchema = z.array(z.string().min(1).max(MAX_PROBLEM_CHARS)).max(MAX_PROBLEMS);
+
+/**
+ * Problem lines as they are kept, within `problemsSchema`: a line past the limit is shortened, its ellipsis inside it,
+ * and past the most lines the first ones stay with a last line saying how many more there were. Every writer of
+ * `problems` goes through it, so a long list never fails a save or a later request.
+ */
+export function capProblems(lines: readonly string[]): string[] {
+  const fit = (line: string) => (line.length > MAX_PROBLEM_CHARS ? `${line.slice(0, MAX_PROBLEM_CHARS - 1)}…` : line);
+  if (lines.length <= MAX_PROBLEMS) return lines.map(fit);
+  const kept = lines.slice(0, MAX_PROBLEMS - 1).map(fit);
+  return [...kept, `…and ${lines.length - kept.length} more.`];
+}
+
 /**
  * What the model writes for one unit whose span the server already decided. Headings reserve materials (`covers`) and
- * practice sources (`practiceCovers`); leaves assign them (`materials`, `practice`). Each is left out when the plan has
- * nothing for it.
+ * practice sources (`practiceCovers`) and say how they spend their hours (`time`); leaves assign them (`materials`,
+ * `practice`). Each is left out when the plan has nothing for it.
  */
 export const unitDraftSchema = z.object({
   title: z.string().min(1),
@@ -27,6 +59,7 @@ export const unitDraftSchema = z.object({
   materials: z.array(materialRefDraftSchema).optional().describe("Leaves only: this unit's Read table"),
   practiceCovers: z.array(practiceCoverDraftSchema).optional().describe("Headings only: practice sources this unit reserves, by id"),
   practice: z.array(practiceRefDraftSchema).optional().describe("Leaves only: this unit's practice rows"),
+  time: unitTimeDraftSchema.optional().describe("Headings only: this unit's minutes of must-reading and of each practice format"),
 });
 export const unitListSchema = z.object({
   units: z.array(unitDraftSchema).min(1).max(40),
@@ -35,7 +68,8 @@ export type UnitDraft = z.infer<typeof unitDraftSchema>;
 
 /**
  * The revised tree the model returns from a change request. Depth is fixed at three levels (month → week → day) so
- * the schema stays plain JSON with no recursion. `ref` echoes the node's ref from the prompt when a node is kept.
+ * the schema stays plain JSON with no recursion. `ref` echoes the node's ref from the prompt when a node is kept; `time`
+ * is a heading's minutes per activity, written when the model changes them or adds the heading.
  */
 const revisedLeafSchema = z.object({
   ref: z.string().optional(),
@@ -46,6 +80,7 @@ const revisedLeafSchema = z.object({
   materials: z.array(materialRefDraftSchema).optional(),
   practiceCovers: z.array(practiceCoverDraftSchema).optional(),
   practice: z.array(practiceRefDraftSchema).optional(),
+  time: unitTimeDraftSchema.optional(),
 });
 const revisedMidSchema = revisedLeafSchema.extend({
   children: z.array(revisedLeafSchema).min(1).max(40).optional(),
@@ -73,6 +108,8 @@ const nodeInputBase = z.object({
   materials: z.array(materialRefSchema).max(40).optional(),
   practice: z.array(practiceRefSchema).max(40).optional(),
   practiceCovers: z.array(practiceCoverSchema).max(40).optional(),
+  time: unitTimeSchema.optional(),
+  problems: problemsSchema.optional(),
 });
 const leafInputSchema = nodeInputBase.extend({ children: z.null().optional() });
 const midInputSchema = nodeInputBase.extend({ children: z.array(leafInputSchema).max(60).nullable().optional() });

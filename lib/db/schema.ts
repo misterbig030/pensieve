@@ -18,10 +18,33 @@ import { SOURCE_TYPES } from "@/lib/schemas/source";
 import { PRACTICE_FORMATS } from "@/lib/practice";
 import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS, MINUTES_BASES, type ChapterList, type MaterialPractice, REF_ACTIVITIES } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
+import type { UnitTime } from "@/lib/schemas/plan";
+
+/**
+ * One row per Clerk user, for what Pensieve itself knows about them; Clerk keeps their identity and profile. A row is
+ * made the first time anything needs it (a track, a key, a credit check), with the signup date filled from Clerk then.
+ */
+export const users = pgTable("users", {
+  /** The Clerk user id, which every other table's `user_id` holds. */
+  id: text("id").primaryKey(),
+  /** When the user signed up with Clerk: their credit periods turn on this day of the month. Empty until first read. */
+  signedUpAt: timestamp("signed_up_at"),
+  /**
+   * A manual credit reset: spend before it no longer counts this period, so the user is back to the full allowance.
+   * Set it by hand (`UPDATE users SET credits_reset_at = now() WHERE id = …`); a reset before the period started does
+   * nothing, so it never carries into later periods.
+   */
+  creditsResetAt: timestamp("credits_reset_at"),
+  /** Staff: debug call bodies, the admin dock, and no credit limit. */
+  isAdmin: boolean("is_admin").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const tracks = pgTable("tracks", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: text("user_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
   instructions: text("instructions"),
@@ -34,6 +57,8 @@ export const tracks = pgTable("tracks", {
   daysPerWeek: integer("days_per_week").notNull().default(7),
   /** How the plan divides that time between reading and practice. Null on plans drafted before it existed. */
   split: jsonb("split").$type<PlanSplit>(),
+  /** Learner lines for the code-checked problems of the plan's top level. Null when there are none. */
+  problems: jsonb("problems").$type<string[]>(),
   status: text("status", { enum: ["active", "completed", "archived"] })
     .notNull()
     .default("active"),
@@ -111,6 +136,10 @@ export const planNodes = pgTable(
     budgetHours: integer("budget_hours"),
     /** True when the learner split a week leaf into days by hand. */
     manualSplit: boolean("manual_split").notNull().default(false),
+    /** Headings: minutes per activity the outline gave this unit. Null on plans drafted before it existed. */
+    time: jsonb("time").$type<UnitTime>(),
+    /** Learner lines for the code-checked problems of the level planned inside this node. Null when there are none. */
+    problems: jsonb("problems").$type<string[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("plan_nodes_track_idx").on(t.trackId), index("plan_nodes_parent_idx").on(t.parentId)],
@@ -204,29 +233,37 @@ export const GENERATION_CALLERS = ["outline", "outline_revision", "daily", "judg
 export type GenerationCaller = (typeof GENERATION_CALLERS)[number];
 
 /** One row per model call. Written by the app's server actions; read by cost reporting and the eval harness. */
-export const generationLog = pgTable("generation_log", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  caller: text("caller", { enum: GENERATION_CALLERS }).notNull(),
-  model: text("model").notNull(),
-  effort: text("effort"), // null until the effort axis is wired (W4 Task 4 / W5)
-  inputTokens: integer("input_tokens"),
-  outputTokens: integer("output_tokens"),
-  cacheReadTokens: integer("cache_read_tokens"), // usage.inputTokenDetails.cacheReadTokens
-  reasoningTokens: integer("reasoning_tokens"), // usage.outputTokenDetails.reasoningTokens
-  costUsd: doublePrecision("cost_usd").notNull(),
-  latencyMs: integer("latency_ms").notNull(),
-  trackId: uuid("track_id"), // nullable: draft outlines have no track yet
-  userId: text("user_id"), // nullable: eval-harness rows have no user
-  /** Who paid: the app's gateway key, or the user's own key (see user_api_keys). */
-  keyOwner: text("key_owner", { enum: KEY_OWNERS }).notNull().default("app"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const generationLog = pgTable(
+  "generation_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caller: text("caller", { enum: GENERATION_CALLERS }).notNull(),
+    model: text("model").notNull(),
+    effort: text("effort"), // null until the effort axis is wired (W4 Task 4 / W5)
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    cacheReadTokens: integer("cache_read_tokens"), // usage.inputTokenDetails.cacheReadTokens
+    reasoningTokens: integer("reasoning_tokens"), // usage.outputTokenDetails.reasoningTokens
+    // What the AI Gateway charged; null for a call on the user's own key, which the gateway never sees.
+    costUsd: doublePrecision("cost_usd"),
+    latencyMs: integer("latency_ms").notNull(),
+    trackId: uuid("track_id"), // nullable: draft outlines have no track yet
+    userId: text("user_id"), // nullable: eval-harness rows have no user
+    /** Who paid: the app's gateway key, or the user's own key (see user_api_keys). */
+    keyOwner: text("key_owner", { enum: KEY_OWNERS }).notNull().default("app"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  // A user's spend this month, summed on every draft, chat turn and page with the credits pill (lib/db/credits.ts).
+  (t) => [index("generation_log_user_created_idx").on(t.userId, t.createdAt)],
+);
 
 /** A user's own API key for one provider, so their usage is billed to them. One row per user and provider. */
 export const userApiKeys = pgTable(
   "user_api_keys",
   {
-    userId: text("user_id").notNull(), // the Clerk id, as on tracks
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     provider: text("provider", { enum: MODEL_PROVIDERS }).notNull(),
     /** AES-256-GCM with the server secret: base64 of iv + tag + ciphertext. */
     ciphertext: text("ciphertext").notNull(),
@@ -258,6 +295,7 @@ export type NewDailyContent = typeof dailyContent.$inferInsert;
 export type CheckIn = typeof checkIns.$inferSelect;
 export type GenerationLog = typeof generationLog.$inferSelect;
 export type NewGenerationLog = typeof generationLog.$inferInsert;
+export type User = typeof users.$inferSelect;
 export type UserApiKey = typeof userApiKeys.$inferSelect;
 export type NewUserApiKey = typeof userApiKeys.$inferInsert;
 

@@ -32,8 +32,6 @@ export interface RunMetrics {
   overBudgetLeaves: number;
   chapterRegressions: number;
   unreservedChapters: number;
-  /** Weeks whose must-reading ran well past the week's reading budget (an over-budget breach on must-reading). */
-  overShareLeaves: number;
   /** Hours of material on the list (over the materials that have a size) and the plan's study hours in all. */
   sizedHours: number;
   totalHours: number;
@@ -129,23 +127,21 @@ export function mustIncludeRecall(materials: Material[], mustInclude: { title: s
 }
 
 /** The code checks' facts, counted across every drafting call of the run. */
-export function checkCounts(calls: ModelCall[]): Pick<RunMetrics, "unknownRefs" | "overBudgetLeaves" | "chapterRegressions" | "unreservedChapters" | "overShareLeaves"> {
+export function checkCounts(calls: ModelCall[]): Pick<RunMetrics, "unknownRefs" | "overBudgetLeaves" | "chapterRegressions" | "unreservedChapters"> {
   let unknownRefs = 0;
   let overBudgetLeaves = 0;
   let chapterRegressions = 0;
   let unreservedChapters = 0;
-  let overShareLeaves = 0;
   for (const call of calls) {
     for (const fact of call.facts) {
       const unknown = fact.match(/^dropped unknown (.+)$/);
       if (unknown) unknownRefs += unknown[1].split(",").length;
       else if (/ over budget: /.test(fact)) overBudgetLeaves += 1;
-      else if (/^breach: .+'s must-reading is \d+ min against a budget/.test(fact)) overShareLeaves += 1;
       else if (/^backbone ch\. \d+ after ch\./.test(fact)) chapterRegressions += 1;
       else if (/^backbone ch\. .* not reserved$/.test(fact)) unreservedChapters += 1;
     }
   }
-  return { unknownRefs, overBudgetLeaves, chapterRegressions, unreservedChapters, overShareLeaves };
+  return { unknownRefs, overBudgetLeaves, chapterRegressions, unreservedChapters };
 }
 
 /** How much of the list is sized, and how much of that code measured. */
@@ -197,7 +193,7 @@ export function runMetrics(input: {
     ...sizeMetrics(outcome.materials),
     totalHours: totalHours(draftRequestOf(record.input).weeks, record.input.hoursPerWeek),
     coverage: outcome.coverage ? { covered: outcome.coverage.covered.length, open: outcome.coverage.open.length } : null,
-    costUsd: input.rows.reduce((sum, r) => sum + r.costUsd, 0) + (input.extraCostUsd ?? 0),
+    costUsd: input.rows.reduce((sum, r) => sum + (r.costUsd ?? 0), 0) + (input.extraCostUsd ?? 0),
     latencyMs: input.latencyMs,
     researchMs: input.researchMs,
     toolCalls: outcome.arm?.counts ?? { searches: 0, fetches: 0, steps: 0 },

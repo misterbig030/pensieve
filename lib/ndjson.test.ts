@@ -89,3 +89,16 @@ describe("ndjson error codes", () => {
     expect(seen).toEqual([{ type: "a" }, { type: "error", message: "socket hang up" }]);
   });
 });
+
+describe("readNdjson on a refused request", () => {
+  it("turns a 402 out-of-credits body into an error with its code and reset", async () => {
+    const res = Response.json({ code: "out_of_credits", resetsAt: "2026-12-01T00:00:00.000Z" }, { status: 402 });
+    await expect(readNdjson(res, () => {})).rejects.toMatchObject({ code: "out_of_credits", resetsAt: "2026-12-01T00:00:00.000Z" });
+  });
+
+  it("keeps plain-text failures as before", async () => {
+    await expect(readNdjson(new Response("Not authenticated", { status: 401 }), () => {})).rejects.toThrow("Not authenticated");
+    await expect(readNdjson(new Response("oops", { status: 402 }), () => {})).rejects.toThrow("oops");
+    await expect(readNdjson(Response.json({ code: "other" }, { status: 400 }), () => {})).rejects.toThrow('{"code":"other"}');
+  });
+});

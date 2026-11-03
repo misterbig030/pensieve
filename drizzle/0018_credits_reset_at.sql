@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "credits_reset_at" timestamp;

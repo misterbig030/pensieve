@@ -172,7 +172,7 @@ Per contestant per task:
 | Δ vs baseline | Paired: for each fixture, contestant's mean minus baseline's mean on the same fixture; mean and 95% interval. |
 | Completion | Share of non-void samples that passed the gate. |
 | `pass^k` | Per fixture, the unbiased estimate C(c, k) ÷ C(n, k) with c the epochs that passed the gate and scored ≥ 0.7, k = 3; mean over fixtures (τ-bench). |
-| Cost | Mean USD per sample: the sum of every call's `costUsd`, the app's own list-price estimate (`estimateCostUsd`, the figure the admin panel and the eval show). It ignores cache discounts, so it errs high. |
+| Cost | Mean USD per sample: the sum of every call's `costUsd`, what the AI Gateway reported charging (the figure `generation_log` and the admin panel show). A call with no reported charge (a failed or timed-out call) is priced at the list rate, cached input at the cache-read rate. Runs before 2026-11-02 used the list-price estimate for every call. |
 | Latency | p50 and p90 of the stage's wall time. |
 
 **Verdict** *(my call: the margin of 5 points is a default the owner can change with `--margin`)*:

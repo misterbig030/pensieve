@@ -436,6 +436,149 @@ describe("applyRevision with practice", () => {
   });
 });
 
+describe("revisions see and edit unit time", () => {
+  beforeEach(() => {
+    mockedGenerateObject.mockReset();
+  });
+  const split = { readingShare: 50, practice: "problems", reason: "", formats: [{ format: "problem-set" as const, share: 100, focus: "arrays", reason: "" }] };
+  const cover = (chapter: number) => ({ id: "aie", chapter, note: null });
+  /** Three week headings of a day plan, each reserving one chapter of the book, with their own time when `timed`. */
+  const weeks = (timed: boolean) =>
+    layout(
+      makeRoot([
+        makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 5, covers: [cover(1)], ...(timed ? { time: { reading: 150, practice: { "problem-set": 180 } } } : {}) }),
+        makeNode({ id: "w2", level: "week", title: "W2", summary: "s", len: 5, covers: [cover(2)], ...(timed ? { time: { reading: 120, practice: { "problem-set": 200 } } } : {}) }),
+        makeNode({ id: "w3", level: "week", title: "W3", summary: "s", len: 5, covers: [cover(3)], ...(timed ? { time: { reading: 60, practice: { "problem-set": 240 } } } : {}) }),
+      ]),
+    );
+  const echo = (ref: string, title: string, extra: Record<string, unknown> = {}) => ({ ref, title, summary: "s", days: 5, ...extra });
+  const respond = (object: unknown) =>
+    mockedGenerateObject.mockResolvedValueOnce({ object, usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 }, finishReason: "stop" } as unknown as Awaited<ReturnType<typeof generateObject>>);
+  const revise = (tree: PlanNode) => revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, daysPerWeek: 5, split, tree, lockBefore: 0, changeRequest: "x" });
+
+  it("changes only the time the model wrote: a kept unit it left alone keeps its own, a new one without time has none", () => {
+    const original = weeks(true);
+    const result = applyRevision(
+      original,
+      assignRefs(original),
+      {
+        units: [
+          echo("n1", "W1"),
+          echo("n2", "W2"),
+          echo("n3", "W3", { time: { reading: 180, practice: [{ format: "problem-set", minutes: 180 }, { format: "mock", minutes: 60 }] } }),
+          { title: "W4", summary: "s", days: 5 },
+        ],
+      },
+      0,
+      "day",
+      aliasMaterials(AIE_MATERIALS),
+      6,
+      5,
+      split,
+    );
+    expect(result.children!.map((w) => w.time)).toEqual([
+      { reading: 150, practice: { "problem-set": 180 } },
+      { reading: 120, practice: { "problem-set": 200 } },
+      // Mock is not one of the plan's picks: its minutes are left out, as when drafting.
+      { reading: 180, practice: { "problem-set": 180 } },
+      undefined,
+    ]);
+  });
+
+  it("puts time on headings only", () => {
+    const original = weeks(true);
+    const result = applyRevision(
+      original,
+      assignRefs(original),
+      { units: [echo("n1", "W1", { children: [{ title: "D1", summary: "s", days: 1, time: { reading: 30, practice: [] } }] }), echo("n2", "W2"), echo("n3", "W3")] },
+      0,
+      "day",
+      aliasMaterials(AIE_MATERIALS),
+      6,
+      5,
+      split,
+    );
+    expect(result.children![0].children![0].time).toBeUndefined();
+    expect(result.children![0].time).toEqual({ reading: 150, practice: { "problem-set": 180 } });
+  });
+
+  it("keeps both rows when Week 2 now reads a chapter Week 1 reads, and reports the overlap", async () => {
+    respond({ units: [echo("n1", "W1", { covers: [{ id: "M1.1" }] }), echo("n2", "W2", { covers: [{ id: "M1.1" }, { id: "M1.2" }] }), echo("n3", "W3")] });
+    const { tree, problems } = await revise(weeks(true));
+    expect(tree.children!.map((w) => w.covers?.map((c) => c.chapter))).toEqual([[1], [1, 2], [3]]);
+    expect(problems).toEqual(expect.arrayContaining([expect.stringMatching(/^Week 2 reserves AI Engineering.* ch\. 1, which Week 1 holds\.$/)]));
+    // The problems stay with the tree, as a draft's do, so confirming the plan saves them.
+    expect(tree.problems).toEqual(problems);
+  });
+
+  it("leaves the tree without problems when the checks find none", async () => {
+    const one = layout(makeRoot([makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, materials: [{ id: "agents", tier: "must", minutes: 12, note: null }] })]));
+    one.problems = ["Stale."];
+    respond({ units: [{ ref: "n1", title: "A, renamed", summary: "a", days: 1 }] });
+    const { tree, problems } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS.filter((m) => m.id === "agents"), granularity: "day", hoursPerWeek: 6, daysPerWeek: 7, tree: one, lockBefore: 0, changeRequest: "x" });
+    expect(problems).toEqual([]);
+    expect(tree).not.toHaveProperty("problems");
+  });
+
+  it("states the minutes it dropped for a format the plan did not pick", async () => {
+    const neet = { ...AIE_MATERIALS[1], id: "neet", title: "NeetCode 150", minutes: null, practice: LISTED_PROBLEMS };
+    respond({ units: [echo("n1", "W1"), echo("n2", "W2"), echo("n3", "W3", { time: { reading: 60, practice: [{ format: "problem-set", minutes: 200 }, { format: "mock", minutes: 40 }] } })] });
+    const calls: ModelCall[] = [];
+    const { tree } = await revisePlanTree({ topic: "t", materials: [...AIE_MATERIALS, neet], granularity: "day", hoursPerWeek: 6, daysPerWeek: 5, split, tree: weeks(true), lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
+    expect(tree.children![2].time).toEqual({ reading: 60, practice: { "problem-set": 200 } });
+    expect(calls[0].facts).toContain("dropped time for unpicked mock");
+  });
+
+  it("drops time for a pick no source serves when the plan has no materials, as a draft does", async () => {
+    respond({ units: [echo("n1", "W1"), echo("n2", "W2"), echo("n3", "W3", { time: { reading: 60, practice: [{ format: "problem-set", minutes: 200 }] } })] });
+    const calls: ModelCall[] = [];
+    const { tree } = await revisePlanTree({ topic: "t", materials: [], granularity: "day", hoursPerWeek: 6, daysPerWeek: 5, split, tree: weeks(true), lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
+    expect(tree.children![2].time).toEqual({ reading: 60, practice: {} });
+    expect(calls[0].facts).toContain("dropped time for unpicked problem-set");
+  });
+
+  it("keeps a month not yet planned in weeks as a heading on a week plan: its time and reservations survive an echo", async () => {
+    const monthTime = { reading: 300, practice: { "problem-set": 400 } };
+    const original = layout(
+      makeRoot([
+        makeNode({
+          id: "m1",
+          level: "month",
+          title: "M1",
+          summary: "s",
+          len: 10,
+          covers: [cover(1)],
+          time: { reading: 200, practice: { "problem-set": 300 } },
+          children: [makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 5 }), makeNode({ id: "w2", level: "week", title: "W2", summary: "s", len: 5 })],
+        }),
+        makeNode({ id: "m2", level: "month", title: "M2", summary: "s", len: 10, covers: [cover(2)], time: monthTime }),
+      ]),
+    );
+    const echoed = {
+      units: [
+        { ref: "n1", title: "M1", summary: "s", days: 10, children: [{ ref: "n2", title: "W1", summary: "s", days: 5 }, { ref: "n3", title: "W2", summary: "s", days: 5 }] },
+        { ref: "n4", title: "M2", summary: "s", days: 10 },
+      ],
+    };
+    const applied = applyRevision(original, assignRefs(original), echoed, 0, "week", aliasMaterials(AIE_MATERIALS), 6, 5, split);
+    const month2 = applied.children![1];
+    expect(month2.time).toEqual(monthTime);
+    expect(month2.covers?.map((c) => c.chapter)).toEqual([2]);
+    expect(month2.budgetHours).toBeNull();
+    respond(echoed);
+    const { tree, problems } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "week", hoursPerWeek: 6, daysPerWeek: 5, split, tree: original, lockBefore: 0, changeRequest: "x" });
+    expect(tree.children![1].time).toEqual(monthTime);
+    expect(problems.filter((p) => p.includes("no time set"))).toEqual([]);
+  });
+
+  it("reports a heading without time only when the revision added or reshaped it", async () => {
+    // A plan saved before unit time: Week 2 gains a chapter, Week 4 is new, Weeks 1 and 3 come back as they were.
+    respond({ units: [echo("n1", "W1", { covers: [{ id: "M1.1" }] }), echo("n2", "W2", { covers: [{ id: "M1.2" }, { id: "M1.4" }] }), echo("n3", "W3"), { title: "W4", summary: "s", days: 5 }] });
+    const { problems } = await revise(weeks(false));
+    expect(problems.filter((p) => p.includes("no time set"))).toEqual(["Week 2 has no time set for its activities.", "Week 4 has no time set for its activities."]);
+  });
+});
+
 describe("revisePlanTree checks the whole tree", () => {
   beforeEach(() => {
     mockedGenerateObject.mockReset();
@@ -466,7 +609,7 @@ describe("revisePlanTree checks the whole tree", () => {
     expect(mockedGenerateObject.mock.calls[0][0]).toEqual(expect.objectContaining({ providerOptions: { anthropic: { effort: "high" } } }));
   });
 
-  it("drops a duplicated resource and a bare book id after one call, with facts", async () => {
+  it("keeps a duplicated resource and a bare book id after one call, and reports them", async () => {
     const two = layout(
       makeRoot([
         makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, materials: [{ id: "aie", tier: "must", minutes: 107, note: null, chapter: 1 }] }),
@@ -484,12 +627,69 @@ describe("revisePlanTree checks the whole tree", () => {
       finishReason: "stop",
     } as unknown as Awaited<ReturnType<typeof generateObject>>);
     const calls: ModelCall[] = [];
-    const { tree } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, daysPerWeek: 7, tree: two, lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
+    const { tree, problems } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, daysPerWeek: 7, tree: two, lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
     expect(calls).toHaveLength(1);
-    expect(calls[0].facts).toEqual(
-      expect.arrayContaining(["breach: Day 2 reads M2, which Day 1 holds", "breach: Day 2 refers to M1 as a whole; use its chapters", "dropped M2 from Day 2: overlap", "dropped M1 from Day 2: whole-book"]),
+    expect(calls[0].facts).toEqual(expect.arrayContaining(["breach: Day 2 reads M2, which Day 1 holds", "breach: Day 2 refers to M1 as a whole; use its chapters"]));
+    expect(calls[0].facts.filter((f) => f.startsWith("dropped"))).toEqual([]);
+    expect(tree.children![1].materials!.map((r) => r.id)).toEqual(["agents", "aie", "evals"]);
+    expect(problems).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^Day 2 reads Building Effective AI Agents, which Day 1 holds\.$/), expect.stringMatching(/^Day 2 refers to AI Engineering.* as a whole rather than by its chapters\.$/)]),
     );
-    expect(tree.children![1].materials).toEqual([{ id: "evals", tier: "should", minutes: 79, note: null, chapter: null, activity: "read" }]);
+  });
+
+  it("states a locked unit's breaches as admin facts, not as the learner's problems", async () => {
+    const agents = { id: "agents", tier: "must" as const, minutes: 12, note: null };
+    const evals = { id: "evals", tier: "must" as const, minutes: 12, note: null };
+    const saved = layout(
+      makeRoot([
+        makeNode({
+          id: "w1",
+          level: "week",
+          title: "Done",
+          summary: "s",
+          len: 2,
+          children: [
+            makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, status: "completed", materials: [agents] }),
+            makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1, status: "completed", materials: [agents] }),
+          ],
+        }),
+        makeNode({
+          id: "w2",
+          level: "week",
+          title: "Open",
+          summary: "s",
+          len: 2,
+          children: [makeNode({ id: "d3", level: "day", title: "C", summary: "c", len: 1, materials: [evals] }), makeNode({ id: "d4", level: "day", title: "D", summary: "d", len: 1 })],
+        }),
+      ]),
+    );
+    mockedGenerateObject.mockResolvedValueOnce({
+      object: {
+        units: [
+          { ref: "n1", title: "Done", summary: "s", days: 2, children: [{ ref: "n2", title: "A", summary: "a", days: 1 }, { ref: "n3", title: "B", summary: "b", days: 1 }] },
+          {
+            ref: "n4",
+            title: "Open",
+            summary: "s",
+            days: 2,
+            children: [
+              { ref: "n5", title: "C", summary: "c", days: 1 },
+              { ref: "n6", title: "D", summary: "d", days: 1, materials: [{ id: "M3", tier: "must", minutes: 12 }] },
+            ],
+          },
+        ],
+      },
+      usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 },
+      finishReason: "stop",
+    } as unknown as Awaited<ReturnType<typeof generateObject>>);
+    const calls: ModelCall[] = [];
+    const { tree, problems } = await revisePlanTree({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, daysPerWeek: 7, tree: saved, lockBefore: 2, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
+    // Week 1 is done: the learner can't change it, so its duplicate read is the admin's to see.
+    expect(problems.filter((p) => p.startsWith("Week 1"))).toEqual([]);
+    expect(calls[0].facts.filter((f) => f.startsWith("locked unit: Week 1 · Day 2"))).toHaveLength(1);
+    // Week 2 is open: its duplicate read is the learner's.
+    expect(problems.filter((p) => p.startsWith("Week 2 · Day 2 reads"))).toHaveLength(1);
+    expect(tree.problems).toEqual(problems);
   });
 
   it("puts ids the model copied into a unit's text in words, with a fact", async () => {
@@ -544,7 +744,7 @@ describe("applyRevision with an item list", () => {
   });
 });
 
-describe("revisePlanTree holds rows it adds or changes to the drafting rules, and saved ones to facts", () => {
+describe("revisePlanTree reports rows it adds or changes by the drafting rules, and states saved ones as facts", () => {
   beforeEach(() => {
     mockedGenerateObject.mockReset();
   });
@@ -581,10 +781,10 @@ describe("revisePlanTree holds rows it adds or changes to the drafting rules, an
   const revise = async (object: unknown) => {
     mockedGenerateObject.mockResolvedValueOnce({ object, usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 }, finishReason: "stop" } as unknown as Awaited<ReturnType<typeof generateObject>>);
     const calls: ModelCall[] = [];
-    const { tree } = await revisePlanTree({ topic: "t", materials, granularity: "day", daysPerWeek: 5, split, tree: saved(), lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
+    const { tree, problems } = await revisePlanTree({ topic: "t", materials, granularity: "day", daysPerWeek: 5, split, tree: saved(), lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
     const days = (tree.children ?? []).flatMap((w) => w.children ?? []);
     const practiceOf = (id: string) => days.find((d: PlanNode) => d.id === id)?.practice;
-    return { facts: calls[0].facts, practiceOf, tree };
+    return { facts: calls[0].facts, practiceOf, tree, problems };
   };
 
   it("keeps saved runs as they are: revision sizes no run", async () => {
@@ -598,21 +798,26 @@ describe("revisePlanTree holds rows it adds or changes to the drafting rules, an
     expect(facts.filter((f) => f.startsWith("dropped") || f.startsWith("trimmed"))).toEqual([]);
   });
 
-  it("drops an itemless row it adds, a repeated item and a source reserved elsewhere, and keeps saved rows with facts", async () => {
-    const { facts, practiceOf } = await revise(
+  it("goes without an itemless row it adds, keeps a repeated item and a source reserved elsewhere with problems, and saved rows with facts", async () => {
+    const { facts, practiceOf, problems } = await revise(
       answer([row("M2.3", "Two Sum")], [row("M2", "Queue problems"), row("M2.3", "Two Sum")], [row("M2.7", "Product of Array Except Self"), row("M3", "Graphs 1-3")]),
     );
-    // (a) A new itemless row of a listed source is unknown: it never reaches the plan. (b) A new repeat of item 3 is dropped.
-    expect(practiceOf("e2")).toBeUndefined();
-    // (c) Week 3 reserved nothing, and both sources are reserved by other weeks: its new rows are dropped.
-    expect(practiceOf("f1")).toBeUndefined();
+    // (a) A new itemless row of a listed source is unknown: it never reaches the plan. (b) A new repeat of item 3 stays, reported.
+    expect(practiceOf("e2")?.map((r) => r.itemFrom)).toEqual([3]);
+    // (c) Week 3 reserved nothing, and both sources are reserved by other weeks: its new rows stay, reported.
+    expect(practiceOf("f1")?.map((r) => [r.id, r.itemFrom ?? null])).toEqual([
+      ["P", 7],
+      ["Q", null],
+    ]);
     expect(facts).toEqual(
       expect.arrayContaining([
-        'dropped Problems M2.3 "Two Sum" from Week 2 · Day 2: practice-overlap',
-        'dropped Problems M2.7 "Product of Array Except Self" from Week 3 · Day 1: practice-outside',
-        'dropped Problems "Graphs 1-3" from Week 3 · Day 1: practice-outside',
+        'breach: Week 2 · Day 2 assigns Problems M2.3 "Two Sum", which Week 1 · Day 2 already assigns',
+        'breach: Week 3 · Day 1 assigns Problems M2.7 "Product of Array Except Self", which Week 3 did not reserve',
       ]),
     );
+    expect(facts.filter((f) => f.startsWith("dropped") || f.startsWith("trimmed"))).toEqual([]);
+    expect(problems).toHaveLength(3);
+    expect(problems).toEqual(expect.arrayContaining([expect.stringMatching(/^Week 2 · Day 2 assigns Problems .*"Two Sum", which Week 1 · Day 2 already assigns\.$/)]));
     // (d) The saved itemless row and the saved repeat stay, stated as facts only.
     // (The model wrote 15 min for the itemless row; minutes do not make a row new.)
     expect(practiceOf("d2")).toEqual([{ ...old, minutes: 15 }, item(3)]);
@@ -620,7 +825,7 @@ describe("revisePlanTree holds rows it adds or changes to the drafting rules, an
     expect(facts).toEqual(
       expect.arrayContaining(['Week 2 · Day 1 assigns Problems M2.3 "Two Sum", which Week 1 · Day 2 already assigns', 'Week 1 · Day 2 assigns Problems "Arrays 1-3" from M2 without an item']),
     );
-    expect(facts.filter((f) => f.startsWith("dropped") && (f.includes("Week 1") || f.includes("Week 2 · Day 1")))).toEqual([]);
+    expect(facts.filter((f) => /^breach: (Week 1|Week 2 · Day 1) /.test(f))).toEqual([]);
   });
 
   it("keeps a saved item row whose task the model reworded, and holds an itemless row it rewrote to the drafting rules", async () => {
@@ -634,15 +839,17 @@ describe("revisePlanTree holds rows it adds or changes to the drafting rules, an
     expect(edited.practiceOf("d2")).toEqual([item(3)]);
   });
 
-  it("drops a new repeat on an earlier day than the saved row that holds the item, and an extra copy of a saved row", async () => {
+  it("reports a new repeat on an earlier day than the saved row that holds the item, and an extra copy of a saved row", async () => {
     // Day 1 of Week 1 gains item 3, which Day 2 (saved, later in the week) already assigns.
     const earlier = await revise(answer([row("M2.3", "Two Sum")], [], [], undefined, [row("M2.1", "Contains Duplicate"), row("M2.3", "Two Sum")]));
-    expect(earlier.practiceOf("d1")?.map((r) => r.itemFrom)).toEqual([1]);
+    expect(earlier.practiceOf("d1")?.map((r) => r.itemFrom)).toEqual([1, 3]);
     expect(earlier.practiceOf("d2")).toEqual([{ ...old, minutes: 15 }, item(3)]);
-    expect(earlier.facts).toContain('dropped Problems M2.3 "Two Sum" from Week 1 · Day 1: practice-overlap');
-    // Day 2 written back with its item 3 twice: the copy past the saved one is new, and goes.
+    expect(earlier.facts).toContain('breach: Week 1 · Day 1 assigns Problems M2.3 "Two Sum", which Week 2 · Day 1 already assigns');
+    expect(earlier.problems).toHaveLength(1);
+    // Day 2 written back with its item 3 twice: the copy past the saved one is new, and is reported.
     const twice = await revise(answer([row("M2.3", "Two Sum")], [], [], [row("M2", "Arrays 1-3"), row("M2.3", "Two Sum"), row("M2.3", "Two Sum")]));
-    expect(twice.practiceOf("d2")).toEqual([{ ...old, minutes: 15 }, item(3)]);
-    expect(twice.facts).toContain('dropped Problems M2.3 "Two Sum" from Week 1 · Day 2: practice-overlap');
+    expect(twice.practiceOf("d2")?.map((r) => r.itemFrom ?? null)).toEqual([null, 3, 3]);
+    expect(twice.facts).toContain('breach: Week 1 · Day 2 assigns Problems M2.3 "Two Sum", which Week 2 · Day 1 already assigns');
+    expect(twice.problems).toHaveLength(1);
   });
 });

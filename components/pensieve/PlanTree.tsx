@@ -17,13 +17,14 @@ import {
   childLevel,
   budgetFor,
   doneDays,
+  isHeading,
   isLocked,
   labelOf,
   MAX_DAYS_PER_WEEK,
   spanOf,
   type PlanNode,
 } from "@/lib/planTree";
-import { dayMinutes, formatDayTime } from "@/lib/studyTime";
+import { dayMinutes, formatDayTime, formatUnitTime } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 export type PlanTreeMode = "create" | "adjust" | "track";
@@ -70,11 +71,6 @@ function gridClass(children: PlanNode[], pending?: PendingSlots): string {
   // Planned weeks show their whole Read list, which needs the full width.
   if (weeks && children.some((c) => (c.materials?.length ?? 0) > 0)) return "grid-cols-[minmax(0,1fr)] gap-2.5";
   return weeks ? "grid-cols-[repeat(auto-fill,minmax(215px,1fr))] gap-2.5" : "grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2.5";
-}
-
-/** Whether a childless node is a heading (to be planned later) rather than a leaf the learner works at. */
-function isHeading(node: PlanNode): boolean {
-  return node.children === null && node.level !== "day" && node.budgetHours === null;
 }
 
 export function PlanTree(props: PlanTreeProps) {
@@ -283,6 +279,7 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
   const unit = childLevel(node.level) ?? "day";
   const canExpand = !locked && !ctx.busy && !slots;
   const pct = node.len > 0 ? Math.round((done / node.len) * 100) : 0;
+  const time = node.time ? formatUnitTime(node.time) : "";
   // A week split by hand still shows the Read table it was planned with; weeks split before tiers were kept show
   // their reservation instead.
   const kept = node.manualSplit ? readRowsFor(keptReadTable(node.covers), ctx.byId) : [];
@@ -327,6 +324,7 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
           </span>
         )}
       </div>
+      {time && <p className="m-0 text-[11.5px] leading-snug text-muted-foreground">{time}</p>}
       <p className="m-0 text-[13px] leading-normal opacity-65">{node.summary}</p>
       {kept.length > 0 || keptPractice.length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -486,18 +484,29 @@ const SPLIT_CHOICES = Array.from({ length: MAX_DAYS_PER_WEEK }, (_, i) => i + 1)
  * "Split into [5 ▾] days". The words split the week into the learner's usual number of days; the number is a chip
  * that opens 1–7 days with the time each comes to, for a week that should have a different number.
  */
-function SplitControl({ usual, hoursPerWeek, onSplit }: { usual: number; hoursPerWeek?: number; onSplit: (days: number) => void }) {
-  const words = "text-[11.5px] text-accent-700 underline underline-offset-2 hover:text-accent-800";
+export function SplitControl({
+  usual,
+  hoursPerWeek,
+  onSplit,
+  disabled = false,
+}: {
+  usual: number;
+  hoursPerWeek?: number;
+  onSplit: (days: number) => void;
+  disabled?: boolean;
+}) {
+  const words = "text-[11.5px] text-accent-700 underline underline-offset-2 hover:text-accent-800 disabled:pointer-events-none disabled:opacity-50";
   const perDay = (n: number) => (n === usual ? "usual" : hoursPerWeek === undefined ? null : `${formatDayTime(dayMinutes(hoursPerWeek, n))} a day`);
   return (
     <span className="inline-flex items-center gap-1">
-      <button type="button" className={words} onClick={() => onSplit(usual)}>
+      <button type="button" className={words} onClick={() => onSplit(usual)} disabled={disabled}>
         Split into
       </button>
       <Menu.Root>
         <Menu.Trigger
+          disabled={disabled}
           aria-label={`Split into ${usual} days, or choose another number`}
-          className="inline-flex h-[18px] items-center gap-0.5 rounded-full bg-accent-100 px-1.5 text-[11.5px] font-semibold text-accent-800 transition-colors hover:bg-accent-200 data-popup-open:bg-accent-200"
+          className="inline-flex h-[18px] items-center gap-0.5 rounded-full bg-accent-100 px-1.5 text-[11.5px] font-semibold text-accent-800 transition-colors hover:bg-accent-200 data-popup-open:bg-accent-200 data-disabled:pointer-events-none data-disabled:opacity-50"
         >
           {usual}
           <ChevronDown className="size-2.5 opacity-70" strokeWidth={3} />
@@ -525,7 +534,7 @@ function SplitControl({ usual, hoursPerWeek, onSplit }: { usual: number; hoursPe
           </Menu.Positioner>
         </Menu.Portal>
       </Menu.Root>
-      <button type="button" className={words} onClick={() => onSplit(usual)}>
+      <button type="button" className={words} onClick={() => onSplit(usual)} disabled={disabled}>
         days
       </button>
     </span>

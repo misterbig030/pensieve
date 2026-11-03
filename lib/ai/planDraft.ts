@@ -1,9 +1,10 @@
 import { streamObject } from "ai";
+import type { z } from "zod";
 import {
   aliasMaterials,
-  dropBreaches,
   levelChecks,
   noSourceFacts,
+  pickedFormats,
   plainUnitText,
   resolveCoverRefs,
   resolveMaterialRefs,
@@ -11,7 +12,6 @@ import {
   resolvePracticeRefs,
   sizeChapterRows,
   sizeItemRuns,
-  type Breach,
   type MaterialAliases,
 } from "@/lib/materials";
 import type { PlanDraftEvent, PlanDraftRequest, PlanExpandEvent, PlanExpandRequest } from "@/lib/planChat";
@@ -27,18 +27,19 @@ import {
   makeRoot,
   topLevelFor,
   topSpans,
+  walk,
   type Granularity,
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
+import type { PracticeFormat } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
-import { unitListSchema, type UnitDraft } from "@/lib/schemas/plan";
+import { capProblems, MAX_UNIT_MINUTES, unitListSchema, type UnitDraft, type UnitTime, type unitTimeDraftSchema } from "@/lib/schemas/plan";
 import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortSettings, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { reportServiceFailure } from "./serviceEvents";
 import { allocatePlan } from "./allocate";
 import { DEFAULT_ALLOCATE_MODEL, DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
-import { providerError } from "./providerError";
 import { appModel, type ResolvedModel } from "./resolve";
 import { buildUnitsPrompt, type UnitsPromptInput } from "./planPrompt";
 import type { ResearchArm } from "./research/agent";
@@ -46,15 +47,16 @@ import { researchMaterials, type ResearchMaterialsInput } from "./research/pipel
 
 /**
  * The draft's time budget, inside the route's 300 s with room for the last events. Measured on 2026-10-24 (SDE, 8
- * weeks, Opus at high effort): research 59 s, the allocation 20 s, the weeks 36 s and their retry 31 s, the first
- * week's days 47 s. Research runs first and takes what it takes; what is left is shared out below.
+ * weeks, Opus at high effort): research 59 s, the allocation 20 s, the weeks 36 s, the first week's days 47 s. A level
+ * is called once (what breaks a rule is reported, not re-asked). Research runs first and takes what it takes; what is
+ * left is shared out below.
  */
 export const DRAFT_BUDGET_MS = 285_000;
 /** The longest the allocation may run; past it, code allocates and the plan is all reading. */
 export const ALLOCATE_TIMEOUT_MS = 90_000;
 /** Kept back from the allocation for the top-level outline, which the draft cannot do without. */
 export const OUTLINE_RESERVE_MS = 90_000;
-/** The least time left to start a retry or the first unit's children; with less, the step is skipped. */
+/** The least time left to start the first unit's children; with less, the step is skipped. */
 export const STEP_MIN_MS = 60_000;
 /** Outline calls retry a failed request once at most: a second Opus attempt eats the time the next level needs. */
 const OUTLINE_MAX_RETRIES = 1;
@@ -76,6 +78,38 @@ export function unitsAreLeaves(level: PlanLevel, granularity: Granularity): bool
   return level === "day" || (level === "week" && granularity === "week");
 }
 
+/**
+ * A heading's time as the model wrote it, as the node keeps it: practice by format, a format given twice summed. Formats
+ * not in `picked` (the split's picks the units can be given) are left out and returned. Each activity is held to
+ * `MAX_UNIT_MINUTES`, what a saved unit may keep, so a slip does not fail the plan's save; `timeOverLimit` tells it.
+ */
+export function toUnitTime(draft: z.infer<typeof unitTimeDraftSchema>, picked: readonly PracticeFormat[]): { time: UnitTime; unpicked: PracticeFormat[] } {
+  const practice: UnitTime["practice"] = {};
+  const unpicked: PracticeFormat[] = [];
+  // A streamed unit is not validated yet: its practice may be missing until the level is in.
+  for (const { format, minutes } of draft.practice ?? []) {
+    if (!picked.includes(format)) {
+      if (!unpicked.includes(format)) unpicked.push(format);
+      continue;
+    }
+    practice[format] = Math.min(MAX_UNIT_MINUTES, (practice[format] ?? 0) + minutes);
+  }
+  return { time: { reading: Math.min(MAX_UNIT_MINUTES, draft.reading), practice }, unpicked };
+}
+
+/** Whether the model wrote more minutes for one of a heading's activities than a saved unit may keep (`toUnitTime` clamps them). */
+export function timeOverLimit(draft: z.infer<typeof unitTimeDraftSchema>): boolean {
+  const byFormat = new Map<PracticeFormat, number>();
+  for (const { format, minutes } of draft.practice ?? []) byFormat.set(format, (byFormat.get(format) ?? 0) + minutes);
+  return draft.reading > MAX_UNIT_MINUTES || [...byFormat.values()].some((m) => m > MAX_UNIT_MINUTES);
+}
+
+/** The admin fact for headings whose time was clamped: none when no unit's was. */
+export function clampedTimeFacts(times: (z.infer<typeof unitTimeDraftSchema> | undefined)[]): string[] {
+  const n = times.filter((t) => t && timeOverLimit(t)).length;
+  return n > 0 ? [`clamped time to ${MAX_UNIT_MINUTES} min an activity on ${n} unit${n === 1 ? "" : "s"}`] : [];
+}
+
 /** Builds a node for a drafted unit: leaves get a time budget when they are week-sized. */
 export function nodeFor(
   unit: UnitDraft,
@@ -85,6 +119,7 @@ export function nodeFor(
   aliases?: MaterialAliases,
   hoursPerWeek?: number,
   split?: PlanSplit | null,
+  picked?: readonly PracticeFormat[],
 ): PlanNode {
   const leaf = unitsAreLeaves(level, granularity);
   const node = makeNode({
@@ -95,15 +130,17 @@ export function nodeFor(
     budgetHours: leaf && level !== "day" ? budgetFor(1, hoursPerWeek) : null,
     children: null,
   });
-  if (aliases) applyUnitRefs(node, unit, leaf, aliases, split);
+  if (aliases) applyUnitRefs(node, unit, leaf, aliases, split, picked);
   return node;
 }
 
 /**
  * Puts what the model wrote for references onto the node: leaves keep `materials` (their Read table) and `practice`
  * (their practice rows), headings keep `covers` and `practiceCovers` (their reservations; a listed source's without a
- * run, which `sizeItemRuns` sizes once the level is in). Returns the ids that are not in the list and the practice rows
- * the rules refuse; both are dropped.
+ * run, which `sizeItemRuns` sizes once the level is in) and `time` (the minutes the unit gives each activity, for the
+ * formats in `picked`, the split's picks by default). Leaves never carry `time`. Returns the ids that are not in the
+ * list, the practice rows the rules refuse and the formats a heading's time named that the split did not pick; all are
+ * dropped.
  */
 export function applyUnitRefs(
   node: PlanNode,
@@ -111,24 +148,29 @@ export function applyUnitRefs(
   leaf: boolean,
   aliases: MaterialAliases,
   split?: PlanSplit | null,
-): { unknown: string[]; refused: string[] } {
+  picked: readonly PracticeFormat[] = pickedFormats(split),
+): { unknown: string[]; refused: string[]; unpicked: PracticeFormat[] } {
   delete node.covers;
   delete node.materials;
   delete node.practice;
   delete node.practiceCovers;
+  delete node.time;
   if (leaf) {
     const reading = resolveMaterialRefs(unit.materials, aliases);
     if (reading.refs.length > 0) node.materials = reading.refs;
     const practice = resolvePracticeRefs(unit.practice, aliases, split, reading.refs.map((r) => r.id));
     if (practice.refs.length > 0) node.practice = practice.refs;
-    return { unknown: [...reading.unknown, ...practice.unknown], refused: practice.refused };
+    return { unknown: [...reading.unknown, ...practice.unknown], refused: practice.refused, unpicked: [] };
   }
   const reading = resolveCoverRefs(unit.covers, aliases);
   if (reading.refs.length > 0) node.covers = reading.refs;
   // A listed source's runs are sized in code once the level is in (`sizeItemRuns`): the model only chose the units.
   const practice = resolvePracticeCovers(unit.practiceCovers, aliases, split, { sized: true });
   if (practice.refs.length > 0) node.practiceCovers = practice.refs;
-  return { unknown: [...reading.unknown, ...practice.unknown], refused: [] };
+  // A heading the model gave no time stays without: the checks report it.
+  const time = unit.time ? toUnitTime(unit.time, picked) : null;
+  if (time) node.time = time.time;
+  return { unknown: [...reading.unknown, ...practice.unknown], refused: [], unpicked: time?.unpicked ?? [] };
 }
 
 /**
@@ -154,8 +196,6 @@ interface StreamUnitsInput {
   expected: number;
   /** Runs on the validated units before the call is reported; returns the checks to show beside the response. */
   check?: (units: UnitDraft[]) => string[];
-  /** A retry: the units are not streamed, only the validated list is returned. */
-  silent?: boolean;
   /** The model that drafts the units, and who pays for it. */
   model: ResolvedModel;
   /** Stops the call: the request going away, or the draft's deadline. */
@@ -196,17 +236,18 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
       const unit = units[sent];
       if (typeof unit.title !== "string" || typeof unit.summary !== "string") break;
       sent += 1;
-      if (!input.silent) yield { type: "unit", unit: unit as UnitDraft };
+      yield { type: "unit", unit: unit as UnitDraft };
     }
   }
   if (failure !== undefined) throw failure;
-  const [object, usage, finishReason] = await Promise.all([result.object, result.usage, result.finishReason]);
+  const [object, usage, finishReason, providerMetadata] = await Promise.all([result.object, result.usage, result.finishReason, result.providerMetadata]);
   const row = buildGenerationLogRow({
     caller: "outline",
     model: input.model.id,
     effort: OUTLINE_EFFORT,
     keyOwner: input.model.keyOwner,
     usage,
+    providerMetadata,
     latencyMs: Math.round(performance.now() - startedAt),
     trackId: input.log?.trackId,
     userId: input.log?.userId,
@@ -222,10 +263,10 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     finishReason: finishReason ?? null,
     facts: [...unitFacts(object.units.length, input.expected), ...checks],
   });
-  yield { type: "done", units: object.units, costUsd: row.costUsd };
+  yield { type: "done", units: object.units, costUsd: row.costUsd ?? 0 };
 }
 
-interface DraftLevelInput {
+export interface DraftLevelInput {
   ctx: {
     topic: string;
     instructions?: string;
@@ -245,30 +286,45 @@ interface DraftLevelInput {
   spans: number[];
   tree?: PlanNode;
   parentId?: string;
+  /**
+   * Top level only (no `parentId`): the plan's first units, done or started, kept as they are before the ones drafted
+   * (a re-draft). The prompt lists them as fixed and gives the drafted units what is left of the plan; what they reserve
+   * or do is taken; the checks see them in the tree, and hold the drafted units alone to stating their time. `spans`
+   * covers only the rest of the plan. The drafted nodes come back without them.
+   */
+  keep?: PlanNode[];
   log?: GenerationLogContext;
-  /** The signal the level's first call runs under; the request's with the draft's deadline when omitted. */
+  /** The signal the level's call runs under; the request's with the draft's deadline when omitted. */
   signal?: AbortSignal;
 }
 
-/** The level's final nodes placed in a copy of the tree, so checks can name them by label. */
-function placeForChecks(tree: PlanNode | undefined, parentId: string | undefined, nodes: PlanNode[]): { root: PlanNode; placed: PlanNode[] } {
+/**
+ * The level's final nodes placed in a copy of the tree, so checks can name them by label. At the top level, units kept
+ * before them (`keep`) come first, copied too, as `kept`.
+ */
+function placeForChecks(tree: PlanNode | undefined, parentId: string | undefined, nodes: PlanNode[], keep: PlanNode[] = []): { root: PlanNode; placed: PlanNode[]; kept: PlanNode[] } {
   const copies = nodes.map((n) => cloneTree(n));
   if (!tree || !parentId) {
-    const root = makeRoot(copies);
-    return { root, placed: copies };
+    const kept = keep.map((n) => cloneTree(n));
+    const root = makeRoot([...kept, ...copies]);
+    return { root, placed: copies, kept };
   }
   const root = cloneTree(tree);
   const parent = findNode(root, parentId);
-  if (!parent) return { root, placed: [] };
+  if (!parent) return { root, placed: [], kept: [] };
   parent.children = copies;
   layout(root);
-  return { root, placed: copies };
+  return { root, placed: copies, kept: [] };
 }
 
-/** Drafts one level of units under `parentId` (or the top level), yielding each node as it lands. */
-async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; costUsd: number }> {
+/**
+ * Drafts one level of units under `parentId` (or the top level) in one call, yielding each node as it lands. The level
+ * is checked once and kept as written: what breaks a rule comes back as the learner's `problems`, never fixed in code.
+ */
+export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; problems: string[]; costUsd: number }> {
   const { ctx, level } = input;
   const leaf = unitsAreLeaves(level, ctx.granularity);
+  const keep = input.parentId ? [] : (input.keep ?? []);
   // References are resolved when there are materials, or practice to assign (rows written without a source).
   const aliases = ctx.materials.length > 0 || (ctx.split?.formats ?? []).length > 0 ? aliasMaterials(ctx.materials) : undefined;
   const promptInput: UnitsPromptInput = {
@@ -284,23 +340,25 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
     weeks: ctx.weeks,
     tree: input.tree,
     parentId: input.parentId,
+    ...(keep.length > 0 ? { keep } : {}),
     unitsAreLeaves: leaf,
   };
   const parentNode = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
   const where = input.tree && parentNode ? fullLabelOf(input.tree, parentNode) : "Top level";
   const n = input.spans.length;
   const label = `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
+  const picked = pickedFormats(ctx.split, ctx.materials);
   const nodes: PlanNode[] = [];
   let final: PlanNode[] = [];
-  let breaches: Breach[] = [];
-  let attempt = 1;
+  let problems: string[] = [];
 
-  // Reconciles spans and references once the whole level has validated, and states the checks in code. On the
-  // retry, rows that still breach are dropped; on either attempt, chapter rows take their minutes from the list.
+  // Reconciles spans and references once the whole level has validated, sizes chapter rows and item runs, and states
+  // the checks in code: the facts for the admin panel, the breaches as the learner's problems.
   const check = (units: UnitDraft[]): string[] => {
     const spans = reconcileSpans(input.spans, units.length, level, ctx.daysPerWeek);
     const unknown: string[] = [];
     const refused: string[] = [];
+    const unpicked = new Set<PracticeFormat>();
     final = units.map((unit, i) => {
       const node = nodes[i] ?? nodeFor(unit, level, spans[i], ctx.granularity, undefined, ctx.hoursPerWeek);
       node.title = unit.title;
@@ -309,18 +367,24 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       node.end = node.start + node.len - 1;
       if (node.budgetHours !== null) node.budgetHours = budgetFor(1, ctx.hoursPerWeek);
       if (aliases) {
-        const out = applyUnitRefs(node, unit, leaf, aliases, ctx.split);
+        const out = applyUnitRefs(node, unit, leaf, aliases, ctx.split, picked);
         unknown.push(...out.unknown);
         refused.push(...out.refused);
+        for (const f of out.unpicked) unpicked.add(f);
       }
       return node;
     });
     if (!aliases) return [];
-    const practiceFacts = [...noSourceFacts(ctx.split, ctx.materials), ...(refused.length > 0 ? [`refused ${refused.join("; ")}`] : [])];
+    const practiceFacts = [
+      ...noSourceFacts(ctx.split, ctx.materials),
+      ...(refused.length > 0 ? [`refused ${refused.join("; ")}`] : []),
+      ...(unpicked.size > 0 ? [`dropped time for unpicked ${[...unpicked].join(", ")}`] : []),
+      ...(leaf ? [] : clampedTimeFacts(units.map((u) => u.time))),
+    ];
     // The checks run without materials too: a plan with no sources can still have practice written without one.
     // Chapter rows take their minutes from the list before the budget is judged, so the checks see real sizes.
     if (leaf) sizeChapterRows(final, ctx.materials);
-    const { root, placed } = placeForChecks(input.tree, input.parentId, final);
+    const { root, placed, kept } = placeForChecks(input.tree, input.parentId, final, keep);
     // Headings: each listed source's runs are sized by the units' time before the checks, which then hold by construction.
     const sizing = leaf ? [] : sizeItemRuns({ root, nodes: placed, materials: ctx.materials, split: ctx.split, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek });
     if (!leaf) {
@@ -329,14 +393,30 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
         else delete final[i].practiceCovers;
       });
     }
-    const checks = levelChecks({ root, nodes: placed, leaves: leaf, top: !input.parentId, materials: ctx.materials, unknownIds: unknown, hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, split: ctx.split });
-    breaches = checks.breaches;
-    const facts = [...checks.facts, ...sizing, ...practiceFacts, ...breaches.map((b) => `breach: ${b.text}`)];
-    if (attempt === 2) {
-      // Rows that still breach are dropped, the drops recorded, and the surviving chapter rows resized.
-      facts.push(...dropBreaches(final, breaches));
-      if (leaf) sizeChapterRows(final, ctx.materials);
-    }
+    // Kept units are checked with the level, so the plan's totals count them; their rows were saved, and only the
+    // drafted units are held to stating their time.
+    const drafted = new Set(placed.map((n) => n.id));
+    const keptIds = new Set<string>();
+    for (const n of kept) walk(n, (d) => void keptIds.add(d.id));
+    const checks = levelChecks({
+      root,
+      nodes: [...kept, ...placed],
+      leaves: leaf,
+      top: !input.parentId,
+      materials: ctx.materials,
+      unknownIds: unknown,
+      hoursPerWeek: ctx.hoursPerWeek,
+      daysPerWeek: ctx.daysPerWeek,
+      split: ctx.split,
+      drafted: kept.length > 0 ? (node) => drafted.has(node.id) : true,
+      ...(kept.length > 0 ? { saved: (node: PlanNode) => keptIds.has(node.id) } : {}),
+    });
+    // A breach of a kept unit's own (its index among the kept, which come first) is the learner's to see nowhere: the unit
+    // can't change, and it is measured against today's settings. It stays a fact for the admin panel. Plan-wide
+    // breaches (index -1) count the kept units' time and stay problems.
+    const fixed = (index: number) => index >= 0 && index < kept.length;
+    problems = capProblems(checks.problems.filter((_, i) => !fixed(checks.breaches[i].index)));
+    const facts = [...checks.facts, ...sizing, ...practiceFacts, ...checks.breaches.map((b) => `${fixed(b.index) ? "kept unit" : "breach"}: ${b.text}`)];
     // After the checks, which read notes as written: ids the model copied from its prompt are put in words for the learner.
     const plain = final.reduce((sum, node) => sum + plainUnitText(node, ctx.materials, aliases), 0);
     if (plain > 0) facts.push(`ids put in words in ${plain} field${plain === 1 ? "" : "s"}`);
@@ -344,12 +424,12 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
   };
 
   const prompt = buildUnitsPrompt(promptInput);
-  const base = { expected: n, check, model: ctx.outlineModel, log: input.log };
   let costUsd = 0;
-  for await (const event of streamUnits({ ...base, prompt, label, signal: input.signal ?? within(ctx.signal, timeLeft(ctx.deadline)) })) {
+  const signal = input.signal ?? within(ctx.signal, timeLeft(ctx.deadline));
+  for await (const event of streamUnits({ prompt, label, expected: n, check, model: ctx.outlineModel, log: input.log, signal })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
-      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split);
+      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split, picked);
       if (aliases) plainUnitText(node, ctx.materials, aliases);
       nodes.push(node);
       yield { type: "node", node };
@@ -357,40 +437,63 @@ async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node
       costUsd = event.costUsd;
     }
   }
+  yield { type: "done", nodes: final, problems, costUsd };
+}
 
-  // One retry with the breaches quoted, its units not streamed; the first answer stays on screen until it lands. With
-  // too little of the draft's time left for it, the first answer stands, its breaching rows dropped.
-  const left = timeLeft(ctx.deadline);
-  if (breaches.length > 0 && left !== null && left < STEP_MIN_MS) {
-    console.error(`[draft] no time left to retry ${label}; breaching rows dropped`);
-    dropBreaches(final, breaches);
-    if (leaf) sizeChapterRows(final, ctx.materials);
-  } else if (breaches.length > 0) {
-    attempt = 2;
-    const corrections = [RETRY_HEADER(n), ...breaches.map((b) => `- ${b.text}`)].join("\n");
+/** Puts a level's problems on the node it was planned inside, within their limits; none leaves the node without `problems`. */
+export function setProblems(node: PlanNode, problems: string[]): void {
+  if (problems.length > 0) node.problems = capProblems(problems);
+  else delete node.problems;
+}
+
+/**
+ * Plans `first` down to the plan's finest units along its first branch: its children, then its first child's, while
+ * the branch is still made of headings and the draft's time allows. Each planned parent keeps its level's problems.
+ * Yields each node as it lands and returns the calls' cost. Past the deadline the unit being planned stays a heading.
+ */
+export async function* draftFirstBranch(
+  ctx: DraftLevelInput["ctx"],
+  root: PlanNode,
+  first: PlanNode | undefined,
+  log?: GenerationLogContext,
+): AsyncGenerator<{ type: "node"; parentId: string; node: PlanNode }, number> {
+  let costUsd = 0;
+  let parent = first;
+  while (parent && !unitsAreLeaves(parent.level, ctx.granularity)) {
+    const left = timeLeft(ctx.deadline);
+    if (left !== null && left < STEP_MIN_MS) break;
+    const level = childLevel(parent.level)!;
+    const spans = childSpans(parent, ctx.daysPerWeek);
+    const kids: PlanNode[] = [];
     const signal = within(ctx.signal, left);
     try {
-      for await (const event of streamUnits({ ...base, prompt: `${prompt}\n${corrections}`, label: `${label} (retry)`, silent: true, signal })) {
-        if (event.type === "done") {
+      for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: parent.id, log, signal })) {
+        if (event.type === "node") {
+          kids.push(event.node);
+          parent.children = kids;
+          layout(root);
+          yield { type: "node", parentId: parent.id, node: event.node };
+        } else {
+          parent.children = event.nodes;
+          setProblems(parent, event.problems);
+          layout(root);
           costUsd += event.costUsd;
         }
       }
     } catch (error) {
-      // A request that went away stops here. On the user's own key a provider refusal is theirs to hear about;
-      // otherwise (the deadline included) the first answer stands, pruned.
-      if (ctx.signal?.aborted) throw error;
-      // A retry the draft's deadline cut short did not fail on Anthropic.
-      reportServiceFailure(input.log, error, "outline retry", signal);
-      if (ctx.outlineModel.keyOwner === "user" && providerError(error)) throw error;
-      console.error(`[draft] retry failed for ${label}`, error);
-      dropBreaches(final, breaches);
-      if (leaf) sizeChapterRows(final, ctx.materials);
+      // Past the deadline the unit stays a heading, its streamed children dropped; any other failure is the draft's.
+      if (ctx.signal?.aborted || ctx.deadline === undefined || Date.now() < ctx.deadline) throw error;
+      // A level the draft's deadline cut off did not fail on Anthropic.
+      reportServiceFailure(log, error, "outline level", signal);
+      console.error(`[draft] out of time planning ${parent.title}; it stays a heading`, error);
+      parent.children = null;
+      layout(root);
+      break;
     }
+    parent = parent.children?.[0];
   }
-  yield { type: "done", nodes: final, costUsd };
+  return costUsd;
 }
-
-export const RETRY_HEADER = (n: number) => `Your previous answer broke these rules; return all ${n} units again, corrected:`;
 
 export interface StreamPlanDraftInput extends Omit<PlanDraftRequest, "materials"> {
   /** The materials list research produced (the learner's own included). */
@@ -452,45 +555,14 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
       yield { type: "node", parentId: root.id, node: event.node };
     } else {
       root.children = event.nodes;
+      setProblems(root, event.problems);
       layout(root);
       costUsd += event.costUsd;
     }
   }
 
   // The first unit's children, while the draft's time allows: a unit left as a heading is planned when it is reached.
-  let parent: PlanNode | undefined = root.children?.[0];
-  while (parent && !unitsAreLeaves(parent.level, input.granularity)) {
-    const left = timeLeft(input.deadline);
-    if (left !== null && left < STEP_MIN_MS) break;
-    const level = childLevel(parent.level)!;
-    const spans = childSpans(parent, input.daysPerWeek);
-    const kids: PlanNode[] = [];
-    const signal = within(input.signal, left);
-    try {
-      for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: parent.id, log: input.log, signal })) {
-        if (event.type === "node") {
-          kids.push(event.node);
-          parent.children = kids;
-          layout(root);
-          yield { type: "node", parentId: parent.id, node: event.node };
-        } else {
-          parent.children = event.nodes;
-          layout(root);
-          costUsd += event.costUsd;
-        }
-      }
-    } catch (error) {
-      // Past the deadline the unit stays a heading, its streamed children dropped; any other failure is the draft's.
-      if (input.signal?.aborted || input.deadline === undefined || Date.now() < input.deadline) throw error;
-      // A level the draft's deadline cut off did not fail on Anthropic.
-      reportServiceFailure(input.log, error, "outline level", signal);
-      console.error(`[draft] out of time planning ${parent.title}; it stays a heading`, error);
-      parent.children = null;
-      layout(root);
-      break;
-    }
-    parent = parent.children?.[0];
-  }
+  costUsd += yield* draftFirstBranch(ctx, root, root.children?.[0], input.log);
 
   yield { type: "finish", root: layout(root), costUsd };
 }
@@ -539,7 +611,7 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
       kids.push(event.node);
       yield { type: "child", node: event.node };
     } else {
-      yield { type: "finish", children: event.nodes, costUsd: event.costUsd };
+      yield { type: "finish", children: event.nodes, problems: event.problems, costUsd: event.costUsd };
     }
   }
 }

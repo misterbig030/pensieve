@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeStreak } from "./streak";
+import { computeStreak, longestStreak } from "./streak";
 
 const day = (offsetFromToday: number, today: Date) => {
   const d = new Date(today);
@@ -43,5 +43,21 @@ describe("computeStreak", () => {
     const d0b = new Date(d0);
     d0b.setHours(d0b.getHours() + 2);
     expect(computeStreak([d0, d0b], today)).toBe(1);
+  });
+});
+
+describe("longestStreak", () => {
+  it("returns 0 for no check-ins", () => {
+    expect(longestStreak([])).toBe(0);
+  });
+
+  it("finds the longest run of consecutive UTC days", () => {
+    const dates = ["2026-10-01T09:00:00Z", "2026-10-02T09:00:00Z", "2026-10-03T09:00:00Z", "2026-10-05T09:00:00Z", "2026-10-06T09:00:00Z"].map((s) => new Date(s));
+    expect(longestStreak(dates)).toBe(3);
+  });
+
+  it("counts two check-ins on one UTC day once", () => {
+    const dates = ["2026-10-01T01:00:00Z", "2026-10-01T23:00:00Z", "2026-10-02T12:00:00Z"].map((s) => new Date(s));
+    expect(longestStreak(dates)).toBe(2);
   });
 });

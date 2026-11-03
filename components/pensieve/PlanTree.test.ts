@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
 import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
 import { layout, makeNode, makeRoot } from "@/lib/planTree";
+import type { UnitTime } from "@/lib/schemas/plan";
 import type { CoverRef, Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
 import { CoversRow, PlanTree, coverLines } from "./PlanTree";
 
@@ -124,5 +125,44 @@ describe("a collapsed day card's practice lines", () => {
     const out = html(none, []);
     expect(out).toContain("A long summary of the day");
     expect(out).not.toContain("Show the day");
+  });
+});
+
+describe("a heading's unit time", () => {
+  const none = new Set<string>();
+  const html = (time?: UnitTime) => {
+    const d1 = makeNode({ id: "d1", level: "day", title: "Hashing", summary: "s", len: 1 });
+    const w1 = makeNode({ id: "w1", level: "week", title: "Arrays", summary: "Week summary", len: 1, children: [d1], time });
+    return renderToStaticMarkup(
+      createElement(PlanTree, {
+        root: layout(makeRoot([w1])),
+        mode: "create",
+        highlight: none,
+        lockBefore: 0,
+        currentLeafId: null,
+        pending: {},
+        collapsed: none,
+        openChips: none,
+        busy: false,
+        onToggle: () => {},
+        onToggleChip: () => {},
+        onExpand: () => {},
+        onSplit: () => {},
+        materials: [...byId.values()],
+        hoursPerWeek: 6,
+        daysPerWeek: 5,
+      }),
+    ).replace(/<!-- -->/g, "");
+  };
+
+  it("shows a week's time under its title", () => {
+    const out = html({ reading: 150, practice: { "problem-set": 180 } });
+    expect(out).toContain("2 h 30 min reading · 3 h Problems");
+    expect(out.indexOf("Arrays")).toBeLessThan(out.indexOf("2 h 30 min reading"));
+  });
+  it("shows nothing for a week the outline gave no time", () => {
+    const out = html();
+    expect(out).not.toContain("reading");
+    expect(out).not.toMatch(/>\d+ (h|min)/);
   });
 });

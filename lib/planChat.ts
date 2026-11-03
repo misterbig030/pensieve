@@ -1,7 +1,7 @@
 import type { KeyErrorKind } from "@/lib/ai/models";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { Coverage, DroppedMaterial, ResearchEvent } from "@/lib/ai/research/events";
-import type { Granularity, PlanLevel, PlanNode } from "@/lib/planTree";
+import { walk, type Granularity, type PlanLevel, type PlanNode } from "@/lib/planTree";
 import type { ChangedNodes } from "@/lib/planSummary";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanTreeInput } from "@/lib/schemas/plan";
@@ -74,6 +74,7 @@ export type PlanDraftEvent =
   | { type: "allocated"; materials: Material[]; dropped: DroppedMaterial[]; coverage: Coverage | null }
   /** Sent right after `allocated`, before any node: how the drafter divides the learner's time. */
   | { type: "split"; split: PlanSplit }
+  /** The drafted tree: its root's `problems` are the top level's, each planned parent's its own level's. */
   | { type: "finish"; root: PlanNode; costUsd: number }
   | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
@@ -123,7 +124,8 @@ export interface PlanExpandRequest extends PlanContext {
 
 export type PlanExpandEvent =
   | { type: "child"; node: PlanNode }
-  | { type: "finish"; children: PlanNode[]; costUsd: number }
+  /** `problems`: the planned level's rule breaks, one learner line each; empty when it keeps every rule. */
+  | { type: "finish"; children: PlanNode[]; problems: string[]; costUsd: number }
   | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
 
@@ -143,8 +145,27 @@ export interface PlanChatRequest extends PlanContext {
 export type PlanChatEvent =
   | { type: "text"; text: string }
   | { type: "revising" }
-  | { type: "revised"; tree: PlanNode; changed: ChangedNodes; costUsd: number }
+  /** `problems`: what the checks found in the revised tree, in the learner's words (none: empty). */
+  | { type: "revised"; tree: PlanNode; changed: ChangedNodes; problems: string[]; costUsd: number }
   | { type: "finish"; costUsd: number }
+  | { type: "error"; message: string; code?: KeyErrorKind }
+  | CallEvent;
+
+/**
+ * Request body for POST /api/plan/redraft: the chat's body without a transcript, and what to re-draft. The hours and
+ * split pickers always re-draft the whole open plan.
+ */
+export interface PlanRedraftRequest extends Omit<PlanChatRequest, "transcript"> {
+  scope: { kind: "plan" };
+}
+
+/**
+ * Events streamed back from POST /api/plan/redraft. `problems`: what the checks found in every level the re-draft
+ * planned, in the learner's words (none: empty). An `error` with nothing to re-draft, or a unit locked, leaves the plan
+ * as it was; its message is the learner's.
+ */
+export type PlanRedraftEvent =
+  | { type: "redrafted"; tree: PlanNode; problems: string[]; costUsd: number }
   | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
 
@@ -203,6 +224,29 @@ export function undoableChangeId(messages: ChatMessage[]): string | null {
   return null;
 }
 
+/**
+ * Why the conversation is locked, or null when it's open. There's nothing to talk over while the plan drafts, nor after
+ * a draft refused at zero credits: the alert's Try again is the way on, and a chat turn would take its place.
+ */
+export function chatLockHint(state: { drafting: boolean; draftRefused: boolean }): string | null {
+  return state.drafting || state.draftRefused ? "Available once the plan is drafted" : null;
+}
+
 export function hasUserTurn(messages: ChatMessage[]): boolean {
   return messages.some((m) => m.kind === "user");
+}
+
+/** What the conversation says when the checks found problems in the plan; nothing when they found none. */
+export function problemsText(problems: string[]): string {
+  if (problems.length === 0) return "";
+  return `A few things in this plan don't add up:\n${problems.map((p) => `- ${p}`).join("\n")}\nAsk me to fix any of them, or to re-draft the plan.`;
+}
+
+/** The problems on the root and on every node under it, in tree order, each line once. */
+export function collectProblems(root: PlanNode): string[] {
+  const seen = new Set<string>();
+  walk(root, (node) => {
+    for (const line of node.problems ?? []) seen.add(line);
+  });
+  return [...seen];
 }

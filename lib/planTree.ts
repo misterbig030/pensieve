@@ -9,6 +9,7 @@
  */
 
 import type { CoverRef, MaterialRef, PracticeCover, PracticeRef } from "@/lib/schemas/material";
+import type { UnitTime } from "@/lib/schemas/plan";
 
 export type PlanLevel = "month" | "week" | "day";
 export type NodeStatus = "pending" | "generated" | "completed";
@@ -37,6 +38,10 @@ export interface PlanNode {
   practiceCovers?: PracticeCover[];
   /** Leaves: the practice rows. */
   practice?: PracticeRef[];
+  /** Headings: minutes per activity the outline gave this unit; must-reading only. */
+  time?: UnitTime;
+  /** Learner lines for the level planned inside this node; on the root, the top level's. */
+  problems?: string[];
   /** Track pages attach the sessions logged against a week leaf. */
   sessions?: { count: number; hours: number };
   /** 1-based index of the first study day across the plan, set by `layout`. Internal: the learner sees days by week. */
@@ -258,6 +263,44 @@ export function currentLeaf(root: PlanNode): PlanNode | null {
   return leavesOf(root).find((leaf) => leaf.status !== "completed") ?? null;
 }
 
+/** Whether a childless node is a heading (to be planned later) rather than a leaf the learner works at. */
+export function isHeading(node: PlanNode): boolean {
+  return node.children === null && node.level !== "day" && node.budgetHours === null;
+}
+
+/** The leaves a learner works at, in plan order: `leavesOf` without the headings still to be planned. */
+export function workLeaves(root: PlanNode): PlanNode[] {
+  return leavesOf(root).filter((leaf) => !isHeading(leaf));
+}
+
+/** The work leaves just before and after this one. */
+export function neighbours(root: PlanNode, id: string): { prev: PlanNode | null; next: PlanNode | null } {
+  const leaves = workLeaves(root);
+  const i = leaves.findIndex((leaf) => leaf.id === id);
+  if (i < 0) return { prev: null, next: null };
+  return { prev: leaves[i - 1] ?? null, next: leaves[i + 1] ?? null };
+}
+
+/**
+ * The node the plan page shows: the one asked for when it exists below the root, else the current leaf, else the last
+ * leaf of a finished plan, else the first unit.
+ */
+export function resolveSelected(root: PlanNode, id: string | undefined): PlanNode {
+  const asked = id && id !== root.id ? findNode(root, id) : null;
+  return asked ?? currentLeaf(root) ?? workLeaves(root).at(-1) ?? root.children?.[0] ?? root;
+}
+
+/** The units on the path to the current leaf, which the plan's outline opens first. */
+export function initialOpen(root: PlanNode, currentLeafId: string | null): Set<string> {
+  const open = new Set<string>();
+  let parent = currentLeafId ? parentOf(root, currentLeafId) : null;
+  while (parent && parent.id !== root.id) {
+    open.add(parent.id);
+    parent = parentOf(root, parent.id);
+  }
+  return open;
+}
+
 /**
  * The tree with every open week and month that is not planned yet re-lengthened for a new usual number of days.
  * Weeks already split keep their days; completed and locked units keep theirs. The days at the top of a one-week plan
@@ -319,6 +362,8 @@ export interface NewNodeInput {
   materials?: MaterialRef[];
   practiceCovers?: PracticeCover[];
   practice?: PracticeRef[];
+  time?: UnitTime;
+  problems?: string[];
 }
 
 export function makeNode(input: NewNodeInput): PlanNode {
@@ -336,6 +381,8 @@ export function makeNode(input: NewNodeInput): PlanNode {
     ...(input.materials && input.materials.length > 0 ? { materials: input.materials } : {}),
     ...(input.practiceCovers && input.practiceCovers.length > 0 ? { practiceCovers: input.practiceCovers } : {}),
     ...(input.practice && input.practice.length > 0 ? { practice: input.practice } : {}),
+    ...(input.time ? { time: input.time } : {}),
+    ...(input.problems && input.problems.length > 0 ? { problems: input.problems } : {}),
     start: 1,
     end: input.len,
   };

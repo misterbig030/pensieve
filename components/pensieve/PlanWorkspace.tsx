@@ -2,24 +2,28 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { unstable_rethrow } from "next/navigation";
+import { unstable_rethrow, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConversationRail } from "@/components/pensieve/ConversationRail";
+import { OutOfCreditsAlert } from "@/components/pensieve/OutOfCreditsAlert";
 import { MaterialsList } from "@/components/pensieve/MaterialsList";
 import { ResearchProgress } from "@/components/pensieve/ResearchProgress";
 import { TimeSplitCard } from "@/components/pensieve/TimeSplitCard";
 import { KEY_ERRORS } from "@/lib/ai/models";
+import { OUT_OF_CREDITS } from "@/lib/credits";
 import type { Coverage, DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
 import { assignmentsOf, draftedSplit, removeMaterialRefs } from "@/lib/materials";
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
-import { formatCostUsd } from "@/lib/formatCost";
 import { pushModelCalls } from "@/lib/modelCalls";
 import { readNdjson } from "@/lib/ndjson";
 import {
   applyDraftEvent,
+  chatLockHint,
+  collectProblems,
   nextMessageId,
+  problemsText,
   toTranscript,
   type ChatMessage,
   type DraftMaterials,
@@ -29,8 +33,10 @@ import {
   type PlanDraftRequest,
   type PlanExpandEvent,
   type PlanExpandRequest,
+  type PlanRedraftRequest,
 } from "@/lib/planChat";
 import { toTreeInput } from "@/lib/planInput";
+import { applyRedraft, createRedraftScheduler, requestRedraft, type RedraftChange, type RedraftResult, type RedraftScheduler } from "@/lib/redraft";
 import { latestChangeNote, summarizePlan } from "@/lib/planSummary";
 import {
   childLevel,
@@ -57,7 +63,7 @@ import {
 import { installLeaveGuard } from "@/lib/leaveGuard";
 import type { Material } from "@/lib/schemas/material";
 import type { SourceInput } from "@/lib/schemas/source";
-import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, isAllReading, practiceLabelOf, rebudget, totalHours, weeksLabel, type PlanSplit } from "@/lib/studyTime";
+import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, isAllReading, practiceLabelOf, totalHours, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 export interface PlanWorkspaceProps {
@@ -85,7 +91,12 @@ export interface PlanWorkspaceProps {
   backLabel: string;
   heading: string;
   subtext: string;
-  onConfirm: (tree: PlanNode, summary: string, materials: Material[], time: { hoursPerWeek: number; daysPerWeek: number; split: PlanSplit | null }) => Promise<void>;
+  onConfirm: (
+    tree: PlanNode,
+    summary: string,
+    materials: Material[],
+    time: { hoursPerWeek: number; daysPerWeek: number; split: PlanSplit | null; problems?: string[] },
+  ) => Promise<void>;
 }
 
 function leafLevel(level: PlanLevel, granularity: Granularity): boolean {
@@ -105,6 +116,12 @@ const codeOf = (e: unknown): string | null => {
   return typeof code === "string" && (KEY_ERRORS as readonly string[]).includes(code) ? code : null;
 };
 
+/** The reset date an out-of-credits refusal travels with (see lib/ndjson); null for every other failure. */
+const refusedResetsAt = (e: unknown): string | null => {
+  const { code, resetsAt } = (e as { code?: unknown; resetsAt?: unknown } | null) ?? {};
+  return code === OUT_OF_CREDITS && typeof resetsAt === "string" ? resetsAt : null;
+};
+
 export function PlanWorkspace(props: PlanWorkspaceProps) {
   const { mode, topic, weeks, granularity, instructions, sources, initialTree, lockBefore = 0, trackId } = props;
   const isAdjust = mode === "adjust";
@@ -115,12 +132,13 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [expanding, setExpanding] = useState(false);
   const [revising, setRevising] = useState(false);
   const [summaryNote, setSummaryNote] = useState("");
-  const [costUsd, setCostUsd] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages(props));
   const [highlight, setHighlight] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [openChips, setOpenChips] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
+  // From an hours or split change until its re-draft is in: the conversation waits, the time pickers stay open.
+  const [redrafting, setRedrafting] = useState(false);
   const isNarrow = useSyncExternalStore(subscribeNarrow, getNarrowSnapshot, getNarrowServerSnapshot);
   const [railToggled, setRailToggled] = useState<boolean | null>(null);
   const railOpen = railToggled ?? !isNarrow;
@@ -129,6 +147,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [error, setError] = useState<string | null>(null);
   /** Set when the failure is a refused user key: the message then links to Settings. */
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  /** Set when a draft or chat turn was refused at zero free credits: the alert shows where that action lives. */
+  const [outOfCredits, setOutOfCredits] = useState<{ resetsAt: string; from: "draft" | "chat" } | null>(null);
   const [confirming, setConfirming] = useState(false);
   // Admin dock: it lives in PageShell. This page only pushes the `call` events the server sends (admins only) into the shared store.
   // Research runs first in create mode; its list is what every unit references.
@@ -148,9 +168,16 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [split, setSplit] = useState<PlanSplit | null>(props.initialSplit ?? null);
   const hoursRef = useRef(hoursPerWeek);
   const daysRef = useRef(daysPerWeek);
+  // The hours and split the tree was drafted for: a re-draft for a time change that fails puts the pickers back to them.
+  const draftedTime = useRef({ hoursPerWeek, split });
 
   const railOpenRef = useRef(railOpen);
   const draftStarted = useRef(false);
+  // Set once the chat has revised the plan: from then on the tree's root holds the top level's problems.
+  const revisedRef = useRef(false);
+  const router = useRouter();
+  // Model calls spend credits: re-render the server parts (the top bar's pill) once one is over. Client state stays.
+  const refreshCredits = useCallback(() => router.refresh(), [router]);
 
   useEffect(() => {
     railOpenRef.current = railOpen;
@@ -178,6 +205,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setDrafting(true);
     setError(null);
     setErrorCode(null);
+    setOutOfCredits(null);
     setTree(makeRoot([]));
     setMaterials([]);
     setDropped([]);
@@ -259,9 +287,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           setAwaitingAllocation(false);
           setTree(layout(event.root));
           setPending({});
-          setCostUsd((c) => c + event.costUsd);
           setDrafting(false);
-          pushAssistant(draftedText(layout(event.root), weeks, held.materials, decided));
+          pushAssistant(withProblems(draftedText(layout(event.root), weeks, held.materials, decided), collectProblems(event.root)));
         } else if (event.type === "error") {
           throw Object.assign(new Error(event.message), { code: event.code });
         }
@@ -272,10 +299,17 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       setAwaitingAllocation(false);
       setPending({});
       setResearch((r) => (r ? { ...r, running: false, reading: null } : r));
-      setError(err instanceof Error ? err.message : "Drafting failed. Try again.");
-      setErrorCode(codeOf(err));
+      const resetsAt = refusedResetsAt(err);
+      if (resetsAt) {
+        setOutOfCredits({ resetsAt, from: "draft" });
+      } else {
+        setError(err instanceof Error ? err.message : "Drafting failed. Try again.");
+        setErrorCode(codeOf(err));
+      }
+    } finally {
+      refreshCredits();
     }
-  }, [topic, weeks, granularity, instructions, sources, pushAssistant]);
+  }, [topic, weeks, granularity, instructions, sources, pushAssistant, refreshCredits]);
 
   useEffect(() => {
     if (initialTree || draftStarted.current) return;
@@ -289,9 +323,79 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const note = [lockNote, summaryNote].filter(Boolean).join(" ");
   const summary = drafting ? "" : summarizePlan(tree, topic, daysPerWeek, note || undefined);
 
+  // A re-draft is built when it fires, from the workspace as it is then (a days change may have come since).
+  const redraftFrom = useRef<() => { tree: PlanNode; summaryNote: string; time: typeof draftedTime.current; body: PlanRedraftRequest }>(null);
+  useEffect(() => {
+    redraftFrom.current = () => ({
+      tree,
+      summaryNote,
+      time: { hoursPerWeek, split },
+      body: {
+        mode,
+        topic,
+        weeks: planWeeks,
+        daysPerWeek,
+        granularity,
+        instructions,
+        materials,
+        hoursPerWeek,
+        split,
+        tree: toTreeInput(tree),
+        lockBefore: isAdjust ? lockBefore : undefined,
+        trackId,
+        scope: { kind: "plan" },
+        debug: true,
+      },
+    });
+  });
+  const lastChange = useRef<RedraftChange | null>(null);
+  const redraft = useRef<RedraftScheduler<RedraftChange>>(null);
+  useEffect(() => {
+    const scheduler = createRedraftScheduler<RedraftChange, { before: PlanNode; prevNote: string; result: RedraftResult; time: typeof draftedTime.current }>({
+      run: async (_change, signal) => {
+        const from = redraftFrom.current!();
+        const result = await requestRedraft(from.body, { signal, onCall: (call) => pushModelCalls([call]) });
+        return { before: from.tree, prevNote: from.summaryNote, result, time: from.time };
+      },
+      onDone: (change, { before, prevNote, result, time }) => {
+        draftedTime.current = time;
+        // As a chat revision lands: the learner can undo it, and confirming saves the new tree's problems.
+        const applied = applyRedraft({ tree: before, summaryNote: prevNote }, change, result);
+        setTree(applied.tree);
+        setMessages((ms) => [...ms, ...applied.messages]);
+        setHighlight(applied.highlight);
+        setSummaryNote(applied.summaryNote);
+        revisedRef.current = true;
+        if (!railOpenRef.current) setUnread(true);
+        refreshCredits();
+      },
+      onFail: (_change, err) => {
+        // The open weeks still have the time they were drafted with, so the pickers go back to it.
+        const back = draftedTime.current;
+        setHoursPerWeek(back.hoursPerWeek);
+        setSplit(back.split);
+        const kept = `The plan keeps the time it was drafted for: ${back.hoursPerWeek} h a week.`;
+        const resetsAt = refusedResetsAt(err);
+        if (resetsAt) setOutOfCredits({ resetsAt, from: "chat" });
+        setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: `${resetsAt || !(err instanceof Error) ? "The re-draft failed." : err.message} ${kept}` }]);
+        if (!railOpenRef.current) setUnread(true);
+        refreshCredits();
+      },
+      onBusy: setRedrafting,
+    });
+    redraft.current = scheduler;
+    return () => scheduler.cancel();
+  }, [refreshCredits]);
+
+  /** Re-drafts the open part of the plan once the learner stops changing the time; the latest change wins. */
+  function scheduleRedraft(change: RedraftChange) {
+    lastChange.current = change;
+    redraft.current?.schedule(change);
+  }
+
   async function expand(nodeId: string, reason: "expand" | "split", splitDays?: number) {
     const node = findNode(tree, nodeId);
-    if (!node || busy || drafting || expanding) return;
+    if (!node || busy || drafting || expanding || redrafting) return;
     const days = reason === "split" ? (splitDays ?? node.len) : undefined;
     const slots = days !== undefined ? { count: days, groups: false } : slotsFor(node, granularity, daysPerWeek);
     if (!slots) return;
@@ -309,6 +413,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setExpanding(true);
     setError(null);
     setErrorCode(null);
+    setOutOfCredits(null);
     setPending((p) => ({ ...p, [nodeId]: slots }));
     setCollapsed((c) => {
       const next = new Set(c);
@@ -366,6 +471,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             const parent = findNode(next, nodeId);
             if (!parent) return t;
             parent.children = event.children;
+            // The level planned inside this node: its problems are replaced with the ones just found.
+            if (event.problems.length > 0) parent.problems = event.problems;
+            else delete parent.problems;
             if (reason === "split") splitWeek(parent);
             return layout(next);
           });
@@ -374,13 +482,12 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             delete next[nodeId];
             return next;
           });
-          setCostUsd((c) => c + event.costUsd);
           const shown = planned.slice(0, 3).map(lowerFirst).join(", ");
           const more = planned.length > 3 ? ` and ${planned.length - 3} more` : "";
           if (reason === "split") {
             setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: `You split ${label} into ${planned.length} day${planned.length === 1 ? "" : "s"} by hand. The rest of the plan stays in weeks.` }]);
           } else {
-            pushAssistant(`Planned ${label}: ${shown}${more}. Say "collapse ${label.toLowerCase()} back" if you would rather leave it for later.`);
+            pushAssistant(withProblems(`Planned ${label}: ${shown}${more}. Say "collapse ${label.toLowerCase()} back" if you would rather leave it for later.`, event.problems));
           }
         } else if (event.type === "error") {
           throw Object.assign(new Error(event.message), { code: event.code });
@@ -398,12 +505,14 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       setErrorCode(codeOf(err));
     } finally {
       setExpanding(false);
+      refreshCredits();
     }
   }
 
   async function send() {
     const text = input.trim();
-    if (!text || busy || drafting || expanding) return;
+    // A chat turn mid-re-draft would revise a tree the re-draft is about to replace.
+    if (!text || busy || drafting || expanding || redrafting || outOfCredits?.from === "draft") return;
     const userMessage: ChatMessage = { id: nextMessageId(), kind: "user", text };
     const history = [...messages, userMessage];
     setMessages(history);
@@ -411,6 +520,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setBusy(true);
     setError(null);
     setErrorCode(null);
+    setOutOfCredits(null);
 
     const body: PlanChatRequest = {
       mode,
@@ -469,7 +579,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             break;
           case "revised": {
             setRevising(false);
-            setCostUsd((c) => c + event.costUsd);
             const emptyAnswerId = activeKind === "answer" ? activeId : null;
             const changeId = nextMessageId();
             const prevTree = treeBefore;
@@ -498,13 +607,15 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             changeText = "";
             treeBefore = next;
             setTree(next);
+            revisedRef.current = true;
+            const found = problemsText(event.problems);
+            if (found) setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: found }]);
             setHighlight(event.changed.ids);
             setSummaryNote("");
             noteBefore = "";
             break;
           }
           case "finish":
-            setCostUsd((c) => c + event.costUsd);
             break;
           case "error":
             throw Object.assign(new Error(event.message), { code: event.code });
@@ -512,11 +623,17 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       });
       if (activeKind === "change") setSummaryNote(latestChangeNote(changeText));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong. Try again.";
-      setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: message }]);
+      const resetsAt = refusedResetsAt(err);
+      if (resetsAt) {
+        setOutOfCredits({ resetsAt, from: "chat" });
+      } else {
+        const message = err instanceof Error ? err.message : "Something went wrong. Try again.";
+        setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: message }]);
+      }
     } finally {
       setRevising(false);
       setBusy(false);
+      refreshCredits();
       const id = activeId;
       if (id) {
         setMessages((ms) =>
@@ -534,12 +651,21 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     if (removed) setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: `Removed ${removed.title} from the materials and from the units that used it.` }]);
   }
 
+  // With nothing drafted yet (a draft that failed), a time change is only kept for the next draft.
+  const hasPlan = (tree.children?.length ?? 0) > 0;
+
   function changeHours(hours: number) {
     if (hours === hoursPerWeek) return;
     setHoursPerWeek(hours);
-    // Open weeks take the new budget at once; reading lists already planned are left as they are.
-    setTree((t) => layout(rebudget(t, hours, isAdjust ? lockBefore : 0)));
-    setTimeNote(`Time set to ${hours} h a week, about ${totalHours(planWeeks, hours)} hours in all. Open weeks are budgeted from it now; units planned from here on use it.`);
+    const set = `Time set to ${hours} h a week, about ${totalHours(planWeeks, hours)} hours in all.`;
+    if (!hasPlan) {
+      draftedTime.current = { ...draftedTime.current, hoursPerWeek: hours };
+      setTimeNote(`${set} Units planned from here on use it.`);
+      return;
+    }
+    // The outline decides each unit's time, so the units not started yet are re-drafted for the new hours.
+    setTimeNote(`${set} The open weeks get re-drafted for it.`);
+    scheduleRedraft({ kind: "hours", hours });
   }
 
   function changeDays(days: number) {
@@ -548,12 +674,21 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     // Weeks not split yet take the new number of days; weeks already split keep theirs.
     setTree((t) => relength(t, daysPerWeek, days, isAdjust ? lockBefore : 0));
     setTimeNote(`Set to ${days} study day${days === 1 ? "" : "s"} a week. Weeks you split from here on have ${days} day${days === 1 ? "" : "s"}; weeks already split keep theirs.`);
+    // A re-draft under way was built from the weeks before this change: start it again from these.
+    if (redrafting && lastChange.current) redraft.current?.schedule(lastChange.current);
   }
 
   function changeSplit(next: PlanSplit) {
     setSplit(next);
     const drafted = draftedSplit(next, materials);
-    setTimeNote(`The plan now spends about ${drafted.readingShare}% of your time reading${isAllReading(drafted) ? "" : ` and the rest on ${practiceLabelOf(drafted)}`}. Units planned from here on follow it.`);
+    const set = `The plan now spends about ${drafted.readingShare}% of your time reading${isAllReading(drafted) ? "" : ` and the rest on ${practiceLabelOf(drafted)}`}.`;
+    if (!hasPlan) {
+      draftedTime.current = { ...draftedTime.current, split: next };
+      setTimeNote(`${set} Units planned from here on follow it.`);
+      return;
+    }
+    setTimeNote(`${set} The open weeks get re-drafted to follow it.`);
+    scheduleRedraft({ kind: "split" });
   }
 
   /** One sys line for time changes, replaced as the learner keeps adjusting, so the rail is not flooded. */
@@ -567,7 +702,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
 
   function undo(messageId: string) {
     const target = messages.find((m) => m.id === messageId);
-    if (!target || target.kind !== "change" || target.undone) return;
+    // The re-draft under way would land on top of the undone tree.
+    if (!target || target.kind !== "change" || target.undone || redrafting) return;
     setTree(layout(cloneTree(target.prevTree)));
     setSummaryNote(target.prevNote);
     setHighlight(target.nodeIds);
@@ -578,8 +714,12 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setConfirming(true);
     setError(null);
     setErrorCode(null);
+    setOutOfCredits(null);
     try {
-      await props.onConfirm(tree, summary, materials, { hoursPerWeek, daysPerWeek, split });
+      // The latest tree's root says what is wrong with the top level. A plan adjusted without a revision has not been
+      // checked here, so its saved problems are left as they are.
+      const problems = mode === "create" || revisedRef.current ? (tree.problems ?? []) : undefined;
+      await props.onConfirm(tree, summary, materials, { hoursPerWeek, daysPerWeek, split, problems });
     } catch (err) {
       unstable_rethrow(err);
       setError(err instanceof Error ? err.message : "Could not save the plan. Try again.");
@@ -597,8 +737,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         ? ["Why is month 2 before month 3?", "Last month should be 2 weeks", "Swap months 3 and 4"]
         : ["Why is week 2 before week 3?", "Expand week 2", "Swap weeks 3 and 4"];
   const streaming = drafting || expanding;
+  const chatLock = chatLockHint({ drafting, draftRefused: outOfCredits?.from === "draft" });
   const researching = drafting && !!research?.running;
-  const canConfirm = !streaming && !revising && !busy && !confirming && tops.length > 0;
+  const canConfirm = !streaming && !revising && !busy && !redrafting && !confirming && tops.length > 0;
   const current = isAdjust ? currentLeaf(tree) : null;
   const draftingText = researching
     ? "Finding materials…"
@@ -608,7 +749,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       ? "Planning in detail…"
       : revising
         ? "Revising the plan…"
-        : "";
+        : redrafting
+          ? "Re-drafting the open weeks…"
+          : "";
 
   return (
     <div className="space-y-6">
@@ -631,7 +774,16 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         )}
       >
         <div className="flex min-w-0 flex-col gap-5 max-[900px]:pb-[72px]">
-          {researching && research ? (
+          {outOfCredits?.from === "draft" ? (
+            <>
+              <OutOfCreditsAlert resetsAt={outOfCredits.resetsAt} onRetry={() => void streamDraft()} />
+              <div className="flex flex-col gap-2.5">
+                <TreeLabel>Plan</TreeLabel>
+                <div className="h-16 rounded-[28px] bg-foreground/4" />
+                <div className="h-16 rounded-[28px] bg-foreground/3" />
+              </div>
+            </>
+          ) : researching && research ? (
             <>
               <ResearchProgress state={research} totalHours={totalHours(weeks, hoursPerWeek)} />
               <div className="flex flex-col gap-2.5">
@@ -670,8 +822,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             researchCoverage={researchCoverage}
             totalHours={totalHours(planWeeks, hoursPerWeek)}
             usesOf={(id) => assignmentsOf(tree, id).map(({ label, role }) => ({ label, role }))}
-            onRemove={streaming || busy || confirming ? undefined : removeMaterial}
-            onResearchAgain={isAdjust || streaming || busy || confirming ? undefined : () => void streamDraft()}
+            onRemove={streaming || busy || redrafting || confirming ? undefined : removeMaterial}
+            onResearchAgain={isAdjust || streaming || busy || redrafting || confirming ? undefined : () => void streamDraft()}
           />
           <TreeLabel>{topLevel === "day" ? "Plan at a glance" : "Plan"}</TreeLabel>
           <PlanTree
@@ -686,7 +838,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             pending={pending}
             collapsed={collapsed}
             openChips={openChips}
-            busy={streaming || busy}
+            busy={streaming || busy || redrafting}
             onToggle={(id) =>
               setCollapsed((c) => {
                 const next = new Set(c);
@@ -723,7 +875,6 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
                 Try again
               </Button>
             )}
-            <p className="text-xs text-muted-foreground">Estimated cost: {formatCostUsd(costUsd)}</p>
           </div>
           {error && (
             <p className="text-sm text-red-600">
@@ -745,8 +896,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           messages={messages}
           open={railOpen}
           unread={unread}
-          busy={busy || streaming}
-          disabledHint={drafting ? "Available once the plan is drafted" : undefined}
+          busy={busy || streaming || redrafting || chatLock !== null}
+          disabledHint={chatLock ?? undefined}
           input={input}
           suggestions={suggestions}
           onToggle={() => {
@@ -756,6 +907,11 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           onInputChange={setInput}
           onSend={() => void send()}
           onUndo={undo}
+          notice={
+            outOfCredits?.from === "chat" ? (
+              <OutOfCreditsAlert resetsAt={outOfCredits.resetsAt} onClose={() => setOutOfCredits(null)} />
+            ) : undefined
+          }
         />
       </div>
     </div>
@@ -815,6 +971,12 @@ function materialsText(materials: Material[]): string {
   }
   if (researched > 0) return `No textbook stood out, so units draw on the ${materials.length} materials above directly. `;
   return "";
+}
+
+/** A message with the plan's problems after it, a blank line between; with none, the message as it is. */
+function withProblems(text: string, problems: string[]): string {
+  const found = problemsText(problems);
+  return found ? `${text}\n\n${found}` : text;
 }
 
 function draftedText(root: PlanNode, weeks: number, materials: Material[] = [], split: PlanSplit | null = null): string {

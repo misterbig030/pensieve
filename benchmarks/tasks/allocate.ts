@@ -4,7 +4,6 @@
  */
 import { allocatePlan, type AllocationInput } from "@/lib/ai/allocate";
 import type { ModelCall } from "@/lib/ai/logged";
-import { estimateCostUsd } from "@/lib/ai/models";
 import { ALLOCATE_TIMEOUT_MS } from "@/lib/ai/planDraft";
 import { renderMaterials } from "@/lib/ai/planPrompt";
 import type { Coverage, DroppedMaterial } from "@/lib/ai/research/events";
@@ -17,6 +16,7 @@ import { totalHours, type PlanSplit } from "@/lib/studyTime";
 import { authorMatches, bookMatches, isNamedList, plain, practiceTimeFindings, servedMinutes, titleMatches } from "@/evals/draft/checks";
 import type { DraftTopic } from "@/evals/draft/topics";
 import { BASELINE } from "../contestants";
+import { listPriceUsd } from "../price";
 import type { AllocateFixture } from "../fixtures";
 import type { CodeCriterion, Contestant, Criterion, CriterionResult, Gate, JudgeCriterion, Sample } from "../types";
 
@@ -302,9 +302,10 @@ export async function runAllocateSample(
     if (!calls.some((call) => call.label === "Allocate") && fixture.baseline) {
       const { inputTokens, outputTokens, ms: baselineMs } = fixture.baseline;
       const pace = baselineMs > 0 ? Math.max(1, ms / baselineMs) : 1;
-      estimatedCostUsd = estimateCostUsd(roleModel.model, { inputTokens, outputTokens: outputTokens * pace });
+      estimatedCostUsd = listPriceUsd(roleModel.model, { inputTokens, outputTokens: outputTokens * pace });
     }
   }
-  const costUsd = calls.reduce((sum, call) => sum + call.costUsd, 0) + estimatedCostUsd;
+  // A call's cost is what the gateway charged; one it reported no charge for is priced at the list rate.
+  const costUsd = calls.reduce((sum, call) => sum + (call.costUsd ?? listPriceUsd(call.model, call)), 0) + estimatedCostUsd;
   return { gate, output, calls, costUsd, ...(estimatedCostUsd > 0 ? { estimatedCostUsd } : {}), ms };
 }

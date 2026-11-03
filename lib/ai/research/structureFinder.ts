@@ -1,4 +1,4 @@
-import { ToolChoiceViolationError, ToolLoopAgent, hasToolCall, isStepCount, tool, type LanguageModel, type LanguageModelUsage, type ToolSet } from "ai";
+import { ToolChoiceViolationError, ToolLoopAgent, hasToolCall, isStepCount, tool, type LanguageModel, type LanguageModelUsage, type ProviderMetadata, type ToolSet } from "ai";
 import { z } from "zod";
 import { MAX_CHAPTERS, clip, type Material, type PracticeList } from "@/lib/schemas/material";
 import { buildGenerationLogRow, effortSettings, emitGenerationLog, isAnthropicModel, type GenerationLogContext, type ModelCall } from "../logged";
@@ -296,6 +296,7 @@ function truncate(text: string, max: number): string {
 /** A model call whose step never ended, as the SDK reported it when the call returned. */
 interface Unstepped {
   usage: LanguageModelUsage;
+  providerMetadata: ProviderMetadata | undefined;
   latencyMs: number;
   finishReason: string;
   content: ReadonlyArray<{ type: string }>;
@@ -442,24 +443,27 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
       };
 
       /** Logs one paid model call: its row now, its call in the log when the next one comes (see `flush`). */
-      const record = async (call: { usage: LanguageModelUsage; latencyMs: number; response: string; finishReason: string | null; facts: string[]; results: string[] }) => {
+      const record = async (call: { usage: LanguageModelUsage; providerMetadata: ProviderMetadata | undefined; latencyMs: number; response: string; finishReason: string | null; facts: string[]; results: string[] }) => {
         const index = steps;
         steps += 1;
         const row = buildGenerationLogRow({
           caller: "research",
           model: modelId,
           usage: call.usage,
+          providerMetadata: call.providerMetadata,
           latencyMs: Math.round(call.latencyMs),
           trackId: log?.trackId,
           userId: log?.userId,
           keyOwner: log?.keyOwner,
           effort,
         });
-        costUsd += row.costUsd;
+        costUsd += row.costUsd ?? 0;
         await emitGenerationLog(log?.onLog, row);
         flush();
         pending = {
           ...row,
+          // Handed over a step late (see `flush`), so it carries its own finish time.
+          endedAt: Date.now(),
           label: `${label} · step ${index + 1}`,
           system: null,
           prompt: index === 0 ? prompt : `(step ${index + 1}: the conversation so far, plus the tool results from step ${index})\n\n${previousResults ?? ""}`,
@@ -485,7 +489,7 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
             ? { toolChoice: { type: "tool", toolName: "answer" }, providerOptions: answerStepOptions(effort, apiModelId), messages: [...messages, { role: "user", content: ANSWER_NOW }] }
             : {},
         onLanguageModelCallEnd: (event) => {
-          unstepped = { usage: event.usage, latencyMs: event.performance.responseTimeMs, finishReason: event.finishReason, content: event.content };
+          unstepped = { usage: event.usage, providerMetadata: event.providerMetadata, latencyMs: event.performance.responseTimeMs, finishReason: event.finishReason, content: event.content };
         },
         onStepEnd: async (step) => {
           unstepped = null;
@@ -498,6 +502,7 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
           const results = step.toolResults.map((r) => `[tool result] ${r.toolName} ${truncate(JSON.stringify(r.output), LOG_RESULT_CHARS)}`);
           await record({
             usage: step.usage,
+            providerMetadata: step.providerMetadata,
             latencyMs: step.performance?.stepTimeMs ?? 0,
             response: [step.text, ...calls, ...results].filter(Boolean).join("\n\n"),
             finishReason: step.finishReason ?? null,
@@ -522,6 +527,7 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
         const tools = parts.filter((p) => p.type === "tool-call");
         await record({
           usage: cut.usage,
+          providerMetadata: cut.providerMetadata,
           latencyMs: cut.latencyMs,
           response: [...parts.filter((p) => p.type === "text").map((p) => p.text ?? ""), ...tools.map((p) => `[tool call] ${p.toolName} ${JSON.stringify(p.input)}`)]
             .filter(Boolean)

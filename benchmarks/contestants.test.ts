@@ -67,7 +67,7 @@ describe("CONTESTANTS", () => {
 
   it("runs DeepSeek V4 Pro at its gateway price, $0.66 in and $1.98 out per million", () => {
     expect(CONTESTANTS["deepseek-v4-pro"].roles.allocate).toEqual({ model: "deepseek/deepseek-v4-pro", effort: ALLOCATE_EFFORT });
-    expect(estimateCostUsd("deepseek/deepseek-v4-pro", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(2.64, 5);
+    expect(estimateCostUsd("deepseek/deepseek-v4-pro", { inputTokens: 1_000_000, outputTokens: 1_000_000, cacheReadTokens: null })).toBeCloseTo(2.64, 5);
   });
 
   it("only uses priced models", () => {

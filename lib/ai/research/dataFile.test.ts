@@ -51,6 +51,32 @@ describe("data files", () => {
     expect(file.sets[1].parentKeys).toEqual(["n", "items"]);
   });
 
+  it("finds records keyed by name, each key kept in _key, and records keyed inside named groups", () => {
+    const keyed = parseDataFile(JSON.stringify({ "Two Sum": { level: "easy" }, "3Sum": { level: "medium" }, "Valid Anagram": { level: "easy" } }))!;
+    expect(keyed.sets.map((s) => [s.path, s.records.length])).toEqual([["*", 3]]);
+    expect(keyed.sets[0].records[1].value).toEqual({ _key: "3Sum", level: "medium" });
+
+    // The NeetCode list's shape: groups by name, each holding its problems by title.
+    const grouped = parseDataFile(
+      JSON.stringify({
+        "Arrays & Hashing": { "Contains Duplicate": { url: "https://x.com/cd", difficulty: "Easy" }, "Two Sum": { url: "https://x.com/ts", difficulty: "Easy" } },
+        Trees: { "Invert Binary Tree": { url: "https://x.com/ibt", difficulty: "Easy" } },
+      }),
+    )!;
+    expect(grouped.sets.map((s) => [s.path, s.records.length])).toEqual([["*.*", 3]]);
+    expect(grouped.sets[0].keys).toEqual(["_key", "url", "difficulty"]);
+    expect(grouped.sets[0].parentKeys).toEqual(["_key"]);
+    const drafts = applyMapping(grouped, mapping({ path: "*.*", title: "_key", group: "../_key", difficulty: "difficulty", url: "{url}" }))!;
+    expect(drafts.map((d) => [d.title, d.group, d.difficulty, d.url])).toEqual([
+      ["Contains Duplicate", "Arrays & Hashing", "Easy", "https://x.com/cd"],
+      ["Two Sum", "Arrays & Hashing", "Easy", "https://x.com/ts"],
+      ["Invert Binary Tree", "Trees", "Easy", "https://x.com/ibt"],
+    ]);
+
+    // An object of settings is not a list.
+    expect(parseDataFile(JSON.stringify({ meta: { v: 1 }, owner: { name: "x" } }))).toBeNull();
+  });
+
   it("reads fields by dot path and from the parent, and fills templates only when every field has a value", () => {
     const record = { value: { slug: "two sum", meta: { id: 1 }, empty: "" }, parent: { name: "Arrays" } };
     expect(fieldValue(record, "meta.id")).toBe("1");

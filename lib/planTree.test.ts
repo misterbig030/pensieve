@@ -24,7 +24,14 @@ import {
   nextPlanningStep,
   planningStepsLeft,
   weeksOf,
+  isHeading,
+  workLeaves,
+  neighbours,
+  resolveSelected,
+  initialOpen,
+  findNode,
 } from "./planTree";
+import { sampleDayPlan, sampleMonthPlan } from "./testPlans";
 
 describe("splitSpans", () => {
   it("absorbs a short tail into the other spans", () => {
@@ -267,5 +274,51 @@ describe("makeNode practice", () => {
     expect("practice" in empty).toBe(false);
     expect("practiceCovers" in empty).toBe(false);
     expect("practice" in makeNode(base)).toBe(false);
+  });
+});
+
+describe("workLeaves", () => {
+  it("lists the leaves a learner works at, without headings", () => {
+    const root = sampleDayPlan();
+    expect(workLeaves(root).map((n) => n.id)).toEqual(["a1", "a2", "a3", "b1", "b2", "b3"]);
+    expect(isHeading(findNode(root, "w3")!)).toBe(true);
+    expect(isHeading(findNode(root, "b3")!)).toBe(false);
+  });
+});
+
+describe("neighbours", () => {
+  it("finds the previous and next work leaf across weeks", () => {
+    const root = sampleDayPlan();
+    const around = neighbours(root, "b2");
+    expect([around.prev?.id, around.next?.id]).toEqual(["b1", "b3"]);
+    expect(neighbours(root, "b1").prev?.id).toBe("a3");
+    expect(neighbours(root, "a1").prev).toBeNull();
+    expect(neighbours(root, "b3").next).toBeNull();
+  });
+});
+
+describe("resolveSelected", () => {
+  it("falls back to the current leaf for a missing, unknown or root id", () => {
+    const root = sampleDayPlan();
+    expect(resolveSelected(root, undefined).id).toBe("b2");
+    expect(resolveSelected(root, "nope").id).toBe("b2");
+    expect(resolveSelected(root, "root").id).toBe("b2");
+  });
+
+  it("selects a unit by its id", () => {
+    expect(resolveSelected(sampleDayPlan(), "w1").id).toBe("w1");
+  });
+
+  it("selects the last leaf of a finished plan", () => {
+    const root = makeRoot([makeNode({ id: "w1", level: "week", title: "W", summary: "", len: 2, children: ["x1", "x2"].map((id) => makeNode({ id, level: "day", title: id, summary: "", len: 1, status: "completed" })) })]);
+    expect(resolveSelected(root, undefined).id).toBe("x2");
+  });
+});
+
+describe("initialOpen", () => {
+  it("opens the units on the path to the current leaf", () => {
+    expect(initialOpen(sampleDayPlan(), "b2")).toEqual(new Set(["w2"]));
+    expect(initialOpen(sampleMonthPlan(), "b2")).toEqual(new Set(["m1", "w2"]));
+    expect(initialOpen(sampleDayPlan(), null)).toEqual(new Set());
   });
 });

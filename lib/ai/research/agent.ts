@@ -327,13 +327,14 @@ export async function runResearchLoop(input: LoopInput): Promise<LoopResult> {
         caller: "research",
         model: modelId,
         usage: step.usage,
+        providerMetadata: step.providerMetadata,
         latencyMs: Math.round(step.performance?.stepTimeMs ?? 0),
         trackId: log?.trackId,
         userId: log?.userId,
         keyOwner: log?.keyOwner,
         effort,
       });
-      costUsd += row.costUsd;
+      costUsd += row.costUsd ?? 0;
       await emitGenerationLog(log?.onLog, row);
       const calls = step.toolCalls.map((c) => `[tool call] ${c.toolName} ${JSON.stringify(c.input)}`);
       const results = step.toolResults.map((r) => `[tool result] ${r.toolName} ${truncate(JSON.stringify(r.output), 1500)}`);

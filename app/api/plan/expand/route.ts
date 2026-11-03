@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { isAdminUserId } from "@/lib/admin";
+import { isAdmin } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
 import { streamExpandNode } from "@/lib/ai/planDraft";
 import { insertGenerationLog } from "@/lib/db/generationLog";
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   const body = parsed.data;
   const tree = fromTreeInput(body.tree);
   const daysPerWeek = body.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK;
-  const debug = body.debug === true && isAdminUserId(userId);
+  const debug = body.debug === true && (await isAdmin(userId));
   const models = await resolveModels(userId);
 
   return ndjsonResponse(

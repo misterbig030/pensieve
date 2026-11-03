@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { isAdminUserId } from "@/lib/admin";
+import { isAdmin } from "@/lib/admin";
 import { ModelCallsDock } from "@/components/pensieve/ModelCallsDock";
 
 /**
@@ -8,6 +8,6 @@ import { ModelCallsDock } from "@/components/pensieve/ModelCallsDock";
  */
 export async function AdminDock() {
   const { userId } = await auth();
-  if (!isAdminUserId(userId)) return null;
+  if (!(await isAdmin(userId))) return null;
   return <ModelCallsDock />;
 }

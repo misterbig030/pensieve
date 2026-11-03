@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateCostUsd } from "@/lib/ai/models";
+import { listPriceUsd } from "./price";
 import { BASELINE, CONTESTANTS } from "./contestants";
 import type { AllocateFixture } from "./fixtures";
 import { JUDGE, SECOND_JUDGE } from "./judge";
@@ -43,7 +43,7 @@ describe("estimateAllocateRun", () => {
     const usage = { inputTokens: 8_000 / 4 + 500, outputTokens: 1_500 };
     const samples = 2 * 2 * 3;
     const secondSamples = 2 * Math.ceil((2 * 3) / 5);
-    const expected = samples * 3 * estimateCostUsd(JUDGE.model, usage) + secondSamples * 3 * estimateCostUsd(SECOND_JUDGE.model, usage);
+    const expected = samples * 3 * listPriceUsd(JUDGE.model, usage) + secondSamples * 3 * listPriceUsd(SECOND_JUDGE.model, usage);
     expect(estimate.judgingUsd).toBeCloseTo(expected, 10);
     expect(estimate.totalUsd).toBeCloseTo(estimate.contestantsUsd + estimate.judgingUsd, 10);
   });

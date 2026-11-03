@@ -1,4 +1,4 @@
-import { generateObject, type FlexibleSchema, type LanguageModel, type LanguageModelUsage } from "ai";
+import { generateObject, type FlexibleSchema, type LanguageModel, type LanguageModelUsage, type ProviderMetadata } from "ai";
 import type { GenerationCaller } from "@/lib/db/schema";
 import type { OnServiceEvent } from "./serviceEvents";
 import { estimateCostUsd, type AiModelId, type KeyOwner, type ReasoningEffort } from "./models";
@@ -34,7 +34,8 @@ export interface GenerationLogRow {
   outputTokens: number | null;
   cacheReadTokens: number | null;
   reasoningTokens: number | null;
-  costUsd: number;
+  /** What the AI Gateway charged for the call. Null when it didn't go through the gateway (the user's own key). */
+  costUsd: number | null;
   latencyMs: number;
   trackId: string | null;
   userId: string | null;
@@ -55,6 +56,8 @@ export interface ModelCall extends GenerationLogRow {
   finishReason: string | null;
   /** Short checks the generator can state about the response ("4 of 4 units", "spans kept"). */
   facts: string[];
+  /** When the call finished (ms since the epoch), stamped as it is handed to the admin; with `latencyMs` it places the call in time. */
+  endedAt?: number;
 }
 
 export type OnModelCall = (call: ModelCall) => void;
@@ -86,7 +89,7 @@ export interface LoggedGenerateObjectOptions<T> {
   label?: string;
   /** Short checks shown beside the raw response in the admin panel. */
   facts?: string[];
-  /** More checks computed from the validated object, appended to `facts`. */
+  /** More checks computed from the validated object, appended to `facts`. Runs on every call, logged or not. */
   check?: (object: T) => string[];
   abortSignal?: AbortSignal;
   /** Retries on a failed request; the AI SDK's default (2) when omitted. */
@@ -101,6 +104,7 @@ export interface LoggedGenerateObjectResult<T> {
   object: T;
   usage: LanguageModelUsage;
   latencyMs: number;
+  /** What Pensieve paid: the gateway's charge, 0 on the user's own key. */
   costUsd: number;
 }
 
@@ -113,21 +117,37 @@ export interface BuildGenerationLogRowInput {
   userId?: string;
   effort?: ReasoningEffort | null;
   keyOwner?: KeyOwner;
+  /** The provider metadata of each request the row covers (a chat answer can take two). */
+  providerMetadata?: ProviderMetadata | readonly (ProviderMetadata | undefined)[];
+  /** The cost to record when no request reports a gateway charge: a failed call's estimate, since its error has no metadata. */
+  fallbackCostUsd?: number | null;
+}
+
+/** What the AI Gateway charged for these requests, from the `cost` it reports on each; null when none reports one. */
+export function gatewayCostUsd(metadata: ProviderMetadata | readonly (ProviderMetadata | undefined)[] | undefined): number | null {
+  const each = Array.isArray(metadata) ? metadata : [metadata as ProviderMetadata | undefined];
+  const costs = each.map((m) => Number(m?.gateway?.cost ?? NaN)).filter(Number.isFinite);
+  return costs.length > 0 ? costs.reduce((a, b) => a + b, 0) : null;
 }
 
 /** Normalizes the AI SDK usage shape into a flat `generation_log` row. Shared by the object wrapper and the streaming routes. */
 export function buildGenerationLogRow(input: BuildGenerationLogRowInput): GenerationLogRow {
   const { usage } = input;
+  const keyOwner = input.keyOwner ?? "app";
+  const costUsd = gatewayCostUsd(input.providerMetadata) ?? input.fallbackCostUsd ?? null;
+  if (costUsd === null && keyOwner === "app") {
+    console.warn("[generation_log] the gateway reported no cost for a call on Pensieve's key: it counts as nothing against credits", { caller: input.caller, model: input.model });
+  }
   return {
     caller: input.caller,
     model: input.model,
     effort: input.effort ?? null,
-    keyOwner: input.keyOwner ?? "app",
+    keyOwner,
     inputTokens: usage.inputTokens ?? null,
     outputTokens: usage.outputTokens ?? null,
     cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? null,
     reasoningTokens: usage.outputTokenDetails?.reasoningTokens ?? null,
-    costUsd: estimateCostUsd(input.model, usage),
+    costUsd,
     latencyMs: input.latencyMs,
     trackId: input.trackId ?? null,
     userId: input.userId ?? null,
@@ -147,21 +167,31 @@ export async function emitGenerationLog(onLog: OnGenerationLog | undefined, row:
 /**
  * Records a failed call when the error carries usage, as the AI SDK's `NoObjectGeneratedError` does for an answer that
  * did not fit the schema: the model was paid for, so its row goes to `onLog` like any other spend, and `meta.onCall` sees
- * it with the error as its response. A failure with no usage (a timeout, a refused request) is not recorded.
+ * it with the error as its response. The error carries no gateway metadata, so on Pensieve's key the row's cost is the
+ * list-price estimate. A failure with no usage (a timeout, a refused request) is not recorded.
  */
 async function reportFailedCall<T>(opts: LoggedGenerateObjectOptions<T>, meta: GenerationLogMeta, error: unknown, latencyMs: number): Promise<void> {
   if (typeof error !== "object" || error === null) return;
   const { usage, finishReason, message } = error as { usage?: LanguageModelUsage; finishReason?: string; message?: unknown };
   if (typeof usage !== "object" || usage === null) return;
+  const keyOwner = opts.keyOwner ?? meta.keyOwner ?? "app";
   const row = buildGenerationLogRow({
     caller: meta.caller,
     model: opts.model,
     usage,
     latencyMs,
     effort: opts.effort ?? null,
-    keyOwner: opts.keyOwner ?? meta.keyOwner,
+    keyOwner,
     trackId: meta.trackId,
     userId: meta.userId,
+    fallbackCostUsd:
+      keyOwner === "app"
+        ? estimateCostUsd(opts.model, {
+            inputTokens: usage.inputTokens ?? null,
+            outputTokens: usage.outputTokens ?? null,
+            cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? null,
+          })
+        : null,
   });
   await emitGenerationLog(meta.onLog, row);
   meta.onCall?.({
@@ -176,7 +206,7 @@ async function reportFailedCall<T>(opts: LoggedGenerateObjectOptions<T>, meta: G
 }
 
 /**
- * Wraps `generateObject`: times the call, computes list-price cost, and hands a normalized row to `meta.onLog`.
+ * Wraps `generateObject`: times the call, records what the gateway charged, and hands a normalized row to `meta.onLog`.
  * A failing `onLog` is reported and swallowed so telemetry never breaks a user-facing generation.
  */
 export async function loggedGenerateObject<T>(
@@ -198,19 +228,22 @@ export async function loggedGenerateObject<T>(
     await reportFailedCall(opts, meta, error, Math.round(performance.now() - startedAt));
     throw error;
   }
-  const { object, usage, finishReason } = generated;
+  const { object, usage, finishReason, providerMetadata } = generated;
   const latencyMs = Math.round(performance.now() - startedAt);
   const row = buildGenerationLogRow({
     caller: meta.caller,
     model: opts.model,
     usage,
     latencyMs,
+    providerMetadata,
     effort: opts.effort ?? null,
     keyOwner: opts.keyOwner ?? meta.keyOwner,
     trackId: meta.trackId,
     userId: meta.userId,
   });
   await emitGenerationLog(meta.onLog, row);
+  // Run whether or not anyone collects the call: a caller's check may do the work it reports on (a revision applies its tree there).
+  const checked = opts.check?.(object as T) ?? [];
   meta.onCall?.({
     ...row,
     label: opts.label ?? meta.caller,
@@ -218,9 +251,9 @@ export async function loggedGenerateObject<T>(
     prompt: opts.prompt,
     response: JSON.stringify(object, null, 2),
     finishReason: finishReason ?? null,
-    facts: [...(opts.facts ?? []), ...(opts.check?.(object as T) ?? [])],
+    facts: [...(opts.facts ?? []), ...checked],
   });
-  const costUsd = row.costUsd;
+  const costUsd = row.costUsd ?? 0;
 
   return { object: object as T, usage, latencyMs, costUsd };
 }

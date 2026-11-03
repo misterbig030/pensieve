@@ -22,7 +22,6 @@ describe("AVAILABLE_MODELS", () => {
     expect(DEFAULT_RESEARCH_MODEL).toBe("anthropic/claude-sonnet-5.5");
     expect(RESEARCH_LOOP_EFFORT).toBe("high");
     expect(CANDIDATE_STEP_EFFORT).toBe("low");
-    expect(estimateCostUsd("anthropic/claude-sonnet-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(12, 5);
   });
 
   it("the outline runs on Opus 5.5 at high effort", () => {
@@ -37,37 +36,24 @@ describe("AVAILABLE_MODELS", () => {
     expect(providerOf("openai/gpt-5.4-mini")).toBe("openai");
     expect(AVAILABLE_MODELS.map((m) => m.id)).toContain(DEFAULT_CHAT_MODEL);
   });
-
-  it("lists Opus 5.5 at its gateway price, $4 in and $20 out per million", () => {
-    expect(estimateCostUsd("anthropic/claude-opus-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(24, 5);
-  });
-
-  it("every model has positive input and output pricing", () => {
-    for (const model of AVAILABLE_MODELS) {
-      expect(model.pricing.input).toBeGreaterThan(0);
-      expect(model.pricing.output).toBeGreaterThan(0);
-    }
-  });
 });
 
 describe("estimateCostUsd", () => {
-  it("computes cost from input/output token counts at the model's list price", () => {
-    // claude-sonnet-5: $2/M input, $10/M output
-    const cost = estimateCostUsd("anthropic/claude-sonnet-5", {
-      inputTokens: 1_000_000,
-      outputTokens: 1_000_000,
-    });
-    expect(cost).toBeCloseTo(12, 5);
+  it("prices fresh input, cached input and output at the model's list price", () => {
+    // Opus 5.5: $4 in, $0.20 cached in, $20 out per million tokens.
+    const usd = estimateCostUsd("anthropic/claude-opus-5.5", { inputTokens: 10_000, cacheReadTokens: 2_000, outputTokens: 1_000 });
+    expect(usd).toBeCloseTo(8_000 * 4e-6 + 2_000 * 0.2e-6 + 1_000 * 20e-6, 10);
   });
 
-  it("treats missing token counts as zero", () => {
-    const cost = estimateCostUsd("anthropic/claude-sonnet-5", {});
-    expect(cost).toBe(0);
+  it("counts missing token counts as none", () => {
+    expect(estimateCostUsd("anthropic/claude-haiku-4.5", { inputTokens: null, cacheReadTokens: null, outputTokens: 1_000_000 })).toBeCloseTo(5, 10);
   });
 
-  it("returns 0 for an unknown model id", () => {
-    // @ts-expect-error - intentionally passing an id outside AiModelId to test the fallback
-    const cost = estimateCostUsd("anthropic/does-not-exist", { inputTokens: 100, outputTokens: 100 });
-    expect(cost).toBe(0);
+  it("has no estimate for a model it has no price for", () => {
+    expect(estimateCostUsd("anthropic/claude-gone" as never, { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 })).toBeNull();
+  });
+
+  it("knows a price for every model in the list", () => {
+    for (const model of AVAILABLE_MODELS) expect(estimateCostUsd(model.id, { inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0 })).toBeGreaterThan(0);
   });
 });

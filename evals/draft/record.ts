@@ -111,9 +111,9 @@ export async function captureRun(stream: AsyncIterable<PlanDraftEvent | CallEven
   const costByStage: Record<string, number> = {};
   for (const call of calls) {
     const stage = stageOf(call.label);
-    costByStage[stage] = (costByStage[stage] ?? 0) + call.costUsd;
+    costByStage[stage] = (costByStage[stage] ?? 0) + (call.costUsd ?? 0);
   }
-  const costUsd = calls.length > 0 ? calls.reduce((sum, call) => sum + call.costUsd, 0) : (finishCost ?? 0);
+  const costUsd = calls.length > 0 ? calls.reduce((sum, call) => sum + (call.costUsd ?? 0), 0) : (finishCost ?? 0);
   return { meta: { ...meta, ms: Math.round(performance.now() - startedAt), costUsd, costByStage }, events, calls, materials, split, plan };
 }
 

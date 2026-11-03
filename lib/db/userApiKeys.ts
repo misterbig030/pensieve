@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { KeyErrorKind, ModelProvider } from "@/lib/ai/models";
 import { db } from "./client";
 import { userApiKeys, type UserApiKey } from "./schema";
+import { ensureUser } from "./users";
 
 /** Every key a user has stored; the resolver's one read per request. Ciphertext only: open it with lib/secrets. */
 export async function getUserApiKeys(userId: string): Promise<UserApiKey[]> {
@@ -11,6 +12,7 @@ export async function getUserApiKeys(userId: string): Promise<UserApiKey[]> {
 /** Saves or replaces a user's key for a provider. A new key starts with a clean record. */
 export async function upsertUserApiKey(input: { userId: string; provider: ModelProvider; ciphertext: string; last4: string; secretVersion: number }): Promise<void> {
   const fresh = { ciphertext: input.ciphertext, last4: input.last4, secretVersion: input.secretVersion, lastError: null, lastErrorAt: null, updatedAt: new Date() };
+  await ensureUser(db, input.userId);
   await db
     .insert(userApiKeys)
     .values({ userId: input.userId, provider: input.provider, ...fresh })

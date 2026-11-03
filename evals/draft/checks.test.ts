@@ -573,9 +573,11 @@ describe("warnings", () => {
     expect(warning?.text).toContain("page refused 1");
   });
 
-  it("counts breach re-asks as retries", () => {
+  it("counts the rule breaks reported as problems, apart from retries", () => {
     const r = record();
     r.calls = [{ label: "Week 1", facts: ["breach: Week 1's must-reading is 400 min against a budget of 200"] } as RunRecord["calls"][number]];
-    expect(kinds(r)).toContain("retries");
+    expect(kinds(r)).toContain("problems");
+    expect(kinds(r)).not.toContain("retries");
+    expect(checkRun(r, SDE).warnings.find((w) => w.kind === "problems")!.text).toBe("reported problems: 1");
   });
 });

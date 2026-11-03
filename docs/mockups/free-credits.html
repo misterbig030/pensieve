@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pensieve credits mocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5ead8; --fg: #201e1d; --card: #ebddc5; --primary: #c67139; --on-primary: #f5ead8;
+  --muted: color-mix(in srgb, #201e1d 55%, transparent);
+  --faint: color-mix(in srgb, #201e1d 38%, transparent);
+  --line: color-mix(in srgb, #201e1d 12%, transparent);
+  --a100: #fff2eb; --a200: #ffe1d0; --a800: #643312;
+  --g500: #8fa073;
+  --n100: #f9f4ed; --n200: #eee7db; --n300: #dcd3c4; --n400: #c0b6a5; --n700: #5c564b; --n800: #474238;
+  --red: #dc2626; --red-bg: #fdeceb;
+  --sh-sm: 0 1px 2px color-mix(in srgb, #2e2b25 14%, transparent);
+  --sh-md: 0 3px 10px color-mix(in srgb, #2e2b25 16%, transparent);
+  --sh-lg: 0 12px 32px color-mix(in srgb, #2e2b25 22%, transparent);
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: Figtree, system-ui, sans-serif; background: #d9ccb6; color: var(--fg); padding: 32px 24px 80px; }
+.page-title { font-family: Caprasimo, serif; font-weight: 400; font-size: 28px; max-width: 1280px; margin: 0 auto 6px; }
+.page-sub { max-width: 1280px; margin: 0 auto 8px; color: var(--n800); font-size: 15px; line-height: 1.5; }
+.label { max-width: 1280px; margin: 44px auto 14px; display: flex; flex-direction: column; gap: 4px; }
+.label b { font-family: Caprasimo, serif; font-weight: 400; font-size: 20px; }
+.label span { color: var(--n800); font-size: 14px; line-height: 1.5; max-width: 860px; }
+.stage { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.note { max-width: 1280px; margin: 12px auto 0; font-size: 13px; color: var(--n800); line-height: 1.5; padding-left: 12px; border-left: 3px solid var(--primary); }
+.note + .note { margin-top: 8px; }
+
+.window { border-radius: 14px; overflow: hidden; background: var(--bg); box-shadow: var(--sh-lg); }
+.chrome { height: 32px; background: #e3d5bd; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.chrome i { width: 10px; height: 10px; border-radius: 50%; background: var(--n400); }
+.chrome .url { margin: 0 auto; width: 380px; max-width: 60%; height: 20px; border-radius: 6px; background: var(--n100); font-size: 11.5px; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+.cap { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--n800); margin-bottom: -8px; }
+.tag-state { position: absolute; top: 10px; right: 12px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--n800); background: var(--n200); padding: 3px 8px; border-radius: 999px; }
+
+h1, h3, .serif { font-family: Caprasimo, serif; font-weight: 400; }
+.muted { color: var(--muted); }
+svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg.i16 { width: 16px; height: 16px; }
+
+/* top bar, as in components/pensieve/TopBar.tsx */
+.top { position: relative; height: 60px; display: flex; align-items: stretch; gap: 32px; padding: 0 32px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand i { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); }
+.brand span { font-family: Caprasimo, serif; font-size: 19px; }
+.tabs { display: flex; gap: 24px; }
+.tab { display: flex; align-items: center; gap: 8px; padding: 0 4px; font-size: 14px; color: var(--muted); border-bottom: 2.5px solid transparent; }
+.tab.on { color: var(--fg); font-weight: 600; border-color: var(--primary); }
+.tab .soon { font-size: 10.5px; font-weight: 600; background: var(--n200); color: var(--n700); padding: 1px 6px; border-radius: 999px; }
+.top-r { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 4px 10px; font-size: 12.5px; font-weight: 600; text-decoration: none; }
+.pill.streak { background: var(--a100); color: var(--a800); }
+.pill.credits { background: var(--n100); color: var(--n700); box-shadow: inset 0 0 0 1px var(--line); }
+.pill.credits.zero { color: var(--red); background: var(--red-bg); box-shadow: inset 0 0 0 1px color-mix(in srgb, #dc2626 25%, transparent); }
+.pill.credits.hover { outline: 2px solid color-mix(in srgb, #c67139 50%, transparent); }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--a200); color: var(--a800); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.tip { position: absolute; top: 50px; right: 92px; background: var(--fg); color: var(--bg); font-size: 12px; padding: 5px 9px; border-radius: 6px; white-space: nowrap; z-index: 2; }
+.narrow { width: 640px; }
+.narrow .top { padding: 0 16px; gap: 16px; }
+.narrow .brand span, .narrow .tab .soon { display: none; }
+.narrow .tabs { gap: 16px; }
+
+/* page bodies */
+.main { padding: 24px 32px 40px; }
+.settings { max-width: 960px; margin: 0 auto; }
+.settings > p { color: var(--muted); font-size: 15px; margin-top: 6px; }
+.col { max-width: 620px; display: flex; flex-direction: column; gap: 20px; margin-top: 28px; }
+.scard { background: var(--card); border-radius: 12px; padding: 20px; font-size: 14px; box-shadow: inset 0 0 0 1px var(--line); position: relative; }
+.scard h3 { font-size: 18px; }
+.scard .sub { color: var(--muted); font-size: 13px; margin-top: 4px; line-height: 1.5; }
+.inner { margin-top: 12px; background: var(--bg); border-radius: 8px; padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mono { font-family: ui-monospace, monospace; font-size: 13px; }
+.big { display: flex; align-items: baseline; gap: 6px; margin-top: 14px; }
+.big b { font-family: Caprasimo, serif; font-weight: 400; font-size: 30px; line-height: 1; }
+.big span { color: var(--muted); font-size: 13px; }
+.big .reset { margin-left: auto; }
+.progress { height: 8px; border-radius: 999px; background: color-mix(in srgb, #201e1d 9%, transparent); overflow: hidden; margin-top: 10px; }
+.progress > span { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
+.coming { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.coming .soon { font-size: 10.5px; font-weight: 600; background: var(--n200); color: var(--n700); padding: 1px 6px; border-radius: 999px; }
+.zero-text { color: var(--red); }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 16px; border-radius: 10px; font: 600 13px Figtree, sans-serif; border: 0; white-space: nowrap; text-decoration: none; }
+.btn-primary { background: var(--primary); color: var(--on-primary); box-shadow: var(--sh-sm); }
+.btn-secondary { background: var(--n200); color: var(--fg); }
+.btn-ghost { background: transparent; color: var(--muted); }
+.btn svg.i { width: 12px; height: 12px; }
+.variants { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.variants .window .main { padding: 20px; }
+
+/* plan workspace */
+.ws { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 28px; align-items: start; }
+.back { font-size: 13px; color: color-mix(in srgb, #201e1d 60%, transparent); margin-bottom: 16px; }
+.ws-head h1 { font-size: 30px; line-height: 1.15; }
+.ws-head p { color: var(--muted); font-size: 15px; margin-top: 8px; margin-bottom: 20px; }
+.sumcard { background: var(--n100); border-radius: 22px; padding: 18px 22px; box-shadow: var(--sh-md); font-size: 14px; line-height: 1.55; }
+.sumcard small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+.treelabel { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); margin: 20px 0 10px; }
+.row { height: 58px; border-radius: 22px; background: var(--card); display: flex; align-items: center; gap: 14px; padding: 0 20px; font-size: 14px; margin-bottom: 8px; }
+.row b { font-weight: 600; }
+.row .hrs { margin-left: auto; font-size: 12px; color: var(--muted); }
+.row.dim { background: color-mix(in srgb, #201e1d 5%, transparent); color: var(--muted); }
+.ghost-row { height: 64px; border-radius: 28px; background: color-mix(in srgb, #201e1d 4%, transparent); margin-bottom: 10px; }
+.ghost-row.f2 { background: color-mix(in srgb, #201e1d 3%, transparent); }
+
+.rail { background: var(--card); border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-height: 520px; }
+.rail-h { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; }
+.msg { font-size: 13.5px; line-height: 1.5; padding: 10px 12px; border-radius: 14px; max-width: 92%; }
+.msg.me { align-self: flex-end; background: var(--primary); color: var(--on-primary); }
+.msg.ai { align-self: flex-start; background: var(--bg); }
+.rail-input { margin-top: auto; height: 40px; border-radius: 12px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); display: flex; align-items: center; padding: 0 12px; font-size: 13px; color: var(--faint); }
+
+/* the alert */
+.alert { background: var(--n100); border-radius: 16px; padding: 16px 18px; box-shadow: var(--sh-md), inset 0 0 0 1px color-mix(in srgb, #c67139 35%, transparent); position: relative; }
+.alert .head { display: flex; align-items: center; gap: 10px; }
+.alert .badge { width: 30px; height: 30px; border-radius: 50%; background: var(--a200); color: var(--a800); display: flex; align-items: center; justify-content: center; flex: none; }
+.alert h3 { font-size: 17px; line-height: 1.25; }
+.alert p { font-size: 13.5px; line-height: 1.55; color: color-mix(in srgb, #201e1d 75%, transparent); margin-top: 8px; }
+.alert .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+.alert .acts .btn { height: 32px; padding: 0 14px; font-size: 12.5px; }
+.alert .acts .btn-ghost { margin-left: auto; }
+.alert.compact { padding: 14px; }
+.alert .close { margin-left: auto; align-self: flex-start; width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--muted); flex: none; }
+.alert.compact .acts .btn-ghost { margin-left: 0; }
+.alert.wide { padding: 22px 24px; }
+.alert.wide h3 { font-size: 20px; }
+.alert.wide p { font-size: 14.5px; max-width: 560px; }
+.tab-hint { font-size: 11.5px; color: var(--faint); margin-top: 10px; display: flex; align-items: center; gap: 5px; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="coins" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></symbol>
+  <symbol id="flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+  <symbol id="route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
+  <symbol id="compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/></symbol>
+  <symbol id="history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="ext" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+</svg>
+
+<h1 class="page-title">Free monthly credits: UI mocks</h1>
+<p class="page-sub">Phase 1 of <code>docs/superpowers/specs/2026-10-30-free-monthly-credits-design.md</code>, on the app shell from PR 32. Everyone gets 500 credits ($5) a month. A new plan draft or a chat turn is refused at 0. Filling in weeks and opening lessons keep working.</p>
+
+<!-- ============ 1. TOP BAR ============ -->
+<div class="label"><b>1 · The credits pill in the top bar</b><span>Next to the streak, for users on Pensieve's key. It's neutral so it doesn't read as a second streak, and it turns red at 0 so a user sees it before anything is refused. It links to the Credits card on Settings.</span></div>
+<div class="stage">
+  <div class="cap">312 left</div>
+  <div class="window">
+    <div class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <span class="tab on"><svg class="i i16"><use href="#route"/></svg>Tracks</span>
+        <span class="tab"><svg class="i i16"><use href="#compass"/></svg>Explore <span class="soon">soon</span></span>
+        <span class="tab"><svg class="i i16"><use href="#history"/></svg>Journey <span class="soon">soon</span></span>
+      </nav>
+      <div class="top-r">
+        <a class="pill credits hover"><svg class="i"><use href="#coins"/></svg>312</a>
+        <span class="pill streak"><svg class="i"><use href="#flame"/></svg>6</span>
+        <span class="avatar">MB</span>
+      </div>
+      <span class="tip">312 credits left this month</span>
+    </div>
+    <div style="height:28px"></div>
+  </div>
+
+  <div class="cap">0 left</div>
+  <div class="window">
+    <div class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <span class="tab on"><svg class="i i16"><use href="#route"/></svg>Tracks</span>
+        <span class="tab"><svg class="i i16"><use href="#compass"/></svg>Explore <span class="soon">soon</span></span>
+        <span class="tab"><svg class="i i16"><use href="#history"/></svg>Journey <span class="soon">soon</span></span>
+      </nav>
+      <div class="top-r">
+        <a class="pill credits zero"><svg class="i"><use href="#coins"/></svg>0</a>
+        <span class="pill streak"><svg class="i"><use href="#flame"/></svg>6</span>
+        <span class="avatar">MB</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cap">Own API key</div>
+  <div class="window">
+    <div class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <span class="tab on"><svg class="i i16"><use href="#route"/></svg>Tracks</span>
+        <span class="tab"><svg class="i i16"><use href="#compass"/></svg>Explore <span class="soon">soon</span></span>
+        <span class="tab"><svg class="i i16"><use href="#history"/></svg>Journey <span class="soon">soon</span></span>
+      </nav>
+      <div class="top-r">
+        <span class="pill streak"><svg class="i"><use href="#flame"/></svg>6</span>
+        <span class="avatar">MB</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cap">640 px</div>
+  <div class="window narrow">
+    <div class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <span class="tab on"><svg class="i i16"><use href="#route"/></svg>Tracks</span>
+        <span class="tab"><svg class="i i16"><use href="#compass"/></svg>Explore <span class="soon">soon</span></span>
+        <span class="tab"><svg class="i i16"><use href="#history"/></svg>Journey <span class="soon">soon</span></span>
+      </nav>
+      <div class="top-r">
+        <a class="pill credits"><svg class="i"><use href="#coins"/></svg>312</a>
+        <span class="pill streak"><svg class="i"><use href="#flame"/></svg>6</span>
+        <span class="avatar">MB</span>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note">The pill shows only the number, to stay as small as the streak. Hovering or focusing it says "312 credits left this month". That's also its accessible name.</p>
+
+<!-- ============ 2. SETTINGS ============ -->
+<div class="label"><b>2 · The Credits card on Settings</b><span>The first card, above API key and Account, in the same card style. The subtitle now says Pensieve pays up to the monthly credits.</span></div>
+<div class="stage">
+  <div class="window">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">pensieve.app/settings#credits</span></div>
+    <div class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <span class="tab"><svg class="i i16"><use href="#route"/></svg>Tracks</span>
+        <span class="tab"><svg class="i i16"><use href="#compass"/></svg>Explore <span class="soon">soon</span></span>
+        <span class="tab"><svg class="i i16"><use href="#history"/></svg>Journey <span class="soon">soon</span></span>
+      </nav>
+      <div class="top-r">
+        <a class="pill credits"><svg class="i"><use href="#coins"/></svg>312</a>
+        <span class="pill streak"><svg class="i"><use href="#flame"/></svg>6</span>
+        <span class="avatar">MB</span>
+      </div>
+    </div>
+    <div class="main">
+      <div class="settings">
+        <h1 style="font-size:26px">Settings</h1>
+        <p>Pensieve pays for your usage up to your monthly credits. Add an API key to pay for your own.</p>
+        <div class="col">
+          <div class="scard">
+            <h3>Credits</h3>
+            <div class="big"><b>312</b><span>of 500 credits left this month</span><span class="reset">Resets 1 Dec</span></div>
+            <div class="progress"><span style="width:62.4%"></span></div>
+            <div class="coming">Paid plans with more credits are coming. <span class="soon">soon</span></div>
+          </div>
+          <div class="scard">
+            <h3>API key</h3>
+            <p class="sub">Pensieve runs on Claude models, so the key has to be an Anthropic key for now. Claude Max and Team plans include monthly API credits; Pro and Free don't, but a key with a card behind it works the same way.</p>
+            <div style="display:flex;gap:8px;margin-top:12px"><span class="inner" style="flex:1;margin:0;color:var(--faint)">sk-ant-…</span><span class="btn btn-secondary" style="height:38px">Save</span></div>
+          </div>
+          <div class="scard">
+            <h3>Account</h3>
+            <div class="inner"><span>Signed in as you@example.com</span><span class="btn btn-secondary">Log out</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="variants">
+    <div class="window"><div class="main">
+      <div class="scard">
+        <span class="tag-state">0 left</span>
+        <h3>Credits</h3>
+        <div class="big"><b class="zero-text">0</b><span>of 500 credits left this month</span><span class="reset">Resets 1 Dec</span></div>
+        <div class="progress"><span style="width:0"></span></div>
+        <p class="sub" style="margin-top:12px">New plans and plan chat are paused until 1 Dec. Your plans, lessons and filling in weeks keep working. Add an API key below to keep going now.</p>
+        <div class="coming">Paid plans with more credits are coming. <span class="soon">soon</span></div>
+      </div>
+    </div></div>
+    <div class="window"><div class="main">
+      <div class="scard">
+        <span class="tag-state">Own API key</span>
+        <h3>Credits</h3>
+        <div class="big"><b>500</b><span>of 500 credits left this month</span><span class="reset">Resets 1 Dec</span></div>
+        <div class="progress"><span style="width:100%"></span></div>
+        <p class="sub" style="margin-top:12px">Your API key pays for your usage, so these credits are only used if a call runs on Pensieve's key.</p>
+      </div>
+    </div></div>
+  </div>
+</div>
+<p class="note">The 0-left card says what still works and how to keep going. Without that line, "0 credits" reads as if the whole app is locked.</p>
+
+<!-- ============ 3. CHAT REFUSED ============ -->
+<div class="label"><b>3 · A chat turn is refused, after a draft</b><span>The draft finished and pushed the balance below zero. The user asks the plan chat for a change. The alert appears in the conversation, where they're looking, and the unsaved draft stays put.</span></div>
+<div class="stage">
+  <div class="window">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">pensieve.app/tracks/new</span></div>
+    <div class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <span class="tab on"><svg class="i i16"><use href="#route"/></svg>Tracks</span>
+        <span class="tab"><svg class="i i16"><use href="#compass"/></svg>Explore <span class="soon">soon</span></span>
+        <span class="tab"><svg class="i i16"><use href="#history"/></svg>Journey <span class="soon">soon</span></span>
+      </nav>
+      <div class="top-r">
+        <a class="pill credits zero"><svg class="i"><use href="#coins"/></svg>0</a>
+        <span class="pill streak"><svg class="i"><use href="#flame"/></svg>6</span>
+        <span class="avatar">MB</span>
+      </div>
+    </div>
+    <div class="main">
+      <div class="back">← Tracks</div>
+      <div class="ws">
+        <div>
+          <div class="ws-head"><h1>Linear algebra, from the ground up</h1><p>Review the draft, then confirm it to start.</p></div>
+          <div class="sumcard"><small>Plan</small>Eight weeks through Strang's <i>Introduction to Linear Algebra</i>: vectors and elimination first, then spaces, orthogonality and eigenvalues, with problem sets every week.</div>
+          <div class="treelabel">Plan</div>
+          <div class="row"><b>Week 1</b>Vectors and linear combinations<span class="hrs">6 h · planned</span></div>
+          <div class="row"><b>Week 2</b>Solving linear equations<span class="hrs">6 h</span></div>
+          <div class="row"><b>Week 3</b>Vector spaces and subspaces<span class="hrs">6 h</span></div>
+          <div class="row dim"><b>Week 4</b>Orthogonality<span class="hrs">6 h</span></div>
+        </div>
+        <div class="rail">
+          <div class="rail-h"><span>Conversation</span><span class="muted" style="font-weight:400">Hide</span></div>
+          <div class="msg ai">Here's your draft: eight weeks, six hours each. Tell me what to change.</div>
+          <div class="msg me">Can you move eigenvalues earlier? I need them for a course in week 5.</div>
+          <div class="alert compact">
+            <div class="head"><span class="badge"><svg class="i"><use href="#coins"/></svg></span><h3>You've used this month's free credits</h3><span class="close" title="Close"><svg class="i"><use href="#x"/></svg></span></div>
+            <p>Your credits reset on 1 Dec. Upgrade for more, or add your own API key to keep going now.</p>
+            <div class="acts">
+              <a class="btn btn-primary">Upgrade <svg class="i"><use href="#ext"/></svg></a>
+              <a class="btn btn-secondary">Add API key <svg class="i"><use href="#ext"/></svg></a>
+            </div>
+            <div class="tab-hint"><svg class="i" style="width:11px;height:11px"><use href="#ext"/></svg>Opens in a new tab, so this draft stays here.</div>
+          </div>
+          <div class="rail-input">Ask for a change…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note"><b>Why here:</b> <code>PlanWorkspace</code> shows errors below Confirm plan, at the bottom of the left column. After a long draft, that's off screen while the user is typing in the conversation. So the alert goes in the conversation, in place of the error message a failed chat turn gets now.</p>
+
+<!-- ============ 4. DRAFT REFUSED ============ -->
+<div class="label"><b>4 · A new draft is refused</b><span>The user is at 0 and starts a new track. The draft route refuses before research starts, so there's no plan to show. The alert takes the plan's place, at the top where the progress would be.</span></div>
+<div class="stage">
+  <div class="window">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">pensieve.app/tracks/new</span></div>
+    <div class="top">
+      <div class="brand"><i></i><span>Pensieve</span></div>
+      <nav class="tabs">
+        <span class="tab on"><svg class="i i16"><use href="#route"/></svg>Tracks</span>
+        <span class="tab"><svg class="i i16"><use href="#compass"/></svg>Explore <span class="soon">soon</span></span>
+        <span class="tab"><svg class="i i16"><use href="#history"/></svg>Journey <span class="soon">soon</span></span>
+      </nav>
+      <div class="top-r">
+        <a class="pill credits zero"><svg class="i"><use href="#coins"/></svg>0</a>
+        <span class="pill streak"><svg class="i"><use href="#flame"/></svg>6</span>
+        <span class="avatar">MB</span>
+      </div>
+    </div>
+    <div class="main">
+      <div class="back">← Tracks</div>
+      <div class="ws">
+        <div>
+          <div class="ws-head"><h1>Rust for systems programmers</h1><p>Review the draft, then confirm it to start.</p></div>
+          <div class="alert wide">
+            <div class="head"><span class="badge"><svg class="i"><use href="#coins"/></svg></span><h3>You've used this month's free credits</h3></div>
+            <p>Your credits reset on 1 Dec. Upgrade for more, or add your own API key to keep going now. Your answers above are kept, so you can draft this plan as soon as you're ready.</p>
+            <div class="acts">
+              <a class="btn btn-primary">Upgrade <svg class="i"><use href="#ext"/></svg></a>
+              <a class="btn btn-secondary">Add API key <svg class="i"><use href="#ext"/></svg></a>
+              <span class="btn btn-secondary">Try again</span>
+            </div>
+          </div>
+          <div class="treelabel">Plan</div>
+          <div class="ghost-row"></div>
+          <div class="ghost-row f2"></div>
+        </div>
+        <div class="rail" style="min-height:300px">
+          <div class="rail-h"><span>Conversation</span><span class="muted" style="font-weight:400">Hide</span></div>
+          <div class="rail-input" style="opacity:.6">Available once the plan is drafted</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note">Here <b>Try again</b> replaces Close: after adding a key in the other tab, the user comes back and drafts without retyping. It's the same button the page already shows when a draft fails.</p>
+
+</body>
+</html>

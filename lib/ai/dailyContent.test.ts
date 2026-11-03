@@ -143,6 +143,36 @@ describe("buildDailyContentPrompt", () => {
       expect(buildDailyContentPrompt({ ...input, practice: [problems] })).not.toMatch(/generated tasks/i);
       expect(buildDailyContentPrompt({ ...input, practice: [{ ...recall, generated: false }] })).not.toContain("```answers");
     });
+
+    describe("steps", () => {
+      const read = { ...input.materials[0]!, step: { token: "T1", id: "read:aie#3" } };
+      const steps = { ...input, materials: [read], practice: [{ ...problems, step: { token: "T2", id: "practice:problem-set#nc#4" } }] };
+      const STEPS_PARAGRAPH = `Each task above has a label in square brackets, like [T1]. Write the lesson as a walk-through of these tasks in this order. Each time the learner should go and do part of a task, write a step: a fenced code block with the info string "step" (\`\`\`step), at the top level of the lesson, never inside a list, whose first line names the one task by its label without brackets, as in "task: T1", whose second line is your estimate for that step, as in "minutes: 25", and whose other lines say in one or two sentences of markdown exactly what to do. A task may have several steps, such as the first half of a chapter and then the second. Write your explanation between the steps as ordinary markdown.`;
+
+      it("labels each task with its token in steps mode", () => {
+        const prompt = buildDailyContentPrompt(steps);
+        expect(prompt).toContain("- [T1] AI Engineering (https://example.com/ai-eng) — must, 90 min, Ch. 4 §2");
+        expect(prompt).toContain("- [T2] Problems: Do problems 1-10 (60 min)");
+      });
+
+      it("asks for step blocks naming one task each, in order", () => {
+        expect(buildDailyContentPrompt(steps)).toContain(STEPS_PARAGRAPH);
+        expect(buildDailyContentPrompt({ ...input, materials: [read] })).toContain(STEPS_PARAGRAPH);
+      });
+
+      it("asks for each practice task's how-to around its steps in steps mode", () => {
+        const prompt = buildDailyContentPrompt(steps);
+        expect(prompt).toContain(
+          `This unit's practice. Give each task at least one step, and around its steps explain how to set it up, how to work through it, and how the learner knows it is done, by its "done when" line. Link a task's source where it helps, but cite none of these sources in "citations":`,
+        );
+        expect(prompt).not.toMatch(/end the lesson with a section/i);
+      });
+
+      it("gives the same prompt as before when no task has a token", () => {
+        expect(buildDailyContentPrompt(input)).not.toContain("[T1]");
+        expect(buildDailyContentPrompt({ ...input, practice: [problems] })).not.toContain(STEPS_PARAGRAPH);
+      });
+    });
   });
 
   it("asks for no citations when nothing on the list is citable", () => {
@@ -207,5 +237,19 @@ describe("generateDailyContent", () => {
     expect(mockedGenerateObject.mock.calls[0][0].model).toBe(direct);
     expect(calls[0]).toMatchObject({ model: "anthropic/claude-sonnet-5", keyOwner: "user" });
     expect(calls[0].label).toBe("Lesson · Day 1");
+  });
+
+  it("stores step blocks with task ids, not tokens", async () => {
+    mockedGenerateObject.mockResolvedValue({
+      object: { contentMarkdown: "Intro.\n\n```step\ntask: T1\nminutes: 20\nRead it.\n```\n\n```step\ntask: T7\nGo.\n```", citations: [] },
+      usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 },
+      finishReason: "stop",
+    } as unknown as Awaited<ReturnType<typeof generateObject>>);
+    const { content } = await generateDailyContent({
+      title: "Day 1",
+      summary: "s",
+      materials: [{ title: "AI Engineering", url: "https://example.com/ai-eng", type: "link", step: { token: "T1", id: "read:aie#3" } }],
+    });
+    expect(content.contentMarkdown).toBe("Intro.\n\n```step\ntask: read:aie#3\nminutes: 20\nRead it.\n```\n\n```step\ntask:\nGo.\n```");
   });
 });

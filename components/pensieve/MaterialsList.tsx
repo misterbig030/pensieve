@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   BookOpen,
   Check,
+  ChevronDown,
   CircleAlert,
   CirclePlay,
   Code,
@@ -25,7 +26,7 @@ import { approxDuration } from "@/lib/researchProgress";
 import { KIND_LABEL, KIND_ORDER, hostOf, type Material, type MaterialKind, type MaterialPractice } from "@/lib/schemas/material";
 import { cn } from "@/lib/utils";
 
-const KIND_ICON: Record<MaterialKind, ComponentType<{ className?: string; strokeWidth?: number }>> = {
+export const KIND_ICON: Record<MaterialKind, ComponentType<{ className?: string; strokeWidth?: number }>> = {
   book: BookOpen,
   course: GraduationCap,
   video: CirclePlay,
@@ -65,6 +66,11 @@ export interface MaterialsListProps {
   awaitingBackbone?: boolean;
   /** Rows shown before "Show all", of the reading groups and of the Practice group each. */
   initialShown?: number;
+  /**
+   * Folds the list into its heading, open on the first visit only, so a returning learner sees the plan first. The
+   * browser storage key that remembers the visit; omit for a list that is always open.
+   */
+  foldKey?: string;
 }
 
 /** The plan-level materials list: the backbone pinned first, the rest grouped by kind. */
@@ -80,9 +86,78 @@ export function MaterialsList(props: MaterialsListProps) {
   const ordered = [...KIND_ORDER.flatMap((kind) => rest.filter((m) => m.kind === kind && !isPracticeOnly(m))), ...rest.filter(isPracticeOnly)];
   const shown = showAll ? ordered : shownRows(ordered, initialShown);
   const researched = materials.filter((m) => m.origin === "research").length;
-  const yours = materials.length - researched;
   const { readingMinutes: sized, practiceMinutes } = materialTotals(materials);
   const unsized = materials.filter((m) => !m.minutes && !m.practice?.minutes).length;
+  const fold = useRef<HTMLDetailsElement>(null);
+
+  // The fold is closed when rendered; the first visit opens it. Set on the element, so React leaves it to the learner.
+  useEffect(() => {
+    if (!props.foldKey || !fold.current) return;
+    try {
+      if (window.localStorage.getItem(props.foldKey)) return;
+      window.localStorage.setItem(props.foldKey, "seen");
+    } catch {
+      return;
+    }
+    fold.current.open = true;
+  }, [props.foldKey]);
+
+  const heading = (
+    <div className="flex flex-wrap items-center gap-2.5">
+      <h2 id="materials-h" className="m-0 font-heading text-lg font-normal">
+        Materials
+      </h2>
+      <span className="inline-flex items-center gap-[5px] rounded-full bg-accent-2-200 px-[9px] py-[3px] text-[11px] font-semibold text-accent-2-800">
+        <Check className="size-3" strokeWidth={3} />
+        {checkedLine(materials)}
+      </span>
+      {props.foldKey && <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-open/fold:rotate-180" />}
+      <span className="ml-auto text-[12.5px] text-muted-foreground max-[640px]:ml-0 max-[640px]:basis-full">Gather these up front. Each week assigns a slice.</span>
+    </div>
+  );
+
+  const body = (
+    <>
+      {sized + practiceMinutes > 0 && (
+        <p className="m-0 text-[13px] leading-normal text-neutral-800">
+          <strong className="font-semibold">{totalsLine(sized, practiceMinutes)}</strong>
+          {props.totalHours ? ` for a plan of about ${props.totalHours} hours` : ""}
+          {unsized > 0 ? `, not counting ${unsized} with no size` : ""}. Sizes are for the part the plan uses. How much of it is required is the plan&apos;s call, week by week.
+        </p>
+      )}
+      {coverage && (coverage.covered.length > 0 || coverage.open.length > 0) && <CoverageChips coverage={coverage} source={coverageSource} />}
+
+      {backbone ? (
+        <div id={BACKBONE_ANCHOR} className="scroll-mt-4">
+          <BackboneCard material={backbone} onRemove={props.onRemove ? () => setRemoving(backbone) : undefined} />
+        </div>
+      ) : props.awaitingBackbone ? null : (
+        <span className="text-[13px] text-muted-foreground">No backbone: units draw on the materials below directly.</span>
+      )}
+
+      <div className="flex flex-col gap-0.5">
+        {shown.map((m, i) => (
+          <div key={m.id} className="contents">
+            {(i === 0 || groupLabel(shown[i - 1]) !== groupLabel(m)) && (
+              <span id={groupAnchor(groupLabel(m))} className="block scroll-mt-4 break-after-avoid px-1 pt-1.5 pb-1 text-[11px] tracking-wide text-muted-foreground uppercase">
+                {groupLabel(m)}
+              </span>
+            )}
+            <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
+          </div>
+        ))}
+      </div>
+
+      {shownRows(ordered, initialShown).length < ordered.length && (
+        <Button variant="secondary" size="sm" className="min-h-10 self-start border border-border bg-transparent px-4 text-[12.5px]" onClick={() => setShowAll((v) => !v)}>
+          {showAll ? "Show fewer" : `Show all ${materials.length}`}
+        </Button>
+      )}
+
+      <DroppedGroup heading="Rejected by checks" items={checked} />
+      <DroppedGroup heading="Found but not used" items={unused} />
+    </>
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -91,52 +166,21 @@ export function MaterialsList(props: MaterialsListProps) {
       )}
 
       {materials.length > 0 && (
-        <section aria-labelledby="materials-h" className="flex flex-col gap-3.5 rounded-[28px] bg-secondary px-[22px] pt-5 pb-[18px]">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h2 id="materials-h" className="m-0 font-heading text-lg font-normal">
-              Materials
-            </h2>
-            <span className="inline-flex items-center gap-[5px] rounded-full bg-accent-2-200 px-[9px] py-[3px] text-[11px] font-semibold text-accent-2-800">
-              <Check className="size-3" strokeWidth={3} />
-              {yours === 0 ? `${researched} · all opened and checked` : researched === 0 ? `${yours} yours` : `${researched} checked · ${yours} yours`}
-            </span>
-            <span className="ml-auto text-[12.5px] text-muted-foreground max-[640px]:ml-0 max-[640px]:basis-full">Gather these up front. Each week assigns a slice.</span>
-          </div>
-
-          {sized + practiceMinutes > 0 && (
-            <p className="m-0 text-[13px] leading-normal text-neutral-800">
-              <strong className="font-semibold">{totalsLine(sized, practiceMinutes)}</strong>
-              {props.totalHours ? ` for a plan of about ${props.totalHours} hours` : ""}
-              {unsized > 0 ? `, not counting ${unsized} with no size` : ""}. Sizes are for the part the plan uses. How much of it is required is the plan&apos;s call, week by week.
-            </p>
+        <section
+          aria-labelledby="materials-h"
+          className="flex flex-col gap-3.5 rounded-[28px] bg-secondary px-[22px] pt-5 pb-[18px]"
+        >
+          {props.foldKey ? (
+            <details ref={fold} className="group/fold">
+              <summary className="cursor-pointer list-none rounded-xl select-none [&::-webkit-details-marker]:hidden">{heading}</summary>
+              <div className="mt-3.5 flex flex-col gap-3.5">{body}</div>
+            </details>
+          ) : (
+            <>
+              {heading}
+              {body}
+            </>
           )}
-          {coverage && (coverage.covered.length > 0 || coverage.open.length > 0) && <CoverageChips coverage={coverage} source={coverageSource} />}
-
-          {backbone ? (
-            <BackboneCard material={backbone} onRemove={props.onRemove ? () => setRemoving(backbone) : undefined} />
-          ) : props.awaitingBackbone ? null : (
-            <span className="text-[13px] text-muted-foreground">No backbone: units draw on the materials below directly.</span>
-          )}
-
-          <div className="flex flex-col gap-0.5">
-            {shown.map((m, i) => (
-              <div key={m.id} className="contents">
-                {(i === 0 || groupLabel(shown[i - 1]) !== groupLabel(m)) && (
-                  <span className="px-1 pt-1.5 pb-1 text-[11px] tracking-wide text-muted-foreground uppercase">{groupLabel(m)}</span>
-                )}
-                <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
-              </div>
-            ))}
-          </div>
-
-          {shownRows(ordered, initialShown).length < ordered.length && (
-            <Button variant="secondary" size="sm" className="min-h-10 self-start border border-border bg-transparent px-4 text-[12.5px]" onClick={() => setShowAll((v) => !v)}>
-              {showAll ? "Show fewer" : `Show all ${materials.length}`}
-            </Button>
-          )}
-
-          <DroppedGroup heading="Rejected by checks" items={checked} />
-          <DroppedGroup heading="Found but not used" items={unused} />
         </section>
       )}
 
@@ -164,8 +208,36 @@ export function shownRows(ordered: Material[], initialShown: number): Material[]
 }
 
 /** A practice-only source goes in the "Practice" group instead of a kind group. */
-function groupLabel(m: Material): string {
+export function groupLabel(m: Material): string {
   return isPracticeOnly(m) ? "Practice" : KIND_LABEL[m.kind];
+}
+
+const BACKBONE_ANCHOR = "materials-backbone";
+
+function groupAnchor(label: string): string {
+  return `materials-${label.toLowerCase()}`;
+}
+
+/** The list's groups in its order, the backbone first when there is one, each with its anchor and how many it holds. */
+export function materialGroups(materials: Material[]): { label: string; anchor: string; count: number }[] {
+  const backbone = materials.find((m) => m.backbone) ?? null;
+  const rest = materials.filter((m) => m !== backbone);
+  const ordered = [...KIND_ORDER.flatMap((kind) => rest.filter((m) => m.kind === kind && !isPracticeOnly(m))), ...rest.filter(isPracticeOnly)];
+  const groups: { label: string; anchor: string; count: number }[] = backbone ? [{ label: "Backbone", anchor: BACKBONE_ANCHOR, count: 1 }] : [];
+  for (const m of ordered) {
+    const label = groupLabel(m);
+    const last = groups.at(-1);
+    if (last && last.label === label) last.count += 1;
+    else groups.push({ label, anchor: groupAnchor(label), count: 1 });
+  }
+  return groups;
+}
+
+/** Whose materials these are: "13 · all opened and checked", "2 yours" or "11 checked · 2 yours". */
+export function checkedLine(materials: Material[]): string {
+  const researched = materials.filter((m) => m.origin === "research").length;
+  const yours = materials.length - researched;
+  return yours === 0 ? `${researched} · all opened and checked` : researched === 0 ? `${yours} yours` : `${researched} checked · ${yours} yours`;
 }
 
 /** What a kind of practice item is called in a count. */
@@ -186,7 +258,7 @@ export function materialTotals(materials: Material[]): { readingMinutes: number;
 }
 
 /** "≈ 5 h 35 of reading + 9 h of practice"; a list with no practice stays "≈ 5 h 35 of material". */
-function totalsLine(readingMinutes: number, practiceMinutes: number): string {
+export function totalsLine(readingMinutes: number, practiceMinutes: number): string {
   if (practiceMinutes === 0) return `${approxDuration(readingMinutes)} of material`;
   if (readingMinutes === 0) return `${approxDuration(practiceMinutes)} of practice`;
   return `${approxDuration(readingMinutes)} of reading + ${approxDuration(practiceMinutes).replace("≈ ", "")} of practice`;
@@ -198,7 +270,7 @@ export function splitCoverage(open: string[]): { areas: string[]; practice: stri
   return { areas: open.filter((a) => !isPracticeOpen(a)), practice };
 }
 
-function byline(m: Material, withKind = false): string {
+export function byline(m: Material, withKind = false): string {
   return [m.author, hostOf(m.url) && m.kind !== "note" && !m.author ? hostOf(m.url) : null, m.year, withKind ? m.kind : null].filter(Boolean).join(" · ");
 }
 

@@ -9,6 +9,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { scrubSecrets } from "@/evals/draft/record";
 import { buildGenerationLogRow, effortSettings, type ModelCall } from "@/lib/ai/logged";
+import { listPriceUsd } from "./price";
 import type { CriterionResult, JudgeCriterion, RoleModel, Sample } from "./types";
 
 /** The one judge a benchmark version uses, and the second opinion from another provider on a fifth of the samples. */
@@ -137,7 +138,7 @@ export async function judgeDimension(args: {
   const generate = args.generate ?? generateObject;
   const instructions = criteriaPrompt(criteria);
   const startedAt = performance.now();
-  const { object, usage, finishReason } = await generate({
+  const { object, usage, finishReason, providerMetadata } = await generate({
     model: judge.model,
     schema: verdictsSchema,
     messages: [
@@ -164,7 +165,19 @@ export async function judgeDimension(args: {
   // An answer with a skipped criterion is not kept, so a rescore asks again instead of reusing the gap.
   if (results.length === criteria.length) cache.set(key, results);
 
-  const row = buildGenerationLogRow({ caller: "judge", model: judge.model, usage, latencyMs, effort: judge.effort });
+  const row = buildGenerationLogRow({
+    caller: "judge",
+    model: judge.model,
+    usage,
+    latencyMs,
+    effort: judge.effort,
+    providerMetadata,
+    fallbackCostUsd: listPriceUsd(judge.model, {
+      inputTokens: usage.inputTokens ?? null,
+      outputTokens: usage.outputTokens ?? null,
+      cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? null,
+    }),
+  });
   const call: ModelCall = {
     ...row,
     label: `Judge · ${dimension}`,
@@ -174,7 +187,7 @@ export async function judgeDimension(args: {
     finishReason: finishReason ?? null,
     facts: [],
   };
-  return { results, costUsd: row.costUsd, calls: [call] };
+  return { results, costUsd: row.costUsd ?? 0, calls: [call] };
 }
 
 /** Every fifth sample of each contestant in (fixture, epoch) order, the first included: the ones the second judge re-grades. */

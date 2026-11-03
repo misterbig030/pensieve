@@ -8,7 +8,8 @@ import { DRAFT_TOPICS } from "@/evals/draft/topics";
 import { BASELINE } from "../contestants";
 import type { AllocateFixture } from "../fixtures";
 import type { Contestant } from "../types";
-import { AVAILABLE_MODELS, estimateCostUsd } from "@/lib/ai/models";
+import { AVAILABLE_MODELS } from "@/lib/ai/models";
+import { listPriceUsd } from "../price";
 import { ALLOCATE_CRITERIA, codeResults, renderAllocation, runAllocateSample, voidReason, type AllocateCtx, type AllocateOutput } from "./allocate";
 
 function material(id: string, title: string, extra: Partial<Material> = {}): Material {
@@ -133,7 +134,7 @@ describe("runAllocateSample", () => {
 
     it("is charged the fixture's baseline tokens at the contestant's allocate model", async () => {
       const sample = await runAllocateSample(WITH_TOKENS, flash, { allocate: allocation({ fallback: true, noCall: true, events: timedOut }) });
-      const estimate = estimateCostUsd("google/gemini-3-flash", { inputTokens: 20_000, outputTokens: 4_000 });
+      const estimate = listPriceUsd("google/gemini-3-flash", { inputTokens: 20_000, outputTokens: 4_000 });
       expect(estimate).toBeGreaterThan(0);
       expect(sample.estimatedCostUsd).toBeCloseTo(estimate);
       expect(sample.costUsd).toBeCloseTo(estimate);
@@ -155,7 +156,7 @@ describe("runAllocateSample", () => {
       const paced: AllocateFixture = { ...FIXTURE, baseline: { inputTokens: 20_000, outputTokens: 4_000, ms: 30_000 } };
       const ticks = [0, 90_000];
       const sample = await runAllocateSample(paced, flash, { allocate: allocation({ fallback: true, noCall: true, events: timedOut }), now: () => ticks.shift()! });
-      expect(sample.estimatedCostUsd).toBeCloseTo(estimateCostUsd("google/gemini-3-flash", { inputTokens: 20_000, outputTokens: 12_000 }));
+      expect(sample.estimatedCostUsd).toBeCloseTo(listPriceUsd("google/gemini-3-flash", { inputTokens: 20_000, outputTokens: 12_000 }));
     });
 
     it("costs nothing to estimate without baseline tokens, and records no estimate", async () => {
@@ -166,7 +167,7 @@ describe("runAllocateSample", () => {
 
     it("prices a contestant that leaves out the role at the baseline's allocate model", async () => {
       const sample = await runAllocateSample(WITH_TOKENS, { name: "bare", roles: {} }, { allocate: allocation({ fallback: true, noCall: true, events: timedOut }) });
-      expect(sample.estimatedCostUsd).toBeCloseTo(estimateCostUsd(BASELINE.roles.allocate!.model, { inputTokens: 20_000, outputTokens: 4_000 }));
+      expect(sample.estimatedCostUsd).toBeCloseTo(listPriceUsd(BASELINE.roles.allocate!.model, { inputTokens: 20_000, outputTokens: 4_000 }));
     });
   });
 

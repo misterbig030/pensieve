@@ -1,26 +1,27 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { isAdminUserId } from "@/lib/admin";
+import { isAdmin } from "@/lib/admin";
 import { asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { sources } from "@/lib/db/schema";
 import { collectCalls } from "@/lib/ai/collectCalls";
 import { generateDailyContent, type LessonMaterial, type LessonPractice } from "@/lib/ai/dailyContent";
-import { chapterAt } from "@/lib/schemas/material";
 import type { ModelCall } from "@/lib/ai/logged";
-import { PRACTICE_REGISTRY } from "@/lib/practice";
-import { getNodePracticeList, getNodeReadList, getOwnedNode, upsertLeafContent } from "@/lib/db/planQueries";
+import { upsertLeafContent } from "@/lib/db/planQueries";
+import { lessonInputs } from "@/lib/dayTasks";
+import { loadDay } from "./loadDay";
 import { resolveModels } from "@/lib/ai/resolve";
 import { UserKeyError, guardUserKeyCall } from "@/lib/ai/userKeyError";
+import { GatewayFundsError } from "@/lib/ai/gatewayFunds";
 import type { KeyErrorKind } from "@/lib/ai/models";
 import { insertGenerationLog } from "@/lib/db/generationLog";
 
 /** `calls` is present only when the server confirmed the caller is an admin: the model call behind this lesson, for the dock. */
 export type GenerateLeafContentResult =
-  | { ok: true; contentMarkdown: string; citations: { title: string; url: string }[]; costUsd: number; calls?: ModelCall[] }
-  | { ok: false; message: string; code: KeyErrorKind; calls?: ModelCall[] };
+  | { ok: true; contentMarkdown: string; citations: { title: string; url: string }[]; calls?: ModelCall[] }
+  | { ok: false; message: string; code?: KeyErrorKind; calls?: ModelCall[] };
 
 export async function generateLeafContentAction(input: {
   trackId: string;
@@ -28,45 +29,27 @@ export async function generateLeafContentAction(input: {
 }): Promise<GenerateLeafContentResult> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
-  const admin = isAdminUserId(userId);
+  const admin = await isAdmin(userId);
   const calls: ModelCall[] = [];
   const extra = admin ? { calls } : {};
 
-  const node = await getOwnedNode(input.nodeId, userId);
-  if (!node || node.trackId !== input.trackId) throw new Error("Plan node not found");
+  const day = await loadDay(input.trackId, input.nodeId, userId);
+  if (!day) throw new Error("Plan node not found");
+  const { node, readRows, tasks } = day;
 
-  // The lesson reads the leaf's Read table. Plans saved before materials were assigned fall back to the whole list.
-  const reads = await getNodeReadList(node.id);
+  // The lesson walks through the day's tasks. Plans saved before materials were assigned have no Read table: those
+  // lessons read every source on the track, as plain prose with no steps.
+  const inputs = lessonInputs(tasks);
   const materials: LessonMaterial[] =
-    reads.length > 0
-      ? reads.map((r) => ({
-          title: r.source.title ?? r.source.url,
-          url: r.source.url,
-          type: r.source.type,
-          kind: r.source.kind,
-          tier: r.tier,
-          minutes: r.minutes,
-          note: r.note,
-          chapter: chapterAt(r.source.toc, r.chapter || null),
-          activity: r.activity,
-        }))
+    readRows.length > 0
+      ? inputs.materials
       : (await db.query.sources.findMany({ where: eq(sources.trackId, input.trackId), orderBy: [asc(sources.position)] })).map((s) => ({
           title: s.title ?? s.url,
           url: s.url,
           type: s.type,
           kind: s.kind,
         }));
-
-  // The Do table: a generated recall row keeps its reading as source, any other generated row has none.
-  const practice: LessonPractice[] = (await getNodePracticeList(node.id)).map((p) => ({
-    format: p.format,
-    label: PRACTICE_REGISTRY[p.format].label,
-    task: p.task,
-    done: p.done ?? "",
-    minutes: p.minutes ?? 0,
-    source: p.source ? { title: p.source.title ?? p.source.url, url: p.source.url } : null,
-    generated: p.generated,
-  }));
+  const practice: LessonPractice[] = inputs.practice;
 
   const models = await resolveModels(userId);
   let generated: Awaited<ReturnType<typeof generateDailyContent>>;
@@ -88,9 +71,10 @@ export async function generateLeafContentAction(input: {
   } catch (error) {
     // A refused user key comes back as a value: a thrown error's message does not survive to the browser in production.
     if (error instanceof UserKeyError) return { ok: false, message: error.message, code: error.code, ...extra };
+    if (error instanceof GatewayFundsError) return { ok: false, message: error.message, ...extra };
     throw error;
   }
-  const { content, costUsd } = generated;
+  const { content } = generated;
 
   await upsertLeafContent(node.id, {
     contentMarkdown: content.contentMarkdown,
@@ -101,5 +85,5 @@ export async function generateLeafContentAction(input: {
   revalidatePath(`/tracks/${input.trackId}`);
   revalidatePath(`/tracks/${input.trackId}/nodes/${input.nodeId}`);
 
-  return { ok: true, ...content, costUsd, ...extra };
+  return { ok: true, ...content, ...extra };
 }

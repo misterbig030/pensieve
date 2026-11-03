@@ -9,7 +9,7 @@ import { createTrackWithPlan } from "@/lib/db/queries";
 import { removeMaterialRefs } from "@/lib/materials";
 import { fromTreeInput } from "@/lib/planInput";
 import { materialListSchema, type Material } from "@/lib/schemas/material";
-import { granularitySchema, planTreeInputSchema, type PlanTreeInput } from "@/lib/schemas/plan";
+import { granularitySchema, planTreeInputSchema, problemsSchema, type PlanTreeInput } from "@/lib/schemas/plan";
 import type { Granularity } from "@/lib/planTree";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema, planSplitSchema, type PlanSplit } from "@/lib/studyTime";
 
@@ -25,16 +25,24 @@ export async function confirmTrackAction(input: {
   materials: Material[];
   tree: PlanTreeInput;
   summary?: string;
+  /** Learner lines for the top level's code-checked problems. */
+  problems?: string[];
 }): Promise<void> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
+  // Every input is checked before anything is written or vetted.
   const topic = topicSchema.parse(input.topic);
   let root = fromTreeInput(planTreeInputSchema.parse(input.tree));
   const granularity = granularitySchema.parse(input.granularity);
+  const hoursPerWeek = hoursPerWeekSchema.parse(input.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK);
+  const daysPerWeek = daysPerWeekSchema.parse(input.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK);
+  const split = planSplitSchema.nullable().parse(input.split ?? null);
+  const problems = problemsSchema.parse(input.problems ?? []);
+  const listed = materialListSchema.parse(input.materials);
 
   // A forged "verified" badge must not reach a saved plan: unsigned research materials are checked again.
-  const { materials, dropped } = await vetMaterials(materialListSchema.parse(input.materials));
+  const { materials, dropped } = await vetMaterials(listed);
   for (const m of dropped) root = removeMaterialRefs(root, m.id);
 
   const { trackId, droppedRefs } = await createTrackWithPlan({
@@ -43,9 +51,10 @@ export async function confirmTrackAction(input: {
     instructions: input.instructions,
     summary: input.summary,
     granularity,
-    hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK),
-    daysPerWeek: daysPerWeekSchema.parse(input.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK),
-    split: planSplitSchema.nullable().parse(input.split ?? null),
+    hoursPerWeek,
+    daysPerWeek,
+    split,
+    problems,
     materials,
     root,
   });
@@ -54,6 +63,6 @@ export async function confirmTrackAction(input: {
     console.info(`[materials] saved track ${trackId}: ${dropped.length} material(s) failed re-verification, ${droppedRefs} reference(s) to unknown ids dropped`);
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/");
   redirect(`/tracks/${trackId}`);
 }

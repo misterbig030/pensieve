@@ -144,13 +144,14 @@ export function createProviderArm(options: ProviderArmOptions = {}): ResearchArm
               caller: "research",
               model: modelId,
               usage: part.usage,
+              providerMetadata: part.providerMetadata,
               latencyMs: Math.round(part.performance?.stepTimeMs ?? 0),
               trackId: log?.trackId,
               userId: log?.userId,
               keyOwner: log?.keyOwner,
               effort: RESEARCH_LOOP_EFFORT,
             });
-            costUsd += row.costUsd;
+            costUsd += row.costUsd ?? 0;
             await emitGenerationLog(log?.onLog, row);
             log?.onCall?.({
               ...row,
