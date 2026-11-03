@@ -30,46 +30,56 @@ function file(n: number, agreed: number, over: Partial<CalibrationFile> = {}): C
 describe("checkedCriteria", () => {
   it("checks a criterion once 10 owner grades have 8 agreeing", () => {
     const got = checkedCriteria([file(10, 8)], JUDGE, [crit("a")]).get("a");
-    expect(got).toEqual({ graded: 10, agreed: 8, checked: true });
+    expect(got).toEqual({ graded: 10, agreed: 8, present: 8, absent: 2, checked: true });
   });
 
   it("does not check it with 7 agreeing", () => {
-    expect(checkedCriteria([file(10, 7)], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 10, agreed: 7, checked: false });
+    expect(checkedCriteria([file(10, 7)], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 10, agreed: 7, present: 7, absent: 3, checked: false });
   });
 
   it("does not check it with fewer than 10 grades", () => {
-    expect(checkedCriteria([file(9, 9)], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 9, agreed: 9, checked: false });
+    expect(checkedCriteria([file(9, 9)], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 9, agreed: 9, present: 9, absent: 0, checked: false });
   });
 
   it("does not count grades the owner has not given", () => {
     const f = file(12, 10);
     f.items[0].grades[0].owner = null;
     f.items[1].grades[0].owner = null;
-    expect(checkedCriteria([f], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 10, agreed: 8, checked: true });
+    expect(checkedCriteria([f], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 10, agreed: 8, present: 8, absent: 2, checked: true });
   });
 
   it("adds up the grades of several files", () => {
-    expect(checkedCriteria([file(5, 4), file(5, 4)], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 10, agreed: 8, checked: true });
+    expect(checkedCriteria([file(5, 4), file(5, 4)], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 10, agreed: 8, present: 8, absent: 2, checked: true });
   });
 
   it("starts again from 0 when the criterion text has changed", () => {
-    expect(checkedCriteria([file(10, 10)], JUDGE, [crit("a", "reworded")]).get("a")).toEqual({ graded: 0, agreed: 0, checked: false });
+    expect(checkedCriteria([file(10, 10)], JUDGE, [crit("a", "reworded")]).get("a")).toEqual({ graded: 0, agreed: 0, present: 0, absent: 0, checked: false });
   });
 
   it("counts only the files of the given judge", () => {
-    expect(checkedCriteria([file(10, 10, { judge: OTHER })], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 0, agreed: 0, checked: false });
+    expect(checkedCriteria([file(10, 10, { judge: OTHER })], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 0, agreed: 0, present: 0, absent: 0, checked: false });
   });
 
   it("measures agreement against the judge's grade", () => {
     const f = file(10, 0);
-    for (const item of f.items) item.grades[0] = { id: "a", judge: false, owner: false };
-    expect(checkedCriteria([f], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 10, agreed: 10, checked: true });
+    for (const [i, item] of f.items.entries()) item.grades[0] = { id: "a", judge: i < 2, owner: i < 2 };
+    expect(checkedCriteria([f], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 10, agreed: 10, present: 2, absent: 8, checked: true });
+  });
+
+  it("does not check a criterion the owner never saw both ways, however much they agree", () => {
+    // A rare harm: owner and judge both say "absent" ten times, which says nothing of whether the judge can spot it.
+    const absent = file(10, 0);
+    for (const item of absent.items) item.grades[0] = { id: "a", judge: false, owner: false };
+    expect(checkedCriteria([absent], JUDGE, [crit("a")]).get("a")).toEqual({ graded: 10, agreed: 10, present: 0, absent: 10, checked: false });
+    // One case each way is not enough either.
+    const once = file(10, 9);
+    expect(checkedCriteria([once], JUDGE, [crit("a")]).get("a")).toMatchObject({ present: 9, absent: 1, checked: false });
   });
 
   it("has an entry for every criterion, with zero counts when nothing graded", () => {
     const got = checkedCriteria([], JUDGE, [crit("a"), crit("b")]);
     expect([...got.keys()]).toEqual(["a", "b"]);
-    expect(got.get("b")).toEqual({ graded: 0, agreed: 0, checked: false });
+    expect(got.get("b")).toEqual({ graded: 0, agreed: 0, present: 0, absent: 0, checked: false });
   });
 });
 

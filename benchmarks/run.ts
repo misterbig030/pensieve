@@ -92,8 +92,9 @@ type Checked = ReturnType<typeof checkedCriteria>;
 type Stop = "cap" | "error" | null;
 
 /**
- * Grades a rendered output on every judge dimension with `judge`, adding each call's cost to the cap. Returns the answers
- * it got, by dimension, and why it stopped short when it did: the cap was reached (checked before each call) or a call threw.
+ * Grades a rendered output on every judge dimension with `judge`, the dimensions at once, adding each call's cost to the
+ * cap. The cap is checked once, before the calls, so a pass can overshoot it by its own calls. Returns the answers it got,
+ * by dimension, and why it stopped short when it did: the cap was already reached, or a call threw (the others still count).
  */
 async function judgeAll(
   rendered: string,
@@ -101,26 +102,29 @@ async function judgeAll(
   deps: { judge: JudgeFn; cache: JudgeCache; cap: SpendCap; print: (line: string) => void },
 ): Promise<{ fresh: Map<string, CriterionResult[]>; stopped: Stop }> {
   const fresh = new Map<string, CriterionResult[]>();
-  for (const [dimension, criteria] of DIMENSIONS) {
-    if (deps.cap.reached) return { fresh, stopped: "cap" };
-    try {
-      const judged = await deps.judge({ rendered, dimension, criteria, judge: model, cache: deps.cache });
-      deps.cap.add(judged.costUsd);
-      fresh.set(dimension, judged.results);
-    } catch (error) {
-      deps.print(`${model.model} could not judge ${dimension}: ${error instanceof Error ? error.message : String(error)}`);
-      return { fresh, stopped: "error" };
-    }
-  }
-  return { fresh, stopped: null };
+  if (deps.cap.reached) return { fresh, stopped: "cap" };
+  let stopped: Stop = null;
+  await Promise.all(
+    [...DIMENSIONS].map(async ([dimension, criteria]) => {
+      try {
+        const judged = await deps.judge({ rendered, dimension, criteria, judge: model, cache: deps.cache });
+        deps.cap.add(judged.costUsd);
+        fresh.set(dimension, judged.results);
+      } catch (error) {
+        deps.print(`${model.model} could not judge ${dimension}: ${error instanceof Error ? error.message : String(error)}`);
+        stopped = "error";
+      }
+    }),
+  );
+  return { fresh, stopped };
 }
 
 /**
- * Judges a completed sample and sets its results and `judged`. Code results are always recomputed. For each dimension a
- * new answer replaces the saved one; where none was obtained the saved results stay, so a short cap or cache never
- * destroys an earlier judgment. `judged` is true when every judge criterion has a result, old or new. The second judge
- * runs when `second` is set and the primary did not fail on an error (a cap stop is left to the second judge's own cap
- * check); its results replace the saved ones only when every dimension was answered.
+ * Judges a completed sample and sets its results and `judged`. Code results are always recomputed. Each criterion takes
+ * the new answer when there is one and keeps its saved result otherwise, so a short cap, a failed call or a skipped
+ * criterion never destroys an earlier judgment. `judged` is true when every judge criterion has a result, old or new. The
+ * second judge runs when `second` is set and the primary did not fail on an error (a cap stop is left to the second
+ * judge's own cap check); its results replace the saved ones only when it answered every criterion.
  */
 async function judgeSample(
   sample: Sample<AllocateOutput>,
@@ -131,19 +135,13 @@ async function judgeSample(
   const rendered = renderAllocation(sample.output!, fixture.input);
   const saved = sample.results.filter((r) => r.grader === "judge");
   const primary = await judgeAll(rendered, JUDGE, deps);
-  const judgeResults: CriterionResult[] = [];
-  let complete = true;
-  for (const [dimension, criteria] of DIMENSIONS) {
-    const kept = criteria.flatMap((c) => saved.filter((r) => r.id === c.id).slice(0, 1));
-    const results = primary.fresh.get(dimension) ?? kept;
-    judgeResults.push(...results);
-    if (results.length < criteria.length) complete = false;
-  }
+  const fresh = [...primary.fresh.values()].flat();
+  const judgeResults = JUDGE_CRITERIA.flatMap((c) => [fresh.find((r) => r.id === c.id) ?? saved.find((r) => r.id === c.id)].filter((r) => r !== undefined));
   sample.results = [...codeResults(sample.output!, ctxFor(fixture)), ...judgeResults];
-  sample.judged = complete;
+  sample.judged = judgeResults.length === JUDGE_CRITERIA.length;
   if (second && primary.stopped !== "error") {
-    const other = await judgeAll(rendered, SECOND_JUDGE, deps);
-    if (other.fresh.size === DIMENSIONS.size) sample.secondJudge = [...other.fresh.values()].flat();
+    const other = [...(await judgeAll(rendered, SECOND_JUDGE, deps)).fresh.values()].flat();
+    if (JUDGE_CRITERIA.every((c) => other.some((r) => r.id === c.id))) sample.secondJudge = other;
   }
 }
 
@@ -271,11 +269,14 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
     }
   };
 
+  // Set once the gateway refuses the key: every later call would meet the same refusal, so nothing more starts.
+  let halted: string | null = null;
   const done = await mapLimit(planned, opts.concurrency ?? CONCURRENCY, async ({ contestant, fixture, epoch }): Promise<Sample<AllocateOutput> | null> => {
-    if (cap.reached) return null;
+    if (cap.reached || halted !== null) return null;
     let ran = await attempt(fixture, contestant);
     cap.add(ran.costUsd);
-    if (ran.gate.status === "void" && !cap.reached) {
+    if (ran.gate.status === "void" && ran.gate.halt) halted = ran.gate.reason;
+    else if (ran.gate.status === "void" && !cap.reached) {
       const first = ran;
       ran = await attempt(fixture, contestant);
       cap.add(ran.costUsd);
@@ -295,7 +296,7 @@ export async function runBenchmark(opts: RunOptions): Promise<{ dir: string; sum
 
   const samples = done.filter((s): s is Sample<AllocateOutput> => s !== null);
   notStarted = planned.length - samples.length;
-  if (notStarted > 0) print(`${notStarted} of ${planned.length} samples not started: the spend cap was reached`);
+  if (notStarted > 0) print(`${notStarted} of ${planned.length} samples not started: ${halted ?? "the spend cap was reached"}`);
   const withEstimate = samples.filter((s) => s.estimatedCostUsd !== undefined).length;
   if (withEstimate > 0) print(`${withEstimate} of ${samples.length} samples carry an estimated cost: the call ended without usage`);
   writeJson(join(dir, "run.json"), runInfo());

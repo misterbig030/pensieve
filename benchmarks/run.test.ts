@@ -155,13 +155,33 @@ describe("runBenchmark", () => {
     expect(summaries.find((s) => s.name === "baseline")?.unjudged).toBe(1);
   });
 
-  it("leaves the second judge off a sample when the cap stops it part way", async () => {
+  it("leaves the second judge off a sample when the cap is reached before it starts", async () => {
     const runSample = runner(() => completed(0.3));
-    // 0.3 + three primary calls at 0.2 reaches 0.9; the second judge's first call (0.9 is under 1) takes it to 1.1.
-    const { dir } = await runBenchmark({ ...base({ maxUsd: 1, fixtures: ["sde-1"], epochs: 1 }), concurrency: 1, runSample, judge: judge(0.2) });
+    // 0.3 + three primary calls at 0.25 is 1.05, over the cap of 1: the second judge makes no call.
+    const judgeFn = judge(0.25);
+    const { dir } = await runBenchmark({ ...base({ maxUsd: 1, fixtures: ["sde-1"], epochs: 1 }), concurrency: 1, runSample, judge: judgeFn });
     const [sample] = readSamples(dir).filter((s) => s.contestant === "baseline");
+    expect(judgeFn).toHaveBeenCalledTimes(3);
     expect(sample.judged).toBe(true);
     expect(sample.secondJudge).toBeUndefined();
+  });
+
+  it("asks the dimensions at once and leaves the second judge off when one of its calls fails", async () => {
+    const runSample = runner(() => completed(0.3));
+    let calls = 0;
+    const answer = judge(0.1);
+    // Calls 1–3 are the primary judge's dimensions, 4–6 the second judge's; the fifth fails.
+    const judgeFn = vi.fn(async (args: Parameters<typeof judgeDimension>[0]) => {
+      if (++calls === 5) throw new Error("gateway 500");
+      return answer(args);
+    }) as unknown as typeof judgeDimension;
+    const lines: string[] = [];
+    const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1, print: (l: string) => lines.push(l) }), concurrency: 1, runSample, judge: judgeFn });
+    const [sample] = readSamples(dir).filter((s) => s.contestant === "baseline");
+    expect(calls).toBe(12); // both judges on each contestant's first sample
+    expect(sample.judged).toBe(true);
+    expect(sample.secondJudge).toBeUndefined();
+    expect(lines.some((l) => l.includes("could not judge") && l.includes("gateway 500"))).toBe(true);
   });
 
   it("re-runs a void sample once and saves the final attempt's outcome with both attempts' calls and costs", async () => {
@@ -242,6 +262,17 @@ describe("runBenchmark", () => {
     expect(judgeFn).not.toHaveBeenCalled();
     expect(readSamples(dir)[0].gate.status).toBe("void");
     expect(summaries[0].voids).toBe(1);
+  });
+
+  it("stops starting samples once the gateway refuses the key, without re-running that one", async () => {
+    const runSample = runner(() => ({ gate: { status: "void", reason: "allocate 402: API key budget exceeded", halt: true }, output: null, calls: [], costUsd: 0, ms: 1 }));
+    const lines: string[] = [];
+    const { dir, summaries } = await runBenchmark({ ...base({ concurrency: 1, print: (line: string) => lines.push(line) }), runSample, judge: judge() });
+    expect(runSample).toHaveBeenCalledTimes(1);
+    expect(readSamples(dir)).toHaveLength(1);
+    expect(summaries.every((s) => s.verdict !== "worse")).toBe(true);
+    expect(lines).toContain("7 of 8 samples not started: allocate 402: API key budget exceeded");
+    expect(JSON.parse(readFileSync(join(dir, "run.json"), "utf8")).notStarted).toBe(7);
   });
 
   it("skips the second judge for a sample whose primary judge failed", async () => {
@@ -354,8 +385,8 @@ describe("rescoreBenchmark", () => {
     const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1 }), runSample: runner(), judge: judge(), cache });
     const expensive = judge(5);
     await rescoreBenchmark(dir, { judge: expensive, cache: memoryCache().cache, maxUsd: 1, concurrency: 1, fixturesRoot, calibrationDir, print: () => {} });
-    // The first call costs 5, over the cap of 1: no second call is made, and the other dimensions keep their saved answers.
-    expect(expensive).toHaveBeenCalledTimes(1);
+    // The first sample's pass costs 15, over the cap of 1: it finishes its three calls, and no later sample asks again.
+    expect(expensive).toHaveBeenCalledTimes(3);
     for (const sample of readSamples(dir)) {
       expect(sample.judged).toBe(true);
       expect(sample.results.filter((r) => r.grader === "judge")).toHaveLength(8);
@@ -398,6 +429,31 @@ describe("rescoreBenchmark", () => {
     expect(after.map((s) => s.judged)).toEqual([true, true]);
     expect(after.map((s) => s.results)).toEqual(before.map((s) => s.results));
     expect(after.map((s) => s.secondJudge)).toEqual(before.map((s) => s.secondJudge));
+  });
+
+  /** A judge that answers every criterion but `skip`, meeting each with `met`. */
+  const skipping = (skip: string, met: boolean) =>
+    vi.fn(async (args: Parameters<typeof judgeDimension>[0]) => ({
+      results: args.criteria.filter((c) => c.id !== skip).map((c): CriterionResult => ({ id: c.id, met, evidence: "new", grader: "judge", judge: args.judge.model })),
+      costUsd: 0,
+      calls: [],
+    })) as unknown as typeof judgeDimension;
+
+  it("leaves a sample unjudged when the judge skipped a criterion", async () => {
+    const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1, contestants: [] }), runSample: runner(), judge: skipping("src-offtopic", true), cache: memoryCache().cache });
+    const [sample] = readSamples(dir);
+    expect(sample.judged).toBe(false);
+    expect(sample.results.some((r) => r.id === "src-offtopic")).toBe(false);
+    expect(sample.secondJudge).toBeUndefined();
+  });
+
+  it("takes a rescore's answers criterion by criterion, keeping the saved one the judge skipped", async () => {
+    const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1, contestants: [] }), runSample: runner(), judge: judge(), cache: memoryCache().cache });
+    await rescoreBenchmark(dir, { judge: skipping("cov-core", false), cache: memoryCache().cache, fixturesRoot, calibrationDir, print: () => {} });
+    const [sample] = readSamples(dir);
+    expect(sample.judged).toBe(true);
+    expect(sample.results.find((r) => r.id === "cov-core")).toMatchObject({ met: true, evidence: "ok" });
+    expect(sample.results.find((r) => r.id === "cov-claims")).toMatchObject({ met: false, evidence: "new" });
   });
 });
 

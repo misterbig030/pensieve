@@ -44,8 +44,10 @@ npx tsx benchmarks/run.ts --calibrate benchmarks/results/<ts>-allocate
 
 Contestants are named in `benchmarks/contestants.ts`. Before calling anything a run prints its estimate (contestants,
 then judging) and stops if the total is over `--max-usd`, saying whether to cut epochs, fixtures or contestants. During
-the run it stops starting samples and stops judging once the real spend passes the cap; samples already done are kept and
-scored, and the unjudged ones can be judged later with `--rescore`.
+the run it stops starting samples and stops judging once the real spend passes the cap (checked before each judge pass,
+whose dimensions are asked at once, so a pass can run past it by its own few calls); samples already done are kept and
+scored, and the unjudged ones can be judged later with `--rescore`. A call the gateway refuses for the account (401, 402,
+403: a bad key or an exhausted budget) stops the run at once, since every later call would be refused too.
 
 ## What a run saves
 
@@ -68,8 +70,9 @@ per judge criterion, `judge` (what the judge said) and `owner: null`.
 1. Read each item's `rendered` text and each criterion's `text` in the file's `criteria`.
 2. Set `owner` to `true` if the criterion holds for that output, `false` if not. A criterion that names a harm
    ("a kept material is off the topic") holds when the harm is present. Leave `null` what you cannot tell.
-3. Run a report again (`--rescore`). A criterion is checked once 10 of your grades are in and the judge agreed with at
-   least 8; its numbers then lose the label. Grades count only against the criterion's current text, so rewording a
+3. Run a report again (`--rescore`). A criterion is checked once 10 of your grades are in, the judge agreed with at
+   least 8, and at least two of your grades say it holds and two say it does not (agreement on outputs that all went one
+   way says little); its numbers then lose the label. Grades count only against the criterion's current text, so rewording a
    criterion starts it over.
 
 Several calibration files add up, so a second `--calibrate` after the first is graded brings a criterion to 10 sooner.

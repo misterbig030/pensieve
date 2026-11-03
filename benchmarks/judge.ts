@@ -119,7 +119,7 @@ function criteriaPrompt(criteria: JudgeCriterion[]): string {
 /**
  * Grades one dimension's criteria in a single call, aborted after `JUDGE_TIMEOUT_MS` (the abort is an error the caller
  * handles; nothing is cached). A cache hit makes no call and costs nothing. An id the judge made up is ignored, a
- * repeated id keeps its first verdict, and a criterion it skipped is not met; such an answer is returned but not cached.
+ * repeated id keeps its first verdict, and a criterion it skipped has no result; such an answer is returned but not cached.
  */
 export async function judgeDimension(args: {
   rendered: string;
@@ -156,12 +156,13 @@ export async function judgeDimension(args: {
 
   const verdicts = new Map<string, { met: boolean; reason: string }>();
   for (const v of object.verdicts) if (!verdicts.has(v.id)) verdicts.set(v.id, v);
-  const results = criteria.map((c): CriterionResult => {
+  // A criterion the judge skipped gets no result: "not met" would credit a harm as absent and cost a positive its weight.
+  const results = criteria.flatMap((c): CriterionResult[] => {
     const v = verdicts.get(c.id);
-    return { id: c.id, met: v?.met ?? false, evidence: v ? v.reason : "judge gave no verdict", grader: "judge", judge: judge.model };
+    return v ? [{ id: c.id, met: v.met, evidence: v.reason, grader: "judge", judge: judge.model }] : [];
   });
   // An answer with a skipped criterion is not kept, so a rescore asks again instead of reusing the gap.
-  if (criteria.every((c) => verdicts.has(c.id))) cache.set(key, results);
+  if (results.length === criteria.length) cache.set(key, results);
 
   const row = buildGenerationLogRow({ caller: "judge", model: judge.model, usage, latencyMs, effort: judge.effort });
   const call: ModelCall = {

@@ -62,7 +62,7 @@ function rowItem(row: Pick<PracticeRef, "id" | "itemFrom">): { id: string; item:
 }
 
 /** Lower case, words only. */
-function plain(text: string): string {
+export function plain(text: string): string {
   return text.toLowerCase().replace(/['’]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 

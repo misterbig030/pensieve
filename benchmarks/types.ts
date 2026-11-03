@@ -45,8 +45,11 @@ export interface CriterionResult {
   judge?: AiModelId;
 }
 
-/** Whether a sample counts: it ran to the end, it failed, or the run itself was unusable and the sample is dropped. */
-export type Gate = { status: "completed" } | { status: "failed"; reason: string } | { status: "void"; reason: string };
+/**
+ * Whether a sample counts: it ran to the end, it failed, or the run itself was unusable and the sample is dropped. A void
+ * with `halt` is one no later sample can get past (the gateway refused the key or its budget), so the run stops there.
+ */
+export type Gate = { status: "completed" } | { status: "failed"; reason: string } | { status: "void"; reason: string; halt?: boolean };
 
 /** One contestant's output on one fixture in one epoch, with what it cost and how it scored. */
 export interface Sample<O = unknown> {

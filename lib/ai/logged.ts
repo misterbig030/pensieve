@@ -145,12 +145,12 @@ export async function emitGenerationLog(onLog: OnGenerationLog | undefined, row:
 }
 
 /**
- * Hands a failed call to `meta.onCall` when the error carries usage, as the AI SDK's `NoObjectGeneratedError` does for an
- * answer that did not fit the schema: the model was paid for, so the call shows with its cost and the error as its
- * response. A failure with no usage (a timeout, a refused request) is not reported, and nothing is written to `onLog`.
+ * Records a failed call when the error carries usage, as the AI SDK's `NoObjectGeneratedError` does for an answer that
+ * did not fit the schema: the model was paid for, so its row goes to `onLog` like any other spend, and `meta.onCall` sees
+ * it with the error as its response. A failure with no usage (a timeout, a refused request) is not recorded.
  */
-function reportFailedCall<T>(opts: LoggedGenerateObjectOptions<T>, meta: GenerationLogMeta, error: unknown, latencyMs: number): void {
-  if (!meta.onCall || typeof error !== "object" || error === null) return;
+async function reportFailedCall<T>(opts: LoggedGenerateObjectOptions<T>, meta: GenerationLogMeta, error: unknown, latencyMs: number): Promise<void> {
+  if (typeof error !== "object" || error === null) return;
   const { usage, finishReason, message } = error as { usage?: LanguageModelUsage; finishReason?: string; message?: unknown };
   if (typeof usage !== "object" || usage === null) return;
   const row = buildGenerationLogRow({
@@ -163,7 +163,8 @@ function reportFailedCall<T>(opts: LoggedGenerateObjectOptions<T>, meta: Generat
     trackId: meta.trackId,
     userId: meta.userId,
   });
-  meta.onCall({
+  await emitGenerationLog(meta.onLog, row);
+  meta.onCall?.({
     ...row,
     label: opts.label ?? meta.caller,
     system: null,
@@ -194,7 +195,7 @@ export async function loggedGenerateObject<T>(
       ...(opts.effort ? effortSettings(opts.effort, opts.model) : {}),
     });
   } catch (error) {
-    reportFailedCall(opts, meta, error, Math.round(performance.now() - startedAt));
+    await reportFailedCall(opts, meta, error, Math.round(performance.now() - startedAt));
     throw error;
   }
   const { object, usage, finishReason } = generated;

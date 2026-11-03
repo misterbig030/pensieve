@@ -15,6 +15,11 @@ export const CALIBRATION_DIR = "benchmarks/calibration";
 /** A criterion is checked with at least this many owner grades, this many of them agreeing with the judge. */
 const MIN_GRADED = 10;
 const MIN_AGREED = 8;
+/**
+ * And with at least this many grades each way, met and not met: agreement on a criterion the owner never saw present (a
+ * rare harm) says nothing of whether the judge can spot it.
+ */
+const MIN_EACH_WAY = 2;
 
 /** A set of judged outputs for the owner to grade; `owner` stays null until they do. */
 export interface CalibrationFile {
@@ -89,15 +94,16 @@ export function writeCalibration(
 }
 
 /**
- * For each criterion, how many owner grades there are, how many agree with the judge and whether that is enough to call
- * it checked. Only files by `judge` count, and only grades made against the criterion's current text.
+ * For each criterion, how many owner grades there are, how many agree with the judge, how many the owner called met
+ * (`present`) and not met (`absent`), and whether that is enough to call it checked. Only files by `judge` count, and only
+ * grades made against the criterion's current text.
  */
 export function checkedCriteria(
   files: CalibrationFile[],
   judge: AiModelId,
   criteria: JudgeCriterion[],
-): Map<string, { graded: number; agreed: number; checked: boolean }> {
-  const counts = new Map(criteria.map((c) => [c.id, { graded: 0, agreed: 0, checked: false }]));
+): Map<string, { graded: number; agreed: number; present: number; absent: number; checked: boolean }> {
+  const counts = new Map(criteria.map((c) => [c.id, { graded: 0, agreed: 0, present: 0, absent: 0, checked: false }]));
   const text = new Map(criteria.map((c) => [c.id, c.text]));
   for (const file of files) {
     if (file.judge !== judge) continue;
@@ -107,10 +113,14 @@ export function checkedCriteria(
         const count = counts.get(grade.id);
         if (!count || grade.owner === null || gradedText.get(grade.id) !== text.get(grade.id)) continue;
         count.graded++;
+        if (grade.owner) count.present++;
+        else count.absent++;
         if (grade.owner === grade.judge) count.agreed++;
       }
     }
   }
-  for (const count of counts.values()) count.checked = count.graded >= MIN_GRADED && count.agreed >= MIN_AGREED;
+  for (const count of counts.values()) {
+    count.checked = count.graded >= MIN_GRADED && count.agreed >= MIN_AGREED && count.present >= MIN_EACH_WAY && count.absent >= MIN_EACH_WAY;
+  }
   return counts;
 }

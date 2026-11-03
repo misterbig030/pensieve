@@ -98,10 +98,11 @@ describe("judgeDimension", () => {
     expect(results[0]).toMatchObject({ id: "a", met: true, evidence: "first" });
   });
 
-  it("marks a criterion the judge skipped as not met", async () => {
+  it("gives no result for a criterion the judge skipped, rather than guessing one", async () => {
+    // "Not met" would credit a harm criterion as absent and cost a positive one its weight.
     const generate = fakeGenerate([{ id: "a", met: true, reason: "ok" }]);
     const { results } = await judgeDimension(args(generate));
-    expect(results[1]).toEqual({ id: "b", met: false, evidence: "judge gave no verdict", grader: "judge", judge: JUDGE.model });
+    expect(results.map((r) => r.id)).toEqual(["a"]);
   });
 
   it("does not cache an answer in which a criterion got no verdict, so a rescore asks again", async () => {

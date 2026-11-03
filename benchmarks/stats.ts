@@ -93,21 +93,23 @@ export function passHatK(byFixture: Map<string, { n: number; c: number }>, k = 3
 /**
  * Worse when the whole interval of the quality delta is below −margin or completion is under 0.90 (whatever the delta).
  * Qualifies when the delta's low end is above −margin, completion is at least 0.95, the cost per sample is under the
- * baseline's and the contestant is not judge-dependent. Anything else, including an unknown delta or completion, is
- * inconclusive.
+ * baseline's and the contestant is not judge-dependent. A delta from one fixture decides neither way: its interval is
+ * over a few epochs, which can agree exactly and make it zero wide. Anything else, including an unknown delta or
+ * completion, is inconclusive.
  */
 export function verdictOf(x: {
-  delta: Interval | null;
+  delta: (Interval & { oneFixture?: boolean }) | null;
   completion: number | null;
   costUsd: number;
   baselineCostUsd: number;
   margin: number;
   judgeDependent: boolean;
 }): "qualifies" | "worse" | "inconclusive" {
-  if ((x.delta && x.delta.high < -x.margin) || (x.completion !== null && x.completion < 0.9)) return "worse";
+  const delta = x.delta && !x.delta.oneFixture ? x.delta : null;
+  if ((delta && delta.high < -x.margin) || (x.completion !== null && x.completion < 0.9)) return "worse";
   const qualifies =
-    x.delta !== null &&
-    x.delta.low > -x.margin &&
+    delta !== null &&
+    delta.low > -x.margin &&
     x.completion !== null &&
     x.completion >= 0.95 &&
     x.costUsd < x.baselineCostUsd &&

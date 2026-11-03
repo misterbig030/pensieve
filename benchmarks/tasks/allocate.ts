@@ -14,7 +14,7 @@ import { isPracticeOnly } from "@/lib/materials";
 import { PRACTICE_REGISTRY } from "@/lib/practice";
 import type { Material } from "@/lib/schemas/material";
 import { totalHours, type PlanSplit } from "@/lib/studyTime";
-import { authorMatches, bookMatches, isNamedList, practiceTimeFindings, servedMinutes, titleMatches } from "@/evals/draft/checks";
+import { authorMatches, bookMatches, isNamedList, plain, practiceTimeFindings, servedMinutes, titleMatches } from "@/evals/draft/checks";
 import type { DraftTopic } from "@/evals/draft/topics";
 import { BASELINE } from "../contestants";
 import type { AllocateFixture } from "../fixtures";
@@ -31,12 +31,23 @@ export interface AllocateCtx {
 /** A reason that names our own time limit or a request that was cut off, which is not the service failing. */
 const TIMEOUT_REASON = /timeout|timed out|aborted/i;
 
+/** The gateway refusing the app's key itself: invalid (401), out of budget (402) or not allowed (403). */
+const ACCOUNT_STATUSES = new Set([401, 402, 403]);
+
+/** Whether the last final failure is the gateway refusing the key, which every later call would meet too. */
+function accountRefused(events: ServiceEvent[]): boolean {
+  const status = events.filter((e) => !e.ok && e.final).at(-1)?.status;
+  return status !== undefined && ACCOUNT_STATUSES.has(status);
+}
+
 /**
  * Why the sample says nothing about the model: the last final failure the outside service itself caused (a 5xx, a 429,
- * or an error with no status that is not a timeout). A client error or a timeout is the contestant's to answer for.
+ * the gateway refusing the key, or an error with no status that is not a timeout). Another client error or a timeout is
+ * the contestant's to answer for.
  */
 export function voidReason(events: ServiceEvent[]): string | null {
-  const caused = events.filter((e) => !e.ok && e.final && (e.status === undefined ? !TIMEOUT_REASON.test(e.reason ?? "") : e.status >= 500 || e.status === 429));
+  const outside = (status: number) => status >= 500 || status === 429 || ACCOUNT_STATUSES.has(status);
+  const caused = events.filter((e) => !e.ok && e.final && (e.status === undefined ? !TIMEOUT_REASON.test(e.reason ?? "") : outside(e.status)));
   const last = caused.at(-1);
   if (!last) return null;
   return `${last.name} ${last.status ?? "error"}${last.reason ? `: ${last.reason}` : ""}`;
@@ -65,8 +76,6 @@ const OVERFULL_SLACK = 1.1;
 const MIN_COVERED = 2;
 
 /** Lower case, words only, for telling an area from the topic. */
-const plainWords = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-
 const describeBook = (m: Material) => `"${m.title}" by ${m.author ?? "no author"}`;
 
 const backbones = (ctx: AllocateCtx) => ctx.topic?.labels?.backbones ?? [];
@@ -145,13 +154,15 @@ const CODE_CRITERIA: CodeCriterion<AllocateOutput, AllocateCtx>[] = [
     id: "format-minutes",
     group: "practice",
     weight: 4,
-    text: "The plan keeps time for practice, and each practice format with a serving material gets at least half its share of it.",
+    text: "The plan keeps time for practice, and each practice format only materials can serve gets at least half its share of it from them.",
     grader: "code",
     check: (output, ctx) => {
       // With no practice time every share is 0 minutes, which any format meets: that is not a pass.
       const practising = output.split.readingShare < 100 && (output.split.formats ?? []).some((p) => p.share > 0);
       if (!practising) return { met: false, evidence: "no practice time" };
-      const { short } = practiceTimeFindings(output.split, output.materials, ctx.fixture.input);
+      // A format the app can write (design exercises, mocks) gets the rest of its time generated: a thin source is not short.
+      const sourced = (output.split.formats ?? []).filter((p) => PRACTICE_REGISTRY[p.format].generated === "never");
+      const { short } = practiceTimeFindings({ ...output.split, formats: sourced }, output.materials, ctx.fixture.input);
       return { met: short.length === 0, evidence: short.length === 0 ? "every served format has its minutes" : short.join("; ") };
     },
   },
@@ -177,8 +188,8 @@ const CODE_CRITERIA: CodeCriterion<AllocateOutput, AllocateCtx>[] = [
     check: (output, ctx) => {
       const covered = output.coverage?.covered ?? [];
       if (covered.length === 0) return { met: false, evidence: "no covered area stated" };
-      const topic = plainWords(ctx.fixture.input.topic);
-      const restated = covered.filter((area) => plainWords(area) === topic);
+      const topic = plain(ctx.fixture.input.topic);
+      const restated = covered.filter((area) => plain(area) === topic);
       const named = covered.length - restated.length;
       const evidence = `covers ${covered.join("; ")}${restated.length > 0 ? ` (the topic itself: ${restated.join("; ")})` : ""}`;
       return { met: named >= MIN_COVERED, evidence };
@@ -257,13 +268,14 @@ export function codeResults(output: AllocateOutput, ctx: AllocateCtx): Criterion
 export async function runAllocateSample(
   fixture: AllocateFixture,
   contestant: Contestant,
-  deps: { allocate?: typeof allocatePlan } = {},
+  deps: { allocate?: typeof allocatePlan; now?: () => number } = {},
 ): Promise<Pick<Sample<AllocateOutput>, "gate" | "output" | "calls" | "costUsd" | "estimatedCostUsd" | "ms">> {
   const allocate = deps.allocate ?? allocatePlan;
   const roleModel = contestant.roles.allocate ?? BASELINE.roles.allocate!;
   const calls: ModelCall[] = [];
   const events: ServiceEvent[] = [];
-  const startedAt = performance.now();
+  const now = deps.now ?? (() => performance.now());
+  const startedAt = now();
   const { split, materials, dropped, coverage, fallback, fallbackReason } = await allocate({
     ...fixture.input,
     model: appModel(roleModel.model),
@@ -271,12 +283,13 @@ export async function runAllocateSample(
     timeoutMs: ALLOCATE_TIMEOUT_MS,
     log: { onCall: (call) => calls.push(call), onService: (event) => events.push(event) },
   });
-  const ms = Math.round(performance.now() - startedAt);
+  const ms = Math.round(now() - startedAt);
   const output: AllocateOutput = { split, materials, dropped, coverage };
 
   let gate: Gate = { status: "completed" };
   // A call that ends without usage (our own timeout, an error that carries none) reports no cost, so a slow contestant
-  // would look free: charge what the fixture's own call used, at this contestant's price.
+  // would look free: charge the fixture's own call at this contestant's price, with as much more output as the baseline's
+  // pace would have written in the extra time (a reasoning model that times out has been writing all along).
   let estimatedCostUsd = 0;
   if (fallback) {
     const outside = voidReason(events);
@@ -284,9 +297,12 @@ export async function runAllocateSample(
     const cause = lastFailure?.reason ?? fallbackReason ?? "no time";
     // Our limit can land while the SDK waits to retry ("Delay was aborted"): name the limit, keep the message.
     const why = TIMEOUT_REASON.test(cause) ? `timed out after ${ALLOCATE_TIMEOUT_MS / 1000} s (${cause})` : cause;
-    gate = outside !== null ? { status: "void", reason: outside } : { status: "failed", reason: `fallback: ${why}` };
+    if (outside === null) gate = { status: "failed", reason: `fallback: ${why}` };
+    else gate = { status: "void", reason: outside, ...(accountRefused(events) ? { halt: true } : {}) };
     if (!calls.some((call) => call.label === "Allocate") && fixture.baseline) {
-      estimatedCostUsd = estimateCostUsd(roleModel.model, fixture.baseline);
+      const { inputTokens, outputTokens, ms: baselineMs } = fixture.baseline;
+      const pace = baselineMs > 0 ? Math.max(1, ms / baselineMs) : 1;
+      estimatedCostUsd = estimateCostUsd(roleModel.model, { inputTokens, outputTokens: outputTokens * pace });
     }
   }
   const costUsd = calls.reduce((sum, call) => sum + call.costUsd, 0) + estimatedCostUsd;

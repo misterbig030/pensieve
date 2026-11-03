@@ -108,6 +108,19 @@ describe("runAllocateSample", () => {
     expect(sample.gate).toMatchObject({ reason: expect.stringContaining("503") });
   });
 
+  it("voids and halts on the gateway refusing the key or its budget (401, 402, 403)", async () => {
+    for (const status of [401, 402, 403]) {
+      const events = [failure({ status, reason: "API key budget exceeded", where: "allocate" })];
+      const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, events }) });
+      expect(sample.gate).toEqual({ status: "void", reason: `anthropic ${status}: API key budget exceeded`, halt: true });
+    }
+  });
+
+  it("does not halt on a gateway outage, which a re-run may get past", async () => {
+    const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, events: [failure({ status: 503, reason: "overloaded" })] }) });
+    expect(sample.gate).toEqual({ status: "void", reason: "anthropic 503: overloaded" });
+  });
+
   it("does not void our own timeout", async () => {
     const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, events: [failure({ reason: "The operation was aborted due to timeout" })] }) });
     expect(sample.gate.status).toBe("failed");
@@ -135,6 +148,14 @@ describe("runAllocateSample", () => {
       const completed = await runAllocateSample(WITH_TOKENS, flash, { allocate: allocation({ noCall: true }) });
       expect(completed.estimatedCostUsd).toBeUndefined();
       expect(completed.costUsd).toBe(0);
+    });
+
+    it("charges the output a call that ran longer than the baseline's would have written by then, at the baseline's pace", async () => {
+      // Round 1: Gemini 4 Argon wrote 13.8k tokens in 166 s, but its timeouts were charged the baseline's 4k.
+      const paced: AllocateFixture = { ...FIXTURE, baseline: { inputTokens: 20_000, outputTokens: 4_000, ms: 30_000 } };
+      const ticks = [0, 90_000];
+      const sample = await runAllocateSample(paced, flash, { allocate: allocation({ fallback: true, noCall: true, events: timedOut }), now: () => ticks.shift()! });
+      expect(sample.estimatedCostUsd).toBeCloseTo(estimateCostUsd("google/gemini-3-flash", { inputTokens: 20_000, outputTokens: 12_000 }));
     });
 
     it("costs nothing to estimate without baseline tokens, and records no estimate", async () => {
@@ -259,6 +280,14 @@ describe("allocate code criteria", () => {
     // Half of 2880 minutes is practice, all of it problems: a share of 1440, so under 720 is short.
     expect(result(output([KLEPPMANN(), neetcode(100)], { split: halfPractice }), "format-minutes")?.met).toBe(false);
     expect(result(output([KLEPPMANN(), neetcode(1200)], { split: halfPractice }), "format-minutes")?.met).toBe(true);
+  });
+
+  it("format-minutes leaves alone a format the app writes the rest of itself", () => {
+    // sde-2 in round 1: a primer giving 34 min of design exercises against a 513 min share failed every contestant.
+    const split = { readingShare: 50, practice: "mixed", reason: "", formats: [{ format: "problem-set", share: 50 }, { format: "design-exercise", share: 50 }] } as PlanSplit;
+    const primer = material("M4", "System design primer", { kind: "repo", minutes: null, practice: { format: "design-exercise", answers: true, minutes: 34 } as Material["practice"] });
+    expect(result(output([KLEPPMANN(), neetcode(600), primer], { split }), "format-minutes")?.met).toBe(true);
+    expect(result(output([KLEPPMANN(), neetcode(100), primer], { split }), "format-minutes")).toMatchObject({ met: false, evidence: expect.stringContaining("problem-set") });
   });
 
   it("format-minutes is not met by a plan that keeps no time for practice", () => {

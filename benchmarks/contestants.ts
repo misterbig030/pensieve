@@ -24,24 +24,16 @@ export const BASELINE: Contestant = {
 const ROLES: Role[] = ["allocate", "outline", "research"];
 
 /**
- * One model in every role, each at the baseline's effort for that role, so the models are compared and not the effort.
- * Models come from `AVAILABLE_MODELS`, where each one supports tool calls and structured output: adding one to that list
- * is where that is checked.
+ * One model in every role. Without an effort, each role runs at the baseline's effort for it, so the models are compared
+ * and not the effort. With one, every role runs at it and the name becomes "<name>@<effort>": providers spend "high" very
+ * differently, and Gemini and DeepSeek wrote over 11k reasoning tokens for an allocation Opus did in under 3k, past the
+ * app's time limit. Models come from `AVAILABLE_MODELS`, where each one supports tool calls and structured output: adding
+ * one to that list is where that is checked.
  */
-function allRoles(name: string, model: AiModelId): Contestant {
+function allRoles(name: string, model: AiModelId, effort?: ReasoningEffort): Contestant {
   const roles: Partial<Record<Role, RoleModel>> = {};
-  for (const role of ROLES) roles[role] = { model, effort: BASELINE.roles[role]!.effort };
-  return { name, roles };
-}
-
-/**
- * The model at one effort in every role, named "<name>@<effort>". Providers spend "high" very differently: Gemini and
- * DeepSeek wrote over 11k reasoning tokens for an allocation Opus did in under 3k, past the app's time limit.
- */
-function atEffort(name: string, model: AiModelId, effort: ReasoningEffort): Contestant {
-  const roles: Partial<Record<Role, RoleModel>> = {};
-  for (const role of ROLES) roles[role] = { model, effort };
-  return { name: `${name}@${effort}`, roles };
+  for (const role of ROLES) roles[role] = { model, effort: effort ?? BASELINE.roles[role]!.effort };
+  return { name: effort ? `${name}@${effort}` : name, roles };
 }
 
 export const CONTESTANTS: Record<string, Contestant> = {
@@ -61,12 +53,12 @@ export const CONTESTANTS: Record<string, Contestant> = {
   "haiku-5.5": allRoles("haiku-5.5", "anthropic/claude-haiku-5.5"),
   "gpt-6-luna": allRoles("gpt-6-luna", "openai/gpt-6-luna"),
   // The candidates that ran out of time at the baseline's effort in round 1 (2026-10-30), at lower effort.
-  "gemini-4-argon@medium": atEffort("gemini-4-argon", "google/gemini-4-argon", "medium"),
-  "gemini-4-argon@low": atEffort("gemini-4-argon", "google/gemini-4-argon", "low"),
-  "gemini-3.8-flash@medium": atEffort("gemini-3.8-flash", "google/gemini-3.8-flash", "medium"),
-  "gemini-3.8-flash@low": atEffort("gemini-3.8-flash", "google/gemini-3.8-flash", "low"),
-  "deepseek-v4-pro@medium": atEffort("deepseek-v4-pro", "deepseek/deepseek-v4-pro", "medium"),
-  "deepseek-v4-pro@low": atEffort("deepseek-v4-pro", "deepseek/deepseek-v4-pro", "low"),
+  "gemini-4-argon@medium": allRoles("gemini-4-argon", "google/gemini-4-argon", "medium"),
+  "gemini-4-argon@low": allRoles("gemini-4-argon", "google/gemini-4-argon", "low"),
+  "gemini-3.8-flash@medium": allRoles("gemini-3.8-flash", "google/gemini-3.8-flash", "medium"),
+  "gemini-3.8-flash@low": allRoles("gemini-3.8-flash", "google/gemini-3.8-flash", "low"),
+  "deepseek-v4-pro@medium": allRoles("deepseek-v4-pro", "deepseek/deepseek-v4-pro", "medium"),
+  "deepseek-v4-pro@low": allRoles("deepseek-v4-pro", "deepseek/deepseek-v4-pro", "low"),
 };
 
 /** Throws when a contestant uses a model the price list lacks, since its cost could not be reported. */

@@ -152,6 +152,14 @@ describe("verdictOf", () => {
     expect(verdictOf({ ...base, delta: { mean: 0, low: -0.2, high: 0.2, n: 3 } })).toBe("inconclusive");
   });
 
+  it("draws no verdict from quality on one fixture, where two equal epochs make a zero-width interval", () => {
+    // Round 1: 0.77 twice against the baseline's 0.77 twice gave +0.00 [+0.00, +0.00].
+    expect(verdictOf({ ...base, delta: { mean: 0, low: 0, high: 0, n: 2, oneFixture: true } })).toBe("inconclusive");
+    expect(verdictOf({ ...base, delta: { mean: -0.09, low: -0.09, high: -0.09, n: 2, oneFixture: true } })).toBe("inconclusive");
+    // Completion still decides on one fixture.
+    expect(verdictOf({ ...base, delta: { mean: 0, low: 0, high: 0, n: 2, oneFixture: true }, completion: 0 })).toBe("worse");
+  });
+
   it("is inconclusive when the contestant is judge-dependent", () => {
     expect(verdictOf({ ...base, judgeDependent: true })).toBe("inconclusive");
   });

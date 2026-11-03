@@ -177,7 +177,7 @@ export function summarize(
 
 // --- Rendering ---------------------------------------------------------------------------------------------------
 
-type Checked = Map<string, { graded: number; agreed: number; checked: boolean }>;
+type Checked = Map<string, { checked: boolean }>;
 
 /** A number with two decimals; "n/a" for a missing or non-finite one, so no NaN or Infinity reaches the page. */
 const num = (value: number | null | undefined) =>
@@ -200,15 +200,15 @@ const table = (header: string[], rows: string[][]) =>
 const UNCHECKED = " (unchecked)";
 
 /**
- * How many more samples would settle an inconclusive contestant, or null when that cannot be said. The delta's n counts
- * epochs of the one fixture, or the fixtures themselves when there are several, so the advice names which.
+ * How many more fixtures would settle an inconclusive contestant, or null when that cannot be said. On one fixture no
+ * number of epochs settles it, since a one-fixture delta gives no verdict (`verdictOf`); the report says to add fixtures.
  */
-function moreToSettle(summary: ContestantSummary, margin: number): { count: number; unit: "epochs" | "fixtures" } | null {
+function moreToSettle(summary: ContestantSummary, margin: number): number | null {
   const d = summary.delta;
-  if (summary.verdict !== "inconclusive" || !d || !(d.mean > -margin)) return null;
+  if (summary.verdict !== "inconclusive" || !d || d.oneFixture || !(d.mean > -margin)) return null;
   const halfWidth = (d.high - d.low) / 2;
   const count = Math.ceil(d.n * (halfWidth / (d.mean + margin)) ** 2 - d.n);
-  return Number.isFinite(count) && count > 0 ? { count, unit: d.oneFixture ? "epochs" : "fixtures" } : null;
+  return Number.isFinite(count) && count > 0 ? count : null;
 }
 
 /** The sample file the report links, relative to the report. */
@@ -279,14 +279,14 @@ export function renderReport(args: {
   );
   const oneFixture = summaries.filter((s) => s.quality?.oneFixture || s.delta?.oneFixture).map((s) => s.name);
   if (oneFixture.length > 0) {
-    out.push(`*one fixture: the interval measures run-to-run spread only* (${oneFixture.join(", ")})`, "");
+    out.push(`*one fixture: the interval measures run-to-run spread only, so quality gives no verdict; add fixtures* (${oneFixture.join(", ")})`, "");
   }
   const notes = summaries.flatMap((s) => {
     const more = moreToSettle(s, margin);
     return [
       ...(s.voids > 0 ? [`- ${s.name}: ${s.voids} void sample${s.voids === 1 ? "" : "s"} left out`] : []),
       ...(s.unjudged > 0 ? [`- ${s.name}: ${s.unjudged} sample${s.unjudged === 1 ? "" : "s"} not judged yet`] : []),
-      ...(more !== null ? [`- ${s.name}: about ${more.count} more ${more.unit} would settle it`] : []),
+      ...(more !== null ? [`- ${s.name}: about ${more} more fixtures would settle it`] : []),
     ];
   });
   if (notes.length > 0) out.push(...notes, "");

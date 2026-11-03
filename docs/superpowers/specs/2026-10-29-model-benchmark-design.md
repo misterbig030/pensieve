@@ -153,7 +153,8 @@ much as one with twenty.)*
 - **Unchecked until calibrated** (PaperBench's JudgeEval, small). Judge criteria count in the score from the start, but
   every judged number carries an **unchecked** label until the owner has graded a calibration set by hand: 10 samples
   across baseline and contestants, every judge criterion. A criterion loses the label once the judge agrees with the
-  owner on at least 8 of 10; one that agrees less stays labelled and the report says how often they disagreed. The
+  owner on at least 8 of 10 and the owner's grades include at least two where it holds and two where it does not; one
+  that agrees less stays labelled and the report says how often they disagreed. The
   report always shows the code-only score beside the full one, so a verdict that rests on unchecked judging is visible
   as such. `--calibrate` picks the samples whenever the owner wants to do it; grades are saved in
   `benchmarks/calibration/` and re-checked when the judge or a criterion changes. *(Owner's decision: show the label,
@@ -179,7 +180,10 @@ Per contestant per task:
 - **qualifies**: the lower end of Δ's 95% interval is above −0.05 (non-inferior within 5 points), completion ≥ 95%,
   and cheaper per sample than the baseline;
 - **worse**: the upper end of Δ's interval is below −0.05, or completion < 90%;
-- **inconclusive**: anything else. The report says roughly how many more epochs or fixtures would settle it.
+- **inconclusive**: anything else. The report says roughly how many more fixtures would settle it.
+
+Δ from a single fixture decides neither way: its interval is over a few epochs of one input, which can agree exactly and
+make it zero wide, so quality gives no verdict until there are two fixtures. Completion still can make it **worse**.
 
 The report also lists the **Pareto frontier**, the contestants that no other beats on both quality and cost, so the
 owner can pick a point on it rather than read a single winner.

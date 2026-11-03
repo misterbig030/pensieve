@@ -146,7 +146,7 @@ describe("loggedGenerateObject", () => {
     });
   });
 
-  it("hands a failed call that carries usage to onCall with its cost and the error message, then rethrows", async () => {
+  it("logs a failed call that carries usage and hands it to onCall with the error message, then rethrows", async () => {
     const usage = { inputTokens: 1_000, outputTokens: 500, totalTokens: 1_500 };
     mockedGenerateObject.mockRejectedValue(
       Object.assign(new Error("No object generated: response did not match schema."), { usage, finishReason: "length" }),
@@ -170,17 +170,20 @@ describe("loggedGenerateObject", () => {
       costUsd: estimateCostUsd("anthropic/claude-haiku-4.5", { inputTokens: 1_000, outputTokens: 500 }),
     });
     expect(calls[0].costUsd).toBeGreaterThan(0);
-    // The app's own log is unchanged: a failed call is still not written to generation_log.
-    expect(rows).toEqual([]);
+    // The spend is logged too, so generation_log totals what the provider billed.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ caller: "outline", inputTokens: 1_000, outputTokens: 500, costUsd: calls[0].costUsd });
   });
 
   it("reports nothing for a failure that carries no usage (a timeout, a refused request)", async () => {
     mockedGenerateObject.mockRejectedValue(new Error("The operation was aborted due to timeout"));
     const onCall = vi.fn();
+    const onLog = vi.fn();
     await expect(
-      loggedGenerateObject({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi" }, { caller: "outline", onCall }),
+      loggedGenerateObject({ model: "anthropic/claude-haiku-4.5", schema, prompt: "hi" }, { caller: "outline", onCall, onLog }),
     ).rejects.toThrow("aborted");
     expect(onCall).not.toHaveBeenCalled();
+    expect(onLog).not.toHaveBeenCalled();
   });
 
   it("labels the call by its caller when no label is given", async () => {

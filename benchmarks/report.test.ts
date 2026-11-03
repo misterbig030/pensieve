@@ -267,13 +267,12 @@ describe("renderReport", () => {
 
   it("notes when the interval measures run-to-run spread only", () => {
     const oneFixture = ["baseline", "cheap"].flatMap((c) => [1, 2, 3].map((e) => sample(c, "f1", e, ALL)));
-    expect(render(oneFixture, checkedAll)).toContain("one fixture: the interval measures run-to-run spread only");
-    expect(render(samples, checkedAll)).not.toContain("one fixture: the interval measures run-to-run spread only");
+    const note = "one fixture: the interval measures run-to-run spread only, so quality gives no verdict; add fixtures";
+    expect(render(oneFixture, checkedAll)).toContain(note);
+    expect(render(samples, checkedAll)).not.toContain(note);
   });
 
-  it("advises how many more epochs would settle an inconclusive contestant on one fixture", () => {
-    // One fixture: the baseline always scores 1; cheap scores 2/3, 1 and 1/3. Delta -1/3, half-width t(2) · sqrt(1/27) = 0.828.
-    // With margin 0.6 the advice is ceil(3 · (0.828 / (0.6 - 1/3))² - 3) = 26 epochs.
+  it("gives no more-epochs advice on one fixture, where epochs cannot settle a verdict", () => {
     const one = [
       ...[1, 2, 3].map((e) => sample("baseline", "f1", e, ALL, { costUsd: 0.1 })),
       sample("cheap", "f1", 1, ["has-plan", "clear", "deep", "no-dup"], { costUsd: 0.01 }),
@@ -283,7 +282,7 @@ describe("renderReport", () => {
     const summaries = summarize(one, criteria, contestants, 0.6);
     expect(summaries[1].verdict).toBe("inconclusive");
     const report = renderReport({ task: "allocate", summaries, samples: one, criteria, checked: checkedAll, run: { ...run, margin: 0.6 } });
-    expect(report).toContain("- cheap: about 26 more epochs would settle it");
+    expect(report).not.toContain("would settle it");
   });
 
   it("advises how many more fixtures would settle an inconclusive contestant on several", () => {
