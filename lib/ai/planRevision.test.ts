@@ -529,6 +529,14 @@ describe("revisions see and edit unit time", () => {
     expect(calls[0].facts).toContain("dropped time for unpicked mock");
   });
 
+  it("drops time for a pick no source serves when the plan has no materials, as a draft does", async () => {
+    respond({ units: [echo("n1", "W1"), echo("n2", "W2"), echo("n3", "W3", { time: { reading: 60, practice: [{ format: "problem-set", minutes: 200 }] } })] });
+    const calls: ModelCall[] = [];
+    const { tree } = await revisePlanTree({ topic: "t", materials: [], granularity: "day", hoursPerWeek: 6, daysPerWeek: 5, split, tree: weeks(true), lockBefore: 0, changeRequest: "x", log: { onCall: (c) => void calls.push(c) } });
+    expect(tree.children![2].time).toEqual({ reading: 60, practice: {} });
+    expect(calls[0].facts).toContain("dropped time for unpicked problem-set");
+  });
+
   it("keeps a month not yet planned in weeks as a heading on a week plan: its time and reservations survive an echo", async () => {
     const monthTime = { reading: 300, practice: { "problem-set": 400 } };
     const original = layout(

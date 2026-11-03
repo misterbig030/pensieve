@@ -505,8 +505,9 @@ export function sizeItemRuns(input: SizeItemRunsInput): string[] {
         chosen = withTime;
         facts.push(`no unit chose ${aliases.alias(id)} for ${name}: it is shared out over every unit with ${name} time`);
       }
-      // A unit the outline gave no minutes of this format gets no run, whatever the model wrote for it.
+      // A unit the outline gave no minutes of this format gets no run, whatever the model wrote for it; the fact says so.
       const untimed = chosen.filter((n) => unitBudgets(input.root, n, input).stated && weight(n, format) === 0);
+      if (untimed.length > 0) facts.push(`dropped ${aliases.alias(id)} from ${untimed.map(label).join(", ")}: no ${name} time`);
       for (const n of untimed) {
         const rest = (n.practiceCovers ?? []).filter((c) => !theirs(c));
         if (rest.length > 0) n.practiceCovers = rest;
@@ -565,6 +566,20 @@ export function pickSources(split: PlanSplit | null | undefined, materials: Pick
     const writable = rule !== "never" && (rule !== "from-reading" || hasReading);
     return { pick, sources, assignable: sources.length > 0 || writable };
   });
+}
+
+/**
+ * The minutes a unit's leaves give each activity: their must-reading and practice rows, a week split by hand's through
+ * its days. Should-reading is an optional extra and counts in no activity.
+ */
+export function leafActivities(node: PlanNode): UnitTime {
+  const out: UnitTime = { reading: 0, practice: {} };
+  walk(node, (n) => {
+    if ((n.children?.length ?? 0) > 0) return;
+    out.reading += tierMinutes(n.materials).must;
+    for (const r of n.practice ?? []) out.practice[r.format] = (out.practice[r.format] ?? 0) + r.minutes;
+  });
+  return out;
 }
 
 /** The formats a heading's time may name: the split's picks the units can be given, or, without the materials to tell, all its picks. */
@@ -1161,13 +1176,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
    */
   const activitiesOf = (node: PlanNode): UnitTime | undefined => {
     if (!input.leaves) return node.time ? { reading: node.time.reading, practice: { ...node.time.practice } } : undefined;
-    const out: UnitTime = { reading: 0, practice: {} };
-    walk(node, (n) => {
-      if ((n.children?.length ?? 0) > 0) return;
-      out.reading += tierMinutes(n.materials).must;
-      for (const r of n.practice ?? []) out.practice[r.format] = (out.practice[r.format] ?? 0) + r.minutes;
-    });
-    return out;
+    return leafActivities(node);
   };
   const overCapacity = (node: PlanNode, index: number, unit: string, planned: number) => {
     const minutes = capacity(node);

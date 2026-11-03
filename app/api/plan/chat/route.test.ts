@@ -8,7 +8,7 @@ vi.mock("@/lib/db/credits", () => ({ getAppSpendUsd: vi.fn() }));
 vi.mock("@/lib/db/client", () => ({ db: {} }));
 vi.mock("@/lib/db/generationLog", () => ({ insertGenerationLog: vi.fn() }));
 vi.mock("@/lib/ai/userKeyError", () => ({ guardUserKey: (events: AsyncIterable<unknown>) => events }));
-vi.mock("@/lib/ai/planChat", () => ({ runPlanChat: vi.fn(async function* () {}) }));
+vi.mock("@/lib/ai/planChat", () => ({ CHAT_REDRAFT_BUDGET_MS: 1000, runPlanChat: vi.fn(async function* () {}) }));
 
 import { runPlanChat } from "@/lib/ai/planChat";
 import { resolveModels, type ResolvedModel, type ResolvedModels } from "@/lib/ai/resolve";
@@ -61,6 +61,8 @@ describe("POST /api/plan/chat", () => {
     expect(res.status).toBe(200);
     await res.text();
     expect(runPlanChat).toHaveBeenCalledOnce();
+    // The turn's re-draft deadline is taken when the request arrives.
+    expect(vi.mocked(runPlanChat).mock.calls[0][1]?.deadline).toEqual(expect.any(Number));
   });
 
   it("is not checked when the user's key pays for chat and outline", async () => {

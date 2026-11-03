@@ -5,6 +5,7 @@ import {
   formatAliases,
   itemAliases,
   itemRun,
+  leafActivities,
   pickSources,
   pickedFormats,
   placedMinutes,
@@ -12,7 +13,6 @@ import {
   planTotals,
   practiceBudgets,
   reservedRuns,
-  tierMinutes,
   unitBudgets,
   weekPracticeTime,
   type MaterialAliases,
@@ -349,10 +349,12 @@ export interface UnitsPromptInput extends PlanPromptContext {
   unitsAreLeaves: boolean;
 }
 
-/** The fixed units (`keep`) in a tree of their own, for their labels and what they hold; null without any. */
+const keptTrees = new WeakMap<UnitsPromptInput, PlanNode | null>();
+
+/** The fixed units (`keep`) in a tree of their own, for their labels and what they hold; null without any. Built once per prompt input. */
 function keptTree(input: UnitsPromptInput): PlanNode | null {
-  if (input.parentId || !input.keep || input.keep.length === 0) return null;
-  return makeRoot(input.keep.map((n) => cloneTree(n)));
+  if (!keptTrees.has(input)) keptTrees.set(input, input.parentId || !input.keep || input.keep.length === 0 ? null : makeRoot(input.keep.map((n) => cloneTree(n))));
+  return keptTrees.get(input)!;
 }
 
 /**
@@ -365,15 +367,7 @@ function keptTime(input: UnitsPromptInput): UnitTime | null {
   const out: UnitTime = { reading: 0, practice: {} };
   const add = (format: PracticeFormat, minutes: number) => void (out.practice[format] = (out.practice[format] ?? 0) + minutes);
   for (const unit of tree.children ?? []) {
-    if (input.unitsAreLeaves) {
-      walk(unit, (n) => {
-        if ((n.children?.length ?? 0) > 0) return;
-        out.reading += tierMinutes(n.materials).must;
-        for (const r of n.practice ?? []) add(r.format, r.minutes);
-      });
-      continue;
-    }
-    const time = unitBudgets(tree, unit, input);
+    const time = input.unitsAreLeaves ? leafActivities(unit) : unitBudgets(tree, unit, input);
     out.reading += time.reading;
     for (const [format, minutes] of Object.entries(time.practice) as [PracticeFormat, number][]) add(format, minutes);
   }

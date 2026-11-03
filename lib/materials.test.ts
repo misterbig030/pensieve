@@ -1346,7 +1346,7 @@ describe("sizeItemRuns: code sizes a listed source's runs on headings", () => {
     const items = Array.from({ length: 52 }, (_, i) => ({ title: `Problem ${i + 1}`, number: String(i + 1), group: null, difficulty: null, url: null, solutionUrl: null, minutes: 10 }));
     const neet = [{ id: "P", practice: { format: "problem-set" as const, items: 52, totalItems: 52, perItemMinutes: 10, minutes: 520, answers: true, list: { items, source: "file" as const, url: "https://example.com/p.json" } } }];
     const nodes = weeks(4, () => [chosen()]).map((n, i) => ({ ...n, time: { reading: 60, practice: { "problem-set": [180, 180, 60, 0][i] } } }));
-    expect(size(nodes, layout(makeRoot(nodes)), neet)).toEqual([]);
+    expect(size(nodes, layout(makeRoot(nodes)), neet)).toEqual(["dropped M1 from Week 4: no Problems time"]);
     expect(nodes.map((n) => positionsOf(n).length)).toEqual([22, 23, 7, 0]);
     expect(nodes.flatMap(positionsOf)).toEqual(Array.from({ length: 52 }, (_, i) => i + 1));
     expect(nodes[3].practiceCovers).toBeUndefined();

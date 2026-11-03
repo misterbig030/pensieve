@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -103,20 +103,23 @@ function LeafRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx
 }
 
 /** A unit's time, and its problems one to a line, muted under its row and lined up with its title. */
-function UnitNotes({ node, depth, leaf }: { node: PlanNode; depth: number; leaf: boolean }) {
-  const time = node.time ? formatUnitTime(node.time) : "";
-  const problems = node.problems ?? [];
-  if (!time && problems.length === 0) return null;
+/** Small muted lines under a unit, or the whole plan: its time and the problems the checks found. */
+export function NoteLines({ lines, className, style }: { lines: string[]; className?: string; style?: CSSProperties }) {
+  if (lines.length === 0) return null;
   return (
-    <div className="-mt-1 flex min-w-0 flex-col gap-0.5 pr-3 pb-1 text-[11.5px] text-muted-foreground" style={{ paddingLeft: 12 + depth * 16 + 60 + (leaf ? 24 : 0) }}>
-      {time && <p className="m-0">{time}</p>}
-      {problems.map((line, i) => (
+    <div className={cn("flex min-w-0 flex-col gap-0.5 text-[11.5px] text-muted-foreground", className)} style={style}>
+      {lines.map((line, i) => (
         <p key={i} className="m-0">
           {line}
         </p>
       ))}
     </div>
   );
+}
+
+function UnitNotes({ node, depth, leaf }: { node: PlanNode; depth: number; leaf: boolean }) {
+  const lines = [...(node.time ? [formatUnitTime(node.time)] : []), ...(node.problems ?? [])];
+  return <NoteLines lines={lines} className="-mt-1 pr-3 pb-1" style={{ paddingLeft: 12 + depth * 16 + 60 + (leaf ? 24 : 0) }} />;
 }
 
 function UnitRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx }) {

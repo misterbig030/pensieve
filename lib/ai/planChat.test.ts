@@ -8,7 +8,7 @@ vi.mock("./planRevision", async (importOriginal) => ({ ...(await importOriginal<
 
 import { streamText } from "ai";
 import type { ModelCall } from "./logged";
-import { runPlanChat, type PlanChatInput } from "./planChat";
+import { CHAT_REDRAFT_BUDGET_MS, runPlanChat, type PlanChatInput } from "./planChat";
 import { DRAFT_BUDGET_MS } from "./planDraft";
 import { NothingToRedraftError, redraftPlan } from "./planRedraft";
 import { LockedNodeError, revisePlanTree } from "./planRevision";
@@ -162,15 +162,22 @@ describe("the redraftPlan tool", () => {
     expect(mockedRedraft.mock.calls[0][0].lockBefore).toBe(2);
   });
 
-  it("gives the re-draft the draft's time budget, as the re-draft route does", async () => {
+  it("gives the re-draft the turn's deadline, taken before the chat model's first step", async () => {
     const tree = weeksTree();
     mockedRedraft.mockResolvedValue({ tree: redrafted(tree), problems: [], costUsd: 0 });
     script([{ tool: "redraftPlan", input: { scope: "plan", unit: null } }]);
+    const turn = runPlanChat(request(tree), { model: chat, deadline: 12345 });
+    while (!(await turn.next()).done);
+    expect(mockedRedraft.mock.calls[0][0].deadline).toBe(12345);
+
+    // With none given, the budget runs from the turn's start, leaving room for the answer after the tool.
+    script([{ tool: "redraftPlan", input: { scope: "plan", unit: null } }]);
     const startedAt = Date.now();
     await run(request(tree));
-    const deadline = mockedRedraft.mock.calls[0][0].deadline!;
-    expect(deadline).toBeGreaterThanOrEqual(startedAt + DRAFT_BUDGET_MS);
-    expect(deadline).toBeLessThanOrEqual(Date.now() + DRAFT_BUDGET_MS);
+    const deadline = mockedRedraft.mock.calls[1][0].deadline!;
+    expect(deadline).toBeGreaterThanOrEqual(startedAt + CHAT_REDRAFT_BUDGET_MS);
+    expect(deadline).toBeLessThanOrEqual(Date.now() + CHAT_REDRAFT_BUDGET_MS);
+    expect(CHAT_REDRAFT_BUDGET_MS).toBeLessThan(DRAFT_BUDGET_MS);
   });
 
   it("yields no revised, and makes no model call, for an unknown unit", async () => {

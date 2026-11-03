@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ActionError } from "@/components/pensieve/leaf/ActionError";
 import type { Granularity, PlanNode } from "@/lib/planTree";
 import { usePlanning } from "./usePlanning";
-import { Row, Skeletons, openUnits, type Ctx, type Planning } from "./OutlineRows";
+import { NoteLines, Row, Skeletons, openUnits, type Ctx, type Planning } from "./OutlineRows";
 
 interface Props {
   trackId: string;
@@ -82,15 +82,7 @@ export function PlanOutline({ trackId, root, granularity, daysPerWeek, selectedI
 
   return (
     <nav aria-label="Plan outline" className="flex flex-col gap-0.5">
-      {(root.problems?.length ?? 0) > 0 && (
-        <div className="flex flex-col gap-0.5 px-3 pb-2 text-[11.5px] text-muted-foreground">
-          {root.problems!.map((line, i) => (
-            <p key={i} className="m-0">
-              {line}
-            </p>
-          ))}
-        </div>
-      )}
+      <NoteLines lines={root.problems ?? []} className="px-3 pb-2" />
       {(root.children ?? []).map((node) => (
         <Row key={node.id} node={node} depth={0} ctx={ctx} />
       ))}

@@ -68,7 +68,14 @@ export interface RunPlanChatOptions {
   model?: ResolvedModel;
   /** The model the revision tool drafts with; the app's outline model when omitted. */
   outlineModel?: ResolvedModel;
+  /** When a re-draft must be done, taken at the request's start; `CHAT_REDRAFT_BUDGET_MS` from the turn's start when omitted. */
+  deadline?: number;
 }
+
+/** Kept back from the draft's budget for the answer the chat model writes after a re-draft. */
+const ANSWER_RESERVE_MS = 20_000;
+/** A turn's re-draft budget: the draft's, less the answer that follows it inside the route's 300 s. */
+export const CHAT_REDRAFT_BUDGET_MS = DRAFT_BUDGET_MS - ANSWER_RESERVE_MS;
 
 /**
  * Runs one conversation turn. The model answers questions as text and calls `revisePlan` for changes; the tool runs
@@ -80,6 +87,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
   const chat = options.model ?? appModel(DEFAULT_CHAT_MODEL);
   const log = options.log;
   const startedAt = performance.now();
+  const deadline = options.deadline ?? Date.now() + CHAT_REDRAFT_BUDGET_MS;
   const tree = layout(cloneTree(req.tree));
   const lockBefore = req.mode === "adjust" ? (req.lockBefore ?? 0) : 0;
 
@@ -167,7 +175,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
           outlineModel: options.outlineModel,
           log,
           // As the re-draft route does: the first branch is planned only while the request has time.
-          deadline: Date.now() + DRAFT_BUDGET_MS,
+          deadline,
         });
         return settle(result);
       } catch (error) {

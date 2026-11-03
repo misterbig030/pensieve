@@ -4,7 +4,7 @@ import { z } from "zod";
 import { isAdmin } from "@/lib/admin";
 import { withCallEvents } from "@/lib/ai/callEvents";
 import { creditRefusal } from "@/lib/ai/creditGate";
-import { runPlanChat } from "@/lib/ai/planChat";
+import { CHAT_REDRAFT_BUDGET_MS, runPlanChat } from "@/lib/ai/planChat";
 import { db } from "@/lib/db/client";
 import { insertGenerationLog } from "@/lib/db/generationLog";
 import { tracks } from "@/lib/db/schema";
@@ -18,7 +18,7 @@ import { weeksOf } from "@/lib/planTree";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema, planSplitSchema } from "@/lib/studyTime";
 
 // A turn may re-draft the plan (`redraftPlan`), which runs the outline as a new draft does: the top level, then the first
-// unit's branch, inside `DRAFT_BUDGET_MS` rather than past this limit.
+// unit's branch, inside `CHAT_REDRAFT_BUDGET_MS` from the request's start rather than past this limit.
 export const maxDuration = 300;
 
 const bodySchema = z.object({
@@ -41,6 +41,7 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const deadline = Date.now() + CHAT_REDRAFT_BUDGET_MS;
   const { userId } = await auth();
   if (!userId) return new Response("Not authenticated", { status: 401 });
 
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
       guardUserKey(
         runPlanChat(
           { ...body, weeks: weeksOf(tree, tree, daysPerWeek), daysPerWeek, instructions: body.instructions || undefined, hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK, split: body.split ?? null, tree },
-          { log, model: models.chat, outlineModel: models.outline },
+          { log, model: models.chat, outlineModel: models.outline, deadline },
         ),
         { userId, models },
       ),

@@ -223,7 +223,7 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
   const model = input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL);
   const aliases = input.materials.length > 0 ? aliasMaterials(input.materials) : undefined;
   // The formats a heading's time may name, as drafting has them: the split's picks the plan's sources can be given.
-  const picked = pickedFormats(input.split, input.materials.length > 0 ? input.materials : undefined);
+  const picked = pickedFormats(input.split, input.materials);
   let revised: PlanNode | null = null;
   let problems: string[] = [];
   let failure: unknown;

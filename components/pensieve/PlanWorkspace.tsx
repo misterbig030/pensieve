@@ -168,6 +168,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [split, setSplit] = useState<PlanSplit | null>(props.initialSplit ?? null);
   const hoursRef = useRef(hoursPerWeek);
   const daysRef = useRef(daysPerWeek);
+  // The hours and split the tree was drafted for: a re-draft for a time change that fails puts the pickers back to them.
+  const draftedTime = useRef({ hoursPerWeek, split });
 
   const railOpenRef = useRef(railOpen);
   const draftStarted = useRef(false);
@@ -322,11 +324,12 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const summary = drafting ? "" : summarizePlan(tree, topic, daysPerWeek, note || undefined);
 
   // A re-draft is built when it fires, from the workspace as it is then (a days change may have come since).
-  const redraftFrom = useRef<() => { tree: PlanNode; summaryNote: string; body: PlanRedraftRequest }>(null);
+  const redraftFrom = useRef<() => { tree: PlanNode; summaryNote: string; time: typeof draftedTime.current; body: PlanRedraftRequest }>(null);
   useEffect(() => {
     redraftFrom.current = () => ({
       tree,
       summaryNote,
+      time: { hoursPerWeek, split },
       body: {
         mode,
         topic,
@@ -348,13 +351,14 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const lastChange = useRef<RedraftChange | null>(null);
   const redraft = useRef<RedraftScheduler<RedraftChange>>(null);
   useEffect(() => {
-    const scheduler = createRedraftScheduler<RedraftChange, { before: PlanNode; prevNote: string; result: RedraftResult }>({
+    const scheduler = createRedraftScheduler<RedraftChange, { before: PlanNode; prevNote: string; result: RedraftResult; time: typeof draftedTime.current }>({
       run: async (_change, signal) => {
         const from = redraftFrom.current!();
         const result = await requestRedraft(from.body, { signal, onCall: (call) => pushModelCalls([call]) });
-        return { before: from.tree, prevNote: from.summaryNote, result };
+        return { before: from.tree, prevNote: from.summaryNote, result, time: from.time };
       },
-      onDone: (change, { before, prevNote, result }) => {
+      onDone: (change, { before, prevNote, result, time }) => {
+        draftedTime.current = time;
         // As a chat revision lands: the learner can undo it, and confirming saves the new tree's problems.
         const applied = applyRedraft({ tree: before, summaryNote: prevNote }, change, result);
         setTree(applied.tree);
@@ -366,9 +370,14 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         refreshCredits();
       },
       onFail: (_change, err) => {
+        // The open weeks still have the time they were drafted with, so the pickers go back to it.
+        const back = draftedTime.current;
+        setHoursPerWeek(back.hoursPerWeek);
+        setSplit(back.split);
+        const kept = `The plan keeps the time it was drafted for: ${back.hoursPerWeek} h a week.`;
         const resetsAt = refusedResetsAt(err);
         if (resetsAt) setOutOfCredits({ resetsAt, from: "chat" });
-        else setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: err instanceof Error ? err.message : "The re-draft failed. Try again." }]);
+        setMessages((ms) => [...ms, { id: nextMessageId(), kind: "sys", text: `${resetsAt || !(err instanceof Error) ? "The re-draft failed." : err.message} ${kept}` }]);
         if (!railOpenRef.current) setUnread(true);
         refreshCredits();
       },
@@ -650,6 +659,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setHoursPerWeek(hours);
     const set = `Time set to ${hours} h a week, about ${totalHours(planWeeks, hours)} hours in all.`;
     if (!hasPlan) {
+      draftedTime.current = { ...draftedTime.current, hoursPerWeek: hours };
       setTimeNote(`${set} Units planned from here on use it.`);
       return;
     }
@@ -673,6 +683,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     const drafted = draftedSplit(next, materials);
     const set = `The plan now spends about ${drafted.readingShare}% of your time reading${isAllReading(drafted) ? "" : ` and the rest on ${practiceLabelOf(drafted)}`}.`;
     if (!hasPlan) {
+      draftedTime.current = { ...draftedTime.current, split: next };
       setTimeNote(`${set} Units planned from here on follow it.`);
       return;
     }
