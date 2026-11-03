@@ -151,6 +151,24 @@ export type PlanChatEvent =
   | { type: "error"; message: string; code?: KeyErrorKind }
   | CallEvent;
 
+/**
+ * Request body for POST /api/plan/redraft: the chat's body without a transcript, and what to re-draft. The hours and
+ * split pickers always re-draft the whole open plan.
+ */
+export interface PlanRedraftRequest extends Omit<PlanChatRequest, "transcript"> {
+  scope: { kind: "plan" };
+}
+
+/**
+ * Events streamed back from POST /api/plan/redraft. `problems`: what the checks found in every level the re-draft
+ * planned, in the learner's words (none: empty). An `error` with nothing to re-draft, or a unit locked, leaves the plan
+ * as it was; its message is the learner's.
+ */
+export type PlanRedraftEvent =
+  | { type: "redrafted"; tree: PlanNode; problems: string[]; costUsd: number }
+  | { type: "error"; message: string; code?: KeyErrorKind }
+  | CallEvent;
+
 let counter = 0;
 export function nextMessageId(): string {
   counter += 1;
