@@ -30,13 +30,15 @@ export interface RedraftScheduler<T> {
 /**
  * One re-draft at a time, for the latest value. A change inside the window replaces the pending one; a change while a
  * re-draft runs aborts it (its answer, or its failure, is ignored) and schedules a new one. `onBusy` is true from a
- * change until the last re-draft settles.
+ * change until the last re-draft settles, even when `onDone` or `onFail` throws; that error goes to `onError`
+ * (`console.error` when omitted).
  */
 export function createRedraftScheduler<T, R>(options: {
   run: (value: T, signal: AbortSignal) => Promise<R>;
   onDone: (value: T, result: R) => void;
   onFail: (value: T, error: unknown) => void;
   onBusy: (busy: boolean) => void;
+  onError?: (error: unknown) => void;
   delay?: number;
 }): RedraftScheduler<T> {
   const delay = options.delay ?? REDRAFT_DEBOUNCE_MS;
@@ -54,20 +56,23 @@ export function createRedraftScheduler<T, R>(options: {
     timer = null;
     const controller = new AbortController();
     running = controller;
-    options.run(value, controller.signal).then(
-      (result) => {
-        if (controller.signal.aborted) return;
-        running = null;
-        options.onDone(value, result);
+    // An aborted run settles nothing: the change that aborted it owns the busy state.
+    const settle = (put: () => void) => {
+      if (controller.signal.aborted) return;
+      running = null;
+      try {
+        put();
+      } finally {
         options.onBusy(false);
-      },
-      (error: unknown) => {
-        if (controller.signal.aborted) return;
-        running = null;
-        options.onFail(value, error);
-        options.onBusy(false);
-      },
-    );
+      }
+    };
+    options
+      .run(value, controller.signal)
+      .then(
+        (result) => settle(() => options.onDone(value, result)),
+        (error: unknown) => settle(() => options.onFail(value, error)),
+      )
+      .catch(options.onError ?? ((error: unknown) => console.error(error)));
   };
 
   return {

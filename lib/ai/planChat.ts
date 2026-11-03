@@ -6,7 +6,7 @@ import { childLevel, cloneTree, labelOf, layout, parentOf, walk, weeksOf, type P
 import { buildGenerationLogRow, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { DEFAULT_CHAT_MODEL } from "./models";
 import { buildPlanChatSystemPrompt, renderTree } from "./planPrompt";
-import { unitsAreLeaves } from "./planDraft";
+import { DRAFT_BUDGET_MS, unitsAreLeaves } from "./planDraft";
 import { NothingToRedraftError, redraftPlan, type RedraftScope } from "./planRedraft";
 import { LockedNodeError, revisePlanTree } from "./planRevision";
 import { appModel, type ResolvedModel } from "./resolve";
@@ -166,6 +166,8 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
           scope: target,
           outlineModel: options.outlineModel,
           log,
+          // As the re-draft route does: the first branch is planned only while the request has time.
+          deadline: Date.now() + DRAFT_BUDGET_MS,
         });
         return settle(result);
       } catch (error) {

@@ -17,6 +17,10 @@ import { materialListSchema } from "@/lib/schemas/material";
 import { weeksOf } from "@/lib/planTree";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, daysPerWeekSchema, hoursPerWeekSchema, planSplitSchema } from "@/lib/studyTime";
 
+// A turn may re-draft the plan (`redraftPlan`), which runs the outline as a new draft does: the top level, then the first
+// unit's branch, inside `DRAFT_BUDGET_MS` rather than past this limit.
+export const maxDuration = 300;
+
 const bodySchema = z.object({
   mode: z.enum(["create", "adjust"]),
   topic: z.string().trim().min(1).max(200),

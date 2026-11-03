@@ -9,6 +9,7 @@ vi.mock("./planRevision", async (importOriginal) => ({ ...(await importOriginal<
 import { streamText } from "ai";
 import type { ModelCall } from "./logged";
 import { runPlanChat, type PlanChatInput } from "./planChat";
+import { DRAFT_BUDGET_MS } from "./planDraft";
 import { NothingToRedraftError, redraftPlan } from "./planRedraft";
 import { LockedNodeError, revisePlanTree } from "./planRevision";
 import type { ResolvedModel } from "./resolve";
@@ -159,6 +160,17 @@ describe("the redraftPlan tool", () => {
     script([{ tool: "redraftPlan", input: { scope: "plan", unit: null } }]);
     await run(request(tree, { mode: "adjust", lockBefore: 2 }));
     expect(mockedRedraft.mock.calls[0][0].lockBefore).toBe(2);
+  });
+
+  it("gives the re-draft the draft's time budget, as the re-draft route does", async () => {
+    const tree = weeksTree();
+    mockedRedraft.mockResolvedValue({ tree: redrafted(tree), problems: [], costUsd: 0 });
+    script([{ tool: "redraftPlan", input: { scope: "plan", unit: null } }]);
+    const startedAt = Date.now();
+    await run(request(tree));
+    const deadline = mockedRedraft.mock.calls[0][0].deadline!;
+    expect(deadline).toBeGreaterThanOrEqual(startedAt + DRAFT_BUDGET_MS);
+    expect(deadline).toBeLessThanOrEqual(Date.now() + DRAFT_BUDGET_MS);
   });
 
   it("yields no revised, and makes no model call, for an unknown unit", async () => {

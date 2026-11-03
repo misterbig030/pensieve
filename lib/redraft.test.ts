@@ -124,6 +124,32 @@ describe("createRedraftScheduler", () => {
     await vi.advanceTimersByTimeAsync(REDRAFT_DEBOUNCE_MS);
     expect(busy.at(-1)).toBe(false);
   });
+
+  it("is no longer busy when putting the answer in, or the failure, throws; the error is reported", async () => {
+    for (const fails of [false, true]) {
+      const busy: boolean[] = [];
+      const onError = vi.fn();
+      const broken = new Error("render failed");
+      const scheduler = createRedraftScheduler<number, string>({
+        run: async () => {
+          if (fails) throw new Error("server down");
+          return "ok";
+        },
+        onDone: () => {
+          throw broken;
+        },
+        onFail: () => {
+          throw broken;
+        },
+        onBusy: (b) => busy.push(b),
+        onError,
+      });
+      scheduler.schedule(7);
+      await vi.advanceTimersByTimeAsync(REDRAFT_DEBOUNCE_MS);
+      expect(busy).toEqual([true, false]);
+      expect(onError).toHaveBeenCalledWith(broken);
+    }
+  });
 });
 
 describe("requestRedraft", () => {
