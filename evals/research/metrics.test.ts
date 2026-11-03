@@ -51,9 +51,7 @@ describe("checkCounts", () => {
         call(["4 of 4 units", "dropped unknown M9, M12"]),
         call(["Week 2 over budget: 400 of 360 min", "backbone ch. 2 after ch. 3 (Week 2)", "backbone ch. 3, 4 not reserved"]),
       ]),
-    ).toEqual({ unknownRefs: 2, overBudgetLeaves: 1, chapterRegressions: 1, unreservedChapters: 1, overShareLeaves: 0 });
-    // Must-reading over the week's reading budget, a leaf week's or a week's days together.
-    expect(checkCounts([call(["breach: Week 1's must-reading is 250 min against a budget of about 180 min", "breach: Week 2's Problems practice is 130 min against a budget of about 90 min"])]).overShareLeaves).toBe(1);
+    ).toEqual({ unknownRefs: 2, overBudgetLeaves: 1, chapterRegressions: 1, unreservedChapters: 1 });
   });
 });
 
@@ -78,7 +76,7 @@ describe("practice metrics", () => {
 describe("decide", () => {
   const run = (arm: "A" | "C", verifiedRate: number, backbone: boolean): RunMetrics => ({
     recordId: "r", arm, run: 1, verifiedRate, proposed: 10, verified: 5, backboneHit: backbone, mustIncludeRecall: null, recency: 0,
-    notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0, overShareLeaves: 0,
+    notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0,
     sizedHours: 36, totalHours: 72, measuredShare: 0.5, unsizedShare: 0, coverage: null, costUsd: 0, latencyMs: 0,
     researchMs: 0, toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: null, picks: [], formatHit: null, practiceSourcedShare: null, openPicks: null,
   });
@@ -106,7 +104,7 @@ describe("decideWorkers", () => {
   /** Research takes `researchMs`; the plan draft adds 40 s to every run, the same for both arms. */
   const run = (arm: ArmName, researchMs: number, costUsd: number, backbone: boolean | null, recall: number | null): RunMetrics => ({
     recordId: "r", arm, run: 1, verifiedRate: 0.7, proposed: 10, verified: 7, backboneHit: backbone, mustIncludeRecall: recall, recency: 0,
-    notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0, overShareLeaves: 0,
+    notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0,
     sizedHours: 36, totalHours: 72, measuredShare: 0.5, unsizedShare: 0, coverage: null, costUsd, latencyMs: researchMs + 40_000, researchMs,
     toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: null, picks: [], formatHit: null, practiceSourcedShare: null, openPicks: null,
   });
@@ -163,7 +161,7 @@ describe("chaptersSource", () => {
   };
   const run = (backbone: boolean | null, source: "catalogue" | "page" | null): RunMetrics => ({
     recordId: "r", arm: "A", run: 1, verifiedRate: 0.7, proposed: 10, verified: 7, backboneHit: backbone, mustIncludeRecall: null, recency: 0,
-    notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0, overShareLeaves: 0,
+    notice: null, unknownRefs: 0, overBudgetLeaves: 0, chapterRegressions: 0, unreservedChapters: 0,
     sizedHours: 36, totalHours: 72, measuredShare: 0.5, unsizedShare: 0, coverage: null, costUsd: 0, latencyMs: 0, researchMs: 0,
     toolCalls: { searches: 0, fetches: 0, steps: 0 }, stoppedBy: null, workers: null, duplicateShare: null, chaptersSource: source, picks: [], formatHit: null, practiceSourcedShare: null, openPicks: null,
   });

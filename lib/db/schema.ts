@@ -18,6 +18,7 @@ import { SOURCE_TYPES } from "@/lib/schemas/source";
 import { PRACTICE_FORMATS } from "@/lib/practice";
 import { MATERIAL_KINDS, MATERIAL_ORIGINS, MATERIAL_TIERS, MINUTES_BASES, type ChapterList, type MaterialPractice, REF_ACTIVITIES } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
+import type { UnitTime } from "@/lib/schemas/plan";
 
 /**
  * One row per Clerk user, for what Pensieve itself knows about them; Clerk keeps their identity and profile. A row is
@@ -56,6 +57,8 @@ export const tracks = pgTable("tracks", {
   daysPerWeek: integer("days_per_week").notNull().default(7),
   /** How the plan divides that time between reading and practice. Null on plans drafted before it existed. */
   split: jsonb("split").$type<PlanSplit>(),
+  /** Learner lines for the code-checked problems of the plan's top level. Null when there are none. */
+  problems: jsonb("problems").$type<string[]>(),
   status: text("status", { enum: ["active", "completed", "archived"] })
     .notNull()
     .default("active"),
@@ -133,6 +136,10 @@ export const planNodes = pgTable(
     budgetHours: integer("budget_hours"),
     /** True when the learner split a week leaf into days by hand. */
     manualSplit: boolean("manual_split").notNull().default(false),
+    /** Headings: minutes per activity the outline gave this unit. Null on plans drafted before it existed. */
+    time: jsonb("time").$type<UnitTime>(),
+    /** Learner lines for the code-checked problems of the level planned inside this node. Null when there are none. */
+    problems: jsonb("problems").$type<string[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("plan_nodes_track_idx").on(t.trackId), index("plan_nodes_parent_idx").on(t.parentId)],

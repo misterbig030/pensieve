@@ -207,6 +207,23 @@ describe("item lists", () => {
     expect(promptOf(model, 0)).toContain('Records at path \\"groups[].problems\\": 4');
   });
 
+  it("maps a file keyed by group and title, taking each title and group from the keys", async () => {
+    // The NeetCode list's shape: { group: { title: { fields } } }.
+    const keyed = JSON.stringify({
+      Arrays: { "Two Sum": { difficulty: "Easy" }, "Valid Anagram": { difficulty: "Easy" } },
+      Trees: { "Invert Binary Tree": { difficulty: "Easy" }, "Same Tree": { difficulty: "Easy" } },
+    });
+    const model = answers({ ...MAPPING, path: "*.*", title: "_key", group: "../_key", difficulty: "difficulty", url: null, solutionUrl: null });
+    const list = (await run(model, fileRead(keyed)).found).list!;
+    expect(list.items.map((i) => [i.title, i.group])).toEqual([
+      ["Two Sum", "Arrays"],
+      ["Valid Anagram", "Arrays"],
+      ["Invert Binary Tree", "Trees"],
+      ["Same Tree", "Trees"],
+    ]);
+    expect(promptOf(model, 0)).toContain('Records at path \\"*.*\\": 4');
+  });
+
   it("shows the model a sample of a large file and lists every record from code", async () => {
     const big = JSON.stringify(Array.from({ length: 300 }, (_, i) => ({ problem: `Problem number ${i + 1}`, pattern: `Group ${Math.floor(i / 30)}` })));
     const model = answers({ ...MAPPING, difficulty: null, url: null, solutionUrl: null });

@@ -76,6 +76,8 @@ export function rowsToTree(rows: PlanNodeRow[], materialRows: NodeMaterialRow[] 
       budgetHours: row.budgetHours,
       manualSplit: row.manualSplit,
       children: kids.length > 0 ? kids.map(build) : null,
+      ...(row.time ? { time: row.time } : {}),
+      ...(row.problems?.length ? { problems: row.problems } : {}),
       ...(refs.get(row.id)?.covers.length ? { covers: refs.get(row.id)!.covers } : {}),
       ...(refs.get(row.id)?.materials.length ? { materials: refs.get(row.id)!.materials } : {}),
       ...(practice.get(row.id)?.covers.length ? { practiceCovers: practice.get(row.id)!.covers } : {}),
@@ -219,6 +221,8 @@ export function flattenTree(
       status: node.status,
       budgetHours: node.budgetHours,
       manualSplit: node.manualSplit,
+      time: node.time ?? null,
+      problems: node.problems?.length ? node.problems : null,
     });
     materials.push(...refRows(idFor(node), node, sourceIds));
     practice.push(...practiceRows(idFor(node), node, sourceIds));
@@ -299,6 +303,8 @@ export async function replacePlanTree(trackId: string, userId: string, root: Pla
             len: row.len,
             budgetHours: row.budgetHours,
             manualSplit: row.manualSplit,
+            time: row.time,
+            problems: row.problems,
           })
           .where(eq(planNodes.id, row.id!));
       } else {
@@ -316,7 +322,7 @@ export async function replacePlanTree(trackId: string, userId: string, root: Pla
 }
 
 /** Plans a heading in detail (or splits a week leaf into days): inserts the children under `parentId`. */
-export async function insertChildren(trackId: string, userId: string, parentId: string, children: PlanNode[], manualSplit = false): Promise<void> {
+export async function insertChildren(trackId: string, userId: string, parentId: string, children: PlanNode[], manualSplit = false, problems: string[] = []): Promise<void> {
   const parent = await getOwnedNode(parentId, userId);
   if (!parent || parent.trackId !== trackId) throw new Error("Plan node not found for this user");
   await db.transaction(async (tx) => {
@@ -338,6 +344,8 @@ export async function insertChildren(trackId: string, userId: string, parentId: 
         .set({ role: "covers" })
         .where(and(eq(nodePractice.nodeId, parentId), eq(nodePractice.role, "assigned")));
     }
+    // The level planned inside this node has its problems saved on the node.
+    await tx.update(planNodes).set({ problems: problems.length > 0 ? problems : null }).where(eq(planNodes.id, parentId));
     const rows: NewPlanNodeRow[] = children.map((child, i) => ({
       id: crypto.randomUUID(),
       trackId,
@@ -350,6 +358,8 @@ export async function insertChildren(trackId: string, userId: string, parentId: 
       status: "pending" as const,
       budgetHours: child.budgetHours,
       manualSplit: false,
+      time: child.time ?? null,
+      problems: child.problems?.length ? child.problems : null,
     }));
     for (let i = 0; i < rows.length; i += 200) await tx.insert(planNodes).values(rows.slice(i, i + 200));
     const sourceIds = await trackSourceIds(tx, trackId);

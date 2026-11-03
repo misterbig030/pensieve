@@ -5,24 +5,31 @@ import {
   formatAliases,
   itemAliases,
   itemRun,
+  leafActivities,
   pickSources,
+  pickedFormats,
   placedMinutes,
   planBlockBudgets,
+  planTotals,
   practiceBudgets,
   reservedRuns,
+  unitBudgets,
   weekPracticeTime,
   type MaterialAliases,
   type PickSources,
   type ResolvedAlias,
+  type UnitBudgets,
 } from "@/lib/materials";
 import { PRACTICE_REGISTRY, blockMinutes, formatRuns, isBlockFormat, itemMinutes, itemPositions, listGroups, type PracticeFormat, type PracticeGenerated } from "@/lib/practice";
 import {
   budgetFor,
   capitalize,
   childLevel,
+  cloneTree,
   findNode,
   fullLabelOf,
   labelOf,
+  makeRoot,
   parentOf,
   spanOf,
   walk,
@@ -32,7 +39,8 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import { hostOf, type ChapterList, type CoverRef, type Material, type MaterialPractice, type MaterialRef, type PracticeCover, type PracticeList, type PracticeRef, type RefActivity } from "@/lib/schemas/material";
-import { dayMinutes, isAllReading, practiceLabelOf, weeksLabel, type PlanSplit } from "@/lib/studyTime";
+import type { UnitTime } from "@/lib/schemas/plan";
+import { dayMinutes, formatDayTime, formatUnitTime, isAllReading, practiceLabelOf, weeksLabel, type PlanSplit } from "@/lib/studyTime";
 
 export interface PlanPromptContext {
   topic: string;
@@ -134,7 +142,10 @@ export function renderRefs(node: Pick<PlanNode, "covers" | "materials" | "practi
   return parts.join(" · ");
 }
 
-/** Renders the tree as indented text the model can read: labels, spans, titles, summaries, done/locked marks. */
+/**
+ * Renders the tree as indented text the model can read: labels, spans, titles, summaries, done/locked marks, a
+ * heading's time ("<time: 2 h 30 min reading · 3 h Problems>") and, with aliases, its references.
+ */
 export function renderTree(root: PlanNode, opts: RenderTreeOptions): string {
   const lines: string[] = [];
   walk(root, (node, parent) => {
@@ -151,8 +162,9 @@ export function renderTree(root: PlanNode, opts: RenderTreeOptions): string {
     const prefix = opts.markId === node.id ? ">> " : "";
     const label = labelOf(root, node);
     const span = node.level === "day" ? "" : ` (${spanOf(root, node, opts.daysPerWeek)})`;
+    const time = node.time ? ` <time: ${formatUnitTime(node.time)}>` : "";
     const refs = opts.aliases ? renderRefs(node, opts.aliases) : "";
-    lines.push(`${indent}${prefix}${label}${ref ? ` [${ref}]` : ""}${span}: "${node.title}" — ${node.summary}${mark}${refs ? ` {${refs}}` : ""}`);
+    lines.push(`${indent}${prefix}${label}${ref ? ` [${ref}]` : ""}${span}: "${node.title}" — ${node.summary}${mark}${time}${refs ? ` {${refs}}` : ""}`);
     void parent;
   });
   return lines.join("\n");
@@ -328,8 +340,49 @@ export interface UnitsPromptInput extends PlanPromptContext {
   /** When expanding, the tree so far and the node being planned. */
   tree?: PlanNode;
   parentId?: string;
+  /**
+   * Top level only: the plan's first units, done or started, which stay as they are (a re-draft). The units being
+   * written come after them, share what is left of the plan's time, and may not take what these hold.
+   */
+  keep?: PlanNode[];
   /** True when the units are the finest level the learner will work at (they get content and check-ins). */
   unitsAreLeaves: boolean;
+}
+
+const keptTrees = new WeakMap<UnitsPromptInput, PlanNode | null>();
+
+/** The fixed units (`keep`) in a tree of their own, for their labels and what they hold; null without any. Built once per prompt input. */
+function keptTree(input: UnitsPromptInput): PlanNode | null {
+  if (!keptTrees.has(input)) keptTrees.set(input, input.parentId || !input.keep || input.keep.length === 0 ? null : makeRoot(input.keep.map((n) => cloneTree(n))));
+  return keptTrees.get(input)!;
+}
+
+/**
+ * The minutes the fixed units take per activity: a heading's stated time (or, from before units stated it, its share of
+ * the split), a leaf's must-reading and practice rows. Null without fixed units.
+ */
+function keptTime(input: UnitsPromptInput): UnitTime | null {
+  const tree = keptTree(input);
+  if (!tree) return null;
+  const out: UnitTime = { reading: 0, practice: {} };
+  const add = (format: PracticeFormat, minutes: number) => void (out.practice[format] = (out.practice[format] ?? 0) + minutes);
+  for (const unit of tree.children ?? []) {
+    const time = input.unitsAreLeaves ? leafActivities(unit) : unitBudgets(tree, unit, input);
+    out.reading += time.reading;
+    for (const [format, minutes] of Object.entries(time.practice) as [PracticeFormat, number][]) add(format, minutes);
+  }
+  return out;
+}
+
+/** The weeks the fixed units span; none without any. */
+function keptWeeks(input: UnitsPromptInput): number {
+  const tree = keptTree(input);
+  return tree ? weeksOf(tree, tree, input.daysPerWeek) : 0;
+}
+
+/** The tree the units outside this level are read from: the plan's below the top level, the fixed units' at it. */
+function contextTree(input: UnitsPromptInput): PlanNode | null {
+  return input.tree && parentNodeOf(input) ? input.tree : keptTree(input);
 }
 
 /** Asks for titles and summaries for exactly `spans.length` units whose spans the server already decided. */
@@ -343,10 +396,18 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   parts.push(...contextLines(input, { sections: true }));
   parts.push(`The whole plan is ${weeksLabel(input.weeks)} long. Each week's days are numbered from Day 1.`);
 
+  const kept = keptTree(input);
   if (input.tree && input.parentId) {
     parts.push(`Here is the plan so far. Lines marked done are behind the learner; use what they covered to plan what comes next.${hasMaterials ? " Braces show the materials each unit reserves or reads." : ""}`);
     parts.push(renderTree(input.tree, { daysPerWeek: input.daysPerWeek, markId: input.parentId, aliases: hasMaterials ? aliases : undefined }));
     parts.push(`Plan the ${noun}s inside the unit marked ">>" in detail. Its ${n} ${noun}s cover, in order:`);
+  } else if (kept) {
+    const k = input.keep!.length;
+    parts.push(
+      `The plan's first ${k} ${noun}${k === 1 ? " is" : "s are"} fixed: the learner has done or started ${k === 1 ? "it" : "them"}, and ${k === 1 ? "it stays" : "they stay"} as ${k === 1 ? "it is" : "they are"}. Use what ${k === 1 ? "it covers" : "they cover"} to plan what comes next.${hasMaterials ? " Braces show the materials each unit reserves or reads." : ""}`,
+    );
+    parts.push(renderTree(kept, { daysPerWeek: input.daysPerWeek, aliases: hasMaterials ? aliases : undefined }));
+    parts.push(`Split the rest of the plan into ${n} ${noun}${n === 1 ? "" : "s"}, picking up where the fixed ${noun}${k === 1 ? "" : "s"} leave${k === 1 ? "s" : ""} off, easiest and most foundational first, hardest and most applied last. They cover, in order:`);
   } else {
     parts.push(`Split the plan into ${n} ${noun}${n === 1 ? "" : "s"}, easiest and most foundational first, hardest and most applied last. They cover, in order:`);
   }
@@ -354,23 +415,13 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   // Days are the days of one week, so the week's day count is the number of units asked for.
   const daysInWeek = input.level === "day" ? n : input.daysPerWeek;
   const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
-  // A week leaf holds its whole week's practice, so its line says each per-item pick's share of it; a block format is
-  // budgeted over the plan, which the practice rules state.
-  const weekMinutes = weekBudgetsOf(input).practice;
-  const perItem = picks.filter((p) => !isBlockFormat(p.pick.format));
-  const weekPractice =
-    input.unitsAreLeaves && input.level !== "day" && perItem.length > 0
-      ? `; practice: ${perItem.map((p) => `${PRACTICE_REGISTRY[p.pick.format].label} ${formatMinutes(weekMinutes[p.pick.format] ?? 0)}`).join(", ")}`
-      : "";
-  // A week leaf's must-reading is the week's reading budget, as the practice rules and the checks have it: the one
-  // place the prompt states it.
-  const weekReading = Math.round(weekBudgetsOf(input).reading / 5) * 5;
+  // Each line gives the unit's hours only: how it spends them is the unit's own, out of the totals the time rules state.
+  // After fixed units, the lines are numbered on from them.
+  const offset = kept ? input.keep!.length : 0;
   input.spans.forEach((len, i) => {
-    const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, daysInWeek, input.hoursPerWeek) : null;
-    // A day's must-reading is budgeted over its week (the rules say how much), so its line gives only its total.
-    const must = minutes === null || !hasMaterials || input.level === "day" ? "" : `, so about ${formatMinutes(weekReading)} of must-reading`;
-    const budget = (hasMaterials || picks.length > 0) && minutes !== null ? ` — budget about ${formatMinutes(minutes)}${must}${weekPractice}` : "";
-    parts.push(`${i + 1}. ${unitLine(input.level, i, len, input.daysPerWeek)}${budget}`);
+    const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, daysInWeek, input.hoursPerWeek) : budgetFor(unitWeeks(input.level, len, input.daysPerWeek), input.hoursPerWeek) * 60;
+    const budget = hasMaterials || picks.length > 0 ? ` — budget about ${formatMinutes(minutes)}` : "";
+    parts.push(`${i + 1}. ${unitLine(input.level, offset + i, len, input.daysPerWeek)}${budget}`);
   });
 
   if (input.unitsAreLeaves) {
@@ -385,17 +436,136 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
     parts.push(`Each ${noun} is a heading that will be planned in detail later, when the learner reaches it. Make the headings distinct and progressive.`);
   }
   parts.push(
-    `Return exactly ${n} units in that order. Title: a short noun phrase (at most 8 words) with no "Week 1:" or "Day 3:" prefix. Summary: one sentence on what it covers and why it comes here.`,
+    `Return exactly ${n} units in that order${offset > 0 ? `, and none of the fixed ${noun}s` : ""}. Title: a short noun phrase (at most 8 words) with no "Week 1:" or "Day 3:" prefix. Summary: one sentence on what it covers and why it comes here.`,
   );
+  const time = input.unitsAreLeaves ? (input.level === "day" ? null : leafTimeRules(input, aliases)) : headingTimeRules(input, aliases);
+  if (time) parts.push(time);
   if (hasMaterials) parts.push(input.unitsAreLeaves ? leafMaterialRules(input, aliases) : headingMaterialRules(input, aliases));
   const practice = input.unitsAreLeaves ? leafPracticeRules(input, aliases) : headingPracticeRules(input, aliases);
   if (practice) parts.push(practice);
   return parts.join("\n");
 }
 
-/** A week's reading and per-pick practice minutes, with a pick that can't be assigned given back to reading: what the checks hold the week to. */
-function weekBudgetsOf(input: UnitsPromptInput) {
-  return practiceBudgets(input.split, budgetFor(1, input.hoursPerWeek) * 60, input.materials);
+/** The heading the units are planned inside, when there is one. */
+function parentNodeOf(input: UnitsPromptInput): PlanNode | null {
+  return input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
+}
+
+/**
+ * What the units being planned share between them: their parent's own minutes (`unitBudgets`: what the outline gave
+ * it, or for a unit from before it did, the even split of its weeks), or, at the top level, the plan's time as the split
+ * shares it, with a pick that can't be assigned given back to reading.
+ */
+function parentBudgetsOf(input: UnitsPromptInput): UnitBudgets {
+  const parent = parentNodeOf(input);
+  if (input.tree && parent) return unitBudgets(input.tree, parent, input);
+  return lessKept(planBudgets(input), keptTime(input));
+}
+
+/** The plan's time as the split shares it, with a pick that can't be assigned given back to reading. */
+function planBudgets(input: UnitsPromptInput): UnitBudgets {
+  return { ...practiceBudgets(input.split, budgetFor(input.weeks, input.hoursPerWeek) * 60, input.materials), stated: false };
+}
+
+/** What is left of `budgets` once the fixed units have taken theirs; `budgets` as they are without fixed units. */
+function lessKept(budgets: UnitBudgets, kept: UnitTime | null): UnitBudgets {
+  if (!kept) return budgets;
+  const practice: UnitBudgets["practice"] = {};
+  for (const [format, minutes] of Object.entries(budgets.practice) as [PracticeFormat, number][]) practice[format] = Math.max(0, minutes - (kept.practice[format] ?? 0));
+  return { reading: Math.max(0, budgets.reading - kept.reading), practice, stated: budgets.stated };
+}
+
+/** `Design (format "design-exercise") about 2 h 30 min, in whole blocks of about 50 min`: one pick's total. */
+function formatTotal(format: PracticeFormat, minutes: number): string {
+  const block = PRACTICE_REGISTRY[format].fixedMinutes;
+  return `${pickName(format)} about ${formatTime(minutes)}${block ? `, in whole blocks of about ${block} min` : ""}`;
+}
+
+/**
+ * The must-reading the weeks or months being planned share: at the top level the allocation's reading per material
+ * (`planTotals`), summed, so the total is the materials' own; with no sized material, and below the top level, the
+ * parent's reading (`parentBudgetsOf`). Days keep their week's.
+ */
+function readingTotal(input: UnitsPromptInput): number {
+  if (input.level !== "day" && !parentNodeOf(input)) {
+    const sized = planTotals(input).reading;
+    // After fixed units, what is left of it.
+    if (sized.length > 0) return Math.max(0, sized.reduce((sum, r) => sum + r.minutes, 0) - (keptTime(input)?.reading ?? 0));
+  }
+  return parentBudgetsOf(input).reading;
+}
+
+/**
+ * The totals the units share out, in one sentence: below the top level the parent's own minutes; at the top level the
+ * plan's, with each sized material's reading by alias and title (`planTotals`), their sum the reading total. With
+ * `withoutBlocks`, block formats are left out: the practice rules state them over the plan. Null when there is nothing
+ * to share.
+ */
+function totalsSentence(input: UnitsPromptInput, aliases: MaterialAliases | undefined, withoutBlocks = false): string | null {
+  const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
+  if (input.materials.length === 0 && picks.length === 0) return null;
+  const budgets = parentBudgetsOf(input);
+  const shown = picks.filter((p) => !(withoutBlocks && isBlockFormat(p.pick.format)));
+  const totals = (b: UnitBudgets) => shown.map((p) => formatTotal(p.pick.format, b.practice[p.pick.format] ?? 0));
+  const practice = totals(budgets);
+  const reading = `reading about ${formatTime(readingTotal(input))}`;
+  if (parentNodeOf(input)) return `The unit marked ">>" gives its ${UNIT_NOUN[input.level]}s these totals: ${[reading, ...practice].join("; ")}.`;
+  const sized = planTotals(input).reading.flatMap(({ id, minutes }) => {
+    const alias = aliases?.alias(id);
+    const m = input.materials.find((x) => x.id === id);
+    return alias && m ? [`${alias} "${m.title}" about ${formatTime(minutes)}`] : [];
+  });
+  const each = sized.length > 0 ? ` (${sized.join(", ")})` : "";
+  const kept = keptTime(input);
+  if (!kept) return `The plan's totals over its ${weeksLabel(input.weeks)}: ${[`${reading}${each}`, ...practice].join("; ")}.`;
+  // After fixed units: the plan's totals, what the fixed units take, and what is left for the units being written.
+  const whole = { ...input, keep: undefined };
+  const plan = `The plan's totals over its ${weeksLabel(input.weeks)}: ${[`reading about ${formatTime(readingTotal(whole))}${each}`, ...totals(planBudgets(input))].join("; ")}.`;
+  const taken = [`reading about ${formatTime(kept.reading)}`, ...shown.map((p) => `${pickName(p.pick.format)} about ${formatTime(kept.practice[p.pick.format] ?? 0)}`)];
+  const noun = UNIT_NOUN[input.level];
+  return `${plan} The fixed ${noun}s take ${taken.join("; ")}, so the ${noun}s you write share what is left: ${[reading, ...practice].join("; ")}.`;
+}
+
+/** "Design and Mock come in whole blocks: …", for the picks that do; empty when none does. */
+function wholeBlocksSentence(input: UnitsPromptInput): string {
+  const blocks = pickSources(input.split, input.materials)
+    .filter((p) => p.assignable && isBlockFormat(p.pick.format))
+    .map((p) => PRACTICE_REGISTRY[p.pick.format].label);
+  if (blocks.length === 0) return "";
+  return ` ${blocks.join(" and ")} come${blocks.length === 1 ? "s" : ""} in whole blocks: give a unit whole blocks, or none.`;
+}
+
+/** Reading in a unit's time is its must-reading: how every time rule says so. */
+const MUST_ONLY = "Reading counts must-reading only: should items are optional extras inside a unit's own hours and count toward no total.";
+
+/**
+ * The time rules for headings: each unit writes its own minutes per activity (`time`), out of the totals it shares with
+ * the other units at its level (the plan's at the top, its parent's below), and within its hours. Null for leaves, or
+ * when there is nothing to share.
+ */
+export function headingTimeRules(input: UnitsPromptInput, aliases: MaterialAliases | undefined): string | null {
+  if (input.unitsAreLeaves) return null;
+  const totals = totalsSentence(input, aliases);
+  if (!totals) return null;
+  return [
+    `Time: for each unit, give "time": its minutes of must-reading (reading) and of each practice format (practice, as { format, minutes }), out of the hours on its line. ${totals}`,
+    `The units may weight reading and each format differently, as the materials call for: a unit heavy on reading early on, one of design and mocks near the end. Each unit's minutes add up to no more than its hours on its line. Across the units, reading and each format add up to about their totals.${wholeBlocksSentence(input)} ${MUST_ONLY}`,
+  ].join("\n");
+}
+
+/**
+ * The time rules for week-sized leaves: they write rows, not `time`, so the totals are what their rows share out, each
+ * unit within its hours. Null when there is nothing to share.
+ */
+function leafTimeRules(input: UnitsPromptInput, aliases: MaterialAliases | undefined): string | null {
+  // Under a parent with no time of its own, block formats keep today's plan-wide budget, which the practice rules state.
+  const totals = totalsSentence(input, aliases, !!parentNodeOf(input) && !parentBudgetsOf(input).stated);
+  if (!totals) return null;
+  const noun = UNIT_NOUN[input.level];
+  return [
+    `Time: what the ${noun}s' rows share out. ${totals}`,
+    `The ${noun}s may weight reading and each format differently, as the materials call for. Each ${noun}'s must-reading and practice rows add up to no more than its hours on its line. Across the ${noun}s, reading and each format add up to about their totals. ${MUST_ONLY}`,
+  ].join("\n");
 }
 
 /** How a format's rows may be written without a source, as an instruction; null when they never may. */
@@ -419,10 +589,18 @@ function reservedPractice(input: UnitsPromptInput, format: PracticeFormat): Prac
   return (parent?.practiceCovers ?? []).filter((c) => c.format === format);
 }
 
-/** The units outside the line of the heading being planned: every node but the root, the parent and its ancestors. */
-function otherUnits(input: UnitsPromptInput): PlanNode[] {
+/**
+ * The units outside the line of the heading being planned: every node but the root, the parent and its ancestors; at the
+ * top level, the fixed units and everything in them. They are `tree`'s own nodes (`contextTree`), so they can be
+ * labelled in it.
+ */
+function otherUnits(input: UnitsPromptInput, tree: PlanNode | null = contextTree(input)): PlanNode[] {
   const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
-  if (!input.tree || !parent) return [];
+  if (!input.tree || !parent) {
+    const out: PlanNode[] = [];
+    if (tree) walk(tree, (n) => void (n.id !== tree.id && out.push(n)));
+    return out;
+  }
   const skip = new Set<string>([input.tree.id, parent.id]);
   for (let p = parentOf(input.tree, parent.id); p; p = parentOf(input.tree, p.id)) skip.add(p.id);
   const out: PlanNode[] = [];
@@ -443,7 +621,8 @@ function positionsText(aliases: MaterialAliases, id: string, positions: number[]
  */
 function practiceHeld(input: UnitsPromptInput, aliases: MaterialAliases, format: PracticeFormat): string {
   const held: string[] = [];
-  for (const n of otherUnits(input)) {
+  const tree = contextTree(input);
+  for (const n of otherUnits(input, tree)) {
     const items = (n.practiceCovers ?? []).filter((r) => r.format === format && r.id !== null).map((r) => practiceItem(r, aliases));
     const done = new Map<string, number[]>();
     for (const r of (n.practice ?? []).filter((r) => r.format === format && r.id !== null)) {
@@ -454,7 +633,7 @@ function practiceHeld(input: UnitsPromptInput, aliases: MaterialAliases, format:
       if (aliases.alias(id)) items.push(positionsText(aliases, id, positions));
     }
     const named = items.filter((s): s is string => s !== null);
-    if (named.length > 0) held.push(`${named.join("; ")} in ${fullLabelOf(input.tree!, n)}`);
+    if (named.length > 0) held.push(`${named.join("; ")} in ${fullLabelOf(tree!, n)}`);
   }
   return held.length > 0 ? ` Other units have: ${held.join("; ")}.` : "";
 }
@@ -561,20 +740,25 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
   if (picks.length === 0) return null;
   const days = input.level === "day";
-  const parent = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
+  const noun = UNIT_NOUN[input.level];
+  const parent = parentNodeOf(input);
   // Days inside a week that reserves listed runs do exactly those items: what a run frees or takes is block time,
   // for blocks the days write themselves when the week reserves none (`weekPracticeTime`, as the checks hold it).
   const runs = days ? reservedRuns(parent, input.materials, input.tree, (id) => takenPositions(input, id)) : {};
   const held = Object.keys(runs).length > 0;
   const daysInWeek = days ? input.spans.length : input.daysPerWeek;
   const day = leafBudgetMinutes("day", daysInWeek, input.hoursPerWeek);
-  // A week's figures never ask for more than its days hold; blocks the days write are a most, not a target (`fitWeekToDays`).
+  // The units share their parent's minutes (the plan's at the top). A week's figures never ask for more than its days
+  // hold; blocks the days write are a most, not a target (`fitWeekToDays`).
+  const shared = parentBudgetsOf(input);
   const budgets = days
-    ? fitWeekToDays(held ? weekPracticeTime(weekBudgetsOf(input), runs) : weekBudgetsOf(input), runs, day, daysInWeek, held)
-    : { ...weekBudgetsOf(input), blocks: {} as Partial<Record<PracticeFormat, number>> };
-  const week = days ? day * daysInWeek : budgetFor(1, input.hoursPerWeek) * 60;
+    ? fitWeekToDays(held ? weekPracticeTime(shared, runs) : shared, runs, day, daysInWeek, held)
+    : { ...shared, blocks: {} as Partial<Record<PracticeFormat, number>> };
+  const span = parent && input.tree ? weeksOf(input.tree, parent, input.daysPerWeek) : input.weeks - keptWeeks(input);
+  const total = days ? day * daysInWeek : budgetFor(span, input.hoursPerWeek) * 60;
   const half = Math.round(day / 2 / 5) * 5;
-  const lines = [`Practice: ${days ? "the" : "each"} week's time, about ${formatMinutes(week)}, is about ${formatMinutes(budgets.reading)} of reading and, by format:`];
+  const scope = days ? "this week" : `across the ${noun}s`;
+  const lines = [`Practice: ${days ? "the week's time" : `the ${noun}s' time together`}, about ${formatTime(total)}, is about ${formatTime(days ? budgets.reading : readingTotal(input))} of reading and, by format:`];
   // A block is never split to fit a week's slice: it is budgeted over the plan, less what earlier units placed.
   const planBlocks = planBlockBudgets(input.split, budgetFor(input.weeks, input.hoursPerWeek) * 60, input.materials);
   let firstItem: string | null = null;
@@ -582,21 +766,27 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     const spec = PRACTICE_REGISTRY[p.pick.format];
     const size = days ? blockMinutes(p.pick.format, day) : spec.fixedMinutes;
     const count = budgets.blocks[p.pick.format];
-    if (count === 0) {
-      lines.push(`- ${pickName(p.pick.format)}: none this week; write no ${spec.label} rows.`);
+    // A parent that states its own time gives a format it left out none.
+    const minutes = budgets.practice[p.pick.format] ?? 0;
+    if (count === 0 || (shared.stated && minutes === 0 && runs[p.pick.format] === undefined)) {
+      lines.push(`- ${pickName(p.pick.format)}: none ${days ? "this week" : `for these ${noun}s`}; write no ${spec.label} rows.`);
       continue;
     }
-    let time = `about ${formatMinutes(budgets.practice[p.pick.format] ?? 0)} ${days ? "this week" : "a week"}`;
+    let time = `about ${formatTime(minutes)} ${scope}`;
     let sizing = sizingSentence(p.pick.format);
     if (held && runs[p.pick.format] !== undefined) time += ", the minutes of the items reserved below";
     if (count !== undefined) {
       time = `up to ${count} block${count === 1 ? "" : "s"} of about ${size} min this week`;
       sizing = `${spec.label} comes in whole blocks: when this week reserves none, write each yourself, or fewer when the days are full.`;
+    } else if (isBlockFormat(p.pick.format) && shared.stated) {
+      // The parent gave the format its own minutes: its units share them out in whole blocks.
+      sizing = `${spec.label} comes in whole blocks of about ${size} min: give a ${noun} whole blocks, or none.`;
     } else if (isBlockFormat(p.pick.format)) {
       const total = planBlocks[p.pick.format] ?? 0;
-      const placed = input.tree && parent ? placedMinutes(input.tree, p.pick.format, parent.start - 1) : 0;
+      const kept = keptTree(input);
+      const placed = input.tree && parent ? placedMinutes(input.tree, p.pick.format, parent.start - 1) : kept ? placedMinutes(kept, p.pick.format, kept.end) : 0;
       const left = Math.max(0, total - placed);
-      time = `about ${formatMinutes(total)} over the whole plan, ${placed > 0 ? `about ${formatMinutes(placed)} placed so far, so about ${formatMinutes(left)} left` : "none placed so far"}`;
+      time = `about ${formatTime(total)} over the whole plan, ${placed > 0 ? `about ${formatTime(placed)} placed so far, so about ${formatTime(left)} left` : "none placed so far"}`;
       sizing = `${spec.label} comes in whole blocks of about ${size} min: place one where a week has room, not a part of one each week.`;
     }
     const from = leafPickSources(input, aliases, p);
@@ -613,15 +803,20 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   if (firstItem) {
     lines.push(`A listed item is one row: id is the item's own ("${firstItem}"), task may restate its title, minutes are its minutes; never an item not listed for the unit, and never one item twice.`);
   }
-  // Block formats are held over the plan, so a week's minutes follow the blocks it holds.
+  // Days held to reserved runs fit their blocks round the items. Units that share an even split (a parent from before
+  // units stated their time, or the plan's at the top) take a block format's minutes from the plan's, so a week's
+  // follow its blocks; under a parent that states its time, blocks are its minutes like any format's.
   const blocks = picks.filter((p) => isBlockFormat(p.pick.format) && budgets.blocks[p.pick.format] !== 0).map((p) => `${PRACTICE_REGISTRY[p.pick.format].label}'s`);
   const except =
     blocks.length === 0
       ? ""
       : held
         ? `: the reserved items take exactly theirs, and ${blocks.join(" and ")} time is at most its blocks, written by the days when the week reserves none`
-        : `, except ${blocks.join(" and ")}: a week that holds a block takes its minutes from the other formats, and a week without one gives its time to them`;
-  lines.push(`${days ? "Across the week" : "Within each week"}, each format's minutes add up to about its time${except}. Place a task longer than half a day's budget (about ${formatMinutes(half)}) on a day of its own.`);
+        : shared.stated
+          ? ""
+          : `, except ${blocks.join(" and ")}: a week that holds a block takes its minutes from the other formats, and a week without one gives its time to them`;
+  const across = days ? "Across the week" : `Across the ${noun}s`;
+  lines.push(`${across}, each format's minutes add up to about its time${except}. Place a task longer than half a day's budget (about ${formatTime(half)}) on a day of its own.`);
   return lines.join("\n");
 }
 
@@ -675,6 +870,12 @@ function leafBudgetMinutes(level: PlanLevel, daysInWeek: number, hoursPerWeek?: 
   return budgetFor(1, hoursPerWeek) * 60;
 }
 
+/** The weeks a unit of the list spans: a month its length in usual weeks, a week one, a day its week's share. */
+function unitWeeks(level: PlanLevel, len: number, daysPerWeek: number): number {
+  if (level === "month") return Math.max(1, Math.round(len / daysPerWeek));
+  return level === "week" ? 1 : 1 / daysPerWeek;
+}
+
 /** "Day 3", "Week 2 (5 study days)", "Month 1 (4 weeks)": one unit of the list the drafter is asked to fill. */
 function unitLine(level: PlanLevel, index: number, len: number, daysPerWeek: number): string {
   const label = `${capitalize(level)} ${index + 1}`;
@@ -682,6 +883,11 @@ function unitLine(level: PlanLevel, index: number, len: number, daysPerWeek: num
   if (level === "week") return `${label} (${len} study day${len === 1 ? "" : "s"})`;
   const weeks = Math.max(1, Math.round(len / daysPerWeek));
   return `${label} (${weeks} week${weeks === 1 ? "" : "s"})`;
+}
+
+/** "2 h 30 min", "45 min": how the time rules state a unit's minutes, rounded to the minute. */
+function formatTime(minutes: number): string {
+  return formatDayTime(Math.round(minutes));
 }
 
 export function formatMinutes(minutes: number): string {
@@ -702,7 +908,10 @@ export function availabilityLines(input: UnitsPromptInput, aliases: MaterialAlia
     const each = input.unitsAreLeaves
       ? `Read each in one ${noun}, or in consecutive ${noun}s when it is longer than one ${noun}'s reading time`
       : `Reserve each as the rules above say`;
-    return [`Every resource is free. ${each}${listedBackbone ? "; the book's chapters in order" : ""}.`];
+    const kept = keptTree(input);
+    const held = kept ? heldReads(kept, new Set([kept.id]), aliases) : [];
+    if (held.length === 0) return [`Every resource is free. ${each}${listedBackbone ? "; the book's chapters in order" : ""}.`];
+    return [`Held by the fixed units, so not for these: ${held.join("; ")}.`, `Every other resource is free. ${each}${listedBackbone ? "; the book's chapters in order" : ""}.`];
   }
   const lines: string[] = [];
   // A week split by hand passes its own Read table down as the reservation. Review rows from before reviews were
@@ -714,14 +923,20 @@ export function availabilityLines(input: UnitsPromptInput, aliases: MaterialAlia
   else lines.push(`Take them from the list above, matching each unit's ground.`);
   const skip = new Set<string>([input.tree.id, parent.id]);
   for (let p = parentOf(input.tree, parent.id); p; p = parentOf(input.tree, p.id)) skip.add(p.id);
-  const held: string[] = [];
-  walk(input.tree, (n) => {
-    if (skip.has(n.id)) return;
-    const reads = [...(n.covers ?? []), ...(n.materials ?? [])].filter((r) => activityOf(r) === "read" && aliases.alias(r.id));
-    if (reads.length > 0) held.push(`${describeRefs(reads, aliases)} (${fullLabelOf(input.tree!, n)})`);
-  });
+  const held = heldReads(input.tree, skip, aliases);
   if (held.length > 0) lines.push(`Held by other units: ${held.join("; ")}.`);
   return lines;
+}
+
+/** "M1.3 (Week 2)": what each unit of `tree` outside `skip` reserves or reads, with its label. */
+function heldReads(tree: PlanNode, skip: ReadonlySet<string>, aliases: MaterialAliases): string[] {
+  const held: string[] = [];
+  walk(tree, (n) => {
+    if (skip.has(n.id)) return;
+    const reads = [...(n.covers ?? []), ...(n.materials ?? [])].filter((r) => activityOf(r) === "read" && aliases.alias(r.id));
+    if (reads.length > 0) held.push(`${describeRefs(reads, aliases)} (${fullLabelOf(tree, n)})`);
+  });
+  return held;
 }
 
 /** What the rest of a unit's time is for, in the plan's words. */
@@ -764,12 +979,13 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   const listed = backbone >= 0 && !!input.materials[backbone].toc;
   const B = `M${backbone + 1}`;
   const where = reserved.length > 0 ? "where the reservation has material for it" : "where the list has material for it";
-  // Days are budgeted over their week, as the checks hold them: the week's must-reading, and each day's own total.
-  const reading = formatMinutes(weekBudgetsOf(input).reading);
+  // The units share their parent's must-reading (the plan's at the top): days their week's, weeks their month's.
+  const reading = formatTime(readingTotal(input));
+  const noun = UNIT_NOUN[input.level];
   const rules =
     input.level === "day"
       ? `Rules: the week has about ${reading} of reading; the rest of its time is for ${practiceOf(input)}. Across the week, the days' must minutes add up to no more than about ${reading}. A day may be all reading or all practice, but each day's must, should and practice minutes fit within its own budget. A day that reads has at least one must; should items are optional extras.`
-      : `Rules: at least one must per unit${input.split ? ` ${where}` : ""}; must minutes stay within the must-reading on the unit's line, because the rest of the time is for ${practiceOf(input)}; should items are optional extras.`;
+      : `Rules: a ${noun} that reads has at least one must${input.split ? ` ${where}` : ""}. Across the ${noun}s, must minutes add up to about ${reading}; a ${noun} may read more or less than another, but its must and practice minutes fit within its hours on its line, and the rest of its time is for ${practiceOf(input)}. Should items are optional extras.`;
   const lines = [
     `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note }. tier is "must" or "should"; minutes is the reading or watching time for this unit; note names the part: for a chapter, the sections this unit covers ("Post-Training; Sampling"), for anything else the part ("§2 only", "whole essay").`,
     ...availabilityLines(input, aliases),
@@ -826,11 +1042,24 @@ export function buildRevisionPrompt(input: RevisionPromptInput): string {
         ? [
             `- Materials: return "covers" (headings: { id, note }) and "materials" (units without children: { id, tier, minutes, note }) for every unit that has them, changed only as the request asks. Ids may name a resource (M3) or a chapter (M1.3); a resource is read in one unit. A request like "make the talk optional" changes that row's tier to "should"; it does not add or drop other rows. Leave both fields out only for units with no materials. Use only ids from the list.`,
             `- Practice: return "practiceCovers" (headings: { format, id, note }) and "practice" (units without children: { format, id, task, done, minutes }) for every unit that has them, changed only as the request asks. Keep each row's format and source id; leave id out only for a row you wrote.${items}`,
+            revisionTimeRule(input),
           ]
         : []),
     ].join("\n"),
   );
   return parts.join("\n");
+}
+
+/**
+ * The revision rule on a heading's time: what "<time: …>" in the tree means, that the model may change it, and that a
+ * heading it adds or reshapes writes its own (code never fills it in; one left without is reported).
+ */
+function revisionTimeRule(input: RevisionPromptInput): string {
+  // The formats the revision keeps a heading's time for (`applyRevision`'s `picked`), so the prompt names no other.
+  const formats = pickedFormats(input.split, input.materials).map(pickName);
+  const named = formats.length > 0 ? ` The practice formats are ${formats.join(", ")}.` : " This plan has no practice formats: practice is [].";
+  const finest = input.granularity === "week" ? "Days, and weeks (this plan's finest units, logged as sessions), have" : "Days have";
+  return `- Time: a heading's "<time: …>" is its minutes per activity: must-reading, and each practice format. You may change them as the request needs: return "time" ({ reading, practice: [{ format, minutes }] }, in minutes) on that heading. Every heading you add or reshape (merged, re-lengthened, or reserving other materials) needs its own "time", within its hours, and so does a heading not yet planned in detail. Leave "time" out on a heading you keep as it was: it keeps its own. ${finest} no "time": they spend their minutes in their rows.${named} ${MUST_ONLY}`;
 }
 
 /** "6 weeks, usually 5 study days a week": the plan's length as prompts state it. */
@@ -868,9 +1097,10 @@ export function buildPlanChatSystemPrompt(input: ChatPromptInput): string {
   parts.push(renderTree(input.tree, { daysPerWeek: input.daysPerWeek, lockBefore: input.lockBefore, aliases: hasMaterials ? aliasMaterials(input.materials) : undefined }));
   parts.push(
     [
-      `There are two kinds of turns.`,
+      `There are three kinds of turns.`,
       `1. Questions about the plan ("why is X first", "why does this matter", "how long per day"): answer in 2–5 sentences of plain prose, grounded in the specific units above. Do not call any tool. If the learner might wonder, end by noting that the plan is unchanged.`,
       `2. Requests to change the plan (add, remove, drop, move, swap, split, merge, rework, shorten, extend, reorder, expand or plan a unit in detail, collapse a unit back to a heading, focus more on something): call revisePlan exactly once. Write the changeRequest as a precise instruction that captures the whole conversation's intent, including anything agreed in earlier turns, and name the units by their labels ("Week 3", "Month 2 · Week 1", "Week 2 · Day 4"). After the tool returns, write a 1–2 sentence change note in plain prose that starts by naming the level the change happened at ("Changed at the week level: …" / "Changed days inside Week 2: …"), says what moved, split or was dropped, and says whether the units inside are untouched. Never describe a change you did not make with the tool.`,
+      `3. Requests to regenerate, redo or re-draft the plan or part of it ("regenerate the whole plan", "redo Week 3", "re-draft the days in Week 2"): call redraftPlan exactly once, with scope "plan" for the whole plan, or scope "level" and the heading's label as the unit (null for the top level). Targeted edits stay with revisePlan. Units already done or started stay as they are. If the tool says it cannot, tell the learner why in a sentence; after it succeeds, write the same 1–2 sentence change note as above.`,
       ...(hasMaterials
         ? [
             `Changing which materials a unit reads, or a row's tier, minutes or note, is a change: call revisePlan. Adding a material that is not in the list is not possible here yet; say so and suggest the closest material in the list.`,

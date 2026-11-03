@@ -24,7 +24,7 @@ import {
   spanOf,
   type PlanNode,
 } from "@/lib/planTree";
-import { dayMinutes, formatDayTime } from "@/lib/studyTime";
+import { dayMinutes, formatDayTime, formatUnitTime } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 
 export type PlanTreeMode = "create" | "adjust" | "track";
@@ -279,6 +279,7 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
   const unit = childLevel(node.level) ?? "day";
   const canExpand = !locked && !ctx.busy && !slots;
   const pct = node.len > 0 ? Math.round((done / node.len) * 100) : 0;
+  const time = node.time ? formatUnitTime(node.time) : "";
   // A week split by hand still shows the Read table it was planned with; weeks split before tiers were kept show
   // their reservation instead.
   const kept = node.manualSplit ? readRowsFor(keptReadTable(node.covers), ctx.byId) : [];
@@ -323,6 +324,7 @@ function GroupCard({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: C
           </span>
         )}
       </div>
+      {time && <p className="m-0 text-[11.5px] leading-snug text-muted-foreground">{time}</p>}
       <p className="m-0 text-[13px] leading-normal opacity-65">{node.summary}</p>
       {kept.length > 0 || keptPractice.length > 0 ? (
         <div className="flex flex-col gap-2">

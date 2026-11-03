@@ -1,10 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { doneDays, findNode, initialOpen, isHeading, labelOf, type PlanNode } from "@/lib/planTree";
+import { formatUnitTime } from "@/lib/studyTime";
 import { cn } from "@/lib/utils";
 import type { usePlanning } from "./usePlanning";
 
@@ -101,6 +102,26 @@ function LeafRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx
   );
 }
 
+/** A unit's time, and its problems one to a line, muted under its row and lined up with its title. */
+/** Small muted lines under a unit, or the whole plan: its time and the problems the checks found. */
+export function NoteLines({ lines, className, style }: { lines: string[]; className?: string; style?: CSSProperties }) {
+  if (lines.length === 0) return null;
+  return (
+    <div className={cn("flex min-w-0 flex-col gap-0.5 text-[11.5px] text-muted-foreground", className)} style={style}>
+      {lines.map((line, i) => (
+        <p key={i} className="m-0">
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function UnitNotes({ node, depth, leaf }: { node: PlanNode; depth: number; leaf: boolean }) {
+  const lines = [...(node.time ? [formatUnitTime(node.time)] : []), ...(node.problems ?? [])];
+  return <NoteLines lines={lines} className="-mt-1 pr-3 pb-1" style={{ paddingLeft: 12 + depth * 16 + 60 + (leaf ? 24 : 0) }} />;
+}
+
 function UnitRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx }) {
   const { planning } = ctx;
   const hasChildren = (node.children?.length ?? 0) > 0;
@@ -171,6 +192,7 @@ function UnitRow({ node, depth, ctx }: { node: PlanNode; depth: number; ctx: Ctx
           </button>
         )}
       </div>
+      <UnitNotes node={node} depth={depth} leaf={leaf} />
       {open && node.children!.map((child) => <Row key={child.id} node={child} depth={depth + 1} ctx={ctx} />)}
       {planning.pending[node.id] && <Skeletons count={planning.pending[node.id].count} depth={depth + 1} />}
     </>

@@ -12,12 +12,12 @@ import { UserKeyError, guardUserKey } from "@/lib/ai/userKeyError";
 import { GatewayFundsError } from "@/lib/ai/gatewayFunds";
 import type { KeyErrorKind } from "@/lib/ai/models";
 import { insertGenerationLog } from "@/lib/db/generationLog";
-import { getTrackDetail, updateTrackStudyTime, updateTrackSummary } from "@/lib/db/queries";
+import { getTrackDetail, updateTrackProblems, updateTrackStudyTime, updateTrackSummary } from "@/lib/db/queries";
 import { insertChildren, logSession, markLeafComplete, replacePlanTree } from "@/lib/db/planQueries";
 import { fromTreeInput } from "@/lib/planInput";
 import { summarizePlan } from "@/lib/planSummary";
 import { findNode, lockBoundary, weeksOf, type PlanNode } from "@/lib/planTree";
-import { planTreeInputSchema, type PlanTreeInput } from "@/lib/schemas/plan";
+import { planTreeInputSchema, problemsSchema, type PlanTreeInput } from "@/lib/schemas/plan";
 import { daysPerWeekSchema, hoursPerWeekSchema, planSplitSchema, type PlanSplit } from "@/lib/studyTime";
 import { z } from "zod";
 
@@ -34,28 +34,35 @@ export async function confirmRevisionAction(input: {
   /** The learner's usual study days a week as the adjust page left it; left out, it stays as saved. */
   daysPerWeek?: number;
   split?: PlanSplit | null;
+  /** Learner lines for the top level's code-checked problems; left out, they stay as saved. */
+  problems?: string[];
 }): Promise<void> {
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
+  // Every input is checked before anything is written, so a bad one never leaves the plan half-saved.
   const root = fromTreeInput(planTreeInputSchema.parse(input.tree));
+  const materialIds = z.array(z.string().uuid()).max(200).parse(input.materialIds);
+  const problems = input.problems === undefined ? undefined : problemsSchema.parse(input.problems);
   const detail = await getTrackDetail(input.trackId, userId);
   if (!detail) throw new Error("Track not found");
+  const studyTime =
+    input.hoursPerWeek === undefined
+      ? undefined
+      : {
+          hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek),
+          daysPerWeek: input.daysPerWeek === undefined ? undefined : daysPerWeekSchema.parse(input.daysPerWeek),
+          split: input.split === undefined ? detail.track.split : planSplitSchema.nullable().parse(input.split),
+        };
 
   // The client never changes locked nodes, but the server re-checks before writing.
   const lockBefore = lockBoundary(detail.root);
   const missingLocked = lockedIds(detail.root, lockBefore).filter((id) => !findNode(root, id));
   if (missingLocked.length > 0) throw new Error("The revised plan drops days you have already completed");
 
-  const materialIds = z.array(z.string().uuid()).max(200).parse(input.materialIds);
   await replacePlanTree(input.trackId, userId, root, materialIds);
-  if (input.hoursPerWeek !== undefined) {
-    await updateTrackStudyTime(input.trackId, userId, {
-      hoursPerWeek: hoursPerWeekSchema.parse(input.hoursPerWeek),
-      daysPerWeek: input.daysPerWeek === undefined ? undefined : daysPerWeekSchema.parse(input.daysPerWeek),
-      split: input.split === undefined ? detail.track.split : planSplitSchema.nullable().parse(input.split),
-    });
-  }
+  if (problems !== undefined) await updateTrackProblems(input.trackId, userId, problems);
+  if (studyTime) await updateTrackStudyTime(input.trackId, userId, studyTime);
   const fresh = await getTrackDetail(input.trackId, userId);
   await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title, fresh!.track.daysPerWeek));
   revalidatePath(`/tracks/${input.trackId}`);
@@ -93,6 +100,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
 
   const models = await resolveModels(userId);
   let children: PlanNode[] | null = null;
+  let problems: string[] = [];
   try {
     for await (const event of guardUserKey(
       streamExpandNode({
@@ -115,6 +123,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
     )) {
       if (event.type === "finish") {
         children = event.children;
+        problems = event.problems;
       } else if (event.type === "error") {
         throw new Error(event.message);
       }
@@ -126,7 +135,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
   }
   if (!children) throw new Error("Planning ended early. Try again.");
 
-  await insertChildren(input.trackId, userId, input.nodeId, children, input.reason === "split");
+  await insertChildren(input.trackId, userId, input.nodeId, children, input.reason === "split", problems);
   const fresh = await getTrackDetail(input.trackId, userId);
   await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title, fresh!.track.daysPerWeek));
   revalidatePath(`/tracks/${input.trackId}`);

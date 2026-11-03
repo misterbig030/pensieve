@@ -14,7 +14,7 @@ import {
   type PracticeFormat,
   type PracticePick,
 } from "@/lib/practice";
-import { activePicks, dayMinutes, isAllReading, readingShareOf, type PlanSplit } from "@/lib/studyTime";
+import { activePicks, dayMinutes, formatDayTime, isAllReading, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
   normalizeMaterialRef,
@@ -36,6 +36,7 @@ import {
   type ChapterList,
   type MaterialKind,
 } from "@/lib/schemas/material";
+import type { UnitTime } from "@/lib/schemas/plan";
 import type { SourceInput } from "@/lib/schemas/source";
 import { shortTitle } from "@/lib/shortTitle";
 
@@ -448,7 +449,7 @@ export interface SizeItemRunsInput {
  * units take a source (any run it wrote is ignored); code gives each of them a contiguous run, in unit order, over the
  * source's available items: the parent's reserved run (the whole list at the top, or under a parent that reserved it
  * without one), less the items units outside this level hold or did. Runs follow each unit's time for that format
- * (`practiceBudgets` over its weeks), cut by `shareRuns`; a unit whose share crosses an item held elsewhere gets one
+ * (`unitBudgets`: what the outline gave it, else its share of the weeks), cut by `shareRuns`; a unit whose share crosses an item held elsewhere gets one
  * reservation per stretch. When the model chose no unit for a source that is the level's own (the top level's, or the
  * parent's reservation) and the level has the format's time, every unit with time takes it. A source the checks will
  * refuse here (the parent reserved others of its format, or a heading elsewhere holds it) is left to them. Changes
@@ -477,8 +478,7 @@ export function sizeItemRuns(input: SizeItemRunsInput): string[] {
     });
     return found;
   };
-  const weight = (n: PlanNode, format: PracticeFormat) =>
-    practiceBudgets(input.split, budgetFor(weeksOf(input.root, n, input.daysPerWeek), input.hoursPerWeek) * 60, input.materials).practice[format] ?? 0;
+  const weight = (n: PlanNode, format: PracticeFormat) => unitBudgets(input.root, n, input).practice[format] ?? 0;
 
   for (const { pick, sources } of pickSources(input.split, input.materials)) {
     const format = pick.format;
@@ -505,6 +505,16 @@ export function sizeItemRuns(input: SizeItemRunsInput): string[] {
         chosen = withTime;
         facts.push(`no unit chose ${aliases.alias(id)} for ${name}: it is shared out over every unit with ${name} time`);
       }
+      // A unit the outline gave no minutes of this format gets no run, whatever the model wrote for it; the fact says so.
+      const untimed = chosen.filter((n) => unitBudgets(input.root, n, input).stated && weight(n, format) === 0);
+      if (untimed.length > 0) facts.push(`dropped ${aliases.alias(id)} from ${untimed.map(label).join(", ")}: no ${name} time`);
+      for (const n of untimed) {
+        const rest = (n.practiceCovers ?? []).filter((c) => !theirs(c));
+        if (rest.length > 0) n.practiceCovers = rest;
+        else delete n.practiceCovers;
+      }
+      chosen = chosen.filter((n) => !untimed.includes(n));
+      if (chosen.length === 0) continue;
       const counts = shareRuns(
         available.map((n) => itemMinutes(format, aliases.item(id, n)!)),
         chosen.map((n) => weight(n, format)),
@@ -559,6 +569,28 @@ export function pickSources(split: PlanSplit | null | undefined, materials: Pick
 }
 
 /**
+ * The minutes a unit's leaves give each activity: their must-reading and practice rows, a week split by hand's through
+ * its days. Should-reading is an optional extra and counts in no activity.
+ */
+export function leafActivities(node: PlanNode): UnitTime {
+  const out: UnitTime = { reading: 0, practice: {} };
+  walk(node, (n) => {
+    if ((n.children?.length ?? 0) > 0) return;
+    out.reading += tierMinutes(n.materials).must;
+    for (const r of n.practice ?? []) out.practice[r.format] = (out.practice[r.format] ?? 0) + r.minutes;
+  });
+  return out;
+}
+
+/** The formats a heading's time may name: the split's picks the units can be given, or, without the materials to tell, all its picks. */
+export function pickedFormats(split: PlanSplit | null | undefined, materials?: Pick<Material, "id" | "practice" | "minutes">[]): PracticeFormat[] {
+  if (!materials) return activePicks(split).map((p) => p.format);
+  return pickSources(split, materials)
+    .filter((p) => p.assignable)
+    .map((p) => p.pick.format);
+}
+
+/**
  * A week's budgets as the drafter is given them and the checks hold it to: `weekBudgets`, with the minutes of a pick
  * that can't be assigned moved to reading. Without picks nothing is practice and reading is the split's share of the
  * week (`MUST_SHARE` before the split is decided), so a split from before formats keeps its share.
@@ -580,6 +612,43 @@ export function practiceBudgets(
     delete budgets.practice[pick.format];
   }
   return budgets;
+}
+
+/** What a unit's budgets are read against: the plan's split and time setting, and the materials the budgets are shared over. */
+export interface BudgetContext {
+  split?: PlanSplit | null;
+  hoursPerWeek?: number;
+  daysPerWeek: number;
+  materials: Pick<Material, "id" | "practice" | "minutes">[];
+}
+
+/** A unit's budgets, and whether the outline stated them (`stated`) or they are today's even split of its share of the weeks. */
+export interface UnitBudgets {
+  reading: number;
+  practice: Partial<Record<PracticeFormat, number>>;
+  stated: boolean;
+}
+
+/**
+ * The one reader of a unit's budgets: the minutes its `time` states, or, for a unit with none (a plan from before the
+ * outline decided them), the plan-wide split of its share of the weeks (`practiceBudgets`).
+ */
+export function unitBudgets(root: PlanNode, node: PlanNode, ctx: BudgetContext): UnitBudgets {
+  if (node.time) return { reading: node.time.reading, practice: { ...node.time.practice }, stated: true };
+  const minutes = budgetFor(weeksOf(root, node, ctx.daysPerWeek), ctx.hoursPerWeek) * 60;
+  return { ...practiceBudgets(ctx.split, minutes, ctx.materials), stated: false };
+}
+
+/**
+ * The plan's totals over `weeks`: the reading each source is kept for (its budget, for a source that is read rather
+ * than only practised, in list order, as the `budget-miss` check holds it), and each format's minutes of practice.
+ */
+export function planTotals(ctx: BudgetContext & { weeks: number }): {
+  reading: { id: string; minutes: number }[];
+  practice: Partial<Record<PracticeFormat, number>>;
+} {
+  const reading = ctx.materials.flatMap((m) => (typeof m.minutes === "number" && !isPracticeOnly(m) ? [{ id: m.id, minutes: m.minutes }] : []));
+  return { reading, practice: practiceBudgets(ctx.split, budgetFor(ctx.weeks, ctx.hoursPerWeek) * 60, ctx.materials).practice };
 }
 
 /**
@@ -910,6 +979,14 @@ function formatChapters(chapters: number[]): string {
  * the unit's own reading).
  * `budget-miss`: at the top level, a material whose units all have minutes and whose reserved units add up to more or
  * less than its budget, past `budgetMissSlack`.
+ * `over-capacity`: a unit's minutes (a heading's stated `time`, a week leaf's must-reading and practice rows) past
+ * `budgetCeiling` of its hours.
+ * `format-total-miss`: at the top level, a picked format's minutes across the units more or less than its plan total
+ * (`planTotals`), past `budgetMissSlack`.
+ * `parent-miss`: a level's minutes for one activity, summed, more or less than its parent's stated minutes for it, past
+ * `budgetMissSlack`.
+ * `reading-over-stated`: a heading's reserved reading past `budgetCeiling` of the reading its `time` states.
+ * `no-time`: a heading drafted or revised without `time`.
  */
 export type BreachKind =
   | "outside"
@@ -921,10 +998,12 @@ export type BreachKind =
   | "practice-outside"
   | "practice-overlap"
   | "practice-generated"
-  | "budget-miss";
-
-/** The breaches a drop can cure: the row goes, the unit keeps the rest. Over-budget and unread reservations stay facts. */
-export const DROPPABLE: ReadonlySet<BreachKind> = new Set<BreachKind>(["outside", "overlap", "whole-book", "review-before-read", "practice-outside", "practice-overlap", "practice-generated"]);
+  | "budget-miss"
+  | "over-capacity"
+  | "format-total-miss"
+  | "parent-miss"
+  | "reading-over-stated"
+  | "no-time";
 
 export interface Breach {
   kind: BreachKind;
@@ -935,23 +1014,30 @@ export interface Breach {
   refs: ResolvedAlias[];
   /** `refs` as the prompt names them: "M1.3–M1.4"; for a practice breach, its row: 'Problems "Arrays 1–6"'. */
   names: string;
-  /** The sentence the retry quotes and the admin dock shows. */
+  /** The sentence the admin dock shows, in minutes and aliases; `learnerProblems` puts it in the learner's words. */
   text: string;
-  /** The practice rows a practice breach names, which a drop removes: one row each. */
+  /** The learner's sentence, when `text` says what the model should do rather than what the plan does. */
+  learner?: string;
+  /** The practice rows a practice breach names: one row each. */
   practice?: (Pick<PracticeRef, "format" | "id" | "task"> & { itemFrom?: number | null })[];
-  /**
-   * The practice reservations a practice breach names, which a drop removes: one each. With `keep`, the drop trims
-   * the run to those items instead (its free stretch), and removes it only when it has none.
-   */
-  practiceCovers?: (Pick<PracticeCover, "format" | "id" | "itemFrom" | "itemTo"> & { keep?: { itemFrom: number; itemTo: number } })[];
+  /** The practice reservations a practice breach names: one each. */
+  practiceCovers?: Pick<PracticeCover, "format" | "id" | "itemFrom" | "itemTo">[];
 }
 
 export interface LevelChecks {
   facts: string[];
   breaches: Breach[];
+  /** The breaches as the learner reads them (`learnerProblems`), one line each. */
+  problems: string[];
 }
 
-type CheckMaterial = Pick<Material, "id" | "toc" | "minutes" | "practice"> & { backbone?: boolean; kind?: Material["kind"]; minutesBasis?: Material["minutesBasis"] };
+type CheckMaterial = Pick<Material, "id" | "toc" | "minutes" | "practice"> & {
+  /** Names the material in the learner's lines; without one (tests), its id stands in. */
+  title?: string;
+  backbone?: boolean;
+  kind?: Material["kind"];
+  minutesBasis?: Material["minutesBasis"];
+};
 
 export interface LevelCheckInput {
   root: PlanNode;
@@ -974,10 +1060,17 @@ export interface LevelCheckInput {
   split?: PlanSplit | null;
   /**
    * Which practice rows and reservations were saved before this call (revision's whole-tree checks): for those, the
-   * rules on item lists and on reserved sources state facts and never breaches, so a saved row is never dropped for
+   * rules on item lists and on reserved sources state facts and never breaches, so a saved row is never reported for
    * them. Rows a call adds or changes are held to the rules as drafted ones are. Left out, nothing is saved.
    */
   saved?: (node: PlanNode, row: PracticeRef | PracticeCover) => boolean;
+  /**
+   * Whether this level was just drafted or revised, after the outline gave headings their `time`: a heading without one
+   * is then reported. A revision passes a predicate, true for the units it added or reshaped (`reshapedUnits`), so a
+   * kept unit it left as it was is not. Left out (a saved tree checked as it is), a heading's missing time is a plan's
+   * from before.
+   */
+  drafted?: boolean | ((node: PlanNode) => boolean);
 }
 
 /**
@@ -1047,16 +1140,15 @@ const refsOf = (n: PlanNode): RefLike[] => [...(n.covers ?? []), ...(n.materials
 
 /**
  * The checks in code that run after each drafted level. Facts describe the level for the admin panel and the eval;
- * breaches are rule violations the drafter is asked to correct, and the droppable ones are removed when it does not.
- * Reading and practice are budgeted over a week: a week leaf on its own, or a week's days together (days at the top
- * of a one-week plan are one week). A single day is held only to its own total, so a day may be all reading or all
- * practice.
+ * breaches are rule violations, reported to the learner as `problems`. Each unit is held to its own time: a heading to
+ * the minutes its `time` states, a week leaf to its hours, a day to its own total (so a day may be all reading or all
+ * practice), a level to its parent's stated minutes per activity, and the top level to the plan's totals per format.
  */
 export function levelChecks(input: LevelCheckInput): LevelChecks {
   const facts: string[] = [];
   const breaches: Breach[] = [];
   if (input.unknownIds.length > 0) facts.push(`dropped unknown ${[...new Set(input.unknownIds)].join(", ")}`);
-  if (input.nodes.length === 0) return { facts, breaches };
+  if (input.nodes.length === 0) return { facts, breaches, problems: [] };
 
   const label = (n: PlanNode) => fullLabelOf(input.root, n);
   const aliases = aliasMaterials(input.materials);
@@ -1070,8 +1162,26 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   // all-reading pick is all of the time whatever share it shows.
   const drafted = input.split ? draftedSplit(input.split, input.materials) : null;
   const share = drafted && isAllReading(drafted) ? 1 : (readingShareOf(drafted) ?? MUST_SHARE);
-  /** A heading's reading budget in minutes: its weeks of the learner's time, at the plan's reading share. */
-  const readingBudget = (node: PlanNode) => budgetFor(weeksOf(input.root, node, input.daysPerWeek), input.hoursPerWeek) * 60 * share;
+  /**
+   * A heading's reading in minutes, which a source without units must be longer than to span: what its `time` states,
+   * or, for a heading without one, its weeks of the learner's time at the plan's reading share.
+   */
+  const readingBudget = (node: PlanNode) => node.time?.reading ?? budgetFor(weeksOf(input.root, node, input.daysPerWeek), input.hoursPerWeek) * 60 * share;
+  const ctx: BudgetContext = { split: input.split, hoursPerWeek: input.hoursPerWeek, daysPerWeek: input.daysPerWeek, materials: input.materials };
+  /** A unit's hours in minutes: a leaf's own hours, else its weeks of the learner's time. */
+  const capacity = (node: PlanNode) => (node.budgetHours !== null ? node.budgetHours * 60 : budgetFor(weeksOf(input.root, node, input.daysPerWeek), input.hoursPerWeek) * 60);
+  /**
+   * A unit's minutes per activity: a heading's stated `time` (undefined without one); a leaf's must-reading and practice
+   * rows, a week split by hand's through its days. Should-reading is an optional extra and counts in no activity.
+   */
+  const activitiesOf = (node: PlanNode): UnitTime | undefined => {
+    if (!input.leaves) return node.time ? { reading: node.time.reading, practice: { ...node.time.practice } } : undefined;
+    return leafActivities(node);
+  };
+  const overCapacity = (node: PlanNode, index: number, unit: string, planned: number) => {
+    const minutes = capacity(node);
+    if (minutes > 0 && planned > budgetCeiling(minutes)) breach("over-capacity", index, unit, [], `${unit} plans ${planned} min in a ${node.level} of ${minutes} min.`);
+  };
   // Headings: a source without units, longer than one unit's reading, may span consecutive units of this level, each
   // reserving a part of it. These are its holders, by position; any other repeat is an overlap.
   const spans = new Map<string, number[]>();
@@ -1105,7 +1215,8 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const leafBudget = (node: PlanNode) => budgetMinutes(node, input.hoursPerWeek, daysInWeekOf(input.root, node, input.daysPerWeek));
   const verb = input.leaves ? "reads" : "reserves";
   const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
-  const breach = (kind: BreachKind, index: number, unit: string, refs: RefLike[], text: string) => breaches.push({ kind, index, unit, refs: refs.map(toResolved), names: names(refs), text });
+  const breach = (kind: BreachKind, index: number, unit: string, refs: RefLike[], text: string, learner?: string) =>
+    breaches.push({ kind, index, unit, refs: refs.map(toResolved), names: names(refs), text, ...(learner ? { learner } : {}) });
   /** 'Problems M2.4 "Group Anagrams"' for an item row, 'Problems "Arrays 1–6"' otherwise. */
   const rowLabel = (row: PracticeRef) => rowName(row.format, row.task, row.id !== null && row.itemFrom ? aliases.alias(row.id, { item: row.itemFrom }) : undefined);
   /** "Problems M2 items 1–9" for a run, "Problems M3" for a source without one. Sourced reservations only. */
@@ -1271,72 +1382,6 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     if (noMust.length > 0) facts.push(`no must: ${noMust.map(label).join(", ")}`);
   }
 
-  /**
-   * The week rule over `units` (a week leaf, or a week's days): must-reading within the week's reading budget, and
-   * practice within the week's practice budgets. A block format (`isBlockFormat`) comes whole, so it is budgeted over
-   * the plan, not the week: the blocks a week holds take their minutes from the per-item formats' budgets, and a week
-   * without one gives its slice to them, shared by their picks' shares. Block formats have no budget of their own in
-   * a week; the week's practice as a whole is held to its total instead.
-   * Days inside a week that reserves listed runs are the exception: they do exactly those items, so each format,
-   * blocks included, has the week's minutes of its own (`weekPracticeTime`), fitted to the days in whole blocks as the
-   * prompt gives them (`fitWeekToDays`), and a block the days leave unwritten is short.
-   */
-  const weekRule = (units: PlanNode[], index: number, unit: string, weekMinutes: number) => {
-    const plain = practiceBudgets(input.split, weekMinutes, input.materials);
-    const runs = units[0]?.level === "day" ? reservedRuns(parentNode, input.materials, input.root) : {};
-    const held = Object.keys(runs).length > 0;
-    const budgets = held ? fitWeekToDays(weekPracticeTime(plain, runs), runs, dayMinutes(input.hoursPerWeek, units.length), units.length, true) : plain;
-    let must = 0;
-    let should = 0;
-    const assigned = new Map<PracticeFormat, number>();
-    for (const n of units) {
-      const tiers = tierMinutes(n.materials);
-      must += tiers.must;
-      should += tiers.should;
-      for (const r of n.practice ?? []) assigned.set(r.format, (assigned.get(r.format) ?? 0) + r.minutes);
-    }
-    if (must > budgetCeiling(budgets.reading)) {
-      breach("over-budget", index, unit, [], `${unit}'s must-reading is ${must} min against a budget of about ${budgets.reading} min`);
-    }
-    const left = Math.max(0, budgets.reading - must);
-    if (should > left) facts.push(`${unit} should-reading is ${should} min, more than the ${left} min must-reading leaves of the reading budget`);
-    const formats = PRACTICE_FORMATS.filter((f) => budgets.practice[f] !== undefined || assigned.has(f));
-    const sum = (fs: PracticeFormat[], of: (f: PracticeFormat) => number) => fs.reduce((total, f) => total + of(f), 0);
-    const budgetOf = (f: PracticeFormat) => budgets.practice[f] ?? 0;
-    const usedOf = (f: PracticeFormat) => assigned.get(f) ?? 0;
-    const blocks = formats.filter(isBlockFormat);
-    const perItem = formats.filter((f) => !isBlockFormat(f));
-    // The per-item formats' budgets, with the block slices the week leaves them (none below 0), shared by their picks.
-    const pool = Math.max(0, sum(perItem, budgetOf) + sum(blocks, budgetOf) - sum(blocks, usedOf));
-    const shares = perItem.map((f) => (budgets.practice[f] === undefined ? 0 : (activePicks(input.split).find((p) => p.format === f)?.share ?? 0)));
-    const scaled = blocks.length > 0 && !held ? shareOut(pool, shares) : perItem.map(budgetOf);
-    const short: string[] = [];
-    let perItemOver = false;
-    perItem.forEach((f, i) => {
-      const minutes = usedOf(f);
-      const budget = scaled[i];
-      const name = PRACTICE_REGISTRY[f].label;
-      if (minutes > budgetCeiling(budget)) {
-        perItemOver = true;
-        breach("over-budget", index, unit, [], `${unit}'s ${name} practice is ${minutes} min against a budget of about ${budget} min`);
-      } else if (minutes < budget / SHARE_TOLERANCE - BUDGET_SLACK) short.push(`${name} ${minutes} of about ${budget} min`);
-    });
-    if (held) {
-      for (const f of blocks) {
-        const minutes = usedOf(f);
-        if (minutes < budgetOf(f) / SHARE_TOLERANCE - BUDGET_SLACK) short.push(`${PRACTICE_REGISTRY[f].label} ${minutes} of about ${budgetOf(f)} min`);
-      }
-    }
-    if (short.length > 0) facts.push(`${unit} practice short: ${short.join(", ")}`);
-    // With blocks, the week's practice as a whole; a per-item breach already names the excess against what the blocks
-    // left. Without blocks the per-format budgets are the whole practice budget and hold it on their own.
-    const total = sum(formats, usedOf);
-    const totalBudget = sum(formats, budgetOf);
-    if (blocks.length > 0 && !perItemOver && total > budgetCeiling(totalBudget)) {
-      breach("over-budget", index, unit, [], `${unit}'s practice is ${total} min against a budget of about ${totalBudget} min`);
-    }
-  };
-
   input.nodes.forEach((node, index) => {
     const unit = label(node);
     const refs = refsOf(node);
@@ -1344,7 +1389,9 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     const whole = reads.filter((r) => !r.chapter && listed(r.id) && !legacy(r));
     // A book is read by chapters; any other material with units, by its units.
     const parts = whole.every((r) => byId.get(r.id)?.kind === "book") ? "chapters" : "units";
-    if (whole.length > 0) breach("whole-book", index, unit, whole, `${unit} refers to ${names(whole)} as a whole; use its ${parts}`);
+    if (whole.length > 0) {
+      breach("whole-book", index, unit, whole, `${unit} refers to ${names(whole)} as a whole; use its ${parts}`, `${unit} refers to ${names(whole)} as a whole rather than by its ${parts}`);
+    }
     const chaptered = reads.filter((r) => !whole.includes(r));
     if (hasReservation) {
       const outside = chaptered.filter((r) => !reservedKeys.has(refKey(r)) && !reservedWhole.has(r.id));
@@ -1410,13 +1457,19 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       if (node.level === "day" && total > budgetCeiling(budget)) {
         breach("over-budget", index, unit, [], `${unit} is ${total} min of reading and practice against a budget of about ${budget} min`);
       } else if (total > budget) facts.push(`${unit} over budget: ${total} of ${budget} min`);
-      if (node.level !== "day") weekRule([node], index, unit, budget);
-    } else {
-      const known = reads.reduce((sum, r) => sum + knownMinutes(r), 0);
-      const budget = readingBudget(node);
-      if (known > budget * SHARE_TOLERANCE) {
-        breach("over-budget", index, unit, [], `${unit} reserves about ${known} min of reading against a budget of about ${Math.round(budget)} min`);
+      if (node.level !== "day") {
+        const own = activitiesOf(node)!;
+        overCapacity(node, index, unit, own.reading + sumPractice(own));
       }
+    } else {
+      // A heading is held to its own stated time: its reserved reading to the reading it gave itself, its time to its hours.
+      if (node.time) {
+        const known = Math.round(reads.reduce((sum, r) => sum + knownMinutes(r), 0));
+        if (known > budgetCeiling(node.time.reading)) {
+          breach("reading-over-stated", index, unit, [], `${unit} plans ${known} min of reading in a ${node.level} that gave itself ${node.time.reading} min for it.`);
+        }
+        overCapacity(node, index, unit, node.time.reading + sumPractice(node.time));
+      } else if (typeof input.drafted === "function" ? input.drafted(node) : input.drafted) breach("no-time", index, unit, [], `${unit} has no time set for its activities.`);
       // Practice reservations: the parent's sources only, a listed source by a run inside the parent's, each item once.
       for (const c of (node.practiceCovers ?? []).filter((c) => c.id !== null)) {
         const covers = parentCovers(c);
@@ -1445,15 +1498,13 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
           for (const n of own) if (!heldBy.has(key(n))) heldBy.set(key(n), unit);
           continue;
         }
-        // Past the parent's runs or into another unit's: a drop keeps the run's longest free stretch, and the run claims
-        // only that, so one edge off by one does not empty this unit or the next. Nothing free, and the run goes.
+        // Past the parent's runs or into another unit's: the run claims only its longest free stretch, so one edge off
+        // by one does not report the next unit too. Nothing free, and it claims nothing.
         const free = own.filter((n) => !outside.includes(n) && !holderOf(n));
         const keep = numberRuns(free).reduce<[number, number] | null>((best, r) => (!best || r[1] - r[0] > best[1] - best[0] ? r : best), null);
         const text =
           outside.length > 0 ? notReserved() : `${unit} reserves ${name}, but ${[...held].map(([holder, ns]) => `${holder} holds ${itemAliases(aliases, c.id!, ns)}`).join(" and ")}`;
-        const b = coverBreach(outside.length > 0 ? "practice-outside" : "practice-overlap", index, unit, c, text);
-        if (keep) b.practiceCovers![0].keep = { itemFrom: keep[0], itemTo: keep[1] };
-        newRule(b, node, c);
+        newRule(coverBreach(outside.length > 0 ? "practice-outside" : "practice-overlap", index, unit, c, text), node, c);
         // A saved run claimed what was free before this level's new ones.
         if (input.saved?.(node, c) || !keep) continue;
         for (let n = keep[0]; n <= keep[1]; n++) heldBy.set(key(n), unit);
@@ -1462,9 +1513,30 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   });
   facts.push(...itemListFacts(input, aliases, parentNode, skip, label));
 
-  // A week's days together: the week rule, named for the week.
-  if (input.leaves && input.nodes[0].level === "day" && hasRows && input.hoursPerWeek !== undefined) {
-    weekRule(input.nodes, -1, parentNode ? label(parentNode) : "Week 1", budgetFor(1, input.hoursPerWeek) * 60);
+  // The level against what its parent stated for each activity, and the top level against the plan's totals per
+  // format. Both need every unit's minutes: a heading without time is reported as such, not counted as nothing.
+  const activities = input.nodes.map(activitiesOf);
+  const counted = activities.every((a) => a !== undefined) ? (activities as UnitTime[]) : null;
+  const given = parentNode ? unitBudgets(input.root, parentNode, ctx) : null;
+  if (counted && parentNode && given?.stated) {
+    const unit = label(parentNode);
+    const level = `${input.nodes[0].level}s`;
+    const miss = (activity: string, planned: number, stated: number) => {
+      if (Math.abs(planned - stated) <= budgetMissSlack(stated)) return;
+      breach("parent-miss", -1, unit, [], `${unit}'s ${level} plan ${planned} min of ${activity}; ${unit} gave itself ${stated} min.`);
+    };
+    miss("reading", counted.reduce((sum, a) => sum + a.reading, 0), given.reading);
+    for (const f of PRACTICE_FORMATS.filter((f) => given.practice[f] !== undefined || counted.some((a) => a.practice[f] !== undefined))) {
+      miss(PRACTICE_REGISTRY[f].label.toLowerCase(), counted.reduce((sum, a) => sum + (a.practice[f] ?? 0), 0), given.practice[f] ?? 0);
+    }
+  }
+  if (counted && input.top) {
+    const totals = planTotals({ ...ctx, weeks: weeksOf(input.root, input.root, input.daysPerWeek) });
+    for (const [f, total] of Object.entries(totals.practice) as [PracticeFormat, number][]) {
+      const planned = counted.reduce((sum, a) => sum + (a.practice[f] ?? 0), 0);
+      if (Math.abs(planned - total) <= budgetMissSlack(total)) continue;
+      breach("format-total-miss", -1, "The plan", [], `${PRACTICE_REGISTRY[f].label} adds up to ${planned} min across the plan; the time split gave it ${total} min.`);
+    }
   }
 
   if (parentNode && hasReservation) {
@@ -1478,8 +1550,8 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   }
 
   // The top level reserves each material whose units are all sized toward its budget: its units' minutes at headings,
-  // its rows' at leaves. An unsized unit would count nothing, so a list with one is not held to its budget. No row can
-  // be dropped to cure a miss, so after the retry it stays a fact. A book whose size is an estimate is not held either:
+  // its rows' at leaves. An unsized unit would count nothing, so a list with one is not held to its budget. A book
+  // whose size is an estimate is not held either:
   // its chapters' minutes are shares of that estimate, which never cap its budget (`budgetCap`), so no set of chapters
   // need add up to it.
   if (input.top) {
@@ -1531,7 +1603,25 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       if (outside.length > 0) facts.push(`backbone ch. ${formatChapters(outside)} ${input.leaves ? "read" : "reserved"} outside the kept chapters`);
     }
   }
-  return { facts, breaches };
+  const named = input.materials.map((m) => ({ ...m, title: m.title ?? m.id }));
+  return { facts, breaches, problems: learnerProblems(breaches, named, aliases) };
+}
+
+/** A unit's practice minutes over its formats. */
+function sumPractice(time: UnitTime): number {
+  return Object.values(time.practice).reduce((sum, m) => sum + (m ?? 0), 0);
+}
+
+/**
+ * The breaches as the learner reads them, one line each (a breach's `learner` sentence, else its text): the list's ids
+ * put in words (`plainAliases`), minutes from an hour up as "2 h 10 min", and a closing full stop. No alias, rule name
+ * or "breach" reaches the learner.
+ */
+export function learnerProblems(breaches: Breach[], materials: NamedMaterial[], aliases: MaterialAliases): string[] {
+  return breaches.map((b) => {
+    const text = plainAliases(b.learner ?? b.text, materials, aliases).replace(/\b(\d+) min\b/g, (match, n: string) => (Number(n) >= 60 ? formatDayTime(Number(n)) : match));
+    return /[.!?]$/.test(text) ? text : `${text}.`;
+  });
 }
 
 /** "item 4", "items 3, 5–6". */
@@ -1625,15 +1715,16 @@ function chaptersBefore(root: PlanNode, node: PlanNode | undefined, backbone: Ch
 
 /**
  * Every sibling group of a tree through `levelChecks`, in walk order. `nodes` is that walk order without the root, and
- * each breach's `index` points into it, so `dropBreaches(nodes, breaches)` works on the whole tree. With `original`
+ * each breach's `index` points into it. `owners`, in the breaches' order, is the unit each one is about: the unit at its
+ * index, or for a parent's breach (index -1) that parent; null for the plan's own. With `original`
  * (revision), a practice row or reservation unchanged from it is saved and the rules on item lists and reserved sources
  * state facts only for it, while a row added or changed breaches as a drafted one does; without it, every row is saved.
  */
 export function treeChecks(
   root: PlanNode,
   materials: CheckMaterial[],
-  opts: { granularity: Granularity; hoursPerWeek?: number; daysPerWeek: number; split?: PlanSplit | null; original?: PlanNode },
-): LevelChecks & { nodes: PlanNode[] } {
+  opts: { granularity: Granularity; hoursPerWeek?: number; daysPerWeek: number; split?: PlanSplit | null; original?: PlanNode; drafted?: LevelCheckInput["drafted"] },
+): LevelChecks & { nodes: PlanNode[]; owners: (PlanNode | null)[] } {
   const { granularity, original, ...shares } = opts;
   const saved = original ? savedPracticeRows(original) : () => true;
   const nodes: PlanNode[] = [];
@@ -1645,6 +1736,8 @@ export function treeChecks(
   });
   const facts: string[] = [];
   const breaches: Breach[] = [];
+  const problems: string[] = [];
+  const owners: (PlanNode | null)[] = [];
   walk(root, (n) => {
     const group = n.children;
     if (!group || group.length === 0) return;
@@ -1654,57 +1747,10 @@ export function treeChecks(
     const out = levelChecks({ root, nodes: group, leaves, top: n.id === root.id, materials, unknownIds: [], saved, ...shares });
     facts.push(...out.facts);
     breaches.push(...out.breaches.map((b) => ({ ...b, index: b.index < 0 ? -1 : position.get(group[b.index].id)! })));
+    problems.push(...out.problems);
+    owners.push(...out.breaches.map((b) => (b.index >= 0 ? group[b.index] : n.id === root.id ? null : n)));
   });
-  return { facts, breaches, nodes };
-}
-
-/**
- * Removes the rows of droppable breaches from `nodes[breach.index]`, or trims a reservation's run to the stretch its
- * breach keeps; one line per breach for the facts.
- */
-export function dropBreaches(nodes: PlanNode[], breaches: Breach[]): string[] {
-  const out: string[] = [];
-  for (const b of breaches) {
-    if (!DROPPABLE.has(b.kind) || b.index < 0) continue;
-    const node = nodes[b.index];
-    if (!node) continue;
-    if (b.practice || b.practiceCovers) {
-      // One row or reservation per entry, the last that matches: a repeated item keeps its first use.
-      for (const p of b.practice ?? []) {
-        const rows = node.practice ?? [];
-        const at = rows.findLastIndex((r) => p.format === r.format && p.id === r.id && p.task === r.task && (p.itemFrom ?? null) === (r.itemFrom ?? null));
-        if (at >= 0) rows.splice(at, 1);
-      }
-      let trimmed: { itemFrom: number; itemTo: number } | undefined;
-      for (const p of b.practiceCovers ?? []) {
-        const covers = node.practiceCovers ?? [];
-        const at = covers.findLastIndex((c) => p.format === c.format && p.id === c.id && (p.itemFrom ?? null) === (c.itemFrom ?? null) && (p.itemTo ?? null) === (c.itemTo ?? null));
-        if (at < 0) continue;
-        if (p.keep) {
-          covers[at] = { ...covers[at], itemFrom: p.keep.itemFrom, itemTo: p.keep.itemTo };
-          trimmed = p.keep;
-        } else covers.splice(at, 1);
-      }
-      if (node.practice?.length === 0) delete node.practice;
-      if (node.practiceCovers?.length === 0) delete node.practiceCovers;
-      if (trimmed) {
-        const { itemFrom: a, itemTo: z } = trimmed;
-        out.push(`trimmed ${b.names} in ${b.unit} to ${a === z ? `item ${a}` : `items ${a}–${z}`}: ${b.kind}`);
-      } else out.push(`dropped ${b.names} from ${b.unit}: ${b.kind}`);
-      continue;
-    }
-    const keys = new Set(b.refs.map(refKey));
-    if (node.covers) {
-      node.covers = node.covers.filter((r) => !keys.has(refKey(r)));
-      if (node.covers.length === 0) delete node.covers;
-    }
-    if (node.materials) {
-      node.materials = node.materials.filter((r) => !keys.has(refKey(r)));
-      if (node.materials.length === 0) delete node.materials;
-    }
-    out.push(`dropped ${b.names} from ${b.unit}: ${b.kind}`);
-  }
-  return out;
+  return { facts, breaches, problems, nodes, owners };
 }
 
 /**

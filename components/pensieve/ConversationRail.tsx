@@ -204,7 +204,7 @@ function MessageView({
       return (
         <div className="flex items-start gap-2 rounded-2xl bg-background px-3 py-2.5 text-[12.5px] leading-normal opacity-80">
           <Lock className="mt-0.5 size-3.5 shrink-0 text-accent-2-700" strokeWidth={2.75} />
-          <span>{m.text}</span>
+          <span className="whitespace-pre-wrap">{m.text}</span>
         </div>
       );
     case "brief":

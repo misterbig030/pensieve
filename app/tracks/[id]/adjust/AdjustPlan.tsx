@@ -48,6 +48,7 @@ export function AdjustPlan({ trackId, trackTitle, granularity, hoursPerWeek, day
           hoursPerWeek: time.hoursPerWeek,
           daysPerWeek: time.daysPerWeek,
           split: time.split,
+          problems: time.problems,
         })
       }
     />
