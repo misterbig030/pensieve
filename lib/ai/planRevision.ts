@@ -34,13 +34,13 @@ import {
 import type { PracticeFormat } from "@/lib/practice";
 import type { CoverRefDraft, MaterialRefDraft, PracticeCover, PracticeCoverDraft, PracticeRef, PracticeRefDraft } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
-import { revisedTreeSchema, type RevisedTree, type unitTimeDraftSchema } from "@/lib/schemas/plan";
+import { capProblems, revisedTreeSchema, type RevisedTree, type unitTimeDraftSchema } from "@/lib/schemas/plan";
 import type { z } from "zod";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
 import { appModel, type ResolvedModel } from "./resolve";
 import { assignRefs, buildRevisionPrompt, type PlanPromptContext } from "./planPrompt";
-import { setProblems, toUnitTime } from "./planDraft";
+import { clampedTimeFacts, setProblems, toUnitTime } from "./planDraft";
 
 /** Resolved with itemless rows kept, so `keptItemless` can tell the unit's saved ones from new ones. */
 const SAVED = { keepUnitemized: true } as const;
@@ -114,7 +114,8 @@ export function applyRevision(
     const below = childLevel(level);
     const children = unit.children && below ? unit.children.map((c) => convert(c, below)) : null;
     const len = spanFor(level, unit.days, kept, daysPerWeek);
-    const leafWeek = children === null && level !== "day" && granularity === "week";
+    // A week-plan's finest unit is a week; a month not yet planned in weeks is still a heading, as drafting has it.
+    const leafWeek = children === null && level === "week" && granularity === "week";
     const leaf = children === null && (level === "day" || leafWeek);
     const covers = aliases && unit.covers !== undefined ? keepCoverTiers(resolveCoverRefs(unit.covers, aliases).refs, kept?.covers) : kept?.covers;
     const materials = aliases && unit.materials !== undefined ? resolveMaterialRefs(unit.materials, aliases).refs : kept?.materials;
@@ -235,6 +236,14 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       return [];
     }
     const dropped = unpicked.size > 0 ? [`dropped time for unpicked ${[...unpicked].join(", ")}`] : [];
+    // Every unit the model gave minutes past what a saved unit keeps (`toUnitTime` clamps a heading's; a leaf's goes).
+    const times: RevisedUnit["time"][] = [];
+    const collect = (u: RevisedUnit) => {
+      times.push(u.time);
+      for (const c of u.children ?? []) collect(c);
+    };
+    for (const u of object.units) collect(u);
+    dropped.push(...clampedTimeFacts(times));
     if (!aliases) return dropped;
     // Practice rows unchanged from the saved tree keep the item and reserved-source rules as facts; new or changed ones
     // breach. Only the units the revision added or reshaped are reported for lacking time.
@@ -246,11 +255,17 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       original: tree,
       drafted: reshapedUnits(tree, revised),
     });
-    problems = checks.problems;
+    // A breach of a locked or completed unit is the learner's to see nowhere: the unit can't change. It stays a fact for
+    // the admin panel, as a re-draft's kept units' do. A plan-wide breach counts every unit and stays a problem.
+    const fixed = (i: number) => {
+      const owner = checks.owners[i];
+      return owner !== null && (owner.status === "completed" || isLocked(owner, input.lockBefore));
+    };
+    problems = capProblems(checks.problems.filter((_, i) => !fixed(i)));
     let plain = 0;
     walk(revised, (node) => void (plain += plainUnitText(node, input.materials, aliases)));
     const words = plain > 0 ? [`ids put in words in ${plain} field${plain === 1 ? "" : "s"}`] : [];
-    return [...checks.facts, ...checks.breaches.map((b) => `breach: ${b.text}`), ...dropped, ...words];
+    return [...checks.facts, ...checks.breaches.map((b, i) => `${fixed(i) ? "locked unit" : "breach"}: ${b.text}`), ...dropped, ...words];
   };
   const { costUsd } = await loggedGenerateObject(
     {

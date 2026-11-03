@@ -1001,6 +1001,8 @@ export interface Breach {
   names: string;
   /** The sentence the admin dock shows, in minutes and aliases; `learnerProblems` puts it in the learner's words. */
   text: string;
+  /** The learner's sentence, when `text` says what the model should do rather than what the plan does. */
+  learner?: string;
   /** The practice rows a practice breach names: one row each. */
   practice?: (Pick<PracticeRef, "format" | "id" | "task"> & { itemFrom?: number | null })[];
   /** The practice reservations a practice breach names: one each. */
@@ -1204,7 +1206,8 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   const leafBudget = (node: PlanNode) => budgetMinutes(node, input.hoursPerWeek, daysInWeekOf(input.root, node, input.daysPerWeek));
   const verb = input.leaves ? "reads" : "reserves";
   const names = (refs: RefLike[]) => formatAliases(refs.map(toResolved), aliases);
-  const breach = (kind: BreachKind, index: number, unit: string, refs: RefLike[], text: string) => breaches.push({ kind, index, unit, refs: refs.map(toResolved), names: names(refs), text });
+  const breach = (kind: BreachKind, index: number, unit: string, refs: RefLike[], text: string, learner?: string) =>
+    breaches.push({ kind, index, unit, refs: refs.map(toResolved), names: names(refs), text, ...(learner ? { learner } : {}) });
   /** 'Problems M2.4 "Group Anagrams"' for an item row, 'Problems "Arrays 1–6"' otherwise. */
   const rowLabel = (row: PracticeRef) => rowName(row.format, row.task, row.id !== null && row.itemFrom ? aliases.alias(row.id, { item: row.itemFrom }) : undefined);
   /** "Problems M2 items 1–9" for a run, "Problems M3" for a source without one. Sourced reservations only. */
@@ -1377,7 +1380,9 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
     const whole = reads.filter((r) => !r.chapter && listed(r.id) && !legacy(r));
     // A book is read by chapters; any other material with units, by its units.
     const parts = whole.every((r) => byId.get(r.id)?.kind === "book") ? "chapters" : "units";
-    if (whole.length > 0) breach("whole-book", index, unit, whole, `${unit} refers to ${names(whole)} as a whole; use its ${parts}`);
+    if (whole.length > 0) {
+      breach("whole-book", index, unit, whole, `${unit} refers to ${names(whole)} as a whole; use its ${parts}`, `${unit} refers to ${names(whole)} as a whole rather than by its ${parts}`);
+    }
     const chaptered = reads.filter((r) => !whole.includes(r));
     if (hasReservation) {
       const outside = chaptered.filter((r) => !reservedKeys.has(refKey(r)) && !reservedWhole.has(r.id));
@@ -1599,12 +1604,13 @@ function sumPractice(time: UnitTime): number {
 }
 
 /**
- * The breaches as the learner reads them, one line each: the list's ids put in words (`plainAliases`), minutes from an
- * hour up as "2 h 10 min", and a closing full stop. No alias, rule name or "breach" reaches the learner.
+ * The breaches as the learner reads them, one line each (a breach's `learner` sentence, else its text): the list's ids
+ * put in words (`plainAliases`), minutes from an hour up as "2 h 10 min", and a closing full stop. No alias, rule name
+ * or "breach" reaches the learner.
  */
 export function learnerProblems(breaches: Breach[], materials: NamedMaterial[], aliases: MaterialAliases): string[] {
   return breaches.map((b) => {
-    const text = plainAliases(b.text, materials, aliases).replace(/\b(\d+) min\b/g, (match, n: string) => (Number(n) >= 60 ? formatDayTime(Number(n)) : match));
+    const text = plainAliases(b.learner ?? b.text, materials, aliases).replace(/\b(\d+) min\b/g, (match, n: string) => (Number(n) >= 60 ? formatDayTime(Number(n)) : match));
     return /[.!?]$/.test(text) ? text : `${text}.`;
   });
 }
@@ -1700,7 +1706,8 @@ function chaptersBefore(root: PlanNode, node: PlanNode | undefined, backbone: Ch
 
 /**
  * Every sibling group of a tree through `levelChecks`, in walk order. `nodes` is that walk order without the root, and
- * each breach's `index` points into it. With `original`
+ * each breach's `index` points into it. `owners`, in the breaches' order, is the unit each one is about: the unit at its
+ * index, or for a parent's breach (index -1) that parent; null for the plan's own. With `original`
  * (revision), a practice row or reservation unchanged from it is saved and the rules on item lists and reserved sources
  * state facts only for it, while a row added or changed breaches as a drafted one does; without it, every row is saved.
  */
@@ -1708,7 +1715,7 @@ export function treeChecks(
   root: PlanNode,
   materials: CheckMaterial[],
   opts: { granularity: Granularity; hoursPerWeek?: number; daysPerWeek: number; split?: PlanSplit | null; original?: PlanNode; drafted?: LevelCheckInput["drafted"] },
-): LevelChecks & { nodes: PlanNode[] } {
+): LevelChecks & { nodes: PlanNode[]; owners: (PlanNode | null)[] } {
   const { granularity, original, ...shares } = opts;
   const saved = original ? savedPracticeRows(original) : () => true;
   const nodes: PlanNode[] = [];
@@ -1721,6 +1728,7 @@ export function treeChecks(
   const facts: string[] = [];
   const breaches: Breach[] = [];
   const problems: string[] = [];
+  const owners: (PlanNode | null)[] = [];
   walk(root, (n) => {
     const group = n.children;
     if (!group || group.length === 0) return;
@@ -1731,8 +1739,9 @@ export function treeChecks(
     facts.push(...out.facts);
     breaches.push(...out.breaches.map((b) => ({ ...b, index: b.index < 0 ? -1 : position.get(group[b.index].id)! })));
     problems.push(...out.problems);
+    owners.push(...out.breaches.map((b) => (b.index >= 0 ? group[b.index] : n.id === root.id ? null : n)));
   });
-  return { facts, breaches, problems, nodes };
+  return { facts, breaches, problems, nodes, owners };
 }
 
 /**

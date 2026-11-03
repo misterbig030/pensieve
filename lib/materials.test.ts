@@ -450,6 +450,8 @@ describe("budget-miss", () => {
     const root = layout(makeRoot(nodes));
     const out = levelChecks({ root, nodes, leaves: false, top: true, materials: [{ id: "E", minutes: 30 }, repo], unknownIds: [], daysPerWeek: 7 });
     expect(out.breaches.map((b) => [b.kind, b.text])).toEqual([["whole-book", "Week 1 refers to M2 as a whole; use its units"]]);
+    // The learner is told what the plan does, not given the model's instruction.
+    expect(out.problems).toEqual(["Week 1 refers to R as a whole rather than by its units."]);
   });
 });
 
