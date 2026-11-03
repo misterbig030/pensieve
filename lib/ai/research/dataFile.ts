@@ -52,26 +52,59 @@ function objectsIn(value: unknown): Record<string, unknown>[] | null {
   return objects.length * 2 >= value.length ? objects : null;
 }
 
+/** The field a record taken from an object keyed by name keeps its key in. */
+export const KEY_FIELD = "_key";
+
+/** An object that reads as one record: most of its values are not objects themselves. */
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  isPlainObject(v) && Object.values(v).filter(isPlainObject).length * 2 < Object.keys(v).length;
+
+/** The records of an object keyed by name (`{"Two Sum": {...}, ...}`), each with its key in `_key`; null when most values are not records. */
+function entriesIn(value: unknown): Record<string, unknown>[] | null {
+  if (!isPlainObject(value)) return null;
+  const entries = Object.entries(value);
+  const records = entries.filter(([, v]) => isRecord(v));
+  return records.length > 0 && records.length * 2 >= entries.length ? records.map(([key, v]) => ({ [KEY_FIELD]: key, ...(v as Record<string, unknown>) })) : null;
+}
+
 function jsonSets(root: unknown): RecordSet[] {
   const sets: RecordSet[] = [];
-  const add = (path: string, records: DataRecord[]) => {
-    if (records.length < MIN_RECORDS) return;
+  const add = (path: string, records: DataRecord[]): boolean => {
+    if (records.length < MIN_RECORDS) return false;
     sets.push({ path, records, keys: keysOf(records.map((r) => r.value)), parentKeys: keysOf(records.map((r) => r.parent).filter(isPlainObject)) });
+    return true;
+  };
+  /** These objects as a set, and the arrays nested one level in them (groups holding their items), gathered across all of them. */
+  const addObjects = (path: string, objects: Record<string, unknown>[]): boolean => {
+    let added = add(path, objects.map((o) => ({ value: o, parent: null })));
+    for (const key of keysOf(objects)) {
+      const nested: DataRecord[] = [];
+      for (const parent of objects) for (const child of objectsIn(parent[key]) ?? []) nested.push({ value: child, parent });
+      added = add(`${path}[].${key}`, nested) || added;
+    }
+    return added;
   };
   const walk = (value: unknown, path: string, depth: number) => {
     if (depth > MAX_DEPTH) return;
     const objects = objectsIn(value);
     if (objects) {
-      add(path, objects.map((o) => ({ value: o, parent: null })));
-      // Arrays nested one level in these objects (groups holding their items): gathered across all of them.
-      for (const key of keysOf(objects)) {
-        const nested: DataRecord[] = [];
-        for (const parent of objects) for (const child of objectsIn(parent[key]) ?? []) nested.push({ value: child, parent });
-        if (nested.length > 0) add(`${path}[].${key}`, nested);
-      }
+      addObjects(path, objects);
       return;
     }
-    if (isPlainObject(value)) for (const [key, child] of Object.entries(value)) walk(child, path ? `${path}.${key}` : key, depth + 1);
+    if (!isPlainObject(value)) return;
+    // Records keyed by name, `*` standing for every key.
+    const keyedPath = path ? `${path}.*` : "*";
+    const keyed = entriesIn(value);
+    const keyedAdded = keyed !== null && keyed.length >= MIN_RECORDS && addObjects(keyedPath, keyed);
+    // Groups keyed by name, each holding records keyed by name: every group's records, the group's key as their parent's.
+    const grouped: DataRecord[] = [];
+    if (!keyedAdded) for (const [key, group] of Object.entries(value)) for (const child of entriesIn(group) ?? []) grouped.push({ value: child, parent: { [KEY_FIELD]: key } });
+    const groupedAdded = add(`${keyedPath}.*`, grouped);
+    for (const [key, child] of Object.entries(value)) {
+      // What a set above already holds is not walked again.
+      if ((keyedAdded && isRecord(child)) || (groupedAdded && entriesIn(child))) continue;
+      walk(child, path ? `${path}.${key}` : key, depth + 1);
+    }
   };
   walk(root, "", 0);
   return sets;
@@ -148,6 +181,7 @@ export function sampleDataFile(file: DataFile): string {
   const lines: string[] = [];
   sets.forEach((set, i) => {
     if (file.kind === "json") lines.push(`Records at path "${set.path}"${set.path === "" ? " (the top level)" : ""}: ${set.records.length}`);
+    if (set.path.includes("*")) lines.push(`(* stands for every key of an object; each record's key is in the field ${KEY_FIELD})`);
     else lines.push(`CSV rows: ${set.records.length}`);
     lines.push(`Fields: ${set.keys.join(", ")}`);
     if (set.parentKeys.length > 0) lines.push(`Fields of the object each record sits in (write them as ../field): ${set.parentKeys.join(", ")}`);
