@@ -944,6 +944,18 @@ function practiceOf(input: UnitsPromptInput): string {
   return input.split ? practiceLabelOf(draftedSplit(input.split, input.materials)) : "building and practice";
 }
 
+/**
+ * Books the model was given no chapters for, the backbone among them whatever its kind: it names their parts by topic,
+ * never by sections it recalls, which may be invented or from another edition than the learner's.
+ */
+function unlistedBookRule(input: UnitsPromptInput, aliases: MaterialAliases): string | null {
+  const unlisted = input.materials.filter((m) => !m.toc && (m.kind === "book" || m.backbone)).flatMap((m) => aliases.alias(m.id) ?? []);
+  if (unlisted.length === 0) return null;
+  const one = unlisted.length === 1;
+  const names = one ? unlisted[0] : `${unlisted.slice(0, -1).join(", ")} and ${unlisted[unlisted.length - 1]}`;
+  return `${names} ${one ? "has" : "have"} no chapter list: name the part each unit reads by topic, in a few words ("the chapters on evaluation"), never by its sections. You were not given ${one ? "its" : "their"} chapters or sections, and from memory they may not match the learner's edition. Never write a chapter number, chapter title or section name you were not given.`;
+}
+
 function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): string {
   const backbone = input.materials.findIndex((m) => m.backbone);
   const kids = UNIT_NOUN[childLevel(input.level) ?? "day"];
@@ -961,11 +973,9 @@ function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases)
     `Any other resource is reserved in at most one unit at this level, unless its budget is more than one unit's reading time: then reserve it in consecutive units, naming the part in each note.`,
   );
   if (backbone < 0) lines.push(`Spread the materials where they fit best.`);
-  else if (!input.materials[backbone].toc) {
-    lines.push(
-      `${B} is the backbone textbook, but its chapters are not listed: reserve it in order across the units and name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
-    );
-  }
+  else if (!input.materials[backbone].toc) lines.push(`${B} is the backbone textbook, but its chapters are not listed: reserve it in order across the units.`);
+  const unlisted = unlistedBookRule(input, aliases);
+  if (unlisted) lines.push(unlisted);
   lines.push(...availabilityLines(input, aliases));
   lines.push(`Use only ids from the list, and only in id fields: titles, summaries, notes and tasks are read by the learner, so name a resource or its part there in words, never by its id.`);
   return lines.join("\n");
@@ -987,7 +997,7 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
       ? `Rules: the week has about ${reading} of reading; the rest of its time is for ${practiceOf(input)}. Across the week, the days' must minutes add up to no more than about ${reading}. A day may be all reading or all practice, but each day's must, should and practice minutes fit within its own budget. A day that reads has at least one must; should items are optional extras.`
       : `Rules: a ${noun} that reads has at least one must${input.split ? ` ${where}` : ""}. Across the ${noun}s, must minutes add up to about ${reading}; a ${noun} may read more or less than another, but its must and practice minutes fit within its hours on its line, and the rest of its time is for ${practiceOf(input)}. Should items are optional extras.`;
   const lines = [
-    `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note }. tier is "must" or "should"; minutes is the reading or watching time for this unit; note names the part: for a chapter, the sections this unit covers ("Post-Training; Sampling"), for anything else the part ("§2 only", "whole essay").`,
+    `Materials: for each unit, list its Read table in "materials" as { id, tier, minutes, note }. tier is "must" or "should"; minutes is the reading or watching time for this unit; note names the part: for a listed chapter (Mn.k), the sections this unit covers ("Post-Training; Sampling"), for anything else the part ("§2 only", "whole essay").`,
     ...availabilityLines(input, aliases),
     rules,
   ];
@@ -1001,10 +1011,10 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   );
   lines.push(`A unit with nothing left to read in its reservation reads nothing: that time is for ${practiceOf(input)}. Never assign a resource a unit before it already read.`);
   if (backbone >= 0 && !listed) {
-    lines.push(
-      `${B} is the backbone textbook, but its chapters are not listed: it runs in order across the units, continuing from where earlier units stopped. Name each unit's part by topic ("the chapters on evaluation"). Never write a chapter number or a chapter title you were not given.`,
-    );
+    lines.push(`${B} is the backbone textbook, but its chapters are not listed: it runs in order across the units, continuing from where earlier units stopped.`);
   }
+  const unlisted = unlistedBookRule(input, aliases);
+  if (unlisted) lines.push(unlisted);
   lines.push(`Use only ids from the list, and only in id fields: titles, summaries, notes and tasks are read by the learner, so name a resource or its part there in words, never by its id.`);
   return lines.join("\n");
 }

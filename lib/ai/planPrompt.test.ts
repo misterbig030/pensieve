@@ -181,8 +181,9 @@ describe("materials in prompts", () => {
     const prompt = buildUnitsPrompt({ topic: "X", materials: MATERIALS, granularity: "week", level: "month", spans: [28, 28], weeks: 8, daysPerWeek: 7, unitsAreLeaves: false });
     expect(prompt).toContain('list in "covers"');
     expect(prompt).toContain("No tier and no minutes yet");
-    expect(prompt).toContain("M1 is the backbone textbook, but its chapters are not listed: reserve it in order across the units");
-    expect(prompt).toContain("Never write a chapter number or a chapter title you were not given.");
+    expect(prompt).toContain("M1 is the backbone textbook, but its chapters are not listed: reserve it in order across the units.");
+    expect(prompt).toContain("M1 has no chapter list: name the part each unit reads by topic");
+    expect(prompt).toContain("Never write a chapter number, chapter title or section name you were not given.");
     expect(prompt).toContain("Any other resource is reserved in at most one unit at this level, unless its budget is more than one unit's reading time: then reserve it in consecutive units, naming the part in each note.");
     expect(prompt).not.toContain("reserved by its units");
   });
@@ -298,8 +299,21 @@ describe("chapters in prompts", () => {
   });
   it("says nothing about chapters when no book is listed", () => {
     const prompt = buildUnitsPrompt({ topic: "X", materials: [MATERIALS[1]], granularity: "day", level: "day", spans: [1], weeks: 1, daysPerWeek: 7, unitsAreLeaves: true });
-    expect(prompt).not.toMatch(/chapters are not listed|never refer to|chapter number/);
+    expect(prompt).not.toMatch(/chapters are not listed|no chapter list|never refer to|chapter number/);
     expect(prompt).toContain("A resource is read once: do not assign what another unit reads.");
+  });
+  it("holds every book without a chapter list to topics, not only the backbone", () => {
+    const side: Material = { ...MATERIALS[0], id: "M3", title: "DDIA", backbone: false };
+    const both = [...MATERIALS, side];
+    for (const unitsAreLeaves of [false, true]) {
+      const prompt = buildUnitsPrompt({ topic: "X", materials: both, granularity: "week", level: unitsAreLeaves ? "week" : "month", spans: [28, 28], weeks: 8, daysPerWeek: 7, unitsAreLeaves });
+      expect(prompt).toContain("M1 and M3 have no chapter list: name the part each unit reads by topic");
+      expect(prompt).toContain("You were not given their chapters or sections, and from memory they may not match the learner's edition.");
+    }
+    // A listed backbone leaves only the side book under the rule; a video is never under it.
+    const listed = buildUnitsPrompt({ topic: "X", materials: [{ ...withToc[0] }, MATERIALS[1], side], granularity: "week", level: "month", spans: [28, 28], weeks: 8, daysPerWeek: 7, unitsAreLeaves: false });
+    expect(listed).toContain("M3 has no chapter list");
+    expect(listed).not.toMatch(/M[12] has no chapter list/);
   });
 });
 
@@ -464,7 +478,7 @@ describe("chapters as resources in prompts", () => {
   });
   it("an unlisted backbone keeps the topic-only rule at both levels", () => {
     const m = [{ ...AIE_MATERIALS[0], toc: null }];
-    expect(buildUnitsPrompt({ topic: "t", materials: m, granularity: "week", level: "month", spans: [30], weeks: 4, daysPerWeek: 7, unitsAreLeaves: false })).toContain("Never write a chapter number or a chapter title you were not given.");
+    expect(buildUnitsPrompt({ topic: "t", materials: m, granularity: "week", level: "month", spans: [30], weeks: 4, daysPerWeek: 7, unitsAreLeaves: false })).toContain("Never write a chapter number, chapter title or section name you were not given.");
     expect(buildUnitsPrompt({ topic: "t", materials: m, granularity: "week", level: "week", spans: [7], weeks: 1, daysPerWeek: 7, unitsAreLeaves: true })).toContain("its chapters are not listed");
   });
   it("the revision rule names chapter ids and the single reading", () => {
