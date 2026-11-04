@@ -54,18 +54,28 @@ Run these in the database (the Neon SQL editor), with the user's Clerk id:
 
 ## Deployment checklist
 
-There is no cloud deployment yet: the app runs locally against the production database hosted on Vercel. Before the
-first deployment, in this order:
+There is no cloud deployment yet. The databases are two branches of one Neon project (connected through Vercel
+Storage):
 
-- [ ] **Set `USER_KEY_ENCRYPTION_SECRET` in Vercel for production and preview, to the same value as the local
-  `.env.local`.** Users' API keys already stored from the local app are sealed with that value; a different one makes
-  them unreadable, and every user would have to re-enter their key. Read it from the file so it never shows on screen:
-  `grep '^USER_KEY_ENCRYPTION_SECRET=' .env.local | cut -d= -f2- > /tmp/s && vercel env add USER_KEY_ENCRYPTION_SECRET production preview < /tmp/s; rm -f /tmp/s`
-- [ ] Set the rest of the local environment the same way: the database URL, the Clerk keys, `AI_GATEWAY_API_KEY`,
-  `TAVILY_API_KEY`, `MATERIALS_SIGNING_SECRET`, `OPEN_LIBRARY_CONTACT`, and `RESEARCH_ARM` if it is set locally.
-  Admins are not an environment variable: they are `users.is_admin` in the database.
-- [ ] Apply any pending migrations with `npx drizzle-kit migrate` **before** the deploy that needs them. New columns
-  must exist before the new code inserts into them; old code tolerates new columns because they carry defaults.
+- **`main`** is production. Vercel's Production and Preview environments get it from the Neon integration.
+- **`dev`** is a copy of `main` taken on 2026-11-04. Local `.env.local` and Vercel's Development environment
+  (`vercel env pull`) point at it, so local work and `drizzle-kit migrate` never touch production.
+
+Before the first deployment, in this order:
+
+- [x] **Set `USER_KEY_ENCRYPTION_SECRET` in Vercel to the same value as the local `.env.local`.** Users' API keys
+  already stored from the local app are sealed with that value; a different one makes them unreadable, and every
+  user would have to re-enter their key. (Done 2026-11-04: Sensitive in production and preview, plain in
+  development, copied from `.env.local` without printing it.)
+- [x] Set the rest of the local environment: `AI_GATEWAY_API_KEY`, `TAVILY_API_KEY`, `MATERIALS_SIGNING_SECRET`,
+  `OPEN_LIBRARY_CONTACT` and `RESEARCH_ARM` (done 2026-11-04, same way). The database URLs come from the Neon
+  integration and the Clerk keys from the Clerk integration. Admins are not an environment variable: they are
+  `users.is_admin` in the database.
+- [ ] Apply any pending migrations to **production** **before** the deploy that needs them. `npx drizzle-kit migrate`
+  on its own migrates `dev`; for production, override the URL (the config's dotenv load does not replace a variable
+  that is already set):
+  `vercel env pull /tmp/pensieve-prod.env --environment=production && DATABASE_URL="$(grep '^DATABASE_URL=' /tmp/pensieve-prod.env | cut -d= -f2- | tr -d '"')" npx drizzle-kit migrate; rm -f /tmp/pensieve-prod.env`.
+  New columns must exist before the new code inserts into them; old code tolerates new columns because they carry defaults.
   A migration that adds a foreign key is the exception: old code can insert rows it rejects (0017's `users` links
   need a user's row before their first track or key), so ship the code that keeps it satisfied right after.
 - [ ] After the first deploy, run one plan draft on a stored user key and confirm the admin model-calls panel shows
