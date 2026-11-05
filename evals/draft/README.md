@@ -16,7 +16,7 @@ npx tsx evals/draft/run.ts --rescore evals/results/draft-<ts>-sde-1 evals/result
 
 | Flag | Meaning |
 |---|---|
-| `--topic <id>` | Required. A key of `DRAFT_TOPICS` in `topics.ts`. |
+| `--topic <id>` | Required. A key of `DRAFT_TOPICS` in `topics.ts`: `sde`, plus ten from the research golden set chosen to reach every plan shape (`csapp`, `finance`, `sqlwin`, `c25k`, `mle`, `aieng`, `deeplearning`, `aieng-daily`, `ml-daily`, `frenchrev`). |
 | `--runs N` | Runs in the round; default 3. |
 | `--parallel 1\|2` | Runs at once; default 1. |
 | `--key app\|user` | `app` (default) uses the app's gateway key. `user` resolves the models from the stored key of the user in `EVAL_USER_ID`, reads the database, and records nothing back. |
