@@ -2,10 +2,11 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { draftRequestBodySchema } from "@/lib/ai/draftRequest";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanDraftEvent } from "@/lib/planChat";
-import { makeNode, makeRoot } from "@/lib/planTree";
+import { makeNode, makeRoot, resolveGranularity, topLevelFor } from "@/lib/planTree";
 import type { PlanSplit } from "@/lib/studyTime";
 import { DRAFT_TOPICS } from "./topics";
 import { captureRun, readRun, scrubSecrets, writeRun } from "./record";
@@ -61,6 +62,22 @@ afterEach(() => {
 describe("topics", () => {
   it("states the SDE inputs", () => {
     expect(DRAFT_TOPICS.sde.request).toEqual({ topic: "Senior software engineer interview preparation", weeks: 8, daysPerWeek: 5, hoursPerWeek: 6, granularity: "day", materials: [] });
+  });
+  it("keys every topic by its id, with a request the draft route accepts", () => {
+    for (const [key, topic] of Object.entries(DRAFT_TOPICS)) {
+      expect(topic.id).toBe(key);
+      expect(draftRequestBodySchema.safeParse(topic.request).success, key).toBe(true);
+    }
+  });
+  it("reaches every shape of plan the outliner writes", () => {
+    const shapes = new Set(
+      Object.values(DRAFT_TOPICS).map(({ request }) => {
+        const top = topLevelFor(request.weeks);
+        const leaves = resolveGranularity(request.granularity, request.weeks);
+        return top === "day" ? "days" : top === "week" ? `weeks over ${leaves === "week" ? "nothing" : "days"}` : `months over weeks over ${leaves === "week" ? "nothing" : "days"}`;
+      }),
+    );
+    expect([...shapes].sort()).toEqual(["days", "months over weeks over days", "months over weeks over nothing", "weeks over days", "weeks over nothing"]);
   });
 });
 
