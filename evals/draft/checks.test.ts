@@ -461,7 +461,7 @@ describe("criterion 5: practice time served", () => {
   });
 });
 
-describe("criterion 6: Week 1 days", () => {
+describe("criterion 6: first drafted units", () => {
   function withMinutes(r: RunRecord, totals: number[]): RunRecord {
     days(r).forEach((d, i) => (d.practice![0].minutes = totals[i] - 30));
     return r;
@@ -498,7 +498,7 @@ describe("criterion 6: Week 1 days", () => {
     days(r)[0].materials = [{ id: "M2", tier: "must", minutes: 30, note: null }];
     const v = verdict(r, 6);
     expect(v.status).toBe("fail");
-    expect(v.evidence).toContain("M2.1 read on Day 1 and Day 2");
+    expect(v.evidence).toContain("M2.1 read on Day 1 and Day 2, without the part in a note");
   });
 
   it("fails a chapter read on two days", () => {
@@ -507,6 +507,215 @@ describe("criterion 6: Week 1 days", () => {
     const v = verdict(r, 6);
     expect(v.status).toBe("fail");
     expect(v.evidence.join("\n")).toContain("M2.1");
+  });
+
+  it("passes a long chapter run across consecutive days, each naming its part", () => {
+    const r = record();
+    days(r)[0].materials = [{ id: "M1", chapter: 1, tier: "must", minutes: 30, note: "first half" }];
+    days(r)[1].materials = [{ id: "M1", chapter: 1, tier: "must", minutes: 30, note: "second half" }];
+    const v = verdict(r, 6);
+    expect(v.status, v.evidence.join("\n")).toBe("pass");
+  });
+
+  it("fails a chapter read on days that are not consecutive, even with notes", () => {
+    const r = record();
+    days(r)[0].materials = [{ id: "M1", chapter: 1, tier: "must", minutes: 30, note: "first half" }];
+    days(r)[2].materials = [{ id: "M1", chapter: 1, tier: "must", minutes: 30, note: "second half" }];
+    const v = verdict(r, 6);
+    expect(v.status).toBe("fail");
+    expect(v.evidence).toContain("M1.1 read on Day 1 and Day 3, not in consecutive units");
+  });
+
+  it("fails a chapter on consecutive days when one of them names no part", () => {
+    const r = record();
+    days(r)[0].materials = [{ id: "M1", chapter: 1, tier: "must", minutes: 30, note: "first half" }];
+    days(r)[1].materials = [{ id: "M1", chapter: 1, tier: "must", minutes: 30, note: null }];
+    const v = verdict(r, 6);
+    expect(v.status).toBe("fail");
+    expect(v.evidence).toContain("M1.1 read on Day 1 and Day 2, without the part in a note");
+  });
+});
+
+describe("plan shapes", () => {
+  type Request = DraftTopic["request"];
+  const topicFor = (request: Partial<Request>): DraftTopic => ({ id: "shape", request: { ...SDE.request, ...request } });
+
+  function leaf(level: "day" | "week", n: number, reads: { id: string; chapter?: number; note?: string }[], minutes: number, input: Partial<Parameters<typeof makeNode>[0]> = {}): PlanNode {
+    const reading = reads.map((r) => ({ tier: "must" as const, minutes: 20, note: r.note ?? null, ...r }));
+    const rest = minutes - reading.reduce((sum, r) => sum + r.minutes, 0);
+    return makeNode({
+      id: `${level[0]}${n}`,
+      level,
+      title: `${level} ${n}`,
+      summary: "Study and practise.",
+      len: level === "day" ? 1 : 5,
+      materials: reading,
+      practice: rest > 0 ? [{ format: "recall", id: null, task: "Recall the key ideas.", done: "written", minutes: rest, generated: true }] : [],
+      ...input,
+    });
+  }
+
+  function heading(level: "month" | "week", n: number, covers: string[], children: PlanNode[] | null = null): PlanNode {
+    return makeNode({
+      id: `${level[0]}${n}`,
+      level,
+      title: `${level} ${n}`,
+      summary: "A stretch of the plan.",
+      len: level === "week" ? 5 : 20,
+      covers: covers.map((id) => ({ id, note: null })),
+      children,
+    });
+  }
+
+  /** M1 has four chapters, M2 is an essay with none. */
+  function shapeRecord(plan: PlanNode | null): RunRecord {
+    const r = record();
+    r.materials.allocated = [material("M1", "A Textbook", { toc: chapters(4) }), material("M2", "An Essay", { kind: "essay", minutes: 40 })];
+    r.split = null;
+    r.plan = plan;
+    return r;
+  }
+
+  const statuses = (r: RunRecord, topic: DraftTopic) => checkRun(r, topic).verdicts.filter((v) => v.id === 3 || v.id === 6).map((v) => [v.id, v.status]);
+
+  describe("one week of days at the top", () => {
+    const topic = topicFor({ weeks: 1 });
+    const plan = () => makeRoot([1, 2, 3, 4, 5].map((n) => leaf("day", n, n <= 4 ? [{ id: `M1.${n}` }] : [{ id: "M2" }], 72)));
+
+    it("reads the days' own rows as the reservation and judges them as the first units", () => {
+      const result = checkRun(shapeRecord(plan()), topic);
+      const [three, six] = [3, 6].map((id) => result.verdicts.find((v) => v.id === id)!);
+      expect(three.status, three.evidence.join("\n")).toBe("pass");
+      expect(three.evidence).toEqual(["2 materials across 5 days"]);
+      expect(six.status, six.evidence.join("\n")).toBe("pass");
+      expect(six.evidence).toEqual(["Days plan 72, 72, 72, 72, 72 min against 72"]);
+    });
+
+    it("fails a material no day reads", () => {
+      const r = shapeRecord(plan());
+      r.plan!.children![4].materials = [];
+      expect(verdict(r, 3, topic).evidence).toContain('M2 "An Essay" is reserved by no day');
+    });
+
+    it("lets a chapter run across consecutive days with notes, not across a gap", () => {
+      const r = shapeRecord(plan());
+      r.plan!.children![1].materials = [{ id: "M1.1", tier: "must", minutes: 20, note: "second half" }, ...r.plan!.children![1].materials!];
+      r.plan!.children![1].practice![0].minutes -= 20;
+      r.plan!.children![0].materials![0].note = "first half";
+      expect(statuses(r, topic)).toEqual([
+        [3, "pass"],
+        [6, "pass"],
+      ]);
+      r.plan!.children![1].materials!.shift();
+      r.plan!.children![2].materials!.unshift({ id: "M1.1", tier: "must", minutes: 20, note: "second half" });
+      expect(verdict(r, 3, topic).evidence).toContain("M1.1 reserved by Day 1 and Day 3, not in consecutive units");
+    });
+  });
+
+  describe("week headings over days", () => {
+    it("is the base run's shape", () => {
+      expect(statuses(record(), SDE)).toEqual([
+        [3, "pass"],
+        [6, "pass"],
+      ]);
+      expect(verdict(record(), 6).evidence).toEqual(["Week 1 days plan 72, 72, 72, 72, 72 min against 72"]);
+    });
+  });
+
+  describe("week leaves at the top", () => {
+    const topic = topicFor({ weeks: 3, hoursPerWeek: 3, granularity: "week" });
+    const plan = () => makeRoot([leaf("week", 1, [{ id: "M1.1" }, { id: "M1.2" }], 180, { budgetHours: 3 }), leaf("week", 2, [{ id: "M1.3" }], 180), leaf("week", 3, [{ id: "M1.4" }, { id: "M2" }], 180)]);
+
+    it("reads the weeks' own rows and judges each week against its hours, with no days to draft", () => {
+      const result = checkRun(shapeRecord(plan()), topic);
+      const [three, six] = [3, 6].map((id) => result.verdicts.find((v) => v.id === id)!);
+      expect(three.status, three.evidence.join("\n")).toBe("pass");
+      expect(six.status, six.evidence.join("\n")).toBe("pass");
+      expect(six.evidence).toEqual(["Weeks plan 180, 180, 180 min against 180"]);
+    });
+
+    it("fails a week far from its hours", () => {
+      const r = shapeRecord(plan());
+      r.plan!.children![1].practice = [];
+      expect(verdict(r, 6, topic).evidence).toContain("Week 2 plans 20 min, outside 144–216");
+    });
+
+    it("fails a material no week reads", () => {
+      const r = shapeRecord(plan());
+      r.plan!.children![2].materials = [{ id: "M1.4", tier: "must", minutes: 20, note: null }];
+      expect(verdict(r, 3, topic).evidence).toContain('M2 "An Essay" is reserved by no week');
+    });
+  });
+
+  describe("months over week leaves", () => {
+    const topic = topicFor({ weeks: 8, granularity: "week" });
+    const plan = () =>
+      makeRoot([
+        heading("month", 1, ["M1.1", "M1.2"], [leaf("week", 1, [{ id: "M1.1" }], 360, { budgetHours: 6 }), leaf("week", 2, [{ id: "M1.2" }], 360, { budgetHours: 6 })]),
+        heading("month", 2, ["M1.3", "M1.4", "M2"]),
+      ]);
+
+    it("reads the months' covers as the reservation and judges Month 1's weeks", () => {
+      const result = checkRun(shapeRecord(plan()), topic);
+      const [three, six] = [3, 6].map((id) => result.verdicts.find((v) => v.id === id)!);
+      expect(three.status, three.evidence.join("\n")).toBe("pass");
+      expect(three.evidence).toEqual(["2 materials across 2 months"]);
+      expect(six.status, six.evidence.join("\n")).toBe("pass");
+      expect(six.evidence).toEqual(["Month 1 weeks plan 360, 360 min against 360"]);
+    });
+
+    it("fails a Month 1 week reading what Month 1 does not reserve", () => {
+      const r = shapeRecord(plan());
+      r.plan!.children![0].children![1].materials![0].id = "M1.3";
+      expect(verdict(r, 3, topic).evidence).toContain("Week 2 reads M1.3, which Month 1 does not reserve");
+    });
+
+    it("fails Month 1 not drafted", () => {
+      const r = shapeRecord(plan());
+      r.plan!.children![0].children = null;
+      for (const id of [3, 6] as const) expect(verdict(r, id, topic).evidence).toContain("Month 1 not drafted");
+    });
+  });
+
+  describe("months over week headings over days", () => {
+    const topic = topicFor({ weeks: 12 });
+    const plan = () =>
+      makeRoot([
+        heading("month", 1, ["M1.1", "M1.2"], [heading("week", 1, ["M1.1"], [1, 2, 3, 4, 5].map((n) => leaf("day", n, n === 1 ? [{ id: "M1.1" }] : [], 72))), heading("week", 2, ["M1.2"])]),
+        heading("month", 2, ["M1.3", "M1.4"]),
+        heading("month", 3, ["M2"]),
+      ]);
+
+    it("counts what later months reserve and judges Month 1's Week 1 days", () => {
+      const result = checkRun(shapeRecord(plan()), topic);
+      const [three, six] = [3, 6].map((id) => result.verdicts.find((v) => v.id === id)!);
+      expect(three.status, three.evidence.join("\n")).toBe("pass");
+      expect(three.evidence).toEqual(["2 materials across 3 months"]);
+      expect(six.status, six.evidence.join("\n")).toBe("pass");
+      expect(six.evidence).toEqual(["Month 1 · Week 1 days plan 72, 72, 72, 72, 72 min against 72"]);
+    });
+
+    it("holds the days to their week's reservation, not their month's", () => {
+      const r = shapeRecord(plan());
+      r.plan!.children![0].children![0].children![1].materials = [{ id: "M1.2", tier: "must", minutes: 20, note: null }];
+      expect(verdict(r, 3, topic).evidence).toContain("Day 2 reads M1.2, which Month 1 · Week 1 does not reserve");
+    });
+
+    it("fails a chapter two months reserve, with no allowance for headings", () => {
+      const r = shapeRecord(plan());
+      r.plan!.children![1].covers!.push({ id: "M1.2", note: "the rest" });
+      r.plan!.children![0].covers![1].note = "first part";
+      expect(verdict(r, 3, topic).evidence).toContain("M1.2 reserved by Month 1 and Month 2");
+    });
+  });
+
+  it("fails 3 and 6 once, with no material list, when the record has no plan", () => {
+    const r = shapeRecord(null);
+    for (const id of [3, 6] as const) {
+      const v = verdict(r, id, UNLABELLED);
+      expect(v.status).toBe("fail");
+      expect(v.evidence).toEqual(["no plan in the record"]);
+    }
   });
 });
 
