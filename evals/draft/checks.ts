@@ -450,8 +450,9 @@ function requestOf(record: RunRecord, topic: DraftTopic): DraftTopic["request"] 
 
 /**
  * What a split's practice share asks of the materials: the picked formats that cannot be generated and have no serving
- * material (`unserved`), the served ones that get under half their share of minutes (`short`), and a note for each of
- * the rest.
+ * material (`unserved`) or get under half their share of minutes from the ones that serve them (`short`), and a note for
+ * each of the rest. A format that can be generated is never short: the planner gives it its whole share and writes rows
+ * itself for what its sources do not fill (`WRITE_YOURSELF` in `lib/ai/planPrompt.ts`).
  */
 export function practiceTimeFindings(
   split: PlanSplit,
@@ -467,17 +468,24 @@ export function practiceTimeFindings(
     const share = Math.round((practice * pick.share) / 100);
     const serving = materials.filter((m) => m.practice?.format === pick.format);
     const served = servedMinutes(materials, pick.format);
+    const generated = PRACTICE_REGISTRY[pick.format].generated !== "never";
     if (serving.length === 0) {
-      if (PRACTICE_REGISTRY[pick.format].generated === "never") unserved.push(`${pick.format}: ${pick.share}% of practice (${share} min) and no material serves it`);
-      else notes.push(`${pick.format}: generated (${pick.share}%)`);
-    } else if (served < share / 2) {
+      if (generated) notes.push(`${pick.format}: generated (${pick.share}%)`);
+      else unserved.push(`${pick.format}: ${pick.share}% of practice (${share} min) and no material serves it`);
+    } else if (served < share / 2 && !generated) {
       short.push(`${pick.format}: materials give ${served} min against a share of ${share} min (${pick.share}%)`);
-    } else notes.push(`${pick.format}: ${served} of ${share} min from ${serving.map((m) => m.id).join(", ")}`);
+    } else {
+      const rest = served < share && generated ? ", the rest generated" : "";
+      notes.push(`${pick.format}: ${served} of ${share} min from ${serving.map((m) => m.id).join(", ")}${rest}`);
+    }
   }
   return { unserved, short, notes };
 }
 
-/** 5. Every picked format that needs a source has one, and served formats get at least half their share of practice time. */
+/**
+ * 5. Every picked format that needs a source has one and gets at least half its share of practice time from its sources.
+ * Formats that can be generated pass however little their sources give.
+ */
 function checkPracticeTime(record: RunRecord, topic: DraftTopic): Verdict {
   const name = "Practice time served";
   const split = record.split;
