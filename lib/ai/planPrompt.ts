@@ -342,7 +342,8 @@ export interface UnitsPromptInput extends PlanPromptContext {
   parentId?: string;
   /**
    * Top level only: the plan's first units, done or started, which stay as they are (a re-draft). The units being
-   * written come after them, share what is left of the plan's time, and may not take what these hold.
+   * written come after them, share what is left of the plan's time, and may not take what these hold. They are the
+   * same level as the units written, or week leaves before month headings that block the rest of a week plan's weeks.
    */
   keep?: PlanNode[];
   /** True when the units are the finest level the learner will work at (they get content and check-ins). */
@@ -367,11 +368,19 @@ function keptTime(input: UnitsPromptInput): UnitTime | null {
   const out: UnitTime = { reading: 0, practice: {} };
   const add = (format: PracticeFormat, minutes: number) => void (out.practice[format] = (out.practice[format] ?? 0) + minutes);
   for (const unit of tree.children ?? []) {
-    const time = input.unitsAreLeaves ? leafActivities(unit) : unitBudgets(tree, unit, input);
+    // A fixed unit finer than the units being written is a week leaf (weeks kept before blocks of weeks): its rows, or
+    // its days' when split by hand, hold its time.
+    const leaf = input.unitsAreLeaves || unit.level !== input.level;
+    const time = leaf ? leafActivities(unit) : unitBudgets(tree, unit, input);
     out.reading += time.reading;
     for (const [format, minutes] of Object.entries(time.practice) as [PracticeFormat, number][]) add(format, minutes);
   }
   return out;
+}
+
+/** What the fixed units are called: their own level, which is finer than the units being written before blocks of weeks. */
+function keptNoun(input: UnitsPromptInput): string {
+  return UNIT_NOUN[input.keep?.[0]?.level ?? input.level];
 }
 
 /** The weeks the fixed units span; none without any. */
@@ -403,11 +412,12 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
     parts.push(`Plan the ${noun}s inside the unit marked ">>" in detail. Its ${n} ${noun}s cover, in order:`);
   } else if (kept) {
     const k = input.keep!.length;
+    const fixed = keptNoun(input);
     parts.push(
-      `The plan's first ${k} ${noun}${k === 1 ? " is" : "s are"} fixed: the learner has done or started ${k === 1 ? "it" : "them"}, and ${k === 1 ? "it stays" : "they stay"} as ${k === 1 ? "it is" : "they are"}. Use what ${k === 1 ? "it covers" : "they cover"} to plan what comes next.${hasMaterials ? " Braces show the materials each unit reserves or reads." : ""}`,
+      `The plan's first ${k} ${fixed}${k === 1 ? " is" : "s are"} fixed: the learner has done or started ${k === 1 ? "it" : "them"}, and ${k === 1 ? "it stays" : "they stay"} as ${k === 1 ? "it is" : "they are"}. Use what ${k === 1 ? "it covers" : "they cover"} to plan what comes next.${hasMaterials ? " Braces show the materials each unit reserves or reads." : ""}`,
     );
     parts.push(renderTree(kept, { daysPerWeek: input.daysPerWeek, aliases: hasMaterials ? aliases : undefined }));
-    parts.push(`Split the rest of the plan into ${n} ${noun}${n === 1 ? "" : "s"}, picking up where the fixed ${noun}${k === 1 ? "" : "s"} leave${k === 1 ? "s" : ""} off, easiest and most foundational first, hardest and most applied last. They cover, in order:`);
+    parts.push(`Split the rest of the plan into ${n} ${noun}${n === 1 ? "" : "s"}, picking up where the fixed ${fixed}${k === 1 ? "" : "s"} leave${k === 1 ? "s" : ""} off, easiest and most foundational first, hardest and most applied last. They cover, in order:`);
   } else {
     parts.push(`Split the plan into ${n} ${noun}${n === 1 ? "" : "s"}, easiest and most foundational first, hardest and most applied last. They cover, in order:`);
   }
@@ -416,12 +426,17 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   const daysInWeek = input.level === "day" ? n : input.daysPerWeek;
   const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
   // Each line gives the unit's hours only: how it spends them is the unit's own, out of the totals the time rules state.
-  // After fixed units, the lines are numbered on from them.
+  // After fixed units, the lines are numbered on from them. Blocks of weeks after fixed weeks are named by their weeks.
   const offset = kept ? input.keep!.length : 0;
+  const byWeeks = kept && keptNoun(input) !== noun;
+  let week = byWeeks ? Math.round(keptWeeks(input)) : 0;
   input.spans.forEach((len, i) => {
     const minutes = input.unitsAreLeaves ? leafBudgetMinutes(input.level, daysInWeek, input.hoursPerWeek) : budgetFor(unitWeeks(input.level, len, input.daysPerWeek), input.hoursPerWeek) * 60;
     const budget = hasMaterials || picks.length > 0 ? ` — budget about ${formatMinutes(minutes)}` : "";
-    parts.push(`${i + 1}. ${unitLine(input.level, offset + i, len, input.daysPerWeek)}${budget}`);
+    const span = Math.max(1, Math.round(len / input.daysPerWeek));
+    const line = byWeeks ? `${span === 1 ? `Week ${week + 1}` : `Weeks ${week + 1}–${week + span}`} (${span} week${span === 1 ? "" : "s"})` : unitLine(input.level, offset + i, len, input.daysPerWeek);
+    week += span;
+    parts.push(`${i + 1}. ${line}${budget}`);
   });
 
   if (input.unitsAreLeaves) {
@@ -436,7 +451,7 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
     parts.push(`Each ${noun} is a heading that will be planned in detail later, when the learner reaches it. Make the headings distinct and progressive.`);
   }
   parts.push(
-    `Return exactly ${n} units in that order${offset > 0 ? `, and none of the fixed ${noun}s` : ""}. Title: a short noun phrase (at most 8 words) with no "Week 1:" or "Day 3:" prefix. Summary: one sentence on what it covers and why it comes here.`,
+    `Return exactly ${n} units in that order${offset > 0 ? `, and none of the fixed ${keptNoun(input)}s` : ""}. Title: a short noun phrase (at most 8 words) with no "Week 1:" or "Day 3:" prefix. Summary: one sentence on what it covers and why it comes here.`,
   );
   const time = input.unitsAreLeaves ? (input.level === "day" ? null : leafTimeRules(input, aliases)) : headingTimeRules(input, aliases);
   if (time) parts.push(time);
@@ -523,7 +538,7 @@ function totalsSentence(input: UnitsPromptInput, aliases: MaterialAliases | unde
   const plan = `The plan's totals over its ${weeksLabel(input.weeks)}: ${[`reading about ${formatTime(readingTotal(whole))}${each}`, ...totals(planBudgets(input))].join("; ")}.`;
   const taken = [`reading about ${formatTime(kept.reading)}`, ...shown.map((p) => `${pickName(p.pick.format)} about ${formatTime(kept.practice[p.pick.format] ?? 0)}`)];
   const noun = UNIT_NOUN[input.level];
-  return `${plan} The fixed ${noun}s take ${taken.join("; ")}, so the ${noun}s you write share what is left: ${[reading, ...practice].join("; ")}.`;
+  return `${plan} The fixed ${keptNoun(input)}s take ${taken.join("; ")}, so the ${noun}s you write share what is left: ${[reading, ...practice].join("; ")}.`;
 }
 
 /** "Design and Mock come in whole blocks: …", for the picks that do; empty when none does. */

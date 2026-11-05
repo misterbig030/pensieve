@@ -229,3 +229,95 @@ describe("redraftPlan", () => {
     expect(out.tree.children![2].children).toBeNull();
   });
 });
+
+describe("redraftPlan with week leaves", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+  });
+
+  /** A week leaf reading chapters of the book, each row at `minutes`. */
+  const leaf = (n: number, chapters: number[], extra: Partial<Parameters<typeof makeNode>[0]> = {}) =>
+    makeNode({
+      id: `w${n}`,
+      level: "week",
+      title: `Old week ${n}`,
+      summary: "s",
+      len: 2,
+      budgetHours: 2,
+      materials: chapters.map((chapter) => ({ id: "book", tier: "must" as const, minutes: 60, note: null, chapter, activity: "read" as const })),
+      ...extra,
+    });
+
+  /**
+   * Eight two-day week leaves at 2 h a week, weeks 1–`done` completed (week 1 read 5 h when the learner had more time, so
+   * it is over today's hours and can't change); days up to the last done week are behind the learner.
+   */
+  function weekPlan(done: number): PlanNode {
+    return layout(
+      makeRoot(
+        Array.from({ length: 8 }, (_, i) => {
+          const n = i + 1;
+          if (n === 1) return leaf(1, [1], { status: "completed", materials: [{ id: "book", tier: "must", minutes: 300, note: null, chapter: 1, activity: "read" }] });
+          return leaf(n, [n], n <= done ? { status: "completed" } : {});
+        }),
+      ),
+    );
+  }
+
+  const leafInput = (tree: PlanNode, done: number): RedraftInput => ({ ...base(tree, { kind: "plan" }), granularity: "week", hoursPerWeek: 2, lockBefore: done * 2 });
+  const weekRows = (from: number, count: number, chapters: (n: number) => number[] = (n) => [n]): UnitDraft[] =>
+    Array.from({ length: count }, (_, i) => ({ title: `New week ${from + i}`, summary: "s", materials: chapters(from + i).map((c) => ({ id: `M1.${c}`, tier: "must" as const, minutes: 60 })) }));
+
+  it("keeps the done weeks first and drafts more than four weeks left in blocks after them, with the problems by week", async () => {
+    const tree = weekPlan(2);
+    const before = cloneTree(tree);
+    mockedStreamObject
+      .mockReturnValueOnce(fakeStream([{ title: "Middle", summary: "s" }, { title: "End", summary: "s" }]))
+      // Week 5, in the first block, also reads chapter 6, which week 6 reads in the second: only the joined weeks see it.
+      .mockReturnValueOnce(fakeStream(weekRows(3, 3, (n) => (n === 5 ? [5, 6] : [n]))))
+      .mockReturnValueOnce(fakeStream(weekRows(6, 3)));
+    const calls: ModelCall[] = [];
+    const out = await redraftPlan({ ...leafInput(tree, 2), log: { onCall: (c) => void calls.push(c) } });
+
+    // The heading call, then both blocks; week leaves plan no branch.
+    expect(mockedStreamObject).toHaveBeenCalledTimes(3);
+    expect(calls.map((c) => c.label)).toEqual(["Top level · 6 weeks in 2 blocks", "Weeks 3–5 · 3 weeks", "Weeks 6–8 · 3 weeks"]);
+    const weeks = out.tree.children!;
+    expect(weeks.slice(0, 2)).toEqual(before.children!.slice(0, 2));
+    expect(weeks.slice(2).map((w) => w.title)).toEqual(["New week 3", "New week 4", "New week 5", "New week 6", "New week 7", "New week 8"]);
+    expect(weeks.map((w) => [w.level, w.start, w.children])).toEqual(Array.from({ length: 8 }, (_, i) => ["week", i * 2 + 1, null]));
+    expect(weeks.some((w) => w.covers)).toBe(false);
+    expect(tree).toEqual(before);
+
+    const prompts = mockedStreamObject.mock.calls.map((c) => (c[0] as { prompt: string }).prompt);
+    expect(prompts[0]).toContain("The plan's first 2 weeks are fixed");
+    expect(prompts[0]).toContain('"Old week 2"');
+    expect(prompts[0]).toContain("Split the rest of the plan into 2 months, picking up where the fixed weeks leave off");
+    expect(prompts[0]).toContain("1. Weeks 3–5 (3 weeks)");
+    expect(prompts[0]).toContain("2. Weeks 6–8 (3 weeks)");
+    expect(prompts[0]).toContain("Return exactly 2 units in that order, and none of the fixed weeks.");
+    expect(prompts[0]).toContain("The fixed weeks take reading about 6 h");
+    // Each block sees the kept weeks before its heading, so what they hold is taken.
+    for (const p of prompts.slice(1)) {
+      expect(p).toContain('"Old week 1"');
+      expect(p).toContain('Plan the weeks inside the unit marked ">>"');
+    }
+
+    // The joined weeks are checked as the plan's top level: by week, and kept week 1's own breach (5 h in a week of
+    // 2 h) is no problem.
+    expect(out.tree.problems).toContain("Week 6 reads The Book ch. 6, which Week 5 holds.");
+    expect(out.tree.problems!.some((p) => p.startsWith("Week 1 ") || p.includes("Month"))).toBe(false);
+    expect(out.problems).toEqual(out.tree.problems);
+    expect(out.costUsd).toBeCloseTo(0.012);
+  });
+
+  it("drafts four week leaves left in one call after the kept weeks", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weekRows(5, 4)));
+    const calls: ModelCall[] = [];
+    const out = await redraftPlan({ ...leafInput(weekPlan(4), 4), log: { onCall: (c) => void calls.push(c) } });
+    expect(mockedStreamObject).toHaveBeenCalledTimes(1);
+    expect(calls.map((c) => c.label)).toEqual(["Top level · 4 weeks"]);
+    expect((mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt).toContain("1. Week 5 (2 study days)");
+    expect(out.tree.children!.map((w) => w.title)).toEqual(["Old week 1", "Old week 2", "Old week 3", "Old week 4", "New week 5", "New week 6", "New week 7", "New week 8"]);
+  });
+});
