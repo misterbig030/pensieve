@@ -3,7 +3,7 @@ import { listPriceUsd } from "./price";
 import { BASELINE, CONTESTANTS } from "./contestants";
 import type { AllocateFixture } from "./fixtures";
 import { JUDGE, SECOND_JUDGE } from "./judge";
-import { cutAdvice, estimateAllocateRun, SpendCap } from "./budget";
+import { cutAdvice, estimateAllocateRun, estimateRun, SpendCap } from "./budget";
 
 function fixture(id: string, baseline: AllocateFixture["baseline"]): AllocateFixture {
   return {
@@ -79,6 +79,27 @@ describe("estimateAllocateRun", () => {
     const fallback = estimateAllocateRun({ ...args, contestants: [{ name: "outline-only", roles: {} }] });
     const base = estimateAllocateRun({ ...args, contestants: [BASELINE] });
     expect(fallback.contestantsUsd).toBeCloseTo(base.contestantsUsd, 10);
+  });
+});
+
+describe("estimateRun", () => {
+  const args = { baselines: [tokens(10_000, 2_000)], epochs: 2, judgeDimensions: 1, renderedChars: 4_000 };
+
+  it("prices the contestant's model for the role, at each baseline's tokens", () => {
+    const contestant = { name: "outline-mini", roles: { allocate: BASELINE.roles.allocate!, outline: { model: "openai/gpt-5.4-mini" as const, effort: "low" as const } } };
+    const estimate = estimateRun({ ...args, role: "outline", contestants: [contestant] });
+    expect(estimate.contestantsUsd).toBeCloseTo(2 * listPriceUsd("openai/gpt-5.4-mini", tokens(10_000, 2_000)), 10);
+  });
+
+  it("falls back to the baseline's model for the role", () => {
+    const estimate = estimateRun({ ...args, role: "outline", contestants: [{ name: "allocate-only", roles: { allocate: mini.roles.allocate! } }] });
+    expect(estimate.contestantsUsd).toBeCloseTo(2 * listPriceUsd(BASELINE.roles.outline!.model, tokens(10_000, 2_000)), 10);
+  });
+
+  it("is what estimateAllocateRun gives for the allocate role", () => {
+    const fixtures = [fixture("a-1", tokens(10_000, 2_000)), fixture("a-2", null)];
+    const common = { contestants: [BASELINE, mini], epochs: 3, judgeDimensions: 3, renderedChars: 8_000 };
+    expect(estimateRun({ ...common, baselines: fixtures.map((f) => f.baseline), role: "allocate" })).toEqual(estimateAllocateRun({ ...common, fixtures }));
   });
 });
 

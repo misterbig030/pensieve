@@ -10,6 +10,9 @@ import { calibrateBenchmark, captureFixtures, rescoreBenchmark, runBenchmark } f
 import { JUDGE, SECOND_JUDGE, judgeDimension, type JudgeCache } from "./judge";
 import type { AllocateFixture } from "./fixtures";
 import type { AllocateOutput, runAllocateSample } from "./tasks/allocate";
+import type { OutlineOutput, runOutlineSample } from "./tasks/outline";
+import { outlineFixturePath, type OutlineFixture } from "./tasks/outlineFixtures";
+import { layout, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { CriterionResult, Sample } from "./types";
 
 function material(id: string, title: string, extra: Partial<Material> = {}): Material {
@@ -447,6 +450,19 @@ describe("rescoreBenchmark", () => {
     expect(sample.secondJudge).toBeUndefined();
   });
 
+  it("rescores a saved allocate run that has no task in run.json", async () => {
+    const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1 }), runSample: runner(), judge: judge(), cache: memoryCache().cache });
+    await rescoreBenchmark(dir, { judge: judge(), cache: memoryCache().cache, fixturesRoot, calibrationDir, print: () => {} });
+    const expected = readFileSync(join(dir, "scores.json"), "utf8");
+    expect(JSON.parse(expected)).toMatchObject({ task: "allocate" });
+
+    const runPath = join(dir, "run.json");
+    const { task: _task, ...withoutTask } = JSON.parse(readFileSync(runPath, "utf8"));
+    writeFileSync(runPath, JSON.stringify(withoutTask));
+    await rescoreBenchmark(dir, { judge: judge(), cache: memoryCache().cache, fixturesRoot, calibrationDir, print: () => {} });
+    expect(readFileSync(join(dir, "scores.json"), "utf8")).toBe(expected);
+  });
+
   it("takes a rescore's answers criterion by criterion, keeping the saved one the judge skipped", async () => {
     const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1, contestants: [] }), runSample: runner(), judge: judge(), cache: memoryCache().cache });
     await rescoreBenchmark(dir, { judge: skipping("cov-core", false), cache: memoryCache().cache, fixturesRoot, calibrationDir, print: () => {} });
@@ -454,6 +470,111 @@ describe("rescoreBenchmark", () => {
     expect(sample.judged).toBe(true);
     expect(sample.results.find((r) => r.id === "cov-core")).toMatchObject({ met: true, evidence: "ok" });
     expect(sample.results.find((r) => r.id === "cov-claims")).toMatchObject({ met: false, evidence: "new" });
+  });
+});
+
+describe("the outline task", () => {
+  function planNode(extra: Partial<PlanNode>): PlanNode {
+    return { id: "n", level: "day", title: "t", summary: "s", len: 1, status: "pending", budgetHours: null, manualSplit: false, children: null, start: 1, end: 1, ...extra };
+  }
+  const BOOK = material("csapp", "Computer Systems: A Programmer's Perspective", { minutes: 600 });
+  const WEEK = planNode({ id: "w1", level: "week", title: "Bits and bytes", summary: "How data is stored", len: 2, covers: [{ id: "csapp", chapter: null, note: null }], time: { reading: 240, practice: {} } });
+  const TREE = layout(makeRoot([WEEK, planNode({ id: "w2", level: "week", title: "Machine code", summary: "Assembly", len: 2 })]));
+
+  const LEAVES: OutlineFixture = {
+    id: "csapp-1/week-1", topic: "csapp", sourceRun: "run", commit: "abc1234", label: "Week 1 · 2 days", group: "leaves", leaf: true,
+    request: { topic: "Computer systems", granularity: "day", weeks: 2, daysPerWeek: 2, hoursPerWeek: 4 },
+    materials: [BOOK], split: ALL_READING, level: "day", spans: [1, 1], tree: TREE, parentId: "w1", timeLimitMs: 197_295,
+    baseline: { inputTokens: 20_000, outputTokens: 4_000, ms: 30_000 },
+  };
+  const TOP: OutlineFixture = { ...LEAVES, id: "csapp-1/top", label: "Top level · 2 weeks", group: "top", leaf: false, level: "week", spans: [2, 2], tree: undefined, parentId: undefined };
+
+  const DAYS: OutlineOutput = {
+    nodes: [
+      planNode({ id: "d1", title: "Bits", summary: "How numbers are stored", materials: [{ id: "csapp", chapter: null, tier: "must", minutes: 60, note: "The first part" }] }),
+      planNode({ id: "d2", title: "Bytes", summary: "How bytes are ordered", materials: [{ id: "csapp", chapter: null, tier: "must", minutes: 60, note: "The second part" }] }),
+    ],
+    units: [],
+    breaches: [],
+    problems: [],
+  };
+  const WEEKS: OutlineOutput = { nodes: [WEEK, planNode({ id: "w2", level: "week", title: "Machine code", summary: "Assembly", len: 2, time: { reading: 240, practice: {} } })], units: [], breaches: [], problems: [] };
+
+  type OutlineRun = Awaited<ReturnType<typeof runOutlineSample>>;
+  const outlineRunner = () =>
+    vi.fn(async (f: OutlineFixture, _contestant: unknown): Promise<OutlineRun> => ({ gate: { status: "completed" }, output: f.leaf ? DAYS : WEEKS, calls: [], costUsd: 0.1, ms: 9_000 })) as unknown as typeof runOutlineSample &
+      ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    for (const f of [LEAVES, TOP]) {
+      const path = outlineFixturePath(f.id, fixturesRoot);
+      mkdirSync(join(path, ".."), { recursive: true });
+      writeFileSync(path, JSON.stringify(f));
+    }
+  });
+
+  const outline = (over: Record<string, unknown> = {}) => base({ task: "outline", fixtures: ["csapp-1/top", "csapp-1/week-1"], ...over });
+
+  it("runs the outline task with a fake sample and writes one report section per group plus routing", async () => {
+    const runSample = outlineRunner();
+    const judgeFn = judge();
+    const { dir } = await runBenchmark({ ...outline(), task: "outline", runSample, judge: judgeFn, commit: "abc1234" });
+
+    expect(dir).toBe(join(outDir, "2026-10-29T10-00-00-000Z-outline"));
+    expect(JSON.parse(readFileSync(join(dir, "run.json"), "utf8")).task).toBe("outline");
+    // A fixture id's "/" becomes "__" in the sample's file name; the sample keeps its id.
+    const sample = JSON.parse(readFileSync(join(dir, "samples/baseline-csapp-1__top-1.json"), "utf8")) as Sample;
+    expect(sample).toMatchObject({ task: "outline", fixture: "csapp-1/top", judged: true });
+    expect(sample.results.filter((r) => r.grader === "judge").every((r) => r.id.startsWith("head-"))).toBe(true);
+    const leaf = JSON.parse(readFileSync(join(dir, "samples/baseline-csapp-1__week-1-1.json"), "utf8")) as Sample;
+    expect(leaf.results.filter((r) => r.grader === "judge").every((r) => r.id.startsWith("leaf-"))).toBe(true);
+    // One judge call per applicable dimension: a level is a leaf or a heading, so one per sample.
+    expect(judgeFn.mock.calls.every(([a]) => a.dimension === "leaf" || a.dimension === "heading")).toBe(true);
+
+    const report = readFileSync(join(dir, "report.md"), "utf8");
+    expect(report).toContain("## Group: top");
+    expect(report).toContain("## Group: leaves");
+    expect(report).toContain("## Routing");
+    expect(report).toContain("(samples/baseline-csapp-1__top-1.json)");
+    expect(report.indexOf("## Group: top")).toBeLessThan(report.indexOf("## Routing"));
+    expect(report.indexOf("## Group: leaves")).toBeLessThan(report.indexOf("## Routing"));
+
+    const scores = JSON.parse(readFileSync(join(dir, "scores.json"), "utf8"));
+    expect(scores).toMatchObject({ task: "outline", margin: 0.05 });
+    expect(scores.groups.top.map((s: { name: string }) => s.name)).toEqual(["baseline", "gpt-5.4-mini"]);
+    expect(scores.groups.leaves.map((s: { name: string }) => s.name)).toEqual(["baseline", "gpt-5.4-mini"]);
+    for (const file of ["chart-top.svg", "chart-leaves.svg"]) expect(existsSync(join(dir, file)), file).toBe(true);
+    expect(existsSync(join(dir, "chart.svg"))).toBe(false);
+  });
+
+  it("filters outline fixtures by --groups", async () => {
+    const runSample = outlineRunner();
+    const { dir } = await runBenchmark({ ...outline(), task: "outline", groups: ["leaves"], runSample, judge: judge() });
+    expect(runSample.mock.calls.every(([f]) => (f as OutlineFixture).id === "csapp-1/week-1")).toBe(true);
+    expect(runSample).toHaveBeenCalledTimes(2 * 2);
+    expect(readSamples(dir).every((s) => s.fixture === "csapp-1/week-1")).toBe(true);
+    expect(Object.keys(JSON.parse(readFileSync(join(dir, "scores.json"), "utf8")).groups)).toEqual(["leaves"]);
+  });
+
+  it("refuses --groups with the allocate task, naming the flag", async () => {
+    const runSample = runner();
+    await expect(runBenchmark({ ...base(), groups: ["leaves"], runSample, judge: judge() })).rejects.toThrow(/--groups/);
+    expect(runSample).not.toHaveBeenCalled();
+  });
+
+  it("rescores a saved outline run by the task in run.json, keeping the groups", async () => {
+    const { dir } = await runBenchmark({ ...outline(), task: "outline", runSample: outlineRunner(), judge: judge() });
+    const before = readFileSync(join(dir, "scores.json"), "utf8");
+    await rescoreBenchmark(dir, { judge: judge(), cache: { get: () => undefined, set: () => {} }, fixturesRoot, calibrationDir, print: () => {} });
+    expect(readFileSync(join(dir, "scores.json"), "utf8")).toBe(before);
+    expect(readFileSync(join(dir, "report.md"), "utf8")).toContain("## Routing");
+  });
+
+  it("calibrates a saved outline run by the task in run.json", async () => {
+    const { dir } = await runBenchmark({ ...outline({ epochs: 1 }), task: "outline", runSample: outlineRunner(), judge: judge() });
+    const file = JSON.parse(readFileSync(calibrateBenchmark(dir, { fixturesRoot, calibrationDir }), "utf8"));
+    expect(file.task).toBe("outline");
+    expect(file.items[0].rendered).toContain("The level as written");
   });
 });
 

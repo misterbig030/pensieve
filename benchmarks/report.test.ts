@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderChart, renderReport, summarize, type ContestantSummary } from "./report";
+import { renderChart, renderReport, renderRouting, summarize, type ContestantSummary } from "./report";
 import type { Contestant, Criterion, CriterionResult, Gate, Sample } from "./types";
 
 const criteria: Criterion<unknown, unknown>[] = [
@@ -347,6 +347,22 @@ describe("renderChart", () => {
 
   it("escapes names", () => {
     expect(renderChart([summary("a<b&c", 0.5, 0.1)])).toContain("a&lt;b&amp;c");
+  });
+
+  describe("renderRouting", () => {
+    const priced = (name: string, verdict: ContestantSummary["verdict"], costUsd: number): ContestantSummary => ({ ...summary(name, null, costUsd), verdict });
+
+    it("names each group's cheapest qualifying contestant, and none yet where none qualifies", () => {
+      const routing = renderRouting({
+        top: [],
+        leaves: [priced("baseline", "baseline", 0.001), priced("dear", "qualifies", 0.05), priced("cheap", "qualifies", 0.01), priced("cheaper", "worse", 0.002)],
+      });
+      expect(routing.startsWith("## Routing")).toBe(true);
+      const line = (group: string) => routing.split("\n").find((l) => l.startsWith(`- ${group}:`))!;
+      expect(line("top")).toBe("- top: none yet");
+      expect(line("leaves")).toMatch(/^- leaves: cheap\b/);
+      expect(line("leaves")).not.toContain("dear");
+    });
   });
 
   it("does not throw on zero or one contestant, or equal or zero costs", () => {
