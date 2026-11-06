@@ -136,7 +136,8 @@ export function minutesOffSize(units: UnitDraft[], materials: Material[]): SizeC
   }
   for (const g of groups.values()) {
     const m = byId.get(g.id);
-    const size = g.chapter ? chapterAt(m?.toc, g.chapter)?.minutes : m?.minutes;
+    // A whole-resource row reads some part of it, and the material's minutes size the whole: the judge grades it.
+    const size = g.chapter ? chapterAt(m?.toc, g.chapter)?.minutes : undefined;
     if (!size) {
       result.unsized += 1;
       continue;

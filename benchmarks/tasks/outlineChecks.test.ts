@@ -95,6 +95,10 @@ describe("minutesOffSize", () => {
     expect(minutesOffSize([unit([read("M1.2", 10)])], mats).off).toHaveLength(1);
     expect(minutesOffSize([unit([read("M2", 30)])], mats)).toEqual({ sized: 0, unsized: 1, off: [] });
   });
+  it("leaves a whole-resource row to the judge even when its material has minutes", () => {
+    const ms = [material("m1", { minutes: 600 })];
+    expect(minutesOffSize([unit([read("M1", 90)])], ms)).toEqual({ sized: 0, unsized: 1, off: [] });
+  });
   it("compares a practice item's row with the item's size", () => {
     const list = { source: "page" as const, items: [{ title: "a", minutes: 20 }, { title: "b", minutes: 20 }, { title: "c", minutes: 20 }] };
     const ms = [material("m1"), material("m2"), material("m3"), material("m4", { practice: { format: "problem-set", list } as unknown as Material["practice"] })];
