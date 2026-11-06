@@ -81,8 +81,14 @@ export function unreserved(nodes: PlanNode[], materials: Material[], leaf: boole
 
 const ID_IN_TEXT = /\bM\d+(?:\.i?\d+)?\b/g;
 
-/** Material ids the units' prose names (`M1`, `M1.3`, `M4.i12`): the prompt's aliases leaking into what the learner reads. */
-export function idsInText(units: UnitDraft[]): string[] {
+/**
+ * Material ids the units' prose names (`M1`, `M1.3`, `M4.i12`): the prompt's aliases leaking into what the learner reads.
+ * Only aliases the prompt issued for `materials` count, so prose that looks like one ("an M5 chip" with two materials, a
+ * chapter past the list) is left alone.
+ */
+export function idsInText(units: UnitDraft[], materials: Material[]): string[] {
+  const aliases = aliasMaterials(materials);
+  const issued = (token: string) => aliases.resolve(token) !== undefined;
   const out: string[] = [];
   for (const u of units) {
     const texts = [
@@ -93,7 +99,7 @@ export function idsInText(units: UnitDraft[]): string[] {
       ...(u.practiceCovers ?? []).map((r) => r.note),
       ...(u.practice ?? []).flatMap((r) => [r.task, r.done]),
     ];
-    for (const t of texts) if (t) out.push(...(t.match(ID_IN_TEXT) ?? []));
+    for (const t of texts) if (t) out.push(...(t.match(ID_IN_TEXT) ?? []).filter(issued));
   }
   return out;
 }
@@ -156,16 +162,24 @@ export function minutesOffSize(units: UnitDraft[], materials: Material[]): SizeC
 
 /**
  * Whether each heading's reserved chapters, summed, fit the reading minutes its `time` sets aside. A heading with a cover
- * that gives no size (a whole resource, or a chapter the list does not size) counts as unsized.
+ * that gives no size (a whole resource, or a chapter the list does not size) counts as unsized, as does one sharing a
+ * chapter with another heading of the level: each reads only part of it, and the list sizes the whole, so the judge
+ * grades it. Reviews are left out: they go back over a chapter, and reserve none of its reading.
  */
 export function setAsideOffSize(nodes: PlanNode[], materials: Material[]): SizeCheck {
   const byId = new Map(materials.map((m) => [m.id, m]));
   const result: SizeCheck = { sized: 0, unsized: 0, off: [] };
+  const read = (node: PlanNode) => (node.covers ?? []).filter((c) => c.activity !== "review");
+  // The headings that reserve each chapter (or whole resource).
+  const holders = new Map<string, Set<number>>();
   nodes.forEach((node, at) => {
-    const covers = (node.covers ?? []).filter((c) => c.activity !== "review");
+    for (const c of read(node)) holders.set(refKey(c), (holders.get(refKey(c)) ?? new Set()).add(at));
+  });
+  nodes.forEach((node, at) => {
+    const covers = read(node);
     if (!node.time || covers.length === 0) return;
     const sizes = covers.map((c) => (c.chapter ? chapterAt(byId.get(c.id)?.toc, c.chapter)?.minutes : undefined));
-    if (sizes.some((s) => !s)) {
+    if (sizes.some((s) => !s) || covers.some((c) => holders.get(refKey(c))!.size > 1)) {
       result.unsized += 1;
       return;
     }

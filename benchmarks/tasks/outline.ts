@@ -20,7 +20,7 @@ import { dayMinutes, formatDayTime, formatUnitTime, isAllReading, totalHours } f
 import { BASELINE } from "../contestants";
 import { listPriceUsd } from "../price";
 import type { CodeCriterion, Contestant, Criterion, CriterionResult, Gate, JudgeCriterion, Sample } from "../types";
-import { breachesOf, idsInText, minutesOffSize, orderBreaks, setAsideOffSize, unreserved } from "./outlineChecks";
+import { breachesOf, idsInText, minutesOffSize, orderBreaks, setAsideOffSize, unreserved, type SizeCheck } from "./outlineChecks";
 import { levelInput, type OutlineFixture } from "./outlineFixtures";
 
 /** The level as the draft returned it: the app's nodes, the units as the model wrote them, and the checks' findings. */
@@ -72,6 +72,26 @@ function givenUnlisted(ctx: OutlineCtx): boolean {
   return (parent.covers ?? []).some((c) => (c.activity ?? "read") === "read" && byId.has(c.id) && !byId.get(c.id)!.toc);
 }
 
+/**
+ * `check` over a level and its fixture, computed once per (output, fixture): a size check is read by its criteria's
+ * `when`, by their check and again by `judgeCriteriaFor`. Outputs are not changed once drafted or read back.
+ */
+function oncePer(check: (output: OutlineOutput, fixture: OutlineFixture) => SizeCheck): (output: OutlineOutput, ctx: OutlineCtx) => SizeCheck {
+  const cache = new WeakMap<OutlineOutput, WeakMap<OutlineFixture, SizeCheck>>();
+  return (output, { fixture }) => {
+    let byFixture = cache.get(output);
+    if (!byFixture) cache.set(output, (byFixture = new WeakMap()));
+    let found = byFixture.get(fixture);
+    if (!found) byFixture.set(fixture, (found = check(output, fixture)));
+    return found;
+  };
+}
+
+/** The rows' minutes against their materials' sizes. */
+const rowSizes = oncePer((output, fixture) => minutesOffSize(output.units, fixture.materials));
+/** What each heading sets aside against its reading time. */
+const setAsideSizes = oncePer((output, fixture) => setAsideOffSize(output.nodes, fixture.materials));
+
 const LEAF_CRITERIA: Entry[] = [
   {
     criterion: code({
@@ -91,15 +111,15 @@ const LEAF_CRITERIA: Entry[] = [
       text: "Rows whose material gives a size have minutes within half to one and a half times that size.",
       applies: isLeaf,
       check: (output, ctx) => {
-        const { sized, off } = minutesOffSize(output.units, ctx.fixture.materials);
+        const { sized, off } = rowSizes(output, ctx);
         return findings(off, `${sized} sized row${sized === 1 ? "" : "s"} within their size`);
       },
     }),
-    when: (output, ctx) => minutesOffSize(output.units, ctx.fixture.materials).sized > 0,
+    when: (output, ctx) => rowSizes(output, ctx).sized > 0,
   },
   {
     criterion: judge("leaf", { id: "leaf-minutes-judge", weight: 1.5, text: "Rows whose material gives no size have minutes that fit what they read or do." }),
-    when: (output, ctx) => minutesOffSize(output.units, ctx.fixture.materials).unsized > 0,
+    when: (output, ctx) => rowSizes(output, ctx).unsized > 0,
   },
   {
     criterion: judge("leaf", {
@@ -139,7 +159,7 @@ const LEAF_CRITERIA: Entry[] = [
       weight: 0.5,
       text: "The units' prose names no material id.",
       applies: isLeaf,
-      check: (output) => findings(idsInText(output.units), "no ids in the text"),
+      check: (output, ctx) => findings(idsInText(output.units, ctx.fixture.materials), "no ids in the text"),
     }),
   },
 ];
@@ -164,16 +184,16 @@ const HEAD_CRITERIA: Entry[] = [
       text: "What each unit sets aside fits its reading time, where the material gives a size.",
       applies: isHeading,
       check: (output, ctx) => {
-        const { sized, off } = setAsideOffSize(output.nodes, ctx.fixture.materials);
+        const { sized, off } = setAsideSizes(output, ctx);
         return findings([...breachTexts(output, ["reading-over-stated"]), ...off], `${sized} sized unit${sized === 1 ? "" : "s"} fit their reading time`);
       },
     }),
     // Only with something to grade: a heading with no covers or no time sets nothing aside to measure.
-    when: (output, ctx) => setAsideOffSize(output.nodes, ctx.fixture.materials).sized > 0,
+    when: (output, ctx) => setAsideSizes(output, ctx).sized > 0,
   },
   {
     criterion: judge("heading", { id: "head-set-aside-judge", weight: 1.5, text: "What each unit sets aside fits its reading time." }),
-    when: (output, ctx) => setAsideOffSize(output.nodes, ctx.fixture.materials).unsized > 0,
+    when: (output, ctx) => setAsideSizes(output, ctx).unsized > 0,
   },
   {
     criterion: code({
@@ -204,7 +224,7 @@ const HEAD_CRITERIA: Entry[] = [
       weight: 0.5,
       text: "The units' prose names no material id.",
       applies: isHeading,
-      check: (output) => findings(idsInText(output.units), "no ids in the text"),
+      check: (output, ctx) => findings(idsInText(output.units, ctx.fixture.materials), "no ids in the text"),
     }),
   },
 ];

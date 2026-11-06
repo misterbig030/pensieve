@@ -12,6 +12,13 @@ import type { Contestant } from "../types";
 import type { OutlineFixture } from "./outlineFixtures";
 import { JUDGE_INSTRUCTIONS } from "../judge";
 import { codeResults, judgeCriteriaFor, OUTLINE_CRITERIA, OUTLINE_JUDGE_INSTRUCTIONS, renderOutline, runOutlineSample, type OutlineOutput } from "./outline";
+import { minutesOffSize, setAsideOffSize } from "./outlineChecks";
+
+// The size checks as they are, counted, so a test can see how often a level is sized.
+vi.mock("./outlineChecks", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./outlineChecks")>();
+  return { ...actual, minutesOffSize: vi.fn(actual.minutesOffSize), setAsideOffSize: vi.fn(actual.setAsideOffSize) };
+});
 
 function chapters(minutes: number[]): ChapterList {
   return {
@@ -151,6 +158,30 @@ describe("codeResults", () => {
     const leaked: UnitDraft[] = [{ ...DAY_UNITS[0], summary: "Read M1.1 closely" }];
     expect(result(leafOutput({ units: leaked }), "leaf-words-code")).toMatchObject({ met: false, evidence: expect.stringContaining("M1.1") });
     expect(result(leafOutput(), "leaf-words-code")?.met).toBe(true);
+  });
+
+  it("takes only the fixture's aliases for ids: one material, so an M5 chip is prose", () => {
+    const prose: UnitDraft[] = [{ ...DAY_UNITS[0], summary: "Why an M5 chip runs this fast" }];
+    expect(result(leafOutput({ units: prose }), "leaf-words-code")?.met).toBe(true);
+    const weeks = [node({ id: "a", level: "week", time: { reading: 120, practice: {} } })];
+    const heading = codeResults({ nodes: weeks, units: [{ title: "M5 chips", summary: "s" }], breaches: [], problems: [] }, { fixture: HEADING });
+    expect(heading.find((r) => r.id === "head-words-code")?.met).toBe(true);
+  });
+
+  it("sizes a level once for its criteria' tests, its checks and the judge's criteria", () => {
+    vi.mocked(minutesOffSize).mockClear();
+    vi.mocked(setAsideOffSize).mockClear();
+    const leaf = leafOutput();
+    judgeCriteriaFor(leaf, { fixture: LEAF });
+    codeResults(leaf, { fixture: LEAF });
+    expect(minutesOffSize).toHaveBeenCalledTimes(1);
+    const weeks: OutlineOutput = { nodes: [node({ id: "a", level: "week", covers: [{ id: "csapp", chapter: 1, note: null }], time: { reading: 120, practice: {} } })], units: [], breaches: [], problems: [] };
+    judgeCriteriaFor(weeks, { fixture: HEADING });
+    codeResults(weeks, { fixture: HEADING });
+    expect(setAsideOffSize).toHaveBeenCalledTimes(1);
+    // Another fixture is another sizing.
+    codeResults(leaf, { fixture: { ...LEAF } });
+    expect(minutesOffSize).toHaveBeenCalledTimes(2);
   });
 
   it("marks leaf-order-code unmet on a chapter read out of order", () => {

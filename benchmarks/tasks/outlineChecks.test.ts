@@ -77,13 +77,28 @@ describe("unreserved", () => {
 
 describe("idsInText", () => {
   const unit = (extra: Partial<UnitDraft>): UnitDraft => ({ title: "t", summary: "s", ...extra });
+  const list = { source: "page" as const, items: [1, 2, 3, 4].map((n) => ({ title: `p${n}`, minutes: 10 })) };
+  // M1 has 4 chapters, M3 an item list of 4, M4 12 chapters.
+  const mats = [
+    material("m1", { toc: chapters([10, 10, 10, 10]) }),
+    material("m2"),
+    material("m3", { practice: { format: "problem-set", list } as unknown as Material["practice"] }),
+    material("m4", { toc: chapters(Array.from({ length: 12 }, () => 10)) }),
+    material("m5"),
+  ];
   it("finds M1.3 in a note and ignores Module 1", () => {
-    expect(idsInText([unit({ materials: [{ id: "M1", tier: "must", minutes: 10, note: "read M1.3 first" }] })])).toEqual(["M1.3"]);
-    expect(idsInText([unit({ title: "Module 1", summary: "Review module 1" })])).toEqual([]);
+    expect(idsInText([unit({ materials: [{ id: "M1", tier: "must", minutes: 10, note: "read M1.3 first" }] })], mats)).toEqual(["M1.3"]);
+    expect(idsInText([unit({ title: "Module 1", summary: "Review module 1" })], mats)).toEqual([]);
   });
   it("finds ids in title, summary, task and done", () => {
-    const out = idsInText([unit({ title: "M2", summary: "M3.i4", practice: [{ format: "problem-set", task: "do M4.12", done: "M5", minutes: 10 }] })]);
+    const out = idsInText([unit({ title: "M2", summary: "M3.i4", practice: [{ format: "problem-set", task: "do M4.12", done: "M5", minutes: 10 }] })], mats);
     expect(out).toEqual(["M2", "M3.i4", "M4.12", "M5"]);
+  });
+  it("counts only the aliases the prompt issued: an M5 chip is prose when there are two materials", () => {
+    const two = mats.slice(0, 2);
+    expect(idsInText([unit({ summary: "Runs on an Apple M5 chip; read M1.2, then M2" })], two)).toEqual(["M1.2", "M2"]);
+    // M1 has 4 chapters, so M1.9 names nothing the model was shown.
+    expect(idsInText([unit({ summary: "Benchmarks on M1.9 hardware" })], two)).toEqual([]);
   });
 });
 
@@ -132,5 +147,14 @@ describe("setAsideOffSize", () => {
   });
   it("counts a heading with an unsized cover as unsized", () => {
     expect(setAsideOffSize([heading(100, [cover("m1", 1), cover("m2")])], mats)).toEqual({ sized: 0, unsized: 1, off: [] });
+  });
+  it("leaves a chapter two headings share to the judge: each holds only part of it", () => {
+    // Chapter 1 (60 min) split over two weeks: counted in full under each, the 30-minute week would fail at 2×.
+    const nodes = [heading(30, [cover("m1", 1)]), heading(90, [cover("m1", 1), cover("m1", 2)]), heading(60, [cover("m1", 3)])];
+    expect(setAsideOffSize(nodes, mats)).toEqual({ sized: 1, unsized: 2, off: [] });
+  });
+  it("does not count a review as sharing the chapter it goes back over", () => {
+    const review = { ...cover("m1", 1), activity: "review" as const };
+    expect(setAsideOffSize([heading(60, [cover("m1", 1)]), heading(60, [cover("m1", 2), review])], mats)).toEqual({ sized: 2, unsized: 0, off: [] });
   });
 });
