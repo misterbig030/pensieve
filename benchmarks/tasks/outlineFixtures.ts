@@ -169,17 +169,25 @@ async function replay(f: OutlineFixture, call: ModelCall): Promise<PlanNode[]> {
   return nodes;
 }
 
-/** The node in `tree` whose children the call labelled `label` planned: "Week 1 · 5 days" is Week 1, planned as 5 days. */
-function plannedNode(tree: PlanNode, label: string, daysPerWeek: number): PlanNode | null {
-  let found: PlanNode | null = null;
+/** A level call's label: where it plans and how many units it asked for ("Week 1 · 5 days"). */
+const LEVEL_LABEL = /^(.+) · (\d+) (day|week|month)s?$/;
+
+/**
+ * The node in `tree` whose children the call labelled `label` planned ("Week 1 · 5 days" is Week 1, planned as days),
+ * and how many units the call asked for. Matched by where the call plans, not by the count: a level that came back with
+ * another count was re-split, and `layout` then changed the parent's length in the saved plan.
+ */
+function plannedNode(tree: PlanNode, label: string): { node: PlanNode; asked: number } {
+  const match = LEVEL_LABEL.exec(label);
+  if (!match) throw new Error(`${label}: not a level call's label`);
+  const [, where, count, level] = match;
+  const found: PlanNode[] = [];
   walk(tree, (node) => {
-    if (found || node.id === tree.id) return;
-    const level = childLevel(node.level);
-    if (!level) return;
-    const n = childSpans(node, daysPerWeek).length;
-    if (`${fullLabelOf(tree, node)} · ${n} ${level}${n === 1 ? "" : "s"}` === label) found = node;
+    if (node.id !== tree.id && node.children !== null && childLevel(node.level) === level && fullLabelOf(tree, node) === where) found.push(node);
   });
-  return found;
+  if (found.length === 0) throw new Error(`${label}: no unit in the plan matches the call`);
+  if (found.length > 1) throw new Error(`${label}: ${found.length} units in the plan match the call`);
+  return { node: found[0], asked: Number(count) };
 }
 
 /** The block heading a block call wrote, by the week range in its label: blocks are recorded as they finish, not in order. */
@@ -267,11 +275,12 @@ export async function captureOutline(runDir: string, runFixtureId: string): Prom
     } else {
       if (!record.plan) throw new Error(`${call.label}: the run has no plan to rebuild the call's tree from`);
       const tree = cloneTree(record.plan);
-      const parent = plannedNode(tree, call.label, daysPerWeek);
-      if (!parent) throw new Error(`${call.label}: no unit in the plan matches the call`);
-      // The tree as it stood before the call: the parent not yet planned, so without its children and their problems.
+      const { node: parent, asked } = plannedNode(tree, call.label);
+      // The tree as it stood before the call: the parent not yet planned, so without its children and their problems,
+      // and its length the one the call was asked to fill (a re-split level changed it).
       parent.children = null;
       delete parent.problems;
+      parent.len = parent.level === "week" ? asked : asked * daysPerWeek;
       layout(tree);
       fixture = fixtureFor(call, childLevel(parent.level)!, childSpans(parent, daysPerWeek), tree, parent.id);
     }

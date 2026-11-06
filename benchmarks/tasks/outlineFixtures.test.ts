@@ -61,9 +61,12 @@ function userText(options: LanguageModelV4CallOptions): string {
     .join("");
 }
 
+/** How many units the model returns for a prompt that asked for `asked`: as many, unless a test says otherwise. */
+type Count = (prompt: string, asked: number) => number;
+
 /** Units for a prompt: headings reserve the guide and state their time; leaves read it. */
-function unitsFor(prompt: string): UnitDraft[] {
-  const n = Number(/Return exactly (\d+) units/.exec(prompt)![1]);
+function unitsFor(prompt: string, count: Count): UnitDraft[] {
+  const n = count(prompt, Number(/Return exactly (\d+) units/.exec(prompt)![1]));
   const leaves = prompt.includes('list its Read table in "materials"');
   return Array.from({ length: n }, (_, i) =>
     leaves
@@ -73,12 +76,12 @@ function unitsFor(prompt: string): UnitDraft[] {
 }
 
 /** A model that answers every outline prompt with `unitsFor`, after `delayMs(prompt)` so parallel calls can land out of order. */
-function scriptedModel(delayMs: (prompt: string) => number = () => 0) {
+function scriptedModel(delayMs: (prompt: string) => number = () => 0, count: Count = (_, asked) => asked) {
   return new MockLanguageModelV4({
     doStream: async (options) => {
       const prompt = userText(options);
       await new Promise((resolve) => setTimeout(resolve, delayMs(prompt)));
-      const text = JSON.stringify({ units: unitsFor(prompt) });
+      const text = JSON.stringify({ units: unitsFor(prompt, count) });
       return {
         stream: new ReadableStream({
           start(controller) {
@@ -122,10 +125,10 @@ const ALLOCATE_CALL: ModelCall = {
 };
 
 /** Drafts `request` through the app's own `streamPlanDraft` on a scripted model, and records it as the eval would. */
-async function recordDraft(request: DraftRequestBody, delayMs?: (prompt: string) => number): Promise<RunRecord> {
+async function recordDraft(request: DraftRequestBody, delayMs?: (prompt: string) => number, count?: Count): Promise<RunRecord> {
   const calls: ModelCall[] = [ALLOCATE_CALL];
   let plan: PlanNode | null = null;
-  const outlineModel = { model: scriptedModel(delayMs), id: "anthropic/claude-opus-5.5" as const, keyOwner: "app" as const };
+  const outlineModel = { model: scriptedModel(delayMs, count), id: "anthropic/claude-opus-5.5" as const, keyOwner: "app" as const };
   for await (const event of streamPlanDraft({ ...request, materials: MATERIALS, split: SPLIT, outlineModel, log: { onCall: (call) => void calls.push({ ...call, endedAt: Date.now() }) } })) {
     if (event.type === "finish") plan = event.root;
   }
@@ -177,6 +180,21 @@ describe("captureOutline", () => {
     expect(parent.children).toBeNull();
     expect(parent).not.toHaveProperty("problems");
     expect(days.tree!.children![1]).toEqual(record.plan!.children![1]);
+  });
+
+  it("captures a level that came back with fewer units than asked, as the call saw it", async () => {
+    // Week 1 asked for 5 days and got 4: the app re-split the spans, and the saved plan's Week 1 is 4 days long.
+    const record = await recordDraft(DAY_PLAN, undefined, (prompt, asked) => (prompt.includes('list its Read table in "materials"') ? asked - 1 : asked));
+    const week1 = record.plan!.children![0];
+    expect(week1.children).toHaveLength(4);
+    expect(week1.len).toBe(4);
+    expect(record.calls.map((c) => c.label)).toContain("Week 1 · 5 days");
+
+    const fixtures = await captureOutline(saved(record), "t-1");
+    expect(fixtures.map((f) => f.id)).toEqual(["t-1/top", "t-1/week-1"]);
+    const days = fixtures[1];
+    expect(days.spans).toHaveLength(5);
+    expect(findNode(days.tree!, week1.id)!.len).toBe(5);
   });
 
   it("refuses a run whose recorded prompt differs, naming the call", async () => {
