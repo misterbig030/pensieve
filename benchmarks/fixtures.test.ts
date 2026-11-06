@@ -27,7 +27,7 @@ function material(id: string, title: string): Material {
 }
 
 function call(label: string, inputTokens: number | null, outputTokens: number | null, latencyMs: number): ModelCall {
-  return { caller: "outline", model: "anthropic/claude-sonnet-5.5", effort: null, keyOwner: "app", inputTokens, outputTokens, cacheReadTokens: null, reasoningTokens: null, costUsd: 0.1, latencyMs, trackId: null, userId: null, label, system: null, prompt: "p", response: "r", finishReason: "stop", facts: [] };
+  return { caller: label.startsWith("Research") ? "research" : "outline", model: "anthropic/claude-sonnet-5.5", effort: null, keyOwner: "app", inputTokens, outputTokens, cacheReadTokens: null, reasoningTokens: null, costUsd: 0.1, latencyMs, trackId: null, userId: null, label, system: null, prompt: "p", response: "r", finishReason: "stop", facts: [] };
 }
 
 const MATERIALS = [material("M1", "DDIA"), material("M2", "System Design Interview")];
@@ -67,70 +67,78 @@ function saved(name: string, rec: RunRecord = record()): string {
 }
 
 describe("captureFixture", () => {
-  it("freezes research's materials as the allocation input", () => {
-    const fixture = captureFixture(saved("sde-1"), root);
+  it("freezes research's materials as the allocation input", async () => {
+    const fixture = await captureFixture(saved("sde-1"), root);
     expect(fixture.input.materials).toEqual(MATERIALS);
     expect(fixture.input).toMatchObject({ topic: META.request!.topic, instructions: "Focus on system design", weeks: 8, daysPerWeek: 5, hoursPerWeek: 7 });
     expect(fixture).toMatchObject({ id: "sde-1", topic: "sde", sourceRun: "sde-1", commit: "abc1234" });
-    expect(loadFixture("sde-1", root)).toEqual(fixture);
+    const { outline, ...allocate } = fixture;
+    expect(outline).toEqual([]);
+    expect(loadFixture("sde-1", root)).toEqual(allocate);
   });
 
-  it("writes allocate.json pretty-printed", () => {
-    captureFixture(saved("sde-1"), root);
+  it("writes allocate.json pretty-printed", async () => {
+    await captureFixture(saved("sde-1"), root);
     const text = readFileSync(join(root, "sde-1", "allocate.json"), "utf8");
     expect(text).toContain('\n  "id": "sde-1"');
   });
 
-  it("takes the baseline from the Allocate call", () => {
-    expect(captureFixture(saved("sde-1"), root).baseline).toEqual({ inputTokens: 1200, outputTokens: 340, ms: 4200 });
+  it("takes the baseline from the Allocate call", async () => {
+    expect((await captureFixture(saved("sde-1"), root)).baseline).toEqual({ inputTokens: 1200, outputTokens: 340, ms: 4200 });
   });
 
-  it("has no baseline when the allocation fell back", () => {
+  it("has no baseline when the allocation fell back", async () => {
     const rec = record({ calls: [call("Research", 5, 5, 5)] });
-    expect(captureFixture(saved("sde-1", rec), root).baseline).toBeNull();
+    expect((await captureFixture(saved("sde-1", rec), root)).baseline).toBeNull();
   });
 
-  it("defaults the hours per week and leaves out absent instructions", () => {
+  it("defaults the hours per week and leaves out absent instructions", async () => {
     const { hoursPerWeek: _hours, instructions: _instructions, ...request } = META.request!;
-    const fixture = captureFixture(saved("sde-1", record({ meta: { request } })), root);
+    const fixture = await captureFixture(saved("sde-1", record({ meta: { request } })), root);
     expect(fixture.input.hoursPerWeek).toBe(DEFAULT_HOURS_PER_WEEK);
     expect(fixture.input).not.toHaveProperty("instructions");
   });
 
-  it("falls back to the topic's request when the folder has none", () => {
-    const fixture = captureFixture(saved("sde-1", record({ meta: { request: undefined } })), root);
+  it("falls back to the topic's request when the folder has none", async () => {
+    const fixture = await captureFixture(saved("sde-1", record({ meta: { request: undefined } })), root);
     expect(fixture.input.topic).toBe(DRAFT_TOPICS.sde.request.topic);
     expect(fixture.input.weeks).toBe(DRAFT_TOPICS.sde.request.weeks);
   });
 
-  it("numbers fixtures per topic", () => {
-    expect(captureFixture(saved("sde-a"), root).id).toBe("sde-1");
-    expect(captureFixture(saved("sde-b"), root).id).toBe("sde-2");
+  it("numbers fixtures per topic", async () => {
+    expect((await captureFixture(saved("sde-a"), root)).id).toBe("sde-1");
+    expect((await captureFixture(saved("sde-b"), root)).id).toBe("sde-2");
     expect(readdirSync(root).sort()).toEqual(["sde-1", "sde-2"]);
   });
 
-  it("refuses a run with no research.done", () => {
+  it("refuses a run with no research.done", async () => {
     const dir = saved("sde-1", record({ events: [{ type: "research.start", caps: { searches: 1, fetches: 1, steps: 1 }, t: 1 } as TimedEvent] }));
-    expect(() => captureFixture(dir, root)).toThrow(dir);
+    await expect(captureFixture(dir, root)).rejects.toThrow(dir);
     expect(readdirSync(root)).toEqual([]);
   });
 
-  it("refuses a run whose research found nothing", () => {
+  it("refuses a run whose research found nothing", async () => {
     const dir = saved("sde-1", record({ events: [done([])] }));
-    expect(() => captureFixture(dir, root)).toThrow(dir);
+    await expect(captureFixture(dir, root)).rejects.toThrow(dir);
     expect(readdirSync(root)).toEqual([]);
   });
 
-  it("refuses a run with no request and no topic to fall back on", () => {
+  it("refuses a run with no request and no topic to fall back on", async () => {
     const dir = saved("odd-1", record({ meta: { topic: "odd", request: undefined } }));
-    expect(() => captureFixture(dir, root)).toThrow(dir);
+    await expect(captureFixture(dir, root)).rejects.toThrow(dir);
     expect(readdirSync(root)).toEqual([]);
   });
 
-  it("refuses a folder already captured", () => {
+  it("writes nothing when an outline call's prompt is not the one recorded", async () => {
+    const dir = saved("sde-1", record({ calls: [call("Allocate", 1200, 340, 4200), { ...call("Top level · 8 weeks", 10, 10, 10), endedAt: Date.parse(META.startedAt) + 60_000 }] }));
+    await expect(captureFixture(dir, root)).rejects.toThrow("Top level · 8 weeks");
+    expect(readdirSync(root)).toEqual([]);
+  });
+
+  it("refuses a folder already captured", async () => {
     const dir = saved("sde-1");
-    captureFixture(dir, root);
-    expect(() => captureFixture(dir, root)).toThrow(dir);
+    await captureFixture(dir, root);
+    await expect(captureFixture(dir, root)).rejects.toThrow(dir);
     expect(readdirSync(root)).toEqual(["sde-1"]);
   });
 });

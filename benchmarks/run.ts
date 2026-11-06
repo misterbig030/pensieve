@@ -408,11 +408,12 @@ export function calibrateBenchmark(dir: string, deps: { fixturesRoot?: string; c
 }
 
 /** Captures each run folder as a fixture, printing the new id or why it was refused and going on to the next. True when none was refused. */
-export function captureFixtures(runDirs: string[], root: string = FIXTURES_ROOT, print: (line: string) => void = console.log): boolean {
+export async function captureFixtures(runDirs: string[], root: string = FIXTURES_ROOT, print: (line: string) => void = console.log): Promise<boolean> {
   let allCaptured = true;
   for (const runDir of runDirs) {
     try {
-      print(`${captureFixture(runDir, root).id} captured from ${runDir}`);
+      const fixture = await captureFixture(runDir, root);
+      print(`${fixture.id} captured from ${runDir} (+${fixture.outline.length} outline)`);
     } catch (error) {
       print(`${runDir} refused: ${error instanceof Error ? error.message : String(error)}`);
       allCaptured = false;
@@ -448,7 +449,7 @@ async function main() {
 
   if (values.capture) {
     if (positionals.length === 0) throw new Error("--capture needs one or more draft-eval run folders: --capture <dir> <dir>");
-    if (!captureFixtures(positionals)) process.exitCode = 1;
+    if (!(await captureFixtures(positionals))) process.exitCode = 1;
     return;
   }
 

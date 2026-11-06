@@ -471,9 +471,9 @@ describe("calibrateBenchmark", () => {
 });
 
 describe("captureFixtures", () => {
-  it("prints why a folder was refused and goes on to the next", () => {
+  it("prints why a folder was refused and goes on to the next", async () => {
     const lines: string[] = [];
-    const ok = captureFixtures([join(root, "missing-1"), join(root, "missing-2")], fixturesRoot, (l) => lines.push(l));
+    const ok = await captureFixtures([join(root, "missing-1"), join(root, "missing-2")], fixturesRoot, (l) => lines.push(l));
     expect(ok).toBe(false);
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain("missing-1 refused:");
