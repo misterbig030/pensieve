@@ -2,6 +2,7 @@ import { APICallError, JSONParseError, NoContentGeneratedError, NoObjectGenerate
 import { describe, expect, it, vi } from "vitest";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { draftLevel } from "@/lib/ai/planDraft";
+import type { ResolvedModel } from "@/lib/ai/resolve";
 import type { Breach } from "@/lib/materials";
 import { layout, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { ChapterList, Material } from "@/lib/schemas/material";
@@ -362,6 +363,13 @@ describe("runOutlineSample", () => {
       expect(sample.estimatedCostUsd).toBeCloseTo(listPriceUsd("google/gemini-3-flash", { inputTokens: 20_000, outputTokens: 4_000 }));
     });
 
+    it("is not charged when the provider refused the request (a 400): nothing was generated or billed", async () => {
+      const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ error: apiError(400) }), now: () => 0 });
+      expect(sample.gate.status).toBe("failed");
+      expect(sample.costUsd).toBe(0);
+      expect(sample).not.toHaveProperty("estimatedCostUsd");
+    });
+
     it("is not estimated past the time ceiling, where the call reported its cost", async () => {
       const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ breaches: [breach("over-budget")] }) });
       expect(sample.gate.status).toBe("failed");
@@ -386,6 +394,27 @@ describe("runOutlineSample", () => {
   it("voids and halts on the gateway refusing the key or its budget (402)", async () => {
     const sample = await runOutlineSample(LEAF, BASELINE, { draft: fakeDraft({ error: apiError(402) }) });
     expect(sample.gate).toMatchObject({ status: "void", halt: true });
+  });
+
+  it("voids and halts when the owner's own key is out of credits, Anthropic's 400, rather than failing the model", async () => {
+    const body = JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API." } });
+    const error = new APICallError({ message: "Your credit balance is too low", url: "https://api.anthropic.com/v1/messages", requestBodyValues: {}, statusCode: 400, responseBody: body });
+    const sample = await runOutlineSample(LEAF, BASELINE, { draft: fakeDraft({ error }) });
+    expect(sample.gate).toMatchObject({ status: "void", halt: true });
+    expect(sample.costUsd).toBe(0);
+  });
+
+  it("calls the outline model the way the route says, the gateway id when no route is given", async () => {
+    const onKey = { model: "direct-instance", id: "anthropic/claude-opus-5.5", keyOwner: "user" } as unknown as ResolvedModel;
+    const route = vi.fn(() => onKey);
+    const draft = fakeDraft();
+    await runOutlineSample(LEAF, BASELINE, { draft, route });
+    expect(route).toHaveBeenCalledWith("anthropic/claude-opus-5.5");
+    expect(draft.mock.calls[0][0].ctx.outlineModel).toBe(onKey);
+
+    const plain = fakeDraft();
+    await runOutlineSample(LEAF, BASELINE, { draft: plain });
+    expect(plain.mock.calls[0][0].ctx.outlineModel).toEqual({ model: "anthropic/claude-opus-5.5", id: "anthropic/claude-opus-5.5", keyOwner: "app" });
   });
 
   describe("an error with no status", () => {

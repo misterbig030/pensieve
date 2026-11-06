@@ -9,6 +9,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { scrubSecrets } from "@/evals/draft/record";
 import { buildGenerationLogRow, effortSettings, type ModelCall } from "@/lib/ai/logged";
+import { appModel, type ModelRoute } from "@/lib/ai/resolve";
 import { listPriceUsd } from "./price";
 import type { CriterionResult, JudgeCriterion, RoleModel, Sample } from "./types";
 
@@ -133,6 +134,8 @@ export async function judgeDimension(args: {
   cache: JudgeCache;
   /** The task's instructions to the judge; allocate's (`JUDGE_INSTRUCTIONS`) when absent. */
   instructions?: string;
+  /** How the judge's model is called; the app's gateway key when absent. The answer is the same model's, so the cache key ignores it. */
+  route?: ModelRoute;
   generate?: typeof generateObject;
 }): Promise<{ results: CriterionResult[]; costUsd: number; calls: ModelCall[] }> {
   const { rendered, dimension, criteria, judge, cache } = args;
@@ -143,9 +146,10 @@ export async function judgeDimension(args: {
 
   const generate = args.generate ?? generateObject;
   const instructions = criteriaPrompt(criteria, taskInstructions);
+  const resolved = (args.route ?? appModel)(judge.model);
   const startedAt = performance.now();
   const { object, usage, finishReason, providerMetadata } = await generate({
-    model: judge.model,
+    model: resolved.model,
     schema: verdictsSchema,
     messages: [
       {
@@ -174,6 +178,7 @@ export async function judgeDimension(args: {
   const row = buildGenerationLogRow({
     caller: "judge",
     model: judge.model,
+    keyOwner: resolved.keyOwner,
     usage,
     latencyMs,
     effort: judge.effort,

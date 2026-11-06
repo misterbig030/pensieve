@@ -5,7 +5,7 @@
 import { clearUserApiKeyError, recordUserApiKeyError } from "@/lib/db/userApiKeys";
 import { GATEWAY_FUNDS_LOG_LINE, GatewayFundsError, isGatewayOutOfFunds } from "./gatewayFunds";
 import { providerOf, type KeyErrorKind, type ModelProvider } from "./models";
-import { providerError } from "./providerError";
+import { classifyProviderError, providerError } from "./providerError";
 import type { APICallError } from "ai";
 import { PROVIDER_NAMES } from "./providerKeys";
 import type { ResolvedModels } from "./resolve";
@@ -21,16 +21,7 @@ export class UserKeyError extends Error {
   }
 }
 
-/** The kind of refusal, read from the APICallError inside whatever was thrown (a RetryError, a wrapped loop error). */
-export function classifyProviderError(error: unknown): KeyErrorKind {
-  const api = providerError(error);
-  if (!api) return "other";
-  const status = api.statusCode;
-  if (status === 401 || status === 403) return "invalid";
-  if (status === 429) return "rate_limit";
-  if (status === 400 && (api.responseBody ?? "").toLowerCase().includes("credit balance")) return "credits";
-  return "other";
-}
+export { classifyProviderError };
 
 export function userKeyMessage(provider: ModelProvider, kind: KeyErrorKind, status?: number): string {
   const name = PROVIDER_NAMES[provider];

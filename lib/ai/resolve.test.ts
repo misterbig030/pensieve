@@ -1,13 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LanguageModel } from "ai";
+import { MockLanguageModelV4 } from "ai/test";
 import { sealSecret } from "@/lib/secrets";
-import { AVAILABLE_MODELS, providerOf } from "./models";
+import { AVAILABLE_MODELS, GATEWAY_PROVIDERS, providerOf } from "./models";
 
 vi.mock("@/lib/db/userApiKeys", () => ({ getUserApiKeys: vi.fn() }));
 
 import { getUserApiKeys } from "@/lib/db/userApiKeys";
-import { ANTHROPIC_API_IDS, DEFAULT_MODEL_IDS, appModel, keyCoversAll, resolveModels, resolveWith } from "./resolve";
+import { ANTHROPIC_API_IDS, DEFAULT_MODEL_IDS, appModel, keyCoversAll, onGatewayProviders, resolveModels, resolveWith, routeWith } from "./resolve";
 
 const mockedKeys = vi.mocked(getUserApiKeys);
 const SECRET = randomBytes(32).toString("base64");
@@ -22,6 +23,9 @@ describe("resolveWith", () => {
     const set = resolveWith({});
     expect(set.outline).toEqual(appModel(DEFAULT_MODEL_IDS.outline));
     expect(set.research).toEqual({ model: DEFAULT_MODEL_IDS.research, id: DEFAULT_MODEL_IDS.research, keyOwner: "app" });
+    // Content's Sonnet 5 is the gateway's model kept off Vertex (`GATEWAY_PROVIDERS`), under its own id.
+    expect(set.content).toMatchObject({ id: DEFAULT_MODEL_IDS.content, keyOwner: "app" });
+    expect(instance(set.content.model).modelId).toBe(DEFAULT_MODEL_IDS.content);
   });
 
   it("builds direct Anthropic instances, paid by the user, for every role when they hold an Anthropic key", () => {
@@ -48,6 +52,15 @@ describe("resolveWith", () => {
     expect(DEFAULT_MODEL_IDS.allocate).toBe("anthropic/claude-opus-5.5");
     expect(resolveWith({}).allocate).toEqual({ model: "anthropic/claude-opus-5.5", id: "anthropic/claude-opus-5.5", keyOwner: "app" });
     expect(resolveWith({ anthropic: "sk-ant-test" }).allocate).toMatchObject({ id: "anthropic/claude-opus-5.5", keyOwner: "user" });
+  });
+});
+
+describe("routeWith", () => {
+  it("calls an Anthropic model on the user's key and any other model on the app's", () => {
+    const route = routeWith({ anthropic: "sk-ant-test" });
+    expect(route("anthropic/claude-haiku-5.5")).toMatchObject({ id: "anthropic/claude-haiku-5.5", keyOwner: "user" });
+    expect(instance(route("anthropic/claude-haiku-5.5").model).modelId).toBe("claude-haiku-5-5");
+    expect(route("openai/gpt-5.4")).toEqual(appModel("openai/gpt-5.4"));
   });
 });
 
@@ -82,5 +95,50 @@ describe("keyCoversAll", () => {
     expect(keyCoversAll(["anthropic"])).toBe(true); // every default today is Anthropic
     expect(keyCoversAll([])).toBe(false);
     expect(keyCoversAll(["anthropic"], ["anthropic/claude-sonnet-5.5", "google/gemini-3-flash"])).toBe(false);
+  });
+});
+
+describe("onGatewayProviders", () => {
+  it("sends every call only to the named providers, keeping the call's other options", async () => {
+    const seen: unknown[] = [];
+    const inner = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        seen.push(options.providerOptions);
+        return {
+          content: [{ type: "text", text: "ok" }],
+          finishReason: { unified: "stop", raw: undefined },
+          usage: { inputTokens: { total: 1, noCache: undefined, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: undefined, reasoning: undefined } },
+          warnings: [],
+        };
+      },
+    });
+    const routed = onGatewayProviders(inner, ["azure", "alibaba"]) as unknown as MockLanguageModelV4;
+    await routed.doGenerate({ prompt: [], providerOptions: { gateway: { order: ["azure"] }, anthropic: { effort: "high" } } });
+    expect(seen).toEqual([{ gateway: { order: ["azure"], only: ["azure", "alibaba"] }, anthropic: { effort: "high" } }]);
+  });
+});
+
+describe("appModel", () => {
+  it("keeps a plain gateway id for a model the gateway may route as it likes", () => {
+    expect(appModel("anthropic/claude-opus-5.5").model).toBe("anthropic/claude-opus-5.5");
+  });
+
+  it("keeps the Anthropic models that lose their thinking on Vertex off it, on Pensieve's key", async () => {
+    // Measured 2026-11-06: through Vertex a schema call on these reported 0 reasoning tokens at effort high.
+    for (const id of ["anthropic/claude-haiku-5.5", "anthropic/claude-sonnet-5", "anthropic/claude-opus-5"] as const) {
+      expect(GATEWAY_PROVIDERS[id], id).toEqual(["anthropic", "bedrock"]);
+      expect(instance(appModel(id).model).modelId, id).toBe(id);
+      expect(appModel(id).model, id).toBe(appModel(id).model); // built once, reused by every request
+    }
+    // The models that always think do so on Vertex too, so the gateway still picks their provider.
+    expect(GATEWAY_PROVIDERS["anthropic/claude-sonnet-5.5"]).toBeUndefined();
+    expect(GATEWAY_PROVIDERS["anthropic/claude-opus-5.5"]).toBeUndefined();
+  });
+
+  it("wraps a model with listed gateway providers, under its own id", () => {
+    const resolved = appModel("deepseek/deepseek-v4-pro");
+    expect(resolved.id).toBe("deepseek/deepseek-v4-pro");
+    expect(resolved.keyOwner).toBe("app");
+    expect(instance(resolved.model).modelId).toBe("deepseek/deepseek-v4-pro");
   });
 });

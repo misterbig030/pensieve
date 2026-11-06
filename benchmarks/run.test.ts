@@ -2,12 +2,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFil
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { generateObject } from "ai";
+import { APICallError, type generateObject } from "ai";
 import type { ModelCall } from "@/lib/ai/logged";
 import { writeRun, type RunRecord, type TimedEvent } from "@/evals/draft/record";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
-import { calibrateBenchmark, captureFixtures, rescoreBenchmark, runBenchmark } from "./run";
+import { appModel } from "@/lib/ai/resolve";
+import { calibrateBenchmark, captureFixtures, rescoreBenchmark, runBenchmark, type RunOptions } from "./run";
 import { JUDGE, JUDGE_INSTRUCTIONS, SECOND_JUDGE, judgeDimension, type JudgeCache } from "./judge";
 import type { AllocateFixture } from "./fixtures";
 import type { AllocateOutput, runAllocateSample } from "./tasks/allocate";
@@ -53,10 +54,12 @@ beforeEach(() => {
 });
 
 type SampleRun = Awaited<ReturnType<typeof runAllocateSample>>;
+/** A stand-in for a task's sample runner, as `runBenchmark` takes one. */
+type Runner = NonNullable<RunOptions["runSample"]>;
 const completed = (costUsd = 0.1): SampleRun => ({ gate: { status: "completed" }, output: OUTPUT, calls: [], costUsd, ms: 14_000 });
 
 /** A sample runner that answers with `answer` for every call. */
-const runner = (answer: () => SampleRun = () => completed()) => vi.fn(async (_fixture: AllocateFixture, _contestant: unknown) => answer()) as unknown as typeof runAllocateSample & ReturnType<typeof vi.fn>;
+const runner = (answer: () => SampleRun = () => completed()) => vi.fn(async (_fixture: AllocateFixture, _contestant: unknown) => answer()) as unknown as Runner & ReturnType<typeof vi.fn>;
 
 /** A judge stand-in that meets every criterion it is given and charges `costUsd` a call. */
 const judge = (costUsd = 0) =>
@@ -89,6 +92,26 @@ describe("runBenchmark", () => {
     expect(runSample).not.toHaveBeenCalled();
     expect(judgeFn).not.toHaveBeenCalled();
     expect(existsSync(outDir)).toBe(false);
+  });
+
+  it("on the owner's key, routes every sample and judge call, records the key and keeps the key out of every file", async () => {
+    const secret = "sk-ant-owner-secret-0123456789";
+    const route = vi.fn(appModel);
+    // One contestant fails with the key in its reason, the way a provider's refusal can quote a request.
+    const runSample = vi.fn(async (_fixture: AllocateFixture, contestant: { name: string }) =>
+      contestant.name === "baseline" ? completed() : { gate: { status: "failed" as const, reason: `refused ${secret}` }, output: null, calls: [], costUsd: 0, ms: 1 },
+    ) as unknown as Runner & ReturnType<typeof vi.fn>;
+    const judgeFn = judge();
+    const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1 }), runSample, judge: judgeFn, userKey: { route, secrets: [secret] } });
+
+    expect(runSample).toHaveBeenCalled();
+    expect(runSample.mock.calls.every((call) => call[2] === route)).toBe(true);
+    expect(judgeFn).toHaveBeenCalled();
+    expect(judgeFn.mock.calls.every((call) => (call[0] as { route?: unknown }).route === route)).toBe(true);
+    expect(JSON.parse(readFileSync(join(dir, "run.json"), "utf8")).key).toBe("user");
+    const failed = readFileSync(join(dir, "samples/gpt-5.4-mini-sde-1-1.json"), "utf8");
+    expect(failed).toContain("refused");
+    expect(failed).not.toContain(secret);
   });
 
   it("estimates allocate's judging on its rendered materials, as before", async () => {
@@ -131,7 +154,7 @@ describe("runBenchmark", () => {
     const run = JSON.parse(readFileSync(join(dir, "run.json"), "utf8"));
     expect(run).toMatchObject({
       task: "allocate", fixtures: ["sde-1", "sde-2"], epochs: 2, maxUsd: 100, margin: 0.05, commit: "abc1234", startedAt: "2026-10-29T10:00:00.000Z",
-      judge: JUDGE, secondJudge: SECOND_JUDGE, estimate: cheap(),
+      key: "app", judge: JUDGE, secondJudge: SECOND_JUDGE, estimate: cheap(),
     });
     expect(run.contestants.map((c: { name: string }) => c.name)).toEqual(["baseline", "gpt-5.4-mini"]);
     expect(run.contestants[1].roles.allocate.model).toBe("openai/gpt-5.4-mini");
@@ -291,6 +314,25 @@ describe("runBenchmark", () => {
     expect(summaries[0].voids).toBe(1);
   });
 
+  it("stops starting samples once a judge's key runs out of credits, since no later sample could be judged", async () => {
+    const runSample = runner(() => completed(0.1));
+    const refused = new APICallError({
+      message: "Your credit balance is too low to access the Anthropic API.",
+      url: "https://api.anthropic.com/v1/messages",
+      requestBodyValues: {},
+      statusCode: 400,
+      responseBody: '{"error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}',
+    });
+    const judgeFn = vi.fn(async () => {
+      throw refused;
+    }) as unknown as typeof judgeDimension;
+    const lines: string[] = [];
+    const { dir } = await runBenchmark({ ...base({ concurrency: 1, print: (line: string) => lines.push(line) }), runSample, judge: judgeFn });
+    expect(runSample).toHaveBeenCalledTimes(1);
+    expect(readSamples(dir)).toHaveLength(1);
+    expect(lines.some((l) => l.startsWith("7 of 8 samples not started: judge key out of funds"))).toBe(true);
+  });
+
   it("stops starting samples once the gateway refuses the key, without re-running that one", async () => {
     const runSample = runner(() => ({ gate: { status: "void", reason: "allocate 402: API key budget exceeded", halt: true }, output: null, calls: [], costUsd: 0, ms: 1 }));
     const lines: string[] = [];
@@ -362,7 +404,7 @@ describe("rescoreBenchmark", () => {
     // The contestants answer differently, so no two samples share a cache entry.
     const runSample = vi.fn(async (_fixture: AllocateFixture, contestant: { name: string }) =>
       contestant.name === "baseline" ? completed() : { ...completed(), output: { ...OUTPUT, materials: [material("M2", "Another book")] } },
-    ) as unknown as typeof runAllocateSample;
+    ) as unknown as Runner;
     const { dir } = await runBenchmark({ ...base({ fixtures: ["sde-1"], epochs: 1 }), runSample, judge: judgeFn, cache });
     const asked = generate.mock.calls.length;
     expect(asked).toBe(2 * 3 + 2 * 3);
@@ -526,7 +568,7 @@ describe("the outline task", () => {
 
   type OutlineRun = Awaited<ReturnType<typeof runOutlineSample>>;
   const outlineRunner = () =>
-    vi.fn(async (f: OutlineFixture, _contestant: unknown): Promise<OutlineRun> => ({ gate: { status: "completed" }, output: f.leaf ? DAYS : WEEKS, calls: [], costUsd: 0.1, ms: 9_000 })) as unknown as typeof runOutlineSample &
+    vi.fn(async (f: OutlineFixture, _contestant: unknown): Promise<OutlineRun> => ({ gate: { status: "completed" }, output: f.leaf ? DAYS : WEEKS, calls: [], costUsd: 0.1, ms: 9_000 })) as unknown as Runner &
       ReturnType<typeof vi.fn>;
 
   beforeEach(() => {

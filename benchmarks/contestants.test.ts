@@ -46,7 +46,14 @@ describe("CONTESTANTS", () => {
       "gemini-3.8-flash@low",
       "deepseek-v4-pro@medium",
       "deepseek-v4-pro@low",
+      "haiku-5.5@medium",
+      "sonnet-5.5@medium",
+      "opus-5.5@medium",
     ]);
+  });
+
+  it("runs Opus 5.5 at medium as the baseline's model one effort down", () => {
+    expect(CONTESTANTS["opus-5.5@medium"].roles.outline).toEqual({ model: BASELINE.roles.outline!.model, effort: "medium" });
   });
 
   it("runs an effort variant at its own effort in every role", () => {

@@ -3,10 +3,10 @@
  * from the user's own key and paid by them. Resolved once per request, right after auth(), and passed down explicitly.
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
-import type { LanguageModel } from "ai";
+import { gateway, wrapLanguageModel, type LanguageModel } from "ai";
 import { getUserApiKeys } from "@/lib/db/userApiKeys";
 import { openSecret } from "@/lib/secrets";
-import { DEFAULT_ALLOCATE_MODEL, DEFAULT_CHAT_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_RESEARCH_MODEL, providerOf, type AiModelId, type KeyOwner, type ModelProvider } from "./models";
+import { DEFAULT_ALLOCATE_MODEL, DEFAULT_CHAT_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_RESEARCH_MODEL, GATEWAY_PROVIDERS, providerOf, type AiModelId, type KeyOwner, type ModelProvider } from "./models";
 
 export interface ResolvedModel {
   /** The gateway id string, or a direct instance built from the user's key. */
@@ -33,9 +33,35 @@ export const DEFAULT_MODEL_IDS: Record<ModelRole, AiModelId> = {
   allocate: DEFAULT_ALLOCATE_MODEL,
 };
 
-/** The app's own route for a model: the gateway id, paid by the app. */
+/**
+ * `model` with every call sent only to the gateway providers in `only`, whatever provider options the call sets (its
+ * own gateway options are kept).
+ */
+export function onGatewayProviders(model: LanguageModel, only: readonly string[]): LanguageModel {
+  return wrapLanguageModel({
+    model: model as Parameters<typeof wrapLanguageModel>[0]["model"],
+    middleware: {
+      transformParams: async ({ params }) => ({
+        ...params,
+        providerOptions: { ...params.providerOptions, gateway: { ...params.providerOptions?.gateway, only: [...only] } },
+      }),
+    },
+  });
+}
+
+/** The wrapped gateway models `appModel` built, one per pinned id, so every request reuses the same one. */
+const pinnedModels = new Map<AiModelId, LanguageModel>();
+
+/**
+ * The app's own route for a model: the gateway id, paid by the app. A model the gateway must send to particular
+ * providers (`GATEWAY_PROVIDERS`) is the gateway's model wrapped to say so.
+ */
 export function appModel(id: AiModelId): ResolvedModel {
-  return { model: id, id, keyOwner: "app" };
+  const only = GATEWAY_PROVIDERS[id];
+  if (!only) return { model: id, id, keyOwner: "app" };
+  let model = pinnedModels.get(id);
+  if (!model) pinnedModels.set(id, (model = onGatewayProviders(gateway(id), only)));
+  return { model, id, keyOwner: "app" };
 }
 
 /** Gateway ids use dots; Anthropic's API uses hyphens. Only ids listed here can run on a user's key. */
@@ -64,13 +90,18 @@ export const DIRECT_PROVIDERS: Partial<Record<ModelProvider, DirectProvider>> = 
   },
 };
 
-/** Pure: the user's decrypted keys by provider decide each role, against the defaults and the registry. */
-export function resolveWith(
+/** How a model is called: on whose key, through which provider. */
+export type ModelRoute = (id: AiModelId) => ResolvedModel;
+
+/**
+ * Pure: how one model is called given the user's decrypted keys by provider: on the user's key when the registry can
+ * call that model directly with it, else on the app's.
+ */
+export function routeWith(
   keys: Partial<Record<ModelProvider, string>>,
-  defaults: Record<ModelRole, AiModelId> = DEFAULT_MODEL_IDS,
   registry: Partial<Record<ModelProvider, DirectProvider>> = DIRECT_PROVIDERS,
-): ModelSet {
-  const resolve = (id: AiModelId): ResolvedModel => {
+): ModelRoute {
+  return (id) => {
     const provider = providerOf(id);
     const key = keys[provider];
     const direct = registry[provider];
@@ -78,6 +109,15 @@ export function resolveWith(
     if (!key || !direct || !apiId) return appModel(id);
     return { model: direct.create(key)(apiId), id, keyOwner: "user" };
   };
+}
+
+/** Pure: the user's decrypted keys by provider decide each role, against the defaults and the registry. */
+export function resolveWith(
+  keys: Partial<Record<ModelProvider, string>>,
+  defaults: Record<ModelRole, AiModelId> = DEFAULT_MODEL_IDS,
+  registry: Partial<Record<ModelProvider, DirectProvider>> = DIRECT_PROVIDERS,
+): ModelSet {
+  const resolve = routeWith(keys, registry);
   return {
     outline: resolve(defaults.outline),
     content: resolve(defaults.content),

@@ -10,7 +10,8 @@ import { isGatewayOutOfFunds } from "@/lib/ai/gatewayFunds";
 import type { ModelCall } from "@/lib/ai/logged";
 import { draftLevel } from "@/lib/ai/planDraft";
 import { renderMaterials, renderTree } from "@/lib/ai/planPrompt";
-import { appModel } from "@/lib/ai/resolve";
+import { classifyProviderError } from "@/lib/ai/providerError";
+import { appModel, type ModelRoute } from "@/lib/ai/resolve";
 import { isPracticeOnly, type Breach, type BreachKind } from "@/lib/materials";
 import { cloneTree, findNode, layout, makeRoot, type PlanNode } from "@/lib/planTree";
 import { PRACTICE_REGISTRY } from "@/lib/practice";
@@ -478,6 +479,8 @@ function thrownGate(error: unknown, timedOut: boolean, timeLimitMs: number): Gat
   const message = messageOf(error);
   // A plain object is not an Error, so its message is checked as one.
   if (isGatewayOutOfFunds(error instanceof Error ? error : new Error(message))) return { status: "void", reason: `gateway out of funds: ${message}`, halt: true };
+  // The provider refused the owner's own key for want of credits, a 400 that would otherwise read as the model's fault.
+  if (classifyProviderError(error) === "credits") return { status: "void", reason: `key out of credits: ${message}`, halt: true };
   if (timedOut || aborted(error)) return { status: "failed", reason: `timed out after ${timeLimitMs / 1000} s` };
   const status = statusOf(error);
   if (status !== undefined && (ACCOUNT_STATUSES.has(status) || status === UNKNOWN_MODEL)) return { status: "void", reason: `gateway ${status}: ${message}`, halt: true };
@@ -500,7 +503,7 @@ const CEILING: BreachKind[] = ["over-capacity", "over-budget"];
 export async function runOutlineSample(
   fixture: OutlineFixture,
   contestant: Contestant,
-  deps: { draft?: typeof draftLevel; now?: () => number } = {},
+  deps: { draft?: typeof draftLevel; now?: () => number; route?: ModelRoute } = {},
 ): Promise<Pick<Sample<OutlineOutput>, "gate" | "output" | "calls" | "costUsd" | "estimatedCostUsd" | "ms">> {
   const draft = deps.draft ?? draftLevel;
   const role = contestant.roles.outline ?? BASELINE.roles.outline!;
@@ -508,7 +511,7 @@ export async function runOutlineSample(
   const now = deps.now ?? (() => performance.now());
   const startedAt = now();
   const deadline = Date.now() + fixture.timeLimitMs;
-  const input = levelInput(fixture, appModel(role.model), role.effort);
+  const input = levelInput(fixture, (deps.route ?? appModel)(role.model), role.effort);
 
   let output: OutlineOutput | null = null;
   let gate: Gate = { status: "completed" };
@@ -534,7 +537,9 @@ export async function runOutlineSample(
   if (gate.status !== "completed" && calls.length === 0) {
     const used = usageOf(thrown);
     if (used) estimatedCostUsd = listPriceUsd(role.model, used);
-    else if (gate.status === "failed") {
+    // A request the provider refused with a status (a 400) generated nothing; only a call that ran (a timeout, an answer
+    // that did not parse) is estimated.
+    else if (gate.status === "failed" && statusOf(thrown) === undefined) {
       const { inputTokens, outputTokens, ms: baselineMs } = fixture.baseline;
       const pace = baselineMs > 0 ? Math.max(1, ms / baselineMs) : 1;
       estimatedCostUsd = listPriceUsd(role.model, { inputTokens, outputTokens: outputTokens * pace });

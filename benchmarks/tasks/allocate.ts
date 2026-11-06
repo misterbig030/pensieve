@@ -6,8 +6,9 @@ import { allocatePlan, type AllocationInput } from "@/lib/ai/allocate";
 import type { ModelCall } from "@/lib/ai/logged";
 import { ALLOCATE_TIMEOUT_MS } from "@/lib/ai/planDraft";
 import { renderMaterials } from "@/lib/ai/planPrompt";
+import { CREDITS_REFUSAL } from "@/lib/ai/providerError";
 import type { Coverage, DroppedMaterial } from "@/lib/ai/research/events";
-import { appModel } from "@/lib/ai/resolve";
+import { appModel, type ModelRoute } from "@/lib/ai/resolve";
 import type { ServiceEvent } from "@/lib/ai/serviceEvents";
 import { isPracticeOnly } from "@/lib/materials";
 import { PRACTICE_REGISTRY } from "@/lib/practice";
@@ -34,20 +35,23 @@ const TIMEOUT_REASON = /timeout|timed out|aborted/i;
 /** The gateway refusing the app's key itself: invalid (401), out of budget (402) or not allowed (403). */
 const ACCOUNT_STATUSES = new Set([401, 402, 403]);
 
-/** Whether the last final failure is the gateway refusing the key, which every later call would meet too. */
+/** The owner's own key out of credits (`--key user`): Anthropic answers a 400 whose message says so, not the model's fault. */
+const creditsRefused = (e: ServiceEvent) => e.status === 400 && CREDITS_REFUSAL.test(e.reason ?? "");
+
+/** Whether the last final failure is the key refused (the gateway's, or the owner's out of credits), which every later call would meet too. */
 function accountRefused(events: ServiceEvent[]): boolean {
-  const status = events.filter((e) => !e.ok && e.final).at(-1)?.status;
-  return status !== undefined && ACCOUNT_STATUSES.has(status);
+  const last = events.filter((e) => !e.ok && e.final).at(-1);
+  return last?.status !== undefined && (ACCOUNT_STATUSES.has(last.status) || creditsRefused(last));
 }
 
 /**
  * Why the sample says nothing about the model: the last final failure the outside service itself caused (a 5xx, a 429,
- * the gateway refusing the key, or an error with no status that is not a timeout). Another client error or a timeout is
+ * the gateway refusing the key, the owner's key out of credits, or an error with no status that is not a timeout). Another client error or a timeout is
  * the contestant's to answer for.
  */
 export function voidReason(events: ServiceEvent[]): string | null {
   const outside = (status: number) => status >= 500 || status === 429 || ACCOUNT_STATUSES.has(status);
-  const caused = events.filter((e) => !e.ok && e.final && (e.status === undefined ? !TIMEOUT_REASON.test(e.reason ?? "") : outside(e.status)));
+  const caused = events.filter((e) => !e.ok && e.final && (e.status === undefined ? !TIMEOUT_REASON.test(e.reason ?? "") : outside(e.status) || creditsRefused(e)));
   const last = caused.at(-1);
   if (!last) return null;
   return `${last.name} ${last.status ?? "error"}${last.reason ? `: ${last.reason}` : ""}`;
@@ -268,7 +272,7 @@ export function codeResults(output: AllocateOutput, ctx: AllocateCtx): Criterion
 export async function runAllocateSample(
   fixture: AllocateFixture,
   contestant: Contestant,
-  deps: { allocate?: typeof allocatePlan; now?: () => number } = {},
+  deps: { allocate?: typeof allocatePlan; now?: () => number; route?: ModelRoute } = {},
 ): Promise<Pick<Sample<AllocateOutput>, "gate" | "output" | "calls" | "costUsd" | "estimatedCostUsd" | "ms">> {
   const allocate = deps.allocate ?? allocatePlan;
   const roleModel = contestant.roles.allocate ?? BASELINE.roles.allocate!;
@@ -278,7 +282,7 @@ export async function runAllocateSample(
   const startedAt = now();
   const { split, materials, dropped, coverage, fallback, fallbackReason } = await allocate({
     ...fixture.input,
-    model: appModel(roleModel.model),
+    model: (deps.route ?? appModel)(roleModel.model),
     effort: roleModel.effort,
     timeoutMs: ALLOCATE_TIMEOUT_MS,
     log: { onCall: (call) => calls.push(call), onService: (event) => events.push(event) },

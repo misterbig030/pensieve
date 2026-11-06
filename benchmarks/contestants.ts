@@ -59,6 +59,10 @@ export const CONTESTANTS: Record<string, Contestant> = {
   "gemini-3.8-flash@low": allRoles("gemini-3.8-flash", "google/gemini-3.8-flash", "low"),
   "deepseek-v4-pro@medium": allRoles("deepseek-v4-pro", "deepseek/deepseek-v4-pro", "medium"),
   "deepseek-v4-pro@low": allRoles("deepseek-v4-pro", "deepseek/deepseek-v4-pro", "low"),
+  // Anthropic's models one effort below the baseline's "high", for runs on the owner's own key (`--key user`).
+  "haiku-5.5@medium": allRoles("haiku-5.5", "anthropic/claude-haiku-5.5", "medium"),
+  "sonnet-5.5@medium": allRoles("sonnet-5.5", "anthropic/claude-sonnet-5.5", "medium"),
+  "opus-5.5@medium": allRoles("opus-5.5", "anthropic/claude-opus-5.5", "medium"),
 };
 
 /** Throws when a contestant uses a model the price list lacks, since its cost could not be reported. */

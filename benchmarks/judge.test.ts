@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { generateObject } from "ai";
+import type { ResolvedModel } from "@/lib/ai/resolve";
 import { JUDGE, JUDGE_INSTRUCTIONS, JUDGE_TIMEOUT_MS, SECOND_JUDGE, fileJudgeCache, judgeDimension, judgeKey, secondJudgeSamples, type JudgeCache } from "./judge";
 import type { CriterionResult, JudgeCriterion } from "./types";
 
@@ -54,6 +55,22 @@ describe("judgeDimension", () => {
     expect(costUsd).toBeCloseTo(6);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ caller: "judge", model: JUDGE.model, effort: JUDGE.effort, label: "Judge · coverage", costUsd: expect.closeTo(6) });
+  });
+
+  it("calls the judge's model the way the route says, priced at list on the owner's key, and caches as without one", async () => {
+    const onKey = { model: "direct-instance", id: JUDGE.model, keyOwner: "user" } as unknown as ResolvedModel;
+    const route = vi.fn(() => onKey);
+    const cache = memoryCache();
+    const generate = fakeGenerate([{ id: "a", met: true, reason: "It does." }, { id: "b", met: true, reason: "It does." }]);
+    const { calls, costUsd } = await judgeDimension({ ...args(generate, cache), route });
+    expect(route).toHaveBeenCalledWith(JUDGE.model);
+    expect((generate.mock.calls[0][0] as { model: unknown }).model).toBe("direct-instance");
+    expect(calls[0]).toMatchObject({ model: JUDGE.model, keyOwner: "user" });
+    expect(costUsd).toBeCloseTo(6);
+    // The same answer on the gateway key is a cache hit: the route does not change the judge.
+    const again = fakeGenerate([]);
+    await judgeDimension(args(again, cache));
+    expect(again).not.toHaveBeenCalled();
   });
 
   it("sends the output as a cached first part and the criteria, without weights, as the second", async () => {
