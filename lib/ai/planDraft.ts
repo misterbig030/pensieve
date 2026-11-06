@@ -12,6 +12,7 @@ import {
   resolvePracticeRefs,
   sizeChapterRows,
   sizeItemRuns,
+  type Breach,
   type MaterialAliases,
 } from "@/lib/materials";
 import type { PlanDraftEvent, PlanDraftRequest, PlanExpandEvent, PlanExpandRequest } from "@/lib/planChat";
@@ -39,7 +40,7 @@ import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortSettings, emitGenerationLog, type GenerationLogContext } from "./logged";
 import { reportServiceFailure } from "./serviceEvents";
 import { allocatePlan } from "./allocate";
-import { DEFAULT_ALLOCATE_MODEL, DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
+import { DEFAULT_ALLOCATE_MODEL, DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT, type ReasoningEffort } from "./models";
 import { appModel, type ResolvedModel } from "./resolve";
 import { buildUnitsPrompt, type UnitsPromptInput } from "./planPrompt";
 import type { ResearchArm } from "./research/agent";
@@ -220,6 +221,8 @@ interface StreamUnitsInput {
   check?: (units: UnitDraft[]) => string[];
   /** The model that drafts the units, and who pays for it. */
   model: ResolvedModel;
+  /** The call's reasoning effort; `OUTLINE_EFFORT` when absent. */
+  effort?: ReasoningEffort;
   /** Stops the call: the request going away, or the draft's deadline. */
   signal?: AbortSignal;
   log?: GenerationLogContext;
@@ -243,7 +246,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
     model: input.model.model,
     schema: unitListSchema,
     prompt: input.prompt,
-    ...effortSettings(OUTLINE_EFFORT, input.model.id),
+    ...effortSettings(input.effort ?? OUTLINE_EFFORT, input.model.id),
     maxRetries: OUTLINE_MAX_RETRIES,
     ...(input.signal ? { abortSignal: input.signal } : {}),
     onError: ({ error }) => {
@@ -266,7 +269,7 @@ async function* streamUnits(input: StreamUnitsInput): AsyncGenerator<UnitEvent> 
   const row = buildGenerationLogRow({
     caller: "outline",
     model: input.model.id,
-    effort: OUTLINE_EFFORT,
+    effort: input.effort ?? OUTLINE_EFFORT,
     keyOwner: input.model.keyOwner,
     usage,
     providerMetadata,
@@ -299,6 +302,8 @@ export interface DraftLevelInput {
     hoursPerWeek?: number;
     split?: PlanSplit | null;
     outlineModel: ResolvedModel;
+    /** The outline call's reasoning effort; `OUTLINE_EFFORT` when absent. */
+    effort?: ReasoningEffort;
     /** The request's signal: a client that goes away stops the calls. */
     signal?: AbortSignal;
     /** When the draft must be done (epoch ms); absent, no budget. */
@@ -345,7 +350,7 @@ function placeForChecks(tree: PlanNode | undefined, parentId: string | undefined
  * Drafts one level of units under `parentId` (or the top level) in one call, yielding each node as it lands. The level
  * is checked once and kept as written: what breaks a rule comes back as the learner's `problems`, never fixed in code.
  */
-export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; problems: string[]; costUsd: number }> {
+export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; problems: string[]; costUsd: number; units: UnitDraft[]; breaches: Breach[] }> {
   const { ctx, level } = input;
   const leaf = unitsAreLeaves(level, ctx.granularity);
   const keep = input.parentId ? [] : (input.keep ?? []);
@@ -375,6 +380,8 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
   const nodes: PlanNode[] = [];
   let final: PlanNode[] = [];
   let problems: string[] = [];
+  let breaches: Breach[] = [];
+  let units: UnitDraft[] = [];
 
   // Reconciles spans and references once the whole level has validated, sizes chapter rows and item runs, and states
   // the checks in code: the facts for the admin panel, the breaches as the learner's problems.
@@ -439,6 +446,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
     // can't change, and it is measured against today's settings. It stays a fact for the admin panel. Plan-wide
     // breaches (index -1) count the kept units' time and stay problems.
     const fixed = (index: number) => index >= 0 && index < kept.length;
+    breaches = checks.breaches;
     problems = capProblems(checks.problems.filter((_, i) => !fixed(checks.breaches[i].index)));
     const facts = [...checks.facts, ...sizing, ...practiceFacts, ...checks.breaches.map((b) => `${fixed(b.index) ? "kept unit" : "breach"}: ${b.text}`)];
     // After the checks, which read notes as written: ids the model copied from its prompt are put in words for the learner.
@@ -450,7 +458,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
   const prompt = buildUnitsPrompt(promptInput);
   let costUsd = 0;
   const signal = input.signal ?? within(ctx.signal, timeLeft(ctx.deadline));
-  for await (const event of streamUnits({ prompt, label, expected: n, check, model: ctx.outlineModel, log: input.log, signal })) {
+  for await (const event of streamUnits({ prompt, label, expected: n, check, model: ctx.outlineModel, effort: ctx.effort, log: input.log, signal })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
       const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split, picked);
@@ -459,9 +467,10 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
       yield { type: "node", node };
     } else {
       costUsd = event.costUsd;
+      units = event.units;
     }
   }
-  yield { type: "done", nodes: final, problems, costUsd };
+  yield { type: "done", nodes: final, problems, costUsd, units, breaches };
 }
 
 /** Puts a level's problems on the node it was planned inside, within their limits; none leaves the node without `problems`. */

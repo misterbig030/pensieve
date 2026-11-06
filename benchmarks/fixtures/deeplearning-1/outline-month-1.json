@@ -1,0 +1,835 @@
+{
+  "id": "deeplearning-1/month-1",
+  "topic": "deeplearning",
+  "sourceRun": "draft-2026-11-05T20-47-56-706Z-deeplearning-1",
+  "commit": "361aeb9",
+  "label": "Month 1 · 4 weeks",
+  "group": "leaves",
+  "leaf": true,
+  "request": {
+    "topic": "Deep learning from the ground up",
+    "instructions": "Career change, studying full time. I want to implement things myself.",
+    "granularity": "week",
+    "weeks": 12,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 30
+  },
+  "materials": [
+    {
+      "id": "M1",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Aston Zhang, Zachary C. Lipton, Mu Li, Alexander J. Smola",
+      "year": 2023,
+      "why": "Executable notebooks with from-scratch and concise implementations, from basics to CNNs, RNNs, transformers and optimisation; free spine for the plan.",
+      "recommendedBy": [],
+      "url": "https://d2l.ai",
+      "title": "Dive into Deep Learning — Dive into Deep Learning 1.0.3 documentation",
+      "backbone": true,
+      "verifiedAt": "2026-11-05T20:48:14.256Z",
+      "fetchedTitle": "Dive into Deep Learning — Dive into Deep Learning 1.0.3 documentation",
+      "sig": "jMorMJDtT-XBYpjZuCMfl3Phzk7fEX-4s78hCm3cuHs",
+      "minutes": 4800,
+      "minutesBasis": "estimated",
+      "uses": "backbone: basics through CNNs, RNNs, attention, transformers, optimisation",
+      "pageMinutes": 13,
+      "hub": true,
+      "toc": {
+        "source": "page",
+        "url": "https://d2l.ai",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "17. Reinforcement Learning",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_reinforcement-learning/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "18. Gaussian Processes",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_gaussian-processes/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "19. Hyperparameter Optimization",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_hyperparameter-optimization/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "21. Recommender Systems",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_recommender-systems/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "22. Appendix: Mathematics for Deep Learning",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_appendix-mathematics-for-deep-learning/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Installation",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_installation/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Preface",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_preface/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "1. Introduction",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_introduction/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "2. Preliminaries",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_preliminaries/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "3. Linear Neural Networks for Regression",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_linear-regression/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "4. Linear Neural Networks for Classification",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_linear-classification/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "5. Multilayer Perceptrons",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_multilayer-perceptrons/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "6. Builders’ Guide",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_builders-guide/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "7. Convolutional Neural Networks",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_convolutional-neural-networks/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "8. Modern Convolutional Neural Networks",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_convolutional-modern/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "9. Recurrent Neural Networks",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_recurrent-neural-networks/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "10. Modern Recurrent Neural Networks",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_recurrent-modern/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "11. Attention Mechanisms and Transformers",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_attention-mechanisms-and-transformers/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "12. Optimization Algorithms",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_optimization/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "13. Computational Performance",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_computational-performance/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "14. Computer Vision",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_computer-vision/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "15. Natural Language Processing: Pretraining",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_natural-language-processing-pretraining/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "16. Natural Language Processing: Applications",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_natural-language-processing-applications/index.html",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "20. Generative Adversarial Networks",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://d2l.ai/chapter_generative-adversarial-networks/index.html",
+            "group": null
+          }
+        ]
+      },
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ],
+      "note": "Online textbook with 22 chapters (plus preface/installation), each split into sections that are executable notebooks; best for hands-on learning from basics through CNNs, RNNs, transformers and optimisation."
+    },
+    {
+      "id": "M2",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Simon J. D. Prince",
+      "year": 2023,
+      "why": "Modern conceptual and mathematical treatment with a free PDF; a theory companion to the code-heavy D2L.",
+      "recommendedBy": [
+        "https://freecomputerbooks.com/Understanding-Deep-Learning.html"
+      ],
+      "url": "https://mitpress.mit.edu/9780262048644/understanding-deep-learning",
+      "title": "Understanding Deep Learning",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:48:41.993Z",
+      "fetchedTitle": "Understanding Deep Learning",
+      "sig": "q16JRWD046xZL12Lxs_L8z7UzLwfZPxBxIrd5qidKkw",
+      "minutes": 1200,
+      "minutesBasis": "estimated",
+      "uses": "theory companion for key chapters",
+      "pageMinutes": 3,
+      "hub": true,
+      "toc": null,
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ]
+    },
+    {
+      "id": "M6",
+      "origin": "research",
+      "type": "link",
+      "kind": "course",
+      "author": "Andrej Karpathy",
+      "year": null,
+      "why": "Build-along lectures coding backprop, MLPs, BatchNorm, WaveNet, GPT and tokenizer from scratch; main implementation track.",
+      "recommendedBy": [
+        "https://csdiy.wiki/en/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/Neural%20Networks%EF%BC%9AZero%20to%20Hero"
+      ],
+      "url": "https://karpathy.ai/zero-to-hero.html",
+      "title": "Neural Networks: Zero To Hero",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:48:02.697Z",
+      "fetchedTitle": "Neural Networks: Zero To Hero",
+      "sig": "oQi0J0NeuDvrh8nWaE8v-4LR8i4QxJEBWGk0t0Ax0XM",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "main implementation lab track",
+      "pageMinutes": 4,
+      "hub": false,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": 8,
+        "perItemMinutes": 5,
+        "minutes": 40,
+        "answers": true
+      },
+      "foundBy": [
+        "canonical",
+        "practice"
+      ]
+    },
+    {
+      "id": "M7",
+      "origin": "research",
+      "type": "link",
+      "kind": "repo",
+      "author": null,
+      "year": null,
+      "why": "Solution notebooks for six Zero to Hero exercise sets, to check your own work.",
+      "recommendedBy": [],
+      "url": "https://github.com/spolivin/nnzerotohero_solutions",
+      "title": "GitHub - spolivin/nnzerotohero_solutions: Solutions for Andrej Karpathy's \"Neural Networks: Zero to Hero\" course",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:48:04.469Z",
+      "fetchedTitle": "GitHub - spolivin/nnzerotohero_solutions: Solutions for Andrej Karpathy's \"Neural Networks: Zero to Hero\" course · GitHub",
+      "sig": "3sgY59Cp9vXB07JdMRyC87eLrbPlcjiPodiX-Mx3x4A",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "check Zero to Hero exercises",
+      "pageMinutes": 1,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": 6,
+        "perItemMinutes": 5,
+        "minutes": 30,
+        "answers": true
+      },
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M8",
+      "origin": "research",
+      "type": "link",
+      "kind": "course",
+      "author": null,
+      "year": 2026,
+      "why": "Numpy-from-scratch assignments on softmax, two-layer nets, BatchNorm, ConvNets, RNNs, plus vision coverage.",
+      "recommendedBy": [],
+      "url": "https://cs231n.stanford.edu",
+      "title": "Stanford University CS231n: Deep Learning for Computer Vision",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:48:02.694Z",
+      "fetchedTitle": "Stanford University CS231n: Deep Learning for Computer Vision",
+      "sig": "-AwJwRbkSYcMbfPQN7sLaXGkAr6S3SJ2ULCP5OArKPA",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "NumPy assignments as projects",
+      "pageMinutes": 5,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "project",
+        "items": null,
+        "perItemMinutes": null,
+        "minutes": null,
+        "answers": true
+      },
+      "foundBy": [
+        "canonical",
+        "practice"
+      ]
+    },
+    {
+      "id": "M9",
+      "origin": "research",
+      "type": "link",
+      "kind": "repo",
+      "author": null,
+      "year": null,
+      "why": "Public solutions to CS231n assignments for checking your work.",
+      "recommendedBy": [],
+      "url": "https://github.com/mantasu/cs231n",
+      "title": "GitHub - mantasu/cs231n: Shortest solutions for CS231n 2021-2026",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:48:41.484Z",
+      "fetchedTitle": "GitHub - mantasu/cs231n: Shortest solutions for CS231n 2021-2026 · GitHub",
+      "sig": "xyeGeEIaQFWvGkTx238HYcRyU3gUy_hhtA2X8b2NFWo",
+      "minutes": 60,
+      "minutesBasis": "estimated",
+      "uses": "check CS231n solutions after attempting",
+      "pageMinutes": 6,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M11",
+      "origin": "research",
+      "type": "link",
+      "kind": "repo",
+      "author": "Sebastian Raschka",
+      "year": null,
+      "why": "Step-by-step code for building a GPT-style LLM, covering pretraining and finetuning.",
+      "recommendedBy": [],
+      "url": "https://github.com/rasbt/LLMs-from-scratch",
+      "title": "GitHub - rasbt/LLMs-from-scratch: Implement a ChatGPT-like LLM in PyTorch from scratch, step by step",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:48:05.502Z",
+      "fetchedTitle": "GitHub - rasbt/LLMs-from-scratch: Implement a ChatGPT-like LLM in PyTorch from scratch, step by step · GitHub",
+      "sig": "S9ewzHWqEU_-Afo18Wc5Skuw4c8X4yHopTI7AbHyzOg",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "capstone GPT-style LLM build",
+      "pageMinutes": 7,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "project",
+        "items": 7,
+        "perItemMinutes": null,
+        "minutes": null,
+        "answers": true
+      },
+      "foundBy": [
+        "current"
+      ]
+    },
+    {
+      "id": "M14",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": "Deep-ML",
+      "year": null,
+      "why": "1,200+ in-browser implement-from-scratch ML problems with tests and instant feedback.",
+      "recommendedBy": [],
+      "url": "https://deep-ml.com/problems",
+      "title": "Practice Problems | Deep-ML",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:48:03.861Z",
+      "fetchedTitle": "Practice Problems | Deep-ML",
+      "sig": "whHykNQFh5wwbW4iXmhRShPHwmgrdtKV1lMKAZbShMc",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "from-scratch implementation drills",
+      "pageMinutes": null,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "problem-set",
+        "items": 200,
+        "perItemMinutes": 10,
+        "minutes": 2000,
+        "answers": true,
+        "totalItems": 1200
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "Deep-ML draws its 1,200+ problems by script, so no list or parts were readable. I found no open data file to point to."
+    },
+    {
+      "id": "M15",
+      "origin": "research",
+      "type": "link",
+      "kind": "repo",
+      "author": null,
+      "year": null,
+      "why": "80 deep learning questions with answers for light theory recall.",
+      "recommendedBy": [],
+      "url": "https://github.com/Devinterview-io/deep-learning-interview-questions",
+      "title": "GitHub - Devinterview-io/deep-learning-interview-questions: 🟣 Deep Learning interview questions and answers to help you prepare for your next machine learning and data science interview in 2026.",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:48:04.531Z",
+      "fetchedTitle": "GitHub - Devinterview-io/deep-learning-interview-questions: 🟣 Deep Learning interview questions and answers to help you prepare for your next machine learning and data science interview in 2026. · GitHub",
+      "sig": "Zqd561Bp7ikFb9mj0PshzEuG7vKFbXWMKRujv2JRPTA",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "theory recall review",
+      "pageMinutes": 27,
+      "hub": false,
+      "toc": null,
+      "practice": {
+        "format": "recall",
+        "items": 80,
+        "perItemMinutes": 3,
+        "minutes": 240,
+        "answers": true
+      },
+      "foundBy": [
+        "practice"
+      ]
+    }
+  ],
+  "split": {
+    "readingShare": 28,
+    "practice": "from-scratch implementation",
+    "formats": [
+      {
+        "format": "project",
+        "share": 58,
+        "focus": "CS231n assignments, GPT from scratch",
+        "reason": "Multi-week builds of real networks, from NumPy layers up to a working LLM, are the most direct way to learn to implement deep learning yourself."
+      },
+      {
+        "format": "lab",
+        "share": 25,
+        "focus": "Karpathy backprop-to-GPT code-alongs",
+        "reason": "Guided build-along steps take you from autograd to transformers in code, and solution notebooks let you check your work."
+      },
+      {
+        "format": "problem-set",
+        "share": 13,
+        "focus": "implement layers, losses, optimisers",
+        "reason": "Short, tested from-scratch problems drill the building blocks with instant feedback."
+      },
+      {
+        "format": "recall",
+        "share": 4,
+        "focus": "core theory and intuitions",
+        "reason": "Light question review keeps the reading's concepts ready for a career switch and for interviews."
+      }
+    ],
+    "reason": "About 100 of your 360 hours go to reading Dive into Deep Learning in order, with Prince's Understanding Deep Learning for the theory behind it. The remaining roughly 260 hours go to building things yourself: Karpathy's code-alongs, the CS231n NumPy assignments, a GPT built from scratch, and many sm…"
+  },
+  "level": "week",
+  "spans": [
+    5,
+    5,
+    5,
+    5
+  ],
+  "tree": {
+    "id": "root",
+    "level": "month",
+    "title": "",
+    "summary": "",
+    "len": 60,
+    "status": "pending",
+    "budgetHours": null,
+    "manualSplit": false,
+    "children": [
+      {
+        "id": "tmp-mw40rj7r-1",
+        "level": "month",
+        "title": "Foundations: tensors, linear models and MLPs",
+        "summary": "Builds the base everything else rests on (tensors, autograd, regression, classification, multilayer perceptrons and the PyTorch building blocks), coding backprop by hand first so later architectures feel like variations rather than magic.",
+        "len": 20,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 1,
+        "end": 20,
+        "covers": [
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 6
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 7
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 8
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 9
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 10
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 11
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 12
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 13
+          },
+          {
+            "id": "M2",
+            "note": "the chapters on supervised learning, shallow and deep networks, loss functions, fitting and gradients",
+            "activity": "read",
+            "chapter": null
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "project",
+            "id": "M8",
+            "note": "Assignment 1: kNN, softmax and a two-layer net in NumPy"
+          },
+          {
+            "format": "lab",
+            "id": "M6",
+            "note": "Lectures 1–4: micrograd backprop, bigram language model, MLP, activations and BatchNorm"
+          },
+          {
+            "format": "lab",
+            "id": "M7",
+            "note": "Solutions for the exercise sets of the first four lectures"
+          },
+          {
+            "format": "problem-set",
+            "id": "M14",
+            "note": "First 90 of the 200 kept problems: linear algebra, activations, losses, linear and logistic regression"
+          },
+          {
+            "format": "recall",
+            "id": "M15",
+            "note": "Questions 1–28: fundamentals, backprop, activations, losses"
+          }
+        ],
+        "time": {
+          "reading": 2520,
+          "practice": {
+            "project": 2060,
+            "lab": 1500,
+            "problem-set": 900,
+            "recall": 220
+          }
+        }
+      },
+      {
+        "id": "tmp-mw40rmix-2",
+        "level": "month",
+        "title": "Convolutional and recurrent networks in depth",
+        "summary": "With MLPs and backprop secure, moves to the architectures that exploit structure in images and sequences (CNNs, modern ConvNets, RNNs, LSTMs and GRUs) and to the training tricks of normalisation, initialisation and regularisation they rely on.",
+        "len": 20,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 21,
+        "end": 40,
+        "covers": [
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 14
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 15
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 16
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 17
+          },
+          {
+            "id": "M2",
+            "note": "the chapters on initialisation, regularisation, convolutional networks and residual networks",
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M9",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "project",
+            "id": "M8",
+            "note": "Assignments 2 and 3: BatchNorm, dropout, ConvNets, RNN captioning"
+          },
+          {
+            "format": "lab",
+            "id": "M6",
+            "note": "Lectures 5–6: manual backprop through a full network, WaveNet-style hierarchical model"
+          },
+          {
+            "format": "lab",
+            "id": "M7",
+            "note": "Solutions for the exercise sets of lectures 5–6"
+          },
+          {
+            "format": "problem-set",
+            "id": "M14",
+            "note": "Next 70 of the kept problems (91–160): convolutions, pooling, normalisation, dropout, recurrent cells, optimisers"
+          },
+          {
+            "format": "recall",
+            "id": "M15",
+            "note": "Questions 29–56: CNNs, RNNs, regularisation, normalisation"
+          }
+        ],
+        "time": {
+          "reading": 2100,
+          "practice": {
+            "project": 2980,
+            "lab": 1200,
+            "problem-set": 700,
+            "recall": 220
+          }
+        }
+      },
+      {
+        "id": "tmp-mw40rp4o-3",
+        "level": "month",
+        "title": "Attention, transformers and a GPT from scratch",
+        "summary": "Ends on the hardest, most applied material: attention, transformers and optimisation algorithms, put to work by building a tokenizer and a GPT-style language model end to end, from pretraining through finetuning, as a capstone portfolio project.",
+        "len": 20,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 41,
+        "end": 60,
+        "covers": [
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 18
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 19
+          },
+          {
+            "id": "M2",
+            "note": "the chapters on transformers and the later chapters on why deep networks train and generalise",
+            "activity": "read",
+            "chapter": null
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "project",
+            "id": "M11",
+            "note": "Full build: data and tokenisation, attention, GPT model, pretraining, finetuning"
+          },
+          {
+            "format": "lab",
+            "id": "M6",
+            "note": "Lectures 7–8: GPT from scratch and building a tokenizer"
+          },
+          {
+            "format": "problem-set",
+            "id": "M14",
+            "note": "Last 40 of the kept problems (161–200): attention, positional encoding, transformer blocks, learning-rate schedules"
+          },
+          {
+            "format": "recall",
+            "id": "M15",
+            "note": "Questions 57–80: attention, transformers, optimisation, deployment"
+          }
+        ],
+        "time": {
+          "reading": 1440,
+          "practice": {
+            "project": 3968,
+            "lab": 1188,
+            "problem-set": 422,
+            "recall": 182
+          }
+        }
+      }
+    ],
+    "start": 1,
+    "end": 60
+  },
+  "parentId": "tmp-mw40rj7r-1",
+  "timeLimitMs": 159880,
+  "baseline": {
+    "inputTokens": 7710,
+    "outputTokens": 8438,
+    "ms": 74650
+  }
+}

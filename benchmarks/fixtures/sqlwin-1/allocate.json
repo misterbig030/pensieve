@@ -1,0 +1,1496 @@
+{
+  "id": "sqlwin-1",
+  "topic": "sqlwin",
+  "sourceRun": "draft-2026-11-05T20-45-12-383Z-sqlwin-1",
+  "commit": "361aeb9",
+  "input": {
+    "topic": "SQL window functions",
+    "weeks": 1,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6,
+    "materials": [
+      {
+        "id": "M1",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Itzik Ben-Gan",
+        "year": 2019,
+        "why": "In-depth book on window functions; written for SQL Server (T-SQL), so less suited if the learner uses another database.",
+        "recommendedBy": [
+          "https://medium.com/@DataScienceDad/recommended-book-for-learning-window-functions-a4f78e239a3a"
+        ],
+        "url": "https://openlibrary.org/works/OL21365070W",
+        "title": "T-SQL Window Functions: For Data Analysis and Beyond",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:58.280Z",
+        "fetchedTitle": "T-SQL Window Functions",
+        "sig": "_QeXZQ1ODIZU07ivt5V3m3p5llaS1yYaNMhZAPODbXI",
+        "minutes": 720,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true
+      },
+      {
+        "id": "M2",
+        "origin": "research",
+        "type": "link",
+        "kind": "docs",
+        "author": null,
+        "year": null,
+        "why": "Short, accurate introduction to OVER, PARTITION BY, ORDER BY and the default frame.",
+        "recommendedBy": [],
+        "url": "https://postgresql.org/docs/current/tutorial-window.html",
+        "title": "3.5. Window Functions",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:16.272Z",
+        "fetchedTitle": "PostgreSQL: Documentation: 18: 3.5. Window Functions",
+        "sig": "-wQ63jVo1U-Cz0kwK9eC3l0yt0h_LKISVcUYWvTqh2U",
+        "minutes": 30,
+        "minutesBasis": "estimated",
+        "uses": null,
+        "pageMinutes": 6,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M3",
+        "origin": "research",
+        "type": "link",
+        "kind": "docs",
+        "author": null,
+        "year": null,
+        "why": "Reference for all built-in window functions, with pitfalls such as last_value under the default frame.",
+        "recommendedBy": [],
+        "url": "https://postgresql.org/docs/current/functions-window.html",
+        "title": "9.22. Window Functions",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:16.257Z",
+        "fetchedTitle": "PostgreSQL: Documentation: 18: 9.22. Window Functions",
+        "sig": "1euLy1r3_f56xFMd1xx6_49fHOP9URrW_f8cPF8HO5M",
+        "minutes": 15,
+        "minutesBasis": "estimated",
+        "uses": null,
+        "pageMinutes": 4,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M4",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": "JulianePadrao",
+        "year": null,
+        "why": "Interactive T-SQL module for SQL Server and Azure users covering RANK, aggregate and offset functions.",
+        "recommendedBy": [],
+        "url": "https://learn.microsoft.com/en-us/training/modules/write-queries-that-use-window-functions",
+        "title": "Write queries that use window functions - Training",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:56.268Z",
+        "fetchedTitle": "Write queries that use window functions - Training | Microsoft Learn",
+        "sig": "DKrU3iUel3K1UC2qjFfoRl-EM4DQ_HEZPFhenMZYPrI",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 1,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M5",
+        "origin": "research",
+        "type": "youtube",
+        "kind": "video",
+        "author": null,
+        "year": null,
+        "why": "Over two hours of video covering ranking, offset functions, frames and running totals.",
+        "recommendedBy": [],
+        "url": "https://youtube.com/watch?v=Wvg4PjbMTO8",
+        "title": "The Ultimate SQL Window Functions Course | Complete End-to-End Guide",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:56.789Z",
+        "fetchedTitle": "The Ultimate SQL Window Functions Course | Complete End-to-End Guide - YouTube",
+        "sig": "OkZrk2v81acdWDwvlJyxdgNA8XkDnYw2H-yTKSDxWa0",
+        "minutes": 231,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 231,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "backbone",
+          "canonical",
+          "practice"
+        ]
+      },
+      {
+        "id": "M6",
+        "origin": "research",
+        "type": "link",
+        "kind": "essay",
+        "author": "Hristo Bogoev",
+        "year": null,
+        "why": "Visual before/after diagrams for ROW_NUMBER, RANK, LAG and LEAD, with quizzes.",
+        "recommendedBy": [],
+        "url": "https://sqlnoir.com/blog/sql-window-functions",
+        "title": "SQL Window Functions Explained: The Complete Visual Guide (2026)",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:56.265Z",
+        "fetchedTitle": "SQL Window Functions Explained: The Complete Visual Guide (2026) | SQLNoir",
+        "sig": "5mDjAI0n_Z6X1OzFesvaEmAwJhuQtwisJ0mCEOscRkw",
+        "minutes": 11,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 11,
+        "hub": false,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M7",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": null,
+        "year": null,
+        "why": "89 browser-run problems from aggregates and frames to ranking, LAG/LEAD and gaps and islands, with hints and solutions.",
+        "recommendedBy": [],
+        "url": "https://practicewindowfunctions.com",
+        "title": "SQL Window Functions & Technical Interview Questions – 80+ Free SQL Practice Exercises",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:19.334Z",
+        "fetchedTitle": "SQL Window Functions & Technical Interview Questions – 80+ Free SQL Practice Exercises",
+        "sig": "6feiezZzoK-2zhai9eSlo6_1bFUp42T_X38_tfSvgBk",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 3,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "problem-set",
+          "items": 89,
+          "perItemMinutes": 10,
+          "minutes": 890,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Galactic Customer Revenue Breakdown",
+                "number": "1",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Interstellar Sales Tracker 9000",
+                "number": "2",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Top 5 Spenders in the Galactic Bazaar",
+                "number": "3",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Two Orders Before, Two Orders After: The Price Prophecy",
+                "number": "4",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Customer Spending, Averaged and Analyzed",
+                "number": "5",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "How Much More Did They Order?",
+                "number": "6",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Species Spending Champions",
+                "number": "7",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Five Transaction Trail Tracker",
+                "number": "8",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lowest Deals in the Galaxy",
+                "number": "9",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Galactic Max Order Hunt",
+                "number": "10",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Largest Order in the Galaxy",
+                "number": "11",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Interstellar Spending Sprees",
+                "number": "12",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Order Volume, Customer by Customer",
+                "number": "13",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Customer Line-Items in the Last 7 Days",
+                "number": "14",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Galactic High Spenders by Week",
+                "number": "15",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "30 Days of Distinct Artifacts",
+                "number": "16",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Order by Order, One by One",
+                "number": "17",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The First Transaction Initiative",
+                "number": "18",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Top Suppliers of the Trade Federation",
+                "number": "19",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Species Revenue Rankings",
+                "number": "20",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Peak Stock Protocol",
+                "number": "21",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Clone Order Detector",
+                "number": "22",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Top 3 Galactic Bestsellers",
+                "number": "23",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Species Spending Standings",
+                "number": "24",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Most Popular Products in the Galaxy",
+                "number": "25",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Supplier Showdown",
+                "number": "26",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "5-Transaction Tally Tracker",
+                "number": "27",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Species Revenue Leaderboard",
+                "number": "28",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Category Revenue Rankings",
+                "number": "29",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Order Titans of the Stars",
+                "number": "30",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Category Spend Royalty",
+                "number": "31",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "First Contact by Category",
+                "number": "32",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Galactic Spending Tiers",
+                "number": "33",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Five Tiers of Product Fame",
+                "number": "34",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Customer Frequency Classes",
+                "number": "35",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Stock Level Stratification",
+                "number": "36",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Supplier Pricing Pyramid",
+                "number": "37",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Species-Based Order Tiers",
+                "number": "38",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Rare and the Profitable",
+                "number": "39",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Species Revenue Classifications",
+                "number": "40",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The First Order Ever Placed",
+                "number": "41",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Species Transaction Origins",
+                "number": "42",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Pioneer Product in Every Category",
+                "number": "43",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Loyalty Group Order Milestones",
+                "number": "44",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Final Purchase Report",
+                "number": "45",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Final Product per Category",
+                "number": "46",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Species Transaction Wrap-Up",
+                "number": "47",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Last Fulfillments by Supplier",
+                "number": "48",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Second Order Chronicles",
+                "number": "49",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Almost Famous: Second Place Products",
+                "number": "50",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Bronze Revenue Medalists",
+                "number": "51",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Fifth Fulfillment",
+                "number": "52",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Next Order Countdown",
+                "number": "53",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Product Pairs in Category Time",
+                "number": "54",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Future Funds Forecast",
+                "number": "55",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Species Spending, Shift by Shift",
+                "number": "56",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Order Histories, One Step Back",
+                "number": "57",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Product Lineage",
+                "number": "58",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Two Transactions Ago...",
+                "number": "59",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Payment Patterns Revealed",
+                "number": "60",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Percent Rank: Species Spending Edition",
+                "number": "61",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Relative Product Popularity",
+                "number": "62",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Transaction Percentile Tracker",
+                "number": "63",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Supplier Pricing Percentiles",
+                "number": "64",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Cumulative Spending by Species",
+                "number": "65",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Cumulative Category Climb",
+                "number": "66",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Supplier Price Curves",
+                "number": "67",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Customer Revenue Trajectory",
+                "number": "68",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Category Supplier Spending Footprint",
+                "number": "69",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Supplier Performance Matrix",
+                "number": "70",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Species Revenue Surge",
+                "number": "71",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Running Sales by Category",
+                "number": "72",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Transaction Trail Analysis",
+                "number": "73",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Inventory Stack Ranks",
+                "number": "74",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Order Cadence Explorer",
+                "number": "75",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Unbroken Chains of Loyalty",
+                "number": "76",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Deserts of Silence",
+                "number": "77",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Supplier Order Gaps",
+                "number": "78",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Waning Moon of Commerce",
+                "number": "79",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Merchant’s Marathon",
+                "number": "80",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "The Merchant’s Remaining Riches",
+                "number": "81",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Three Moons of Revenue Flow",
+                "number": "82",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Waves of Galactic Spending",
+                "number": "83",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Seven-Day Revenue Signal",
+                "number": "84",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Month-to-Month Spending Drift",
+                "number": "85",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Days Since the Last Visit",
+                "number": "86",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Each Order's Slice of the Galactic Treasury",
+                "number": "87",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Customer Revenue Share",
+                "number": "88",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Restock Gap Tracker",
+                "number": "89",
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://practicewindowfunctions.com"
+          },
+          "totalItems": 89
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "89 browser-run SQL window-function problems in one numbered list, roughly progressing from aggregates and frames through ranking, LAG/LEAD, percentiles and gaps and islands. Best for interview practice."
+      },
+      {
+        "id": "M8",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": "Selva Prabhakaran",
+        "year": null,
+        "why": "15 graded problems with desired output and solutions, covering top-N, percent change and medians.",
+        "recommendedBy": [],
+        "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises",
+        "title": "SQL Window Functions Exercises - Practice to perfection - machinelearningplus",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:23.165Z",
+        "fetchedTitle": "SQL Window Functions Exercises - Practice to perfection - machinelearningplus",
+        "sig": "lOWFC3T1JxQHAw6SNf4GH-_9zu9fujZYjeR1jEco5Vo",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 11,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "problem-set",
+          "items": 15,
+          "perItemMinutes": 10,
+          "minutes": 150,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Q1. Find the running cumulative total demand.",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q1-find-the-running-cumulative-total-demand",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q2. Find the running cumulative total demand by product.",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q2-find-the-running-cumulative-total-demand-by-product",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q3. When are the top 2 worst performing days for each product?",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q3-when-are-the-top-2-worst-performing-days-for-each-product",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q4. Find the percentage increase in qty compared to the previous day.",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q4-find-the-percentage-increase-in-qty-compared-to-the-previous-day",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q5. Show the minimum and maximum ‘qty’ sold for each product as separate columns.",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q5-show-the-minimum-and-maximum-qty-sold-for-each-product-as-separate-columns",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q6. Calculate the difference between the second largest and the second smallest sales qty",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q6-calculate-the-difference-between-the-second-largest-and-the-second-smallest-sales-qty",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q7. On each day, which product had the highest sales?",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q7-on-each-day-which-product-had-the-highest-sales",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q8. Create row numbers in increasing order of sales.",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q8-create-row-numbers-in-increasing-order-of-sales",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q9. Find the top products (Rank 1 and 2) within each location",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q9-find-the-top-products-rank-1-and-2-within-each-location",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q10. What is the total sales from Top 3 products in each location?",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q10-what-is-the-total-sales-from-top-3-products-in-each-location",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q11. Calculate the proportion of sales from each location",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q11-calculate-the-proportion-of-sales-from-each-location",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q12. Which products contribute to top 80% of total sales?",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q12-which-products-contribute-to-top-80-of-total-sales",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q13. What is the median value of sales overall?",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q13-what-is-the-median-value-of-sales-overall",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q14. What is the median value of sales for each location?",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q14-what-is-the-median-value-of-sales-for-each-location",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Q15. Which product has the largest refund rate overall?",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q15-which-product-has-the-largest-refund-rate-overall",
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises"
+          },
+          "totalItems": 15
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "One page of 15 graded SQL window-function exercises (Q1–Q15) with desired output and solutions; best for hands-on practice of running totals, top-N, percent change, proportions and medians."
+      },
+      {
+        "id": "M9",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": null,
+        "year": null,
+        "why": "Company-tagged SQL questions with an in-browser editor and worked solutions; filter by window functions for mock-style practice.",
+        "recommendedBy": [],
+        "url": "https://datalemur.com/questions",
+        "title": "SQL Interview Questions | DataLemur",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:57.147Z",
+        "fetchedTitle": "SQL Interview Questions | DataLemur",
+        "sig": "GzpGgbr4Rb6U2Z9wu2QPQl_fXqga5VKGHiyAiQnDN0c",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 9,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "mock",
+          "items": null,
+          "perItemMinutes": null,
+          "minutes": 75,
+          "answers": true
+        },
+        "foundBy": [
+          "practice"
+        ]
+      },
+      {
+        "id": "M10",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": "SQL Practice Online",
+        "year": null,
+        "why": "11 live-editor labs on frames, ROWS vs RANGE, running totals and gaps and islands.",
+        "recommendedBy": [],
+        "url": "https://sql-practice.online/scenario/ctes-window",
+        "title": "CTEs & Window Functions SQL Topic Exercises (11)",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:19.431Z",
+        "fetchedTitle": "CTEs & Window Functions SQL Topic Exercises (11)",
+        "sig": "NkQeTTrpLQ5O-JZ4x1sWPf0aZ5wR1Af1B4WgmH6dbvg",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 3,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "lab",
+          "items": 11,
+          "perItemMinutes": 5,
+          "minutes": 55,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Summarize Team Performance with a CTE",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/summarize-team-performance-with-a-cte",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Compare Team Revenue with a Chained CTE Pipeline",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/compare-team-revenue-with-a-chained-cte-pipeline",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Calculate a Deterministic Running Revenue Total",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/calculate-a-deterministic-running-revenue-total",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Compare Each Period with Its Neighbors",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/compare-each-period-with-its-neighbors",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Select the Best Quality Snapshot per Team",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/select-the-best-quality-snapshot-per-team",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Keep the Latest Snapshot per Team",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/keep-the-latest-snapshot-per-team",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Calculate Period-over-Period Revenue Growth",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/calculate-period-over-period-revenue-growth",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Broadcast Starting and Latest Revenue with Full Frames",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/broadcast-starting-and-latest-revenue-with-full-frames",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Contrast Physical and Peer-aware Running Totals",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/contrast-physical-and-peer-aware-running-totals",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Detect Consecutive Reporting Streaks",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/detect-consecutive-reporting-streaks",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Measure Cumulative Revenue Concentration",
+                "number": null,
+                "group": "Choose an exercise",
+                "difficulty": null,
+                "url": "https://www.sql-practice.online/scenario/ctes-window/measure-cumulative-revenue-concentration",
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://sql-practice.online/scenario/ctes-window"
+          },
+          "totalItems": 11
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "Topic page listing 11 live-editor SQL exercises, ordered easy to hard, covering CTEs, ranking, LAG/LEAD, frames, ROWS vs RANGE and gaps-and-islands; best for hands-on window-function practice."
+      },
+      {
+        "id": "M11",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": null,
+        "year": null,
+        "why": "Optional guided project of about 2.5 hours applying window functions to analytics.",
+        "recommendedBy": [],
+        "url": "https://coursera.org/projects/sql-window-functions-for-analytics",
+        "title": "SQL Window Functions for Analytics",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:56.629Z",
+        "fetchedTitle": "SQL Window Functions for Analytics",
+        "sig": "MYVo-nGNUeu2mvWmRVKwN2etxXF8A7sBhc54SvO6XNU",
+        "minutes": 150,
+        "minutesBasis": "estimated",
+        "uses": null,
+        "pageMinutes": 5,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "project",
+          "items": null,
+          "perItemMinutes": null,
+          "minutes": null,
+          "answers": false
+        },
+        "foundBy": [
+          "practice"
+        ]
+      },
+      {
+        "id": "M12",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": "Modern Age Coders",
+        "year": null,
+        "why": "64 questions with answers testing output prediction, default frame and LAST_VALUE pitfalls; MySQL examples.",
+        "recommendedBy": [],
+        "url": "https://learn.modernagecoders.com/resources/sql/window-functions/practice",
+        "title": "Window Functions - ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD Practice | SQL",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:19.627Z",
+        "fetchedTitle": "Window Functions - ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD Practice | SQL",
+        "sig": "lCgruntx57kdHDPPOTAEpgeU9kRSgXxcIpVHEy1-pkM",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 16,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "recall",
+          "items": 64,
+          "perItemMinutes": 3,
+          "minutes": 192,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Topic-Specific Questions",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Mixed & Application Questions",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Multiple Choice Questions",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Coding Challenges",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": null,
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://learn.modernagecoders.com/resources/sql/window-functions/practice"
+          },
+          "totalItems": 4
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "One practice page split into question sets (topic, mixed, MCQ) plus 8 coding challenges; best for output prediction and frame pitfalls in MySQL."
+      },
+      {
+        "id": "M13",
+        "origin": "research",
+        "type": "link",
+        "kind": "essay",
+        "author": null,
+        "year": null,
+        "why": "7 conceptual questions and 5 coded company problems with answers.",
+        "recommendedBy": [],
+        "url": "https://datalemur.com/blog/sql-window-functions-interview-questions",
+        "title": "12 SQL Window Functions Interview Questions (With Answers!)",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:45:19.365Z",
+        "fetchedTitle": "12 SQL Window Functions Interview Questions (With Answers!)",
+        "sig": "PwhGsMJbmBW0-L8RyeOtI_YtFAloRiQEUXwACZ2yY0Q",
+        "minutes": 10,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 10,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "recall",
+          "items": 12,
+          "perItemMinutes": 3,
+          "minutes": 36,
+          "answers": true
+        },
+        "foundBy": [
+          "practice"
+        ]
+      }
+    ]
+  },
+  "baseline": {
+    "inputTokens": 5512,
+    "outputTokens": 2739,
+    "ms": 26366
+  }
+}

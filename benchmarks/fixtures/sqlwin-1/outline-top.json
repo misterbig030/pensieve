@@ -1,0 +1,581 @@
+{
+  "id": "sqlwin-1/top",
+  "topic": "sqlwin",
+  "sourceRun": "draft-2026-11-05T20-45-12-383Z-sqlwin-1",
+  "commit": "361aeb9",
+  "label": "Top level · 5 days",
+  "group": "top",
+  "leaf": true,
+  "request": {
+    "topic": "SQL window functions",
+    "granularity": "day",
+    "weeks": 1,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6
+  },
+  "materials": [
+    {
+      "id": "M2",
+      "origin": "research",
+      "type": "link",
+      "kind": "docs",
+      "author": null,
+      "year": null,
+      "why": "Short, accurate introduction to OVER, PARTITION BY, ORDER BY and the default frame.",
+      "recommendedBy": [],
+      "url": "https://postgresql.org/docs/current/tutorial-window.html",
+      "title": "3.5. Window Functions",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:16.272Z",
+      "fetchedTitle": "PostgreSQL: Documentation: 18: 3.5. Window Functions",
+      "sig": "-wQ63jVo1U-Cz0kwK9eC3l0yt0h_LKISVcUYWvTqh2U",
+      "minutes": 30,
+      "minutesBasis": "estimated",
+      "uses": "Intro to OVER, PARTITION BY, default frame",
+      "pageMinutes": 6,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M3",
+      "origin": "research",
+      "type": "link",
+      "kind": "docs",
+      "author": null,
+      "year": null,
+      "why": "Reference for all built-in window functions, with pitfalls such as last_value under the default frame.",
+      "recommendedBy": [],
+      "url": "https://postgresql.org/docs/current/functions-window.html",
+      "title": "9.22. Window Functions",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:16.257Z",
+      "fetchedTitle": "PostgreSQL: Documentation: 18: 9.22. Window Functions",
+      "sig": "1euLy1r3_f56xFMd1xx6_49fHOP9URrW_f8cPF8HO5M",
+      "minutes": 15,
+      "minutesBasis": "estimated",
+      "uses": "Reference for built-in functions and pitfalls",
+      "pageMinutes": 4,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M5",
+      "origin": "research",
+      "type": "youtube",
+      "kind": "video",
+      "author": null,
+      "year": null,
+      "why": "Over two hours of video covering ranking, offset functions, frames and running totals.",
+      "recommendedBy": [],
+      "url": "https://youtube.com/watch?v=Wvg4PjbMTO8",
+      "title": "The Ultimate SQL Window Functions Course | Complete End-to-End Guide",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:56.789Z",
+      "fetchedTitle": "The Ultimate SQL Window Functions Course | Complete End-to-End Guide - YouTube",
+      "sig": "OkZrk2v81acdWDwvlJyxdgNA8XkDnYw2H-yTKSDxWa0",
+      "minutes": 75,
+      "minutesBasis": "measured",
+      "uses": "Ranking, offset functions, frames, running totals",
+      "pageMinutes": 231,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "backbone",
+        "canonical",
+        "practice"
+      ]
+    },
+    {
+      "id": "M6",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Hristo Bogoev",
+      "year": null,
+      "why": "Visual before/after diagrams for ROW_NUMBER, RANK, LAG and LEAD, with quizzes.",
+      "recommendedBy": [],
+      "url": "https://sqlnoir.com/blog/sql-window-functions",
+      "title": "SQL Window Functions Explained: The Complete Visual Guide (2026)",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:56.265Z",
+      "fetchedTitle": "SQL Window Functions Explained: The Complete Visual Guide (2026) | SQLNoir",
+      "sig": "5mDjAI0n_Z6X1OzFesvaEmAwJhuQtwisJ0mCEOscRkw",
+      "minutes": 11,
+      "minutesBasis": "measured",
+      "uses": "Visual model of ROW_NUMBER, RANK, LAG, LEAD",
+      "pageMinutes": 11,
+      "hub": false,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M8",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": "Selva Prabhakaran",
+      "year": null,
+      "why": "15 graded problems with desired output and solutions, covering top-N, percent change and medians.",
+      "recommendedBy": [],
+      "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises",
+      "title": "SQL Window Functions Exercises - Practice to perfection - machinelearningplus",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:23.165Z",
+      "fetchedTitle": "SQL Window Functions Exercises - Practice to perfection - machinelearningplus",
+      "sig": "lOWFC3T1JxQHAw6SNf4GH-_9zu9fujZYjeR1jEco5Vo",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Graded window-function problems",
+      "pageMinutes": 11,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "problem-set",
+        "items": 15,
+        "perItemMinutes": 10,
+        "minutes": 150,
+        "answers": true,
+        "list": {
+          "items": [
+            {
+              "title": "Q1. Find the running cumulative total demand.",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q1-find-the-running-cumulative-total-demand",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q2. Find the running cumulative total demand by product.",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q2-find-the-running-cumulative-total-demand-by-product",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q3. When are the top 2 worst performing days for each product?",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q3-when-are-the-top-2-worst-performing-days-for-each-product",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q4. Find the percentage increase in qty compared to the previous day.",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q4-find-the-percentage-increase-in-qty-compared-to-the-previous-day",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q5. Show the minimum and maximum ‘qty’ sold for each product as separate columns.",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q5-show-the-minimum-and-maximum-qty-sold-for-each-product-as-separate-columns",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q6. Calculate the difference between the second largest and the second smallest sales qty",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q6-calculate-the-difference-between-the-second-largest-and-the-second-smallest-sales-qty",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q7. On each day, which product had the highest sales?",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q7-on-each-day-which-product-had-the-highest-sales",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q8. Create row numbers in increasing order of sales.",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q8-create-row-numbers-in-increasing-order-of-sales",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q9. Find the top products (Rank 1 and 2) within each location",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q9-find-the-top-products-rank-1-and-2-within-each-location",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q10. What is the total sales from Top 3 products in each location?",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q10-what-is-the-total-sales-from-top-3-products-in-each-location",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q11. Calculate the proportion of sales from each location",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q11-calculate-the-proportion-of-sales-from-each-location",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q12. Which products contribute to top 80% of total sales?",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q12-which-products-contribute-to-top-80-of-total-sales",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q13. What is the median value of sales overall?",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q13-what-is-the-median-value-of-sales-overall",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q14. What is the median value of sales for each location?",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q14-what-is-the-median-value-of-sales-for-each-location",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Q15. Which product has the largest refund rate overall?",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises#q15-which-product-has-the-largest-refund-rate-overall",
+              "solutionUrl": null,
+              "minutes": null
+            }
+          ],
+          "source": "page",
+          "url": "https://machinelearningplus.com/sql/sql-window-functions-exercises"
+        },
+        "totalItems": 15
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "One page of 15 graded SQL window-function exercises (Q1–Q15) with desired output and solutions; best for hands-on practice of running totals, top-N, percent change, proportions and medians."
+    },
+    {
+      "id": "M10",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": "SQL Practice Online",
+      "year": null,
+      "why": "11 live-editor labs on frames, ROWS vs RANGE, running totals and gaps and islands.",
+      "recommendedBy": [],
+      "url": "https://sql-practice.online/scenario/ctes-window",
+      "title": "CTEs & Window Functions SQL Topic Exercises (11)",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:19.431Z",
+      "fetchedTitle": "CTEs & Window Functions SQL Topic Exercises (11)",
+      "sig": "NkQeTTrpLQ5O-JZ4x1sWPf0aZ5wR1Af1B4WgmH6dbvg",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Live labs on frames and gaps and islands",
+      "pageMinutes": 3,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": 11,
+        "perItemMinutes": 5,
+        "minutes": 55,
+        "answers": true,
+        "list": {
+          "items": [
+            {
+              "title": "Summarize Team Performance with a CTE",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/summarize-team-performance-with-a-cte",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Compare Team Revenue with a Chained CTE Pipeline",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/compare-team-revenue-with-a-chained-cte-pipeline",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Calculate a Deterministic Running Revenue Total",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/calculate-a-deterministic-running-revenue-total",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Compare Each Period with Its Neighbors",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/compare-each-period-with-its-neighbors",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Select the Best Quality Snapshot per Team",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/select-the-best-quality-snapshot-per-team",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Keep the Latest Snapshot per Team",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/keep-the-latest-snapshot-per-team",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Calculate Period-over-Period Revenue Growth",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/calculate-period-over-period-revenue-growth",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Broadcast Starting and Latest Revenue with Full Frames",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/broadcast-starting-and-latest-revenue-with-full-frames",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Contrast Physical and Peer-aware Running Totals",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/contrast-physical-and-peer-aware-running-totals",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Detect Consecutive Reporting Streaks",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/detect-consecutive-reporting-streaks",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Measure Cumulative Revenue Concentration",
+              "number": null,
+              "group": "Choose an exercise",
+              "difficulty": null,
+              "url": "https://www.sql-practice.online/scenario/ctes-window/measure-cumulative-revenue-concentration",
+              "solutionUrl": null,
+              "minutes": null
+            }
+          ],
+          "source": "page",
+          "url": "https://sql-practice.online/scenario/ctes-window"
+        },
+        "totalItems": 11
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "Topic page listing 11 live-editor SQL exercises, ordered easy to hard, covering CTEs, ranking, LAG/LEAD, frames, ROWS vs RANGE and gaps-and-islands; best for hands-on window-function practice."
+    },
+    {
+      "id": "M12",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": "Modern Age Coders",
+      "year": null,
+      "why": "64 questions with answers testing output prediction, default frame and LAST_VALUE pitfalls; MySQL examples.",
+      "recommendedBy": [],
+      "url": "https://learn.modernagecoders.com/resources/sql/window-functions/practice",
+      "title": "Window Functions - ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD Practice | SQL",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:19.627Z",
+      "fetchedTitle": "Window Functions - ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD Practice | SQL",
+      "sig": "lCgruntx57kdHDPPOTAEpgeU9kRSgXxcIpVHEy1-pkM",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Output prediction and frame-pitfall recall",
+      "pageMinutes": 16,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "recall",
+        "items": 4,
+        "perItemMinutes": 3,
+        "minutes": 12,
+        "answers": true,
+        "list": {
+          "items": [
+            {
+              "title": "Topic-Specific Questions",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Mixed & Application Questions",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Multiple Choice Questions",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Coding Challenges",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            }
+          ],
+          "source": "page",
+          "url": "https://learn.modernagecoders.com/resources/sql/window-functions/practice"
+        },
+        "totalItems": 4
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "One practice page split into question sets (topic, mixed, MCQ) plus 8 coding challenges; best for output prediction and frame pitfalls in MySQL."
+    },
+    {
+      "id": "M13",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": null,
+      "year": null,
+      "why": "7 conceptual questions and 5 coded company problems with answers.",
+      "recommendedBy": [],
+      "url": "https://datalemur.com/blog/sql-window-functions-interview-questions",
+      "title": "12 SQL Window Functions Interview Questions (With Answers!)",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:19.365Z",
+      "fetchedTitle": "12 SQL Window Functions Interview Questions (With Answers!)",
+      "sig": "PwhGsMJbmBW0-L8RyeOtI_YtFAloRiQEUXwACZ2yY0Q",
+      "minutes": 10,
+      "minutesBasis": "measured",
+      "uses": "Conceptual questions and recall check",
+      "pageMinutes": 10,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "recall",
+        "items": 12,
+        "perItemMinutes": 3,
+        "minutes": 36,
+        "answers": true
+      },
+      "foundBy": [
+        "practice"
+      ]
+    }
+  ],
+  "split": {
+    "readingShare": 39,
+    "practice": "Writing window queries",
+    "formats": [
+      {
+        "format": "problem-set",
+        "share": 59,
+        "focus": "Running totals, top-N, percent change, medians",
+        "reason": "Window functions are mastered by writing many queries and checking them against expected output."
+      },
+      {
+        "format": "lab",
+        "share": 22,
+        "focus": "Frames, ROWS vs RANGE, gaps and islands",
+        "reason": "Guided live-editor steps make frame behaviour visible as you change it."
+      },
+      {
+        "format": "recall",
+        "share": 19,
+        "focus": "Output prediction and frame pitfalls",
+        "reason": "Predicting results from memory fixes the subtle rules, like default frames and ranking ties, that cause silent bugs."
+      }
+    ],
+    "reason": "About a third of the week (roughly 1 h 45 min) goes to short docs, a visual guide and part of a video course to build the mental model of OVER, partitions and frames. The remaining four-plus hours go to writing real window queries, because this is a skill you learn by doing."
+  },
+  "level": "day",
+  "spans": [
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "timeLimitMs": 183711,
+  "baseline": {
+    "inputTokens": 5642,
+    "outputTokens": 4546,
+    "ms": 40716
+  }
+}

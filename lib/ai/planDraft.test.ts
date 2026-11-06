@@ -11,11 +11,11 @@ import type { ModelCall } from "./logged";
 import type { ServiceEvent } from "./serviceEvents";
 import { STRUCTURE_ALLOCATE_MIN_MS, STRUCTURE_RESERVE_MS, type StructureFinder } from "./research/structureFinder";
 import { SourceFetcher } from "./research/tools";
-import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, timeOverLimit, toUnitTime, streamPlanDraft, streamResearchedPlanDraft, weekLeafBlocks } from "./planDraft";
+import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, timeOverLimit, toUnitTime, draftLevel, streamPlanDraft, streamResearchedPlanDraft, weekLeafBlocks } from "./planDraft";
 import { MAX_UNIT_MINUTES, unitTimeSchema } from "@/lib/schemas/plan";
 import type { ResolvedModel } from "./resolve";
 import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
-import { aliasMaterials } from "@/lib/materials";
+import { aliasMaterials, type Breach } from "@/lib/materials";
 import { makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import { AIE_MATERIALS, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
@@ -1140,5 +1140,40 @@ describe("the draft's time budget", () => {
       for await (const e of streamPlanDraft({ topic: "Git", weeks: 4, daysPerWeek: 5, granularity: "day", materials: [], split: SPLIT, deadline: Date.now() + DRAFT_BUDGET_MS })) void e;
     };
     await expect(run()).rejects.toThrow("boom");
+  });
+});
+
+describe("draftLevel's outline call", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+  });
+  const direct: ResolvedModel = { model: {} as never, id: "anthropic/claude-opus-5.5", keyOwner: "app" };
+  const base = { topic: "Reading", weeks: 1, daysPerWeek: 1, granularity: "day" as const, hoursPerWeek: 1, outlineModel: direct };
+  type Ctx = Parameters<typeof draftLevel>[0]["ctx"];
+  const run = async (ctx: Ctx, units: UnitDraft[]) => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(units));
+    const calls: ModelCall[] = [];
+    let done: { units: UnitDraft[]; breaches: Breach[] } | null = null;
+    for await (const e of draftLevel({ ctx, level: "day", spans: [1], log: { onCall: (c) => void calls.push(c) } })) if (e.type === "done") done = e;
+    return { calls, done: done! };
+  };
+
+  it("runs the outline call at the effort the draft is given", async () => {
+    const unit = { title: "D1", summary: "s" } as UnitDraft;
+    expect((await run({ ...base, materials: [], effort: "low" }, [unit])).calls[0].effort).toBe("low");
+    expect((await run({ ...base, materials: [] }, [unit])).calls[0].effort).toBe("high");
+  });
+  it("returns the model's own units and the typed breaches with the level", async () => {
+    const chapters = Array.from({ length: 3 }, (_, i) => ({ n: i + 1, title: `Chapter ${i + 1}`, page: null, minutes: 100, sections: [] }));
+    const book = material("M1", { kind: "book", minutes: 300, toc: { source: "catalogue", url: "u", printPages: false, end: null, chapters } });
+    const unit = { title: "D1", summary: "s", materials: [{ id: "M1.1", tier: "must" as const, minutes: 999 }] } as UnitDraft;
+    const { done } = await run({ ...base, materials: [book], split: { readingShare: 100, practice: "none", reason: "r" } }, [unit]);
+    expect(done.units[0].materials![0].minutes).toBe(999);
+    expect(done.breaches.map((b) => b.kind)).toContain("over-budget");
+  });
+  it("returns no breaches for a level without materials", async () => {
+    const { done } = await run({ ...base, materials: [] }, [{ title: "D1", summary: "s" } as UnitDraft]);
+    expect(done.breaches).toEqual([]);
+    expect(done.units).toHaveLength(1);
   });
 });

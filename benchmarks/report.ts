@@ -211,9 +211,14 @@ function moreToSettle(summary: ContestantSummary, margin: number): number | null
   return Number.isFinite(count) && count > 0 ? count : null;
 }
 
+/**
+ * A sample's name, `<contestant>-<fixture>-<epoch>`, which is also its file's in `samples/`: a "/" in an outline
+ * fixture's id ("csapp-1/top") becomes "__", so the folder stays flat.
+ */
+export const sampleName = (s: Pick<Sample, "contestant" | "fixture" | "epoch">) => `${s.contestant}-${s.fixture.replaceAll("/", "__")}-${s.epoch}`;
+
 /** The sample file the report links, relative to the report. */
-const sampleFile = (s: Pick<Sample, "contestant" | "fixture" | "epoch">) =>
-  `samples/${s.contestant}-${s.fixture}-${s.epoch}.json`;
+const sampleFile = (s: Pick<Sample, "contestant" | "fixture" | "epoch">) => `samples/${sampleName(s)}.json`;
 
 /** The report: header, then the comparison, score by group, criteria, samples and the chart link, in that order. */
 export function renderReport(args: {
@@ -222,6 +227,10 @@ export function renderReport(args: {
   samples: Sample[];
   criteria: ScoredCriterion[];
   checked: Checked;
+  /** The chart's file, beside the report; `chart.svg` by default. */
+  chart?: string;
+  /** Whether the header states the run's spend and cap; true by default. False for a part of a run (a group's section). */
+  spend?: boolean;
   run: {
     commit: string;
     fixtures: string[];
@@ -249,7 +258,7 @@ export function renderReport(args: {
     `- Commit: ${run.commit}`,
     `- Fixtures: ${run.fixtures.join(", ") || "none"}; ${run.epochs} epochs`,
     `- Judge: ${run.judge.model} (${run.judge.effort}); second judge: ${run.secondJudge.model} (${run.secondJudge.effort})`,
-    `- Spend: $${run.spentUsd.toFixed(2)} of the $${run.capUsd.toFixed(2)} cap`,
+    ...(args.spend === false ? [] : [`- Spend: $${run.spentUsd.toFixed(2)} of the $${run.capUsd.toFixed(2)} cap`]),
     `- Margin: ${margin}`,
     "",
   );
@@ -382,10 +391,22 @@ export function renderReport(args: {
     "",
     `Pareto frontier: ${frontier.join(", ") || "none"}`,
     "",
-    "![Score vs cost](chart.svg)",
+    `![Score vs cost](${args.chart ?? "chart.svg"})`,
     "",
   );
   return out.join("\n");
+}
+
+/**
+ * The routing section: for each group, the cheapest contestant (by cost per sample) whose verdict is "qualifies", or
+ * "none yet". The baseline's verdict is "baseline", so it never counts as routing to a new model.
+ */
+export function renderRouting(groups: Record<string, ContestantSummary[]>): string {
+  const lines = Object.entries(groups).map(([group, summaries]) => {
+    const cheapest = summaries.filter((s) => s.verdict === "qualifies").toSorted((a, b) => a.costUsd - b.costUsd)[0];
+    return `- ${group}: ${cheapest ? `${cheapest.name} (${usd(cheapest.costUsd)} a sample)` : "none yet"}`;
+  });
+  return ["## Routing", "", "The cheapest contestant that qualifies in each group, by cost per sample.", "", ...lines, ""].join("\n");
 }
 
 // --- Chart -------------------------------------------------------------------------------------------------------

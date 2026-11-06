@@ -1,6 +1,7 @@
 /**
  * Fixtures for the model benchmark: the exact input the allocation step received in a saved draft-eval run, frozen so
- * every contestant gets the same one. A fixture is one `allocate.json` under the fixtures root, named for its topic.
+ * every contestant gets the same one. A fixture is one `allocate.json` under the fixtures root, named for its topic,
+ * with an `outline-<call>.json` beside it for each outline call the run made (`tasks/outlineFixtures`).
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -8,6 +9,7 @@ import type { AllocationInput } from "@/lib/ai/allocate";
 import { DEFAULT_HOURS_PER_WEEK } from "@/lib/planTree";
 import { DRAFT_TOPICS } from "@/evals/draft/topics";
 import { readRun, scrubSecrets } from "@/evals/draft/record";
+import { captureOutline, outlineFixturePath, type OutlineFixture } from "./tasks/outlineFixtures";
 
 export const FIXTURES_ROOT = "benchmarks/fixtures";
 
@@ -48,11 +50,12 @@ function nextNumber(topic: string, taken: AllocateFixture[]): number {
 }
 
 /**
- * Freezes the allocation input of a saved draft-eval run as the next fixture for its topic under `root`. Throws,
- * naming the folder and writing nothing, when the folder was already captured, has no request, or research
- * did not finish with materials.
+ * Freezes the allocation input of a saved draft-eval run as the next fixture for its topic under `root`, with each of
+ * the run's outline calls beside it. Throws, naming the folder (or the outline call) and writing nothing, when the
+ * folder was already captured, has no request, research did not finish with materials, or an outline call cannot be
+ * rebuilt as it was recorded.
  */
-export function captureFixture(runDir: string, root: string = FIXTURES_ROOT): AllocateFixture {
+export async function captureFixture(runDir: string, root: string = FIXTURES_ROOT): Promise<AllocateFixture & { outline: OutlineFixture[]; skipped: string[] }> {
   const sourceRun = basename(runDir);
   const record = readRun(runDir);
   const { meta } = record;
@@ -84,10 +87,14 @@ export function captureFixture(runDir: string, root: string = FIXTURES_ROOT): Al
     baseline: allocate ? { inputTokens: allocate.inputTokens ?? 0, outputTokens: allocate.outputTokens ?? 0, ms: allocate.latencyMs } : null,
   };
 
+  // Every outline call is rebuilt and checked against its recording before anything is written.
+  const { fixtures: outline, skipped } = await captureOutline(runDir, fixture.id);
+
   const dir = join(root, fixture.id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, FIXTURE_FILE), scrubSecrets(JSON.stringify(fixture, null, 2)));
-  return fixture;
+  for (const call of outline) writeFileSync(outlineFixturePath(call.id, root), scrubSecrets(JSON.stringify(call, null, 2)));
+  return { ...fixture, outline, skipped };
 }
 
 /** Reads a fixture back by id. Throws an `Error` naming the id when there is none. */

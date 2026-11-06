@@ -1,0 +1,869 @@
+{
+  "id": "frenchrev-1/week-1",
+  "topic": "frenchrev",
+  "sourceRun": "draft-2026-11-05T20-56-24-138Z-frenchrev-1",
+  "commit": "361aeb9",
+  "label": "Week 1 · 5 days",
+  "group": "leaves",
+  "leaf": true,
+  "request": {
+    "topic": "The French Revolution, 1789 to 1799",
+    "granularity": "day",
+    "weeks": 12,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6
+  },
+  "materials": [
+    {
+      "id": "M1",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Peter McPhee",
+      "year": 2016,
+      "why": "Single-volume narrative of the whole decade 1789-1799, covering Paris, the provinces and the global setting; reviewed as the likely standard English text.",
+      "recommendedBy": [
+        "https://history.ufl.edu/wp-content/uploads/sites/113/2024/08/EUH3452The-French-Revolution-A.-Matytsin.pdf",
+        "https://ageofrevolutions.com/2016/06/08/french-revolution-summer-reading-list"
+      ],
+      "url": "https://yalebooks.yale.edu/book/9780300228694/liberty-or-death",
+      "title": "Liberty or Death: The French Revolution",
+      "backbone": true,
+      "verifiedAt": "2026-11-05T20:56:37.385Z",
+      "fetchedTitle": "Liberty or Death",
+      "sig": "x-T_jvfBq9BHuvd3Ydd0lG6iqOufTw6fMxIJgogASMk",
+      "minutes": 1170,
+      "minutesBasis": "measured",
+      "uses": "Backbone narrative of 1789-1799, read in order",
+      "pageMinutes": 1170,
+      "hub": true,
+      "toc": {
+        "source": "catalogue",
+        "url": "https://openlibrary.org/books/OL27210650M",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Patchworks of power and privilege: France in the 1780s",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "A world of intellectual ferment",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Mismanaging crisis, 1785-88",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "The people's revolution, 1789",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Regenerating the nation, 1789-90",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "The revolution triumphant, 1790",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Fracturing Christ's family: religious schism and the king's flight, 1790-91",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Fear and fury, 1791-92, and a second revolution",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Republicans at the crossroads, 1792-93",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Liberty or death: choosing sides in violent times, 1793",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "\"Terror until the peace\", July-October 1793",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Saving a republic of virtue, October 1793-April 1794",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Terror, victory and collapse, April-July 1794",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Settling scores: the Thermidorian reaction, 1794-95",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Men with a stake in society, 1795-97",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "The great nation and its enemies, 1797-99",
+            "page": null,
+            "minutes": 69,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "The significance of the French Revolution.",
+            "page": null,
+            "minutes": 66,
+            "sections": []
+          }
+        ]
+      },
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ]
+    },
+    {
+      "id": "M3",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Timothy Tackett",
+      "year": 2015,
+      "why": "Companion for the 1792-1794 weeks, explaining how the Terror arose.",
+      "recommendedBy": [
+        "https://ageofrevolutions.com/2016/06/08/french-revolution-summer-reading-list"
+      ],
+      "url": "https://openlibrary.org/works/OL20227871W",
+      "title": "The Coming of the Terror in the French Revolution",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:57:09.573Z",
+      "fetchedTitle": "The Coming of the Terror in the French Revolution",
+      "sig": "fnE2M-e4i-uN9oJgxmJa31mXtHZB6VLg9H9ohDs_N5M",
+      "minutes": 540,
+      "minutesBasis": "measured",
+      "uses": "Deeper study of how the Terror arose, 1792-94",
+      "toc": null,
+      "catalogued": true,
+      "note": "The Open Library page has only catalogue details and no table of contents, so I couldn't find any chapters to list."
+    },
+    {
+      "id": "M5",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Simon Schama",
+      "year": 1989,
+      "why": "Narrative supplementary reading with vivid detail.",
+      "recommendedBy": [
+        "https://fivebooks.com/best-books/french-revolution-lynn-hunt"
+      ],
+      "url": "https://openlibrary.org/works/OL14866001W",
+      "title": "Citizens: A Chronicle of the French Revolution",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:57:09.574Z",
+      "fetchedTitle": "Citizens",
+      "sig": "3KK5-J9RKT2h1vZCImWykDsssSXrm0hB7_Kk2JdmCXI",
+      "minutes": 360,
+      "minutesBasis": "measured",
+      "uses": "Vivid episodes: 1789, the king's trial, the Terror",
+      "toc": null,
+      "catalogued": true,
+      "note": "The pages I could fetch (Open Library, Wikipedia and Internet Archive) only have catalogue information and no table of contents, so I found no chapter units."
+    },
+    {
+      "id": "M7",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "François Furet",
+      "year": 1981,
+      "why": "Key interpretive and historiographical work.",
+      "recommendedBy": [
+        "https://fivebooks.com/best-books/french-revolution-lynn-hunt"
+      ],
+      "url": "https://openlibrary.org/works/OL780258W",
+      "title": "Interpreting the French Revolution",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:57:09.574Z",
+      "fetchedTitle": "Interpreting the French Revolution",
+      "sig": "sQcJYGEKQCzVEulDfYUButBZIrkf273PuXoXGGPHsfc",
+      "minutes": 300,
+      "minutesBasis": "measured",
+      "uses": "Historiography and interpretive debate",
+      "toc": null,
+      "catalogued": true,
+      "note": "I couldn't get a table of contents. The Open Library page is only a catalogue record, and the Internet Archive page timed out. I made no units."
+    },
+    {
+      "id": "M8",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Alexis de Tocqueville",
+      "year": 1966,
+      "why": "Classic analysis of the Revolution's origins and continuities.",
+      "recommendedBy": [
+        "https://fivebooks.com/best-books/french-revolution-lynn-hunt"
+      ],
+      "url": "https://openlibrary.org/works/OL34716012W",
+      "title": "The Ancien Régime and the Revolution",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:57:09.574Z",
+      "fetchedTitle": "Ancien Regime and the French Revolution",
+      "sig": "U1FC5z6hiB-b577bhwDNsvcDLqyLT5cYrlHSvW3S6nE",
+      "minutes": 240,
+      "minutesBasis": "estimated",
+      "uses": "Origins and continuities of the old regime",
+      "toc": null,
+      "catalogued": true,
+      "note": "The Open Library page is only a catalogue record with no table of contents, so it has no chapters to place."
+    },
+    {
+      "id": "M9",
+      "origin": "research",
+      "type": "youtube",
+      "kind": "video",
+      "author": null,
+      "year": null,
+      "why": "15-minute video overview for orientation.",
+      "recommendedBy": [],
+      "url": "https://youtube.com/watch?v=5fJl_ZX91l0",
+      "title": "The French Revolution: Crash Course European History #21",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:56:30.659Z",
+      "fetchedTitle": "The French Revolution: Crash Course European History #21 - YouTube",
+      "sig": "Yu82pDbwkeYW0_9spWK1rMRNBV7WZFde85qNLkoMdlQ",
+      "minutes": 15,
+      "minutesBasis": "measured",
+      "uses": "Week-one orientation",
+      "pageMinutes": 15,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical",
+        "current"
+      ]
+    },
+    {
+      "id": "M11",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": null,
+      "year": null,
+      "why": "Review of a site with 12 essays and 350 documents, 250 images, maps and songs for primary-source work.",
+      "recommendedBy": [
+        "https://ageofrevolutions.com/french-revolution-links"
+      ],
+      "url": "https://worldhistorycommons.org/liberty-equality-fraternity",
+      "title": "Liberty, Equality, Fraternity | World History Commons",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:56:33.616Z",
+      "fetchedTitle": "Liberty, Equality, Fraternity | World History Commons",
+      "sig": "jpJnC9pp7GiIQd56BAyDZ_5MzL_e_UcqtrfGef3boGo",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Primary-source analysis lab",
+      "pageMinutes": 3,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": null,
+        "perItemMinutes": 5,
+        "minutes": null,
+        "answers": false
+      },
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M13",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": null,
+      "year": null,
+      "why": "40-question quiz matching the plan's dates, with instant feedback.",
+      "recommendedBy": [],
+      "url": "https://wayground.com/admin/quiz/6976cffc680a3cc8b09ad4aa/the-french-revolution-1789-1799",
+      "title": "The French Revolution (1789-1799) Quiz",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:57:04.455Z",
+      "fetchedTitle": "The French Revolution (1789-1799) Quiz",
+      "sig": "2utbfQ9AsyNuQHKWsd559zWQBdrgqlZ35tCUdtUepkk",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Chronology and fact recall",
+      "pageMinutes": 3,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "recall",
+        "items": 40,
+        "perItemMinutes": 3,
+        "minutes": 120,
+        "answers": true
+      },
+      "foundBy": [
+        "practice"
+      ]
+    }
+  ],
+  "split": {
+    "readingShare": 61,
+    "practice": "source analysis, essays",
+    "formats": [
+      {
+        "format": "design-exercise",
+        "share": 40,
+        "focus": "Timed analytical essays on causes, Terror, outcomes",
+        "reason": "History is learned by arguing from evidence, and a timed essay compared against a rubric trains exactly that."
+      },
+      {
+        "format": "lab",
+        "share": 35,
+        "focus": "Analysing primary documents, images, songs",
+        "reason": "The World History Commons collection gives guided work with real revolutionary sources alongside the narrative."
+      },
+      {
+        "format": "recall",
+        "share": 25,
+        "focus": "Chronology, actors, key journées",
+        "reason": "A decade of fast-moving events needs regular retrieval of dates and people, and the 40-question quiz matches the plan's period."
+      }
+    ],
+    "reason": "About three-fifths of the 72 hours goes to reading, built on McPhee's narrative of the whole decade read in order. Tackett and Schama add depth on the Terror and on key episodes, and Furet and Tocqueville cover interpretation. The remaining time goes to primary-source work, timed essays and recall,…"
+  },
+  "level": "day",
+  "spans": [
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "tree": {
+    "id": "root",
+    "level": "month",
+    "title": "",
+    "summary": "",
+    "len": 60,
+    "status": "pending",
+    "budgetHours": null,
+    "manualSplit": false,
+    "children": [
+      {
+        "id": "tmp-mw41291l-1",
+        "level": "month",
+        "title": "Old Regime Crisis and the Revolution of 1789",
+        "summary": "Builds the foundation by covering France in the 1780s, the Enlightenment, the fiscal crisis and the revolution of 1789-90, with Tocqueville's classic account of origins, before the decade turns radical.",
+        "len": 20,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": [
+          {
+            "id": "tmp-mw412oml-4",
+            "level": "week",
+            "title": "France in the 1780s and the Enlightenment",
+            "summary": "Opens with a short video overview, then maps the old regime's society, privileges and intellectual ferment, alongside Tocqueville on centralised administration, so the later crisis has a clear setting.",
+            "len": 5,
+            "status": "pending",
+            "budgetHours": null,
+            "manualSplit": false,
+            "children": null,
+            "start": 1,
+            "end": 5,
+            "covers": [
+              {
+                "id": "M9",
+                "note": null,
+                "activity": "read",
+                "chapter": null
+              },
+              {
+                "id": "M1",
+                "note": null,
+                "activity": "read",
+                "chapter": 1
+              },
+              {
+                "id": "M1",
+                "note": null,
+                "activity": "read",
+                "chapter": 2
+              },
+              {
+                "id": "M8",
+                "note": "first half: the old regime's administration, centralisation and social structure",
+                "activity": "read",
+                "chapter": null
+              }
+            ],
+            "practiceCovers": [
+              {
+                "format": "lab",
+                "id": "M11",
+                "note": "introductory essays and documents on old regime society and privilege"
+              },
+              {
+                "format": "recall",
+                "id": "M13",
+                "note": "questions 1–4: long-term causes and the old regime"
+              }
+            ],
+            "time": {
+              "reading": 273,
+              "practice": {
+                "lab": 45,
+                "recall": 40
+              }
+            }
+          },
+          {
+            "id": "tmp-mw412qeh-5",
+            "level": "week",
+            "title": "Fiscal Crisis and Tocqueville's Origins Argument",
+            "summary": "Follows the mismanaged crisis of 1785-88 and finishes Tocqueville's account of pre-revolutionary attitudes, then tests the causes in a first timed analytical essay.",
+            "len": 5,
+            "status": "pending",
+            "budgetHours": null,
+            "manualSplit": false,
+            "children": null,
+            "start": 6,
+            "end": 10,
+            "covers": [
+              {
+                "id": "M1",
+                "note": null,
+                "activity": "read",
+                "chapter": 3
+              },
+              {
+                "id": "M8",
+                "note": "second half: pre-revolutionary attitudes, reform and the coming of revolution",
+                "activity": "read",
+                "chapter": null
+              }
+            ],
+            "practiceCovers": [
+              {
+                "format": "lab",
+                "id": "M11",
+                "note": "documents on the fiscal crisis and the grievance lists of 1789"
+              },
+              {
+                "format": "recall",
+                "id": "M13",
+                "note": "questions 5–7: the fiscal crisis and the calling of the Estates-General"
+              }
+            ],
+            "time": {
+              "reading": 189,
+              "practice": {
+                "design-exercise": 50,
+                "lab": 70,
+                "recall": 50
+              }
+            }
+          },
+          {
+            "id": "tmp-mw412rzg-6",
+            "level": "week",
+            "title": "The People's Revolution of 1789",
+            "summary": "Reads the core narrative of 1789 together with Schama's vivid episodes of the Estates-General, the Bastille and the October Days, building the chronology of the year's key journées.",
+            "len": 5,
+            "status": "pending",
+            "budgetHours": null,
+            "manualSplit": false,
+            "children": null,
+            "start": 11,
+            "end": 15,
+            "covers": [
+              {
+                "id": "M1",
+                "note": null,
+                "activity": "read",
+                "chapter": 4
+              },
+              {
+                "id": "M5",
+                "note": "the episodes of 1789: the Estates-General, the fall of the Bastille and the October Days",
+                "activity": "read",
+                "chapter": null
+              }
+            ],
+            "practiceCovers": [
+              {
+                "format": "lab",
+                "id": "M11",
+                "note": "documents and images on the events of 1789: the Tennis Court Oath, the Bastille and the Great Fear"
+              },
+              {
+                "format": "recall",
+                "id": "M13",
+                "note": "questions 8–11: the journées and actors of 1789"
+              }
+            ],
+            "time": {
+              "reading": 249,
+              "practice": {
+                "lab": 65,
+                "recall": 45
+              }
+            }
+          },
+          {
+            "id": "tmp-mw412tj3-7",
+            "level": "week",
+            "title": "Regenerating the Nation, 1789-90",
+            "summary": "Closes the month with the National Assembly's reforms and the revolution's triumphant year, analysing the Declaration of the Rights of Man and writing two timed essays that consolidate causes and early outcomes before the decade turns radical.",
+            "len": 5,
+            "status": "pending",
+            "budgetHours": null,
+            "manualSplit": false,
+            "children": null,
+            "start": 16,
+            "end": 20,
+            "covers": [
+              {
+                "id": "M1",
+                "note": null,
+                "activity": "read",
+                "chapter": 5
+              },
+              {
+                "id": "M1",
+                "note": null,
+                "activity": "read",
+                "chapter": 6
+              }
+            ],
+            "practiceCovers": [
+              {
+                "format": "lab",
+                "id": "M11",
+                "note": "the Declaration of the Rights of Man and documents on the reforms of 1789-90"
+              },
+              {
+                "format": "recall",
+                "id": "M13",
+                "note": "questions 12–14: the early revolution's reforms, 1789-90"
+              }
+            ],
+            "time": {
+              "reading": 138,
+              "practice": {
+                "design-exercise": 100,
+                "lab": 70,
+                "recall": 45
+              }
+            }
+          }
+        ],
+        "start": 1,
+        "end": 20,
+        "covers": [
+          {
+            "id": "M9",
+            "note": "the whole video, as week-one orientation",
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M8",
+            "note": "the whole book, on the old regime's origins and continuities",
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 1
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 2
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 3
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 4
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 5
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 6
+          },
+          {
+            "id": "M5",
+            "note": "the episodes of 1789: the Estates-General, the Bastille and the October Days",
+            "activity": "read",
+            "chapter": null
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "lab",
+            "id": "M11",
+            "note": "essays and documents on the old regime, the grievances of 1789 and the Declaration of the Rights of Man"
+          },
+          {
+            "format": "recall",
+            "id": "M13",
+            "note": "questions 1–14: causes, 1789 and the early revolution"
+          }
+        ],
+        "time": {
+          "reading": 849,
+          "practice": {
+            "design-exercise": 150,
+            "lab": 250,
+            "recall": 180
+          }
+        }
+      },
+      {
+        "id": "tmp-mw412bec-2",
+        "level": "month",
+        "title": "Schism, Republic and the Coming of Terror",
+        "summary": "Follows the religious schism, the king's flight, war, the fall of the monarchy and the Terror up to spring 1794, paired with Tackett's study of how the Terror arose, once the 1789 foundations are secure.",
+        "len": 20,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 21,
+        "end": 40,
+        "covers": [
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 7
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 8
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 9
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 10
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 11
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 12
+          },
+          {
+            "id": "M3",
+            "note": "the chapters from 1789 through the crises of 1792-93",
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M5",
+            "note": "the episodes of the king's trial and execution",
+            "activity": "read",
+            "chapter": null
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "lab",
+            "id": "M11",
+            "note": "documents, images and songs on the radical revolution, the sans-culottes and the Terror"
+          },
+          {
+            "format": "recall",
+            "id": "M13",
+            "note": "questions 15–28: 1791 to 1794, actors and key journées"
+          }
+        ],
+        "time": {
+          "reading": 864,
+          "practice": {
+            "design-exercise": 200,
+            "lab": 220,
+            "recall": 140
+          }
+        }
+      },
+      {
+        "id": "tmp-mw412doe-3",
+        "level": "month",
+        "title": "Thermidor, Directory and Interpreting the Revolution",
+        "summary": "Completes the decade from the fall of Robespierre through the Directory to 1799, then weighs the Revolution's significance with Furet's historiography, ending with the most applied analytical essay work.",
+        "len": 20,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 41,
+        "end": 60,
+        "covers": [
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 13
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 14
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 15
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 16
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 17
+          },
+          {
+            "id": "M3",
+            "note": "the closing chapters on the Terror's climax in 1794 and its conclusions",
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M5",
+            "note": "the episodes of the Terror and its end",
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M7",
+            "note": "the whole book, on interpreting the Revolution",
+            "activity": "read",
+            "chapter": null
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "lab",
+            "id": "M11",
+            "note": "documents on Thermidor, the Directory, women, the colonies and the Revolution's legacy"
+          },
+          {
+            "format": "recall",
+            "id": "M13",
+            "note": "questions 29–40: Thermidor, the Directory and 1799"
+          }
+        ],
+        "time": {
+          "reading": 912,
+          "practice": {
+            "design-exercise": 300,
+            "lab": 120,
+            "recall": 101
+          }
+        }
+      }
+    ],
+    "start": 1,
+    "end": 60
+  },
+  "parentId": "tmp-mw412oml-4",
+  "timeLimitMs": 148398,
+  "baseline": {
+    "inputTokens": 7536,
+    "outputTokens": 2796,
+    "ms": 27160
+  }
+}

@@ -1,0 +1,751 @@
+{
+  "id": "ml-daily-1",
+  "topic": "ml-daily",
+  "sourceRun": "draft-2026-11-05T20-53-44-765Z-ml-daily-1",
+  "commit": "361aeb9",
+  "input": {
+    "topic": "Machine learning fundamentals with Python",
+    "instructions": "Comfortable with Python, rusty on linear algebra.",
+    "weeks": 13,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6,
+    "materials": [
+      {
+        "id": "M1",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Aurélien Géron",
+        "year": 2019,
+        "why": "Code-first backbone book for Python users; the scikit-learn and classical ML part fits this plan.",
+        "recommendedBy": [
+          "https://coursera.org/articles/machine-learning-books",
+          "https://youtube.com/watch?v=eE6yvtKLwvk"
+        ],
+        "url": "https://oreilly.com/library/view/hands-on-machine-learning/9781098125974",
+        "title": "Hands-On Machine Learning with Scikit-Learn, Keras, and TensorFlow",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:54:23.769Z",
+        "fetchedTitle": "Hands-On Machine Learning with Scikit-Learn, Keras, and TensorFlow",
+        "sig": "BsPfskjj9Y6_VMg51AFWXmYY9HvG-K1mgZw1vhM3iW0",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "toc": null,
+        "practice": {
+          "format": "problem-set",
+          "items": 9,
+          "perItemMinutes": 10,
+          "minutes": null,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "01_the_machine_learning_landscape.ipynb",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/ageron/handson-ml3/blob/main/01_the_machine_learning_landscape.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "02_end_to_end_machine_learning_project.ipynb",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/ageron/handson-ml3/blob/main/02_end_to_end_machine_learning_project.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "03_classification.ipynb",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/ageron/handson-ml3/blob/main/03_classification.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "04_training_linear_models.ipynb",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/ageron/handson-ml3/blob/main/04_training_linear_models.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "05_support_vector_machines.ipynb",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/ageron/handson-ml3/blob/main/05_support_vector_machines.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "06_decision_trees.ipynb",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/ageron/handson-ml3/blob/main/06_decision_trees.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "07_ensemble_learning_and_random_forests.ipynb",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/ageron/handson-ml3/blob/main/07_ensemble_learning_and_random_forests.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "08_dimensionality_reduction.ipynb",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/ageron/handson-ml3/blob/main/08_dimensionality_reduction.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "09_unsupervised_learning.ipynb",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/ageron/handson-ml3/blob/main/09_unsupervised_learning.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://oreilly.com/library/view/hands-on-machine-learning/9781098125974"
+          },
+          "totalItems": 9
+        },
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ],
+        "note": "The book's practice is the companion GitHub repo (handson-ml3), one Jupyter notebook per chapter. I listed only the classical scikit-learn chapters 1–9. The O'Reilly page returned 403 and no list file was found."
+      },
+      {
+        "id": "M2",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Andreas C. Müller and Sarah Guido",
+        "year": 2016,
+        "why": "Shorter, scikit-learn-focused alternative for Python users who want a lighter read.",
+        "recommendedBy": [
+          "https://datacamp.com/blog/the-15-best-data-machine-learning-books-to-read-in-2022"
+        ],
+        "url": "https://openlibrary.org/works/OL17357597W",
+        "title": "Introduction to Machine Learning with Python: A Guide for Data Scientists",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:54:23.769Z",
+        "fetchedTitle": "Introduction to Machine Learning with Python",
+        "sig": "6z6HsNvTy2oN3HfUyqjh5MUuUZpu4CTMyWhmd_Ff2aM",
+        "minutes": 940,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ]
+      },
+      {
+        "id": "M3",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Sebastian Raschka and Vahid Mirjalili",
+        "year": 2015,
+        "why": "Covers ML in Python with more of the maths behind the algorithms.",
+        "recommendedBy": [
+          "https://reddit.com/r/learnmachinelearning/comments/13y4rzn/are_there_any_books_i_should_read_to_learn"
+        ],
+        "url": "https://openlibrary.org/works/OL19667740W",
+        "title": "Python Machine Learning",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:54:23.769Z",
+        "fetchedTitle": "Python machine learning",
+        "sig": "sjavZ7FMcNVCZ6K8LDSq8s3JD9k5e-yS9vhu76wSZkY",
+        "minutes": 1343,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": {
+          "source": "catalogue",
+          "url": "https://openlibrary.org/books/OL26886340M",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": null,
+              "title": "Giving computers the ability to learn from data",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Training machine learning algorithms for classification",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "A tour of machine learning classifiers using Scikit-learn",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Building good training sets : data preprocessing",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Compressing data via dimensionality reduction",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Learning best practices for model evaluation and hyperparameter tuning",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Combining different models for ensemble learning",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Applying machine learning to sentiment analysis",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Embedding a machine learning model into a web application",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Predicting continuous target variables with regression analysis",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Working with unlabeled data : clustering analysis",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Training artificial neural networks for image recognition",
+              "page": null,
+              "minutes": 103,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Parallelizing neural network training with Theano.",
+              "page": null,
+              "minutes": 107,
+              "sections": []
+            }
+          ]
+        },
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ]
+      },
+      {
+        "id": "M4",
+        "origin": "research",
+        "type": "link",
+        "kind": "docs",
+        "author": null,
+        "year": null,
+        "why": "Official reference for the scikit-learn algorithms, from linear models to the rest of classical ML.",
+        "recommendedBy": [],
+        "url": "https://scikit-learn.org/stable/user_guide.html",
+        "title": "User Guide",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:53:51.494Z",
+        "fetchedTitle": "User Guide — scikit-learn 1.9.1 documentation",
+        "sig": "illiBwZt7iacBwSC8OjGM05WLATZd74C7WbSJQfZ-NQ",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 8,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M5",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": "Andrew Ng",
+        "year": 2026,
+        "why": "Beginner-friendly course covering the theory of supervised and unsupervised learning.",
+        "recommendedBy": [],
+        "url": "https://deeplearning.ai/specializations/machine-learning",
+        "title": "Machine Learning Specialization",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:53:51.394Z",
+        "fetchedTitle": "Machine Learning Specialization - DeepLearning.AI",
+        "sig": "xok3aaiUr3FNzt7Iq-Jm_gq1sN1mWLtElzdks0iCREA",
+        "minutes": 5700,
+        "minutesBasis": "estimated",
+        "uses": null,
+        "pageMinutes": 13,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M6",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": "David Dye",
+        "year": null,
+        "why": "Covers the linear algebra and calculus prerequisites for ML.",
+        "recommendedBy": [],
+        "url": "https://coursera.org/specializations/mathematics-machine-learning",
+        "title": "Mathematics for Machine Learning",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:53:51.833Z",
+        "fetchedTitle": "Mathematics for Machine Learning | Coursera",
+        "sig": "KIQcZ2I63OotHsKtJMUgjDKL4CKos0f4thJ_eYGgKHI",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 9,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M7",
+        "origin": "research",
+        "type": "link",
+        "kind": "video",
+        "author": "Grant Sanderson",
+        "year": null,
+        "why": "Visual intuition for linear algebra, a quick refresher for a rusty learner.",
+        "recommendedBy": [],
+        "url": "https://3blue1brown.com?topic=linear-algebra",
+        "title": "3Blue1Brown",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:53:51.497Z",
+        "fetchedTitle": "3Blue1Brown",
+        "sig": "2erOAQEdV9uqY9lhVhJpwt5XoNLe5n3I1zuX6SZQZnQ",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": null,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M8",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": "Luis Serrano",
+        "year": 2024,
+        "why": "Linear algebra taught in an ML context with graded practice and Python labs.",
+        "recommendedBy": [],
+        "url": "https://coursera.org/learn/machine-learning-linear-algebra",
+        "title": "Linear Algebra for Machine Learning and Data Science",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:53:54.660Z",
+        "fetchedTitle": "Linear Algebra for Machine Learning and Data Science | Coursera",
+        "sig": "MIMjf8Fu17mfalc0MPsG6fc02GoqhVsYTWPAiB60YwA",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 11,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "lab",
+          "items": null,
+          "perItemMinutes": 5,
+          "minutes": null,
+          "answers": true
+        },
+        "foundBy": [
+          "practice"
+        ]
+      },
+      {
+        "id": "M9",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": "Kaggle",
+        "year": null,
+        "why": "A roughly 3-hour hands-on intro with an exercise per lesson.",
+        "recommendedBy": [],
+        "url": "https://kaggle.com/learn/intro-to-machine-learning",
+        "title": "Learn Intro to Machine Learning Tutorials",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:53:53.095Z",
+        "fetchedTitle": "Learn Intro to Machine Learning Tutorials | Kaggle",
+        "sig": "iYIvR6lGIFPlwHw44FNMEvuu2dY6bZg62e-j7umVLow",
+        "minutes": 180,
+        "minutesBasis": "estimated",
+        "uses": null,
+        "pageMinutes": 1,
+        "hub": false,
+        "toc": null,
+        "practice": {
+          "format": "lab",
+          "items": null,
+          "perItemMinutes": 5,
+          "minutes": null,
+          "answers": true
+        },
+        "foundBy": [
+          "practice"
+        ]
+      },
+      {
+        "id": "M10",
+        "origin": "research",
+        "type": "link",
+        "kind": "repo",
+        "author": "andrewekhalel",
+        "year": null,
+        "why": "69 ML interview questions with answers, for recall practice.",
+        "recommendedBy": [],
+        "url": "https://github.com/andrewekhalel/MLQuestions",
+        "title": "GitHub - andrewekhalel/MLQuestions: Machine Learning and Computer Vision Engineer - Technical Interview Questions",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:53:53.472Z",
+        "fetchedTitle": "GitHub - andrewekhalel/MLQuestions: Machine Learning and Computer Vision Engineer - Technical Interview Questions · GitHub",
+        "sig": "MFgvXdej6q_vjb4v1OwzMrPCITywc40atP1jmLF_xxQ",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 25,
+        "hub": false,
+        "toc": null,
+        "practice": {
+          "format": "recall",
+          "items": 69,
+          "perItemMinutes": 3,
+          "minutes": 207,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Machine Learning Fundamentals",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/andrewekhalel/MLQuestions#machine-learning-fundamentals",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Algorithms and Ensembles",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/andrewekhalel/MLQuestions#algorithms-and-ensembles",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Data Preprocessing and Feature Engineering",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/andrewekhalel/MLQuestions#data-preprocessing-and-feature-engineering",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Optimization and Training",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/andrewekhalel/MLQuestions#optimization-and-training",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Deep Learning and Neural Networks",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/andrewekhalel/MLQuestions#deep-learning-and-neural-networks",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Computer Vision",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/andrewekhalel/MLQuestions#computer-vision",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Dimensionality Reduction",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/andrewekhalel/MLQuestions#dimensionality-reduction",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Model Evaluation and Validation",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/andrewekhalel/MLQuestions#model-evaluation-and-validation",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Probability and Statistics",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/andrewekhalel/MLQuestions#probability-and-statistics",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Coding and Implementation",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://github.com/andrewekhalel/MLQuestions#coding-and-implementation",
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://github.com/andrewekhalel/MLQuestions"
+          },
+          "totalItems": 10
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "One README with ~69 recall questions grouped into topic sections, answers inline; best for interview-style self-quizzing. Grouped at section level since there are more than 40 questions."
+      },
+      {
+        "id": "M11",
+        "origin": "research",
+        "type": "link",
+        "kind": "repo",
+        "author": "krasserm",
+        "year": null,
+        "why": "Stanford ML course exercises implemented in scikit-learn, ready to work through or compare against.",
+        "recommendedBy": [],
+        "url": "https://github.com/krasserm/machine-learning-notebooks",
+        "title": "GitHub - krasserm/machine-learning-notebooks: Stanford Machine Learning course exercises implemented with scikit-learn",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:53:53.670Z",
+        "fetchedTitle": "GitHub - krasserm/machine-learning-notebooks: Stanford Machine Learning course exercises implemented with scikit-learn · GitHub",
+        "sig": "3Gej1750VH1urjHyQ0bhKT_gGupyw0rbt6qXFyRIWuI",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 1,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "lab",
+          "items": 7,
+          "perItemMinutes": 5,
+          "minutes": 35,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Exercise 1 notebook",
+                "number": null,
+                "group": "Course exercises",
+                "difficulty": null,
+                "url": "https://github.com/krasserm/machine-learning-notebooks/blob/master/ml-ex1.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Exercise 2 notebook",
+                "number": null,
+                "group": "Course exercises",
+                "difficulty": null,
+                "url": "https://github.com/krasserm/machine-learning-notebooks/blob/master/ml-ex2.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Exercise 3 notebook",
+                "number": null,
+                "group": "Course exercises",
+                "difficulty": null,
+                "url": "https://github.com/krasserm/machine-learning-notebooks/blob/master/ml-ex3.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Exercise 4 notebook",
+                "number": null,
+                "group": "Course exercises",
+                "difficulty": null,
+                "url": "https://github.com/krasserm/machine-learning-notebooks/blob/master/ml-ex4.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Exercise 5 notebook",
+                "number": null,
+                "group": "Course exercises",
+                "difficulty": null,
+                "url": "https://github.com/krasserm/machine-learning-notebooks/blob/master/ml-ex5.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Exercise 6 notebook",
+                "number": null,
+                "group": "Course exercises",
+                "difficulty": null,
+                "url": "https://github.com/krasserm/machine-learning-notebooks/blob/master/ml-ex6.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Exercise 7 notebook",
+                "number": null,
+                "group": "Course exercises",
+                "difficulty": null,
+                "url": "https://github.com/krasserm/machine-learning-notebooks/blob/master/ml-ex7.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Exercise 8 notebook",
+                "number": null,
+                "group": "Course exercises",
+                "difficulty": null,
+                "url": "https://github.com/krasserm/machine-learning-notebooks/blob/master/ml-ex8.ipynb",
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://github.com/krasserm/machine-learning-notebooks"
+          },
+          "totalItems": 8
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "README links eight exercise notebooks (Coursera Stanford ML), each with a PDF handout; best for working through or comparing solutions."
+      },
+      {
+        "id": "M12",
+        "origin": "research",
+        "type": "link",
+        "kind": "docs",
+        "author": null,
+        "year": 2021,
+        "why": "Official PyTorch intro to tensors, models and training, for a deep learning follow-on.",
+        "recommendedBy": [],
+        "url": "https://docs.pytorch.org/tutorials/beginner/basics/intro.html",
+        "title": "Learn the Basics — PyTorch Tutorials 2.15.0+cu132 documentation",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:53:53.821Z",
+        "fetchedTitle": "Learn the Basics — PyTorch Tutorials 2.15.0+cu132 documentation",
+        "sig": "ZKkX0Fxz4kag_dHx16xjUt2OsqVA4E5po7z_rwaI5wg",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 2,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "current"
+        ]
+      },
+      {
+        "id": "M13",
+        "origin": "research",
+        "type": "youtube",
+        "kind": "video",
+        "author": "Simplilearn",
+        "year": 2026,
+        "why": "A long beginner video course on ML with Python.",
+        "recommendedBy": [],
+        "url": "https://youtube.com/watch?v=5knckC3rl-Y",
+        "title": "Machine Learning With Python Full Course 2026 | Python Machine Learning For Beginners | Simplilearn",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:53:54.564Z",
+        "fetchedTitle": "Machine Learning With Python Full Course 2026 | Python Machine Learning For Beginners | Simplilearn - YouTube",
+        "sig": "sQp_HwVBh3bWMWMXu4gHXBepYzP9bYfS9X_JHoGGsvo",
+        "minutes": 507,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 507,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "backbone",
+          "current"
+        ],
+        "note": "Single 507-minute video with no chapters or headings available from the tools, so it can't be split into parts."
+      }
+    ]
+  },
+  "baseline": {
+    "inputTokens": 5758,
+    "outputTokens": 3101,
+    "ms": 29038
+  }
+}
