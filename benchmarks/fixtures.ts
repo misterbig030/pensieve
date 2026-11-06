@@ -55,7 +55,7 @@ function nextNumber(topic: string, taken: AllocateFixture[]): number {
  * folder was already captured, has no request, research did not finish with materials, or an outline call cannot be
  * rebuilt as it was recorded.
  */
-export async function captureFixture(runDir: string, root: string = FIXTURES_ROOT): Promise<AllocateFixture & { outline: OutlineFixture[] }> {
+export async function captureFixture(runDir: string, root: string = FIXTURES_ROOT): Promise<AllocateFixture & { outline: OutlineFixture[]; skipped: string[] }> {
   const sourceRun = basename(runDir);
   const record = readRun(runDir);
   const { meta } = record;
@@ -88,13 +88,13 @@ export async function captureFixture(runDir: string, root: string = FIXTURES_ROO
   };
 
   // Every outline call is rebuilt and checked against its recording before anything is written.
-  const outline = await captureOutline(runDir, fixture.id);
+  const { fixtures: outline, skipped } = await captureOutline(runDir, fixture.id);
 
   const dir = join(root, fixture.id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, FIXTURE_FILE), scrubSecrets(JSON.stringify(fixture, null, 2)));
   for (const call of outline) writeFileSync(outlineFixturePath(call.id, root), scrubSecrets(JSON.stringify(call, null, 2)));
-  return { ...fixture, outline };
+  return { ...fixture, outline, skipped };
 }
 
 /** Reads a fixture back by id. Throws an `Error` naming the id when there is none. */

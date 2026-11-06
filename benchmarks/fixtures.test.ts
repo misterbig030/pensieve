@@ -72,8 +72,9 @@ describe("captureFixture", () => {
     expect(fixture.input.materials).toEqual(MATERIALS);
     expect(fixture.input).toMatchObject({ topic: META.request!.topic, instructions: "Focus on system design", weeks: 8, daysPerWeek: 5, hoursPerWeek: 7 });
     expect(fixture).toMatchObject({ id: "sde-1", topic: "sde", sourceRun: "sde-1", commit: "abc1234" });
-    const { outline, ...allocate } = fixture;
+    const { outline, skipped, ...allocate } = fixture;
     expect(outline).toEqual([]);
+    expect(skipped).toEqual([]);
     expect(loadFixture("sde-1", root)).toEqual(allocate);
   });
 

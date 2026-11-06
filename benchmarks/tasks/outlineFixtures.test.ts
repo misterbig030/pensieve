@@ -165,7 +165,7 @@ describe("captureOutline", () => {
     const record = await recordDraft(DAY_PLAN);
     const week1 = record.plan!.children![0];
     week1.problems = ["A day reads too much."];
-    const fixtures = await captureOutline(saved(record), "t-1");
+    const { fixtures } = await captureOutline(saved(record), "t-1");
 
     expect(fixtures.map((f) => f.id)).toEqual(["t-1/top", "t-1/week-1"]);
     const [top, days] = fixtures;
@@ -190,7 +190,7 @@ describe("captureOutline", () => {
     expect(week1.len).toBe(4);
     expect(record.calls.map((c) => c.label)).toContain("Week 1 · 5 days");
 
-    const fixtures = await captureOutline(saved(record), "t-1");
+    const { fixtures } = await captureOutline(saved(record), "t-1");
     expect(fixtures.map((f) => f.id)).toEqual(["t-1/top", "t-1/week-1"]);
     const days = fixtures[1];
     expect(days.spans).toHaveLength(5);
@@ -209,7 +209,7 @@ describe("captureOutline", () => {
     const delay = (prompt: string) => (prompt.includes(">> Month 2") ? 60 : prompt.includes(">> Month 3") ? 30 : 0);
     const record = await recordDraft(WEEK_LEAF_PLAN, delay);
     expect(record.calls.map((c) => c.label)).toEqual(["Allocate", "Top level · 8 weeks in 3 blocks", "Weeks 1–2 · 2 weeks", "Weeks 6–8 · 3 weeks", "Weeks 3–5 · 3 weeks"]);
-    const fixtures = await captureOutline(saved(record), "t-1");
+    const { fixtures } = await captureOutline(saved(record), "t-1");
 
     expect(fixtures.map((f) => f.id)).toEqual(["t-1/top", "t-1/weeks-1-2", "t-1/weeks-6-8", "t-1/weeks-3-5"]);
     const [heads, ...blocks] = fixtures;
@@ -231,25 +231,55 @@ describe("captureOutline", () => {
     }
   });
 
-  it("skips a level the run did not record and captures the rest", async () => {
+  it("skips a level the run did not record, captures the rest, and names the one it skipped", async () => {
     const record = await recordDraft(DAY_PLAN);
     expect(record.plan!.children![0].children).toHaveLength(5);
     record.calls = record.calls.filter((c) => c.label !== "Week 1 · 5 days");
-    const fixtures = await captureOutline(saved(record), "t-1");
+    const { fixtures, skipped } = await captureOutline(saved(record), "t-1");
     expect(fixtures.map((f) => f.id)).toEqual(["t-1/top"]);
+    expect(skipped).toEqual(["Week 1"]);
+  });
+
+  it("names the top level when the plan has one but no call was recorded for it", async () => {
+    const record = await recordDraft(DAY_PLAN);
+    record.calls = record.calls.filter((c) => !c.label.startsWith("Top level"));
+    const { fixtures, skipped } = await captureOutline(saved(record), "t-1");
+    expect(fixtures.map((f) => f.id)).toEqual(["t-1/week-1"]);
+    expect(skipped).toEqual(["Top level"]);
+  });
+
+  it("names a block of weeks whose call was not recorded", async () => {
+    const record = await recordDraft(WEEK_LEAF_PLAN);
+    record.calls = record.calls.filter((c) => c.label !== "Weeks 3–5 · 3 weeks");
+    const { fixtures, skipped } = await captureOutline(saved(record), "t-1");
+    expect(fixtures.map((f) => f.id)).toEqual(["t-1/top", "t-1/weeks-1-2", "t-1/weeks-6-8"]);
+    expect(skipped).toEqual(["Weeks 3–5 · 3 weeks"]);
+  });
+
+  it("names nothing when every planned level was recorded", async () => {
+    expect((await captureOutline(saved(await recordDraft(DAY_PLAN)), "t-1")).skipped).toEqual([]);
+    expect((await captureOutline(saved(await recordDraft(WEEK_LEAF_PLAN), "t-run-2"), "t-2")).skipped).toEqual([]);
+  });
+
+  it("says how many prompts the replay sent, and why, when it sent none", async () => {
+    const record = await recordDraft(DAY_PLAN);
+    // A practice format the app does not know makes the prompt fail to build, so the replay sends nothing.
+    record.split = { ...SPLIT, formats: [{ ...SPLIT.formats![0], format: "bogus" as never }] };
+    record.events = [{ type: "split", split: record.split, t: 1 }];
+    await expect(captureOutline(saved(record), "t-1")).rejects.toThrow(/Top level · 2 weeks: the replay sent 0 prompts, not 1; draftLevel threw: .+/);
   });
 });
 
 describe("loadOutlineFixture", () => {
   it("reads a saved fixture back", async () => {
-    const [top] = await captureOutline(saved(await recordDraft(DAY_PLAN)), "t-1");
+    const [top] = (await captureOutline(saved(await recordDraft(DAY_PLAN)), "t-1")).fixtures;
     mkdirSync(join(dir, "fixtures", "t-1"), { recursive: true });
     writeFileSync(join(dir, "fixtures", "t-1", "outline-top.json"), JSON.stringify(top, null, 2));
     expect(loadOutlineFixture("t-1/top", join(dir, "fixtures"))).toEqual(top);
   });
 
   it("fails loudly on a fixture an older schema wrote", async () => {
-    const [top] = await captureOutline(saved(await recordDraft(DAY_PLAN)), "t-1");
+    const [top] = (await captureOutline(saved(await recordDraft(DAY_PLAN)), "t-1")).fixtures;
     const { timeLimitMs: _limit, ...older } = top;
     mkdirSync(join(dir, "fixtures", "t-1"), { recursive: true });
     const path = join(dir, "fixtures", "t-1", "outline-top.json");

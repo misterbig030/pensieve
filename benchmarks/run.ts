@@ -552,7 +552,8 @@ export async function captureFixtures(runDirs: string[], root: string = FIXTURES
   for (const runDir of runDirs) {
     try {
       const fixture = await captureFixture(runDir, root);
-      print(`${fixture.id} captured from ${runDir} (+${fixture.outline.length} outline)`);
+      const skipped = fixture.skipped.length > 0 ? `; skipped: ${fixture.skipped.join(", ")}` : "";
+      print(`${fixture.id} captured from ${runDir} (+${fixture.outline.length} outline${skipped})`);
     } catch (error) {
       print(`${runDir} refused: ${error instanceof Error ? error.message : String(error)}`);
       allCaptured = false;

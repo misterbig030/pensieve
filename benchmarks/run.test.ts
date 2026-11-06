@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { generateObject } from "ai";
 import type { ModelCall } from "@/lib/ai/logged";
+import { writeRun, type RunRecord, type TimedEvent } from "@/evals/draft/record";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 import { calibrateBenchmark, captureFixtures, rescoreBenchmark, runBenchmark } from "./run";
@@ -598,6 +599,28 @@ describe("calibrateBenchmark", () => {
 });
 
 describe("captureFixtures", () => {
+  const captureNode = (extra: Partial<PlanNode>): PlanNode => ({ id: "n", level: "day", title: "t", summary: "s", len: 1, status: "pending", budgetHours: null, manualSplit: false, children: null, start: 1, end: 1, ...extra });
+  /** A saved draft-eval run with research done, no outline call and `plan`. */
+  const captureRecord = (plan: PlanNode | null): RunRecord => ({
+    meta: {
+      topic: "sde", run: 1, startedAt: "2026-10-29T10:00:00.000Z", commit: "abc1234", key: "app", models: {}, ms: 1, costUsd: 0, costByStage: {},
+      request: { topic: "Senior software engineer interview preparation", weeks: 2, daysPerWeek: 2, hoursPerWeek: 4, granularity: "day", materials: [] },
+    },
+    events: [{ type: "research.done", materials: [material("M1", "DDIA")], dropped: [], counts: { searches: 1, fetches: 1 }, t: 10 } as TimedEvent],
+    calls: [],
+    materials: { verified: [], allocated: null, dropped: [], coverage: null },
+    split: null,
+    plan,
+  });
+
+  it("prints each folder it captured with its outline count", async () => {
+    const runDir = join(root, "evals", "sde-run");
+    writeRun(runDir, captureRecord(null));
+    const lines: string[] = [];
+    expect(await captureFixtures([runDir], fixturesRoot, (l) => lines.push(l))).toBe(true);
+    expect(lines).toEqual([`sde-3 captured from ${runDir} (+0 outline)`]);
+  });
+
   it("prints why a folder was refused and goes on to the next", async () => {
     const lines: string[] = [];
     const ok = await captureFixtures([join(root, "missing-1"), join(root, "missing-2")], fixturesRoot, (l) => lines.push(l));
@@ -605,5 +628,17 @@ describe("captureFixtures", () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain("missing-1 refused:");
     expect(lines[1]).toContain("missing-2 refused:");
+  });
+
+  it("names the planned levels it found no recorded call for", async () => {
+    // A plan whose top level and Week 1 were planned, with no outline call recorded for either.
+    const day = (id: string) => captureNode({ id, level: "day", title: id, summary: id });
+    const week1 = captureNode({ id: "w1", level: "week", title: "Week one", summary: "s", len: 2, children: [day("d1"), day("d2")] });
+    const week2 = captureNode({ id: "w2", level: "week", title: "Week two", summary: "s", len: 2 });
+    const runDir = join(root, "evals", "sde-run");
+    writeRun(runDir, captureRecord(layout(makeRoot([week1, week2]))));
+    const lines: string[] = [];
+    expect(await captureFixtures([runDir], fixturesRoot, (l) => lines.push(l))).toBe(true);
+    expect(lines).toEqual([`sde-3 captured from ${runDir} (+0 outline; skipped: Top level, Week 1)`]);
   });
 });

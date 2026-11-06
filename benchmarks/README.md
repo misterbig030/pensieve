@@ -65,7 +65,8 @@ There are three groups, named for the level the call outlines:
 A fixture folder holds `allocate.json` and one `outline-<slug>.json` per outline call. `--capture` writes them from a
 draft-eval run. It replays each recorded response through the app's code with a mock model, so it makes no paid calls.
 It also rebuilds each prompt and refuses the run if a prompt differs from the recorded one. A level the run never
-reached, for example because time ran out, has no call and so no outline fixture.
+reached, for example because time ran out, has no call and so no outline fixture. A level the plan shows planned but
+with no recorded call is named on the capture line, as `skipped: Week 1`.
 
 ```bash
 npx tsx benchmarks/run.ts --capture evals/results/draft-<ts>-<topic>-1

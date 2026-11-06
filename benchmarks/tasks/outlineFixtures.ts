@@ -163,8 +163,10 @@ async function replay(f: OutlineFixture, call: ModelCall): Promise<PlanNode[]> {
   } catch (error) {
     failure = { error };
   }
+  const why = failure ? `; draftLevel threw: ${failure.error instanceof Error ? failure.error.message : String(failure.error)}` : "";
   // The prompt is checked first: a response that no longer parses matters only once the input is the recorded one.
-  if (prompts.length !== 1 || prompts[0] !== call.prompt) throw new Error(`${call.label}: the rebuilt prompt differs from the recorded one`);
+  if (prompts.length !== 1) throw new Error(`${call.label}: the replay sent ${prompts.length} prompts, not 1${why}`);
+  if (prompts[0] !== call.prompt) throw new Error(`${call.label}: the rebuilt prompt differs from the recorded one${why}`);
   if (failure) throw new Error(`${call.label}: the recorded response did not replay: ${failure.error instanceof Error ? failure.error.message : String(failure.error)}`);
   return nodes;
 }
@@ -205,16 +207,53 @@ function blockHead(heads: PlanNode[], label: string, daysPerWeek: number): PlanN
   throw new Error(`${label}: no block heading holds weeks ${from}–${to}`);
 }
 
+/** The labels the app gives #48's block calls, one per block heading, in order: "Week 4 · 1 week", "Weeks 1–3 · 3 weeks". */
+function blockLabels(heads: PlanNode[], daysPerWeek: number): string[] {
+  let first = 1;
+  return heads.map((head) => {
+    const n = childSpans(head, daysPerWeek).length;
+    const last = first + n - 1;
+    const label = n === 1 ? `Week ${first} · 1 week` : `Weeks ${first}–${last} · ${n} weeks`;
+    first = last + 1;
+    return label;
+  });
+}
+
+/**
+ * The levels the run planned that no recorded call did: the top level and each unit with children in the saved plan,
+ * by where they plan ("Top level", "Week 1"), then any of `blocks` (#48's block calls) with no call. A call that failed
+ * or was cut off records nothing, so it has no fixture; capture names it instead of skipping it in silence.
+ */
+function unrecorded(plan: PlanNode | null, calls: ModelCall[], blocks: string[]): string[] {
+  const planned = new Set<string>();
+  for (const call of calls) {
+    const match = LEVEL_LABEL.exec(call.label);
+    if (match) planned.add(`${match[1]}|${match[3]}`);
+  }
+  const out: string[] = [];
+  if (plan?.children?.length && !calls.some((call) => call.label.startsWith("Top level · "))) out.push("Top level");
+  if (plan) {
+    walk(plan, (node) => {
+      if (node.id === plan.id || !node.children?.length) return;
+      const where = fullLabelOf(plan, node);
+      if (!planned.has(`${where}|${childLevel(node.level)}`)) out.push(where);
+    });
+  }
+  const labels = new Set(calls.map((call) => call.label));
+  return [...out, ...blocks.filter((label) => !labels.has(label))];
+}
+
 /**
  * Rebuilds every outline call a saved draft-eval run made (in recorded order, the allocation's call left out) as a
- * fixture under `runFixtureId`, each replayed through the app to check its prompt. Throws, naming the call, when one
- * cannot be rebuilt or its prompt differs; writes nothing.
+ * fixture under `runFixtureId`, each replayed through the app to check its prompt, and names the planned levels that
+ * have no recorded call (`skipped`), which get no fixture. Throws, naming the call, when one cannot be rebuilt or its
+ * prompt differs; writes nothing.
  */
-export async function captureOutline(runDir: string, runFixtureId: string): Promise<OutlineFixture[]> {
+export async function captureOutline(runDir: string, runFixtureId: string): Promise<{ fixtures: OutlineFixture[]; skipped: string[] }> {
   const record = readRun(runDir);
   const { meta } = record;
   const calls = record.calls.filter((call) => call.caller === "outline" && call.label !== ALLOCATE_LABEL);
-  if (calls.length === 0) return [];
+  if (calls.length === 0) return { fixtures: [], skipped: unrecorded(record.plan, calls, []) };
 
   const asked = meta.request ?? DRAFT_TOPICS[meta.topic]?.request;
   if (!asked) throw new Error(`Run folder ${runDir} has no request, and topic "${meta.topic}" has none to fall back on`);
@@ -293,7 +332,8 @@ export async function captureOutline(runDir: string, runFixtureId: string): Prom
     if (ids.has(fixture.id)) throw new Error(`${fixture.label}: a second call named ${fixture.id}`);
     ids.add(fixture.id);
   }
-  return fixtures;
+  const blocks = heads ? blockLabels(layout(makeRoot(heads.map((head) => cloneTree(head)))).children!, daysPerWeek) : [];
+  return { fixtures, skipped: unrecorded(record.plan, calls, blocks) };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
