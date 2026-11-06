@@ -138,7 +138,7 @@ positive weights.
 | 1 | Practice uses only what has been read by then. | judge |
 | 1 | Each task says what done looks like (`done` field). | judge |
 | 1 | The unit has one focus. | judge |
-| 1 | Written for the learner: no ids, no chapter or section names it was not given, no filler. | judge; ids in text also by code, read before the app puts them in words |
+| 1 | Written for the learner: no ids, no chapter or section names it was not given, no filler. | judge, except ids: by code only, read before the app puts them in words (the judge sees the rewritten text) |
 
 **Heading calls**
 
@@ -149,7 +149,7 @@ positive weights.
 | 3 | **What it sets aside fits its reading time.** | code: breach `reading-over-stated`, and the set-aside size against the unit's reading minutes where sizes are known; judge otherwise |
 | 2 | **Sets aside materials in order, no gaps, no repeats.** Every allocated material is set aside somewhere (top level); listed chapters and items in order; each in one unit. | code: breaches `outside`, `overlap`, `whole-book`, plus a new order check and an every-material check |
 | 2 | **Each unit builds on the ones before it.** | judge |
-| 1 | Written for the learner: no ids; a book without a chapter list named by topic, never by chapter or section. | judge; ids by code |
+| 1 | Written for the learner: no ids; a book without a chapter list named by topic, never by chapter or section. | judge, except ids: by code only |
 
 A top-level call whose units are leaves (`sqlwin`'s days) takes the leaf list with the plan-wide checks added as noted,
 so it is held to the split's totals like a top-level heading call. `no-time` (a heading that states no time) counts
