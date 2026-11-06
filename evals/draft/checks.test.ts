@@ -131,6 +131,13 @@ describe("practiceTimeFindings", () => {
     expect(found.short).toEqual([]);
   });
 
+  it("notes a format that can be generated and is served under half its share: the planner writes the rest", () => {
+    const recall = { ...split, formats: [{ format: "recall" as const, share: 60, focus: "facts", reason: "" }] };
+    const served = material("M3", "Questions", { practice: { format: "recall", items: null, perItemMinutes: null, minutes: 10, answers: true, list: null } });
+    const found = practiceTimeFindings(recall, [served], request);
+    expect(found).toEqual({ unserved: [], short: [], notes: ["recall: 10 of 360 min from M3, the rest generated"] });
+  });
+
   it("notes a served format that gets its share", () => {
     const served = material("M3", "Problems", { practice: { format: "problem-set", items: null, perItemMinutes: null, minutes: 300, answers: true, list: null } });
     const found = practiceTimeFindings(split, [served], request);
@@ -438,6 +445,19 @@ describe("criterion 5: practice time served", () => {
       { format: "recall", share: 50, focus: "facts", reason: "" },
     ];
     expect(verdict(r, 5).status).toBe("pass");
+  });
+
+  it("passes recall served at a fraction of its share, which the planner fills with generated rows", () => {
+    const r = record();
+    r.split!.formats = [
+      { format: "problem-set", share: 50, focus: "patterns", reason: "" },
+      { format: "recall", share: 50, focus: "facts", reason: "" },
+    ];
+    r.materials.allocated![2].practice!.minutes = 600;
+    r.materials.allocated!.push(material("M9", "Questions", { practice: { format: "recall", items: null, perItemMinutes: null, minutes: 12, answers: true, list: null } }));
+    const v = verdict(r, 5);
+    expect(v.status).toBe("pass");
+    expect(v.evidence).toContain("recall: 12 of 576 min from M9, the rest generated");
   });
 
   it("passes a source sized by items × minutes per item", () => {

@@ -50,7 +50,7 @@ time and cost. A rescore writes `draft-<timestamp>-rescore-summary.md`.
 2. **Named practice list**: a read LeetCode/NeetCode list carries the problem-set time and the first drafted units name its problems, none twice.
 3. **Reservations add up**: every material is reserved by some top-level unit (a heading's covers, a leaf's own rows), nothing with chapters twice, and the first drafted units use only their heading's reservation.
 4. **Outside services**: no outside call gave up, no Open Library read failed, and the stream did not error.
-5. **Practice time served**: every picked format that needs a source has one, and served formats get at least half their share of practice time.
+5. **Practice time served**: every picked format that needs a source (lab, problem set) has one and gets at least half its share of practice time from its sources. A format the planner may write itself (recall, design, project, mock, session) passes however little its sources give, because the planner writes the rest of its share as generated rows.
 6. **First drafted units**: the first drafted leaves fit their minutes, no text shows a material id, and nothing with chapters is used twice.
 
 The checks read every plan shape. The top level holds the reservations whatever its level, and the "first drafted
