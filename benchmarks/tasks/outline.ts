@@ -534,7 +534,9 @@ export async function runOutlineSample(
   if (gate.status !== "completed" && calls.length === 0) {
     const used = usageOf(thrown);
     if (used) estimatedCostUsd = listPriceUsd(role.model, used);
-    else if (gate.status === "failed") {
+    // A request the provider refused with a status (a 400) generated nothing; only a call that ran (a timeout, an answer
+    // that did not parse) is estimated.
+    else if (gate.status === "failed" && statusOf(thrown) === undefined) {
       const { inputTokens, outputTokens, ms: baselineMs } = fixture.baseline;
       const pace = baselineMs > 0 ? Math.max(1, ms / baselineMs) : 1;
       estimatedCostUsd = listPriceUsd(role.model, { inputTokens, outputTokens: outputTokens * pace });

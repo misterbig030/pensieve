@@ -362,6 +362,13 @@ describe("runOutlineSample", () => {
       expect(sample.estimatedCostUsd).toBeCloseTo(listPriceUsd("google/gemini-3-flash", { inputTokens: 20_000, outputTokens: 4_000 }));
     });
 
+    it("is not charged when the provider refused the request (a 400): nothing was generated or billed", async () => {
+      const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ error: apiError(400) }), now: () => 0 });
+      expect(sample.gate.status).toBe("failed");
+      expect(sample.costUsd).toBe(0);
+      expect(sample).not.toHaveProperty("estimatedCostUsd");
+    });
+
     it("is not estimated past the time ceiling, where the call reported its cost", async () => {
       const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ breaches: [breach("over-budget")] }) });
       expect(sample.gate.status).toBe("failed");
