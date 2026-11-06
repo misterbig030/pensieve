@@ -11,7 +11,7 @@ import type { ModelCall } from "./logged";
 import type { ServiceEvent } from "./serviceEvents";
 import { STRUCTURE_ALLOCATE_MIN_MS, STRUCTURE_RESERVE_MS, type StructureFinder } from "./research/structureFinder";
 import { SourceFetcher } from "./research/tools";
-import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, timeOverLimit, toUnitTime, streamPlanDraft, streamResearchedPlanDraft } from "./planDraft";
+import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, timeOverLimit, toUnitTime, streamPlanDraft, streamResearchedPlanDraft, weekLeafBlocks } from "./planDraft";
 import { MAX_UNIT_MINUTES, unitTimeSchema } from "@/lib/schemas/plan";
 import type { ResolvedModel } from "./resolve";
 import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
@@ -616,14 +616,14 @@ describe("breaches while drafting", () => {
     const week = (title: string, ids: string[], minutes: number[]) => ({ title, summary: "s", materials: ids.map((id, i) => ({ id, tier: "must" as const, minutes: minutes[i] })) });
     const weeks = [
       week("W1", ["M1.1", "M1.2", "M1.3", "M1.4"], [107, 140, 93, 126]),
-      ...["M1.5", "M1.6", "M1.7", "M1.8", "M1.9", "M1.10", "M1.11"].map((id, i) => week(`W${i + 2}`, [id], [60])),
+      ...["M1.5", "M1.6", "M1.7"].map((id, i) => week(`W${i + 2}`, [id], [60])),
     ];
     mockedStreamObject.mockReturnValueOnce(fakeStream(weeks));
     const calls: ModelCall[] = [];
     let root: PlanNode | null = null;
-    for await (const e of streamPlanDraft({ ...ctx, weeks: 8, daysPerWeek: 7, granularity: "week", log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") root = e.root;
+    for await (const e of streamPlanDraft({ ...ctx, weeks: 4, daysPerWeek: 7, granularity: "week", log: { onCall: (c) => void calls.push(c) } })) if (e.type === "finish") root = e.root;
     expect(mockedStreamObject).toHaveBeenCalledTimes(1);
-    expect(calls.map((c) => c.label)).toEqual(["Top level · 8 weeks"]);
+    expect(calls.map((c) => c.label)).toEqual(["Top level · 4 weeks"]);
     expect(calls[0].facts).toContain("breach: Week 1 plans 466 min in a week of 360 min.");
     expect(calls[0].facts.some((f) => f.startsWith("dropped M1"))).toBe(false);
     expect(root!.children!.map((w) => w.title)).toEqual(weeks.map((w) => w.title));
@@ -815,6 +815,121 @@ describe("toUnitTime", () => {
     expect(unitTimeSchema.safeParse(time).success).toBe(true);
     expect(timeOverLimit(draft)).toBe(true);
     expect(timeOverLimit({ reading: 60, practice: [{ format: "recall", minutes: 90 }] })).toBe(false);
+  });
+});
+
+describe("week leaves drafted in blocks", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+    mockedGenerateObject.mockReset();
+  });
+
+  const weekRows = (from: number, count: number, extra: (n: number) => Partial<UnitDraft> = () => ({})): UnitDraft[] =>
+    Array.from({ length: count }, (_, i) => ({ title: `W${from + i}`, summary: "s", ...extra(from + i) }));
+
+  /** A stream that sends nothing until `gate` opens: a block's call that is still running. */
+  function gatedStream(units: UnitDraft[], gate: Promise<void>) {
+    const stream = fakeStream(units);
+    const partials = stream.partialObjectStream;
+    return {
+      ...stream,
+      partialObjectStream: (async function* () {
+        await gate;
+        yield* partials;
+      })(),
+    } as unknown as ReturnType<typeof streamObject>;
+  }
+
+  it("lists the blocks a top level of week leaves is drafted in: one call up to four weeks, blocks of at most three beyond", () => {
+    expect(weekLeafBlocks(1)).toEqual([1]);
+    expect(weekLeafBlocks(4)).toEqual([4]);
+    expect(weekLeafBlocks(5)).toEqual([2, 3]);
+    expect(weekLeafBlocks(6)).toEqual([3, 3]);
+    expect(weekLeafBlocks(8)).toEqual([2, 3, 3]);
+    expect(weekLeafBlocks(10)).toEqual([2, 2, 3, 3]);
+  });
+
+  it("drafts eight week leaves as block headings, then every block's weeks at once, and sends the weeks in order", async () => {
+    const heads: UnitDraft[] = [
+      { title: "Start", summary: "s", covers: [{ id: "M1.1" }, { id: "M1.2" }], time: { reading: 200, practice: [{ format: "project", minutes: 760 }] } },
+      { title: "Middle", summary: "s", covers: [{ id: "M1.3" }, { id: "M1.4" }], time: { reading: 200, practice: [{ format: "project", minutes: 1240 }] } },
+      { title: "End", summary: "s", covers: [{ id: "M1.5" }, { id: "M1.6" }], time: { reading: 200, practice: [{ format: "project", minutes: 1240 }] } },
+    ];
+    // The first block's weeks arrive only once every block's call has started: the blocks run at once, not in turn.
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    mockedStreamObject
+      .mockReturnValueOnce(fakeStream(heads))
+      .mockReturnValueOnce(gatedStream(weekRows(1, 2, (n) => ({ materials: [{ id: `M1.${n}`, tier: "must", minutes: 100 }] })), gate))
+      .mockReturnValueOnce(fakeStream(weekRows(3, 3)))
+      .mockImplementationOnce(() => {
+        open();
+        return fakeStream(weekRows(6, 3));
+      });
+    const calls: ModelCall[] = [];
+    const events: PlanDraftEvent[] = [];
+    for await (const event of streamPlanDraft({ topic: "Interviews", weeks: 8, daysPerWeek: 5, granularity: "week", hoursPerWeek: 8, materials: [bookOfSix()], split: SPLIT, log: { onCall: (c) => void calls.push(c) } })) {
+      events.push(event);
+    }
+    expect(mockedStreamObject).toHaveBeenCalledTimes(4);
+    const prompts = mockedStreamObject.mock.calls.map((c) => (c[0] as { prompt: string }).prompt);
+    expect(prompts[0]).toContain("Split the plan into 3 months");
+    expect(prompts[0]).toContain("1. Month 1 (2 weeks)");
+    expect(prompts[2]).toContain('Plan the weeks inside the unit marked ">>"');
+    expect(prompts[2]).toContain("This unit's reservation, the only resources its weeks may use:");
+    expect(calls.map((c) => c.label)).toEqual(["Top level · 8 weeks in 3 blocks", "Weeks 1–2 · 2 weeks", "Weeks 3–5 · 3 weeks", "Weeks 6–8 · 3 weeks"]);
+
+    const root = events.find((e) => e.type === "node") && events.at(-1);
+    if (root?.type !== "finish") throw new Error("no finish");
+    const nodes = events.filter((e) => e.type === "node");
+    expect(nodes.map((e) => e.parentId)).toEqual(Array(8).fill(root.root.id));
+    expect(nodes.map((e) => e.node.title)).toEqual(["W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"]);
+    const weeks = root.root.children!;
+    expect(weeks.map((w) => [w.level, w.title, w.start, w.end, w.budgetHours, w.children])).toEqual(
+      Array.from({ length: 8 }, (_, i) => ["week", `W${i + 1}`, i * 5 + 1, i * 5 + 5, 8, null]),
+    );
+    expect(weeks[0].materials).toEqual([expect.objectContaining({ id: "M1", chapter: 1, tier: "must" })]);
+    expect(weeks.some((w) => w.covers || w.time)).toBe(false);
+  });
+
+  it("puts the plan's checks on the root by week, as one call's would be", async () => {
+    mockedStreamObject
+      .mockReturnValueOnce(fakeStream([{ title: "A", summary: "s" }, { title: "B", summary: "s" }]))
+      .mockReturnValueOnce(fakeStream(weekRows(1, 3)))
+      .mockReturnValueOnce(fakeStream(weekRows(4, 3, (n) => (n === 5 ? { materials: [1, 2, 3, 4, 5, 6].map((c) => ({ id: `M1.${c}`, tier: "must" as const, minutes: 100 })) } : {}))));
+    let finish: PlanDraftEvent | undefined;
+    for await (const event of streamPlanDraft({ topic: "Interviews", weeks: 6, daysPerWeek: 5, granularity: "week", hoursPerWeek: 6, materials: [bookOfSix()], split: SPLIT })) finish = event;
+    if (finish?.type !== "finish") throw new Error("no finish");
+    expect(finish.root.problems).toContain("Week 5 plans 10 h in a week of 6 h.");
+    expect(finish.root.problems!.some((p) => p.includes("Month"))).toBe(false);
+  });
+
+  it("stops the other blocks and fails the draft when one block's call fails", async () => {
+    let seen: AbortSignal | undefined;
+    mockedStreamObject
+      .mockReturnValueOnce(fakeStream([{ title: "A", summary: "s" }, { title: "B", summary: "s" }]))
+      .mockImplementationOnce((options) => {
+        seen = (options as { abortSignal?: AbortSignal }).abortSignal;
+        return gatedStream(weekRows(1, 3), new Promise(() => {}));
+      })
+      .mockImplementationOnce((options) => {
+        (options as { onError?: (e: { error: unknown }) => void }).onError?.({ error: new Error("overloaded") });
+        return fakeStream([]);
+      });
+    await expect(async () => {
+      for await (const event of streamPlanDraft({ topic: "Interviews", weeks: 6, daysPerWeek: 5, granularity: "week", materials: [], split: SPLIT })) void event;
+    }).rejects.toThrow("overloaded");
+    expect(seen?.aborted).toBe(true);
+  });
+
+  it("keeps one call for four weeks of week leaves, and blocks only week leaves", async () => {
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weekRows(1, 4)));
+    for await (const event of streamPlanDraft({ topic: "T", weeks: 4, daysPerWeek: 5, granularity: "week", materials: [], split: SPLIT })) void event;
+    expect(mockedStreamObject).toHaveBeenCalledTimes(1);
+    mockedStreamObject.mockReset();
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weekRows(1, 8))).mockReturnValueOnce(fakeStream(weekRows(1, 5)));
+    for await (const event of streamPlanDraft({ topic: "T", weeks: 8, daysPerWeek: 5, granularity: "day", materials: [], split: SPLIT })) void event;
+    expect((mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt).toContain("Split the plan into 8 weeks");
   });
 });
 

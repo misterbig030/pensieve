@@ -60,6 +60,28 @@ export const OUTLINE_RESERVE_MS = 90_000;
 export const STEP_MIN_MS = 60_000;
 /** Outline calls retry a failed request once at most: a second Opus attempt eats the time the next level needs. */
 const OUTLINE_MAX_RETRIES = 1;
+/**
+ * The most top-level week leaves one call writes. Past it, the weeks are drafted in blocks (`weekLeafBlocks`): one call
+ * reserves each block's share of the plan as headings, then each block's weeks are written at once, in parallel.
+ * Measured on 2026-11-05 (MLE interview, 8 week leaves, Opus 5.5, one call): at high effort it reasoned 141 s (11k
+ * tokens) before its first week, then wrote 10k tokens of Read tables and practice rows at about 14 s a week, 250 s in
+ * all; at medium effort 63 s, then the same 113 s of writing. The draft had 195 s left after research and the allocation.
+ */
+export const LEAF_CALL_MAX_WEEKS = 4;
+/** The most weeks one block's call writes, when the weeks are drafted in blocks. */
+export const LEAF_BLOCK_WEEKS = 3;
+
+/**
+ * The blocks a top level of week leaves is drafted in, as weeks per block: one block (one call) up to
+ * `LEAF_CALL_MAX_WEEKS`, past it as few blocks of at most `LEAF_BLOCK_WEEKS` as hold the weeks, the longer ones last.
+ */
+export function weekLeafBlocks(weeks: number): number[] {
+  if (weeks <= LEAF_CALL_MAX_WEEKS) return [weeks];
+  const count = Math.ceil(weeks / LEAF_BLOCK_WEEKS);
+  const base = Math.floor(weeks / count);
+  const extra = weeks % count;
+  return Array.from({ length: count }, (_, i) => base + (i >= count - extra ? 1 : 0));
+}
 
 /** Milliseconds left before `deadline`; null when the draft has no deadline (tests, the eval, expanding a unit). */
 function timeLeft(deadline: number | undefined): number | null {
@@ -296,6 +318,8 @@ export interface DraftLevelInput {
   log?: GenerationLogContext;
   /** The signal the level's call runs under; the request's with the draft's deadline when omitted. */
   signal?: AbortSignal;
+  /** What the admin panel calls the call; where it plans and how many units when omitted ("Top level · 4 weeks"). */
+  label?: string;
 }
 
 /**
@@ -346,7 +370,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
   const parentNode = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
   const where = input.tree && parentNode ? fullLabelOf(input.tree, parentNode) : "Top level";
   const n = input.spans.length;
-  const label = `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
+  const label = input.label ?? `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
   const picked = pickedFormats(ctx.split, ctx.materials);
   const nodes: PlanNode[] = [];
   let final: PlanNode[] = [];
@@ -495,6 +519,85 @@ export async function* draftFirstBranch(
   return costUsd;
 }
 
+/**
+ * Drafts a top level of week leaves in blocks of weeks (`weekLeafBlocks`), so no one call writes them all: one call
+ * plans the blocks as month headings, each reserving its share of the plan, then every block's weeks are written under
+ * its reservation at once. The weeks come out at the top level, sent in order as they land (the first block's live, a
+ * later block's once those before it are in); the headings are dropped. The joined weeks are checked against the plan,
+ * as one call's would be, and their problems put on `root`. One block's failure stops the others and fails the draft.
+ */
+async function* draftWeekBlocks(ctx: DraftLevelInput["ctx"], root: PlanNode, blocks: number[], log?: GenerationLogContext): AsyncGenerator<{ type: "node"; parentId: string; node: PlanNode }, number> {
+  let costUsd = 0;
+  let heads: PlanNode[] = [];
+  const label = `Top level · ${ctx.weeks} weeks in ${blocks.length} blocks`;
+  for await (const event of draftLevel({ ctx, level: "month", spans: blocks.map((w) => w * ctx.daysPerWeek), log, label })) {
+    if (event.type === "done") {
+      heads = event.nodes;
+      costUsd += event.costUsd;
+    }
+  }
+  const tree = layout(makeRoot(heads));
+
+  const stop = new AbortController();
+  const signal = within(ctx.signal ? AbortSignal.any([ctx.signal, stop.signal]) : stop.signal, timeLeft(ctx.deadline));
+  type Block = { nodes: PlanNode[]; final: PlanNode[] | null };
+  const states: Block[] = heads.map(() => ({ nodes: [], final: null }));
+  let failure: { error: unknown } | null = null;
+  let wake: (() => void) | null = null;
+  const notify = () => {
+    wake?.();
+    wake = null;
+  };
+  let first = 1;
+  // Every block's call starts now, in order; the loop below sends their weeks in order.
+  heads.forEach((head, i) => {
+    const spans = childSpans(head, ctx.daysPerWeek);
+    const last = first + spans.length - 1;
+    const label = spans.length === 1 ? `Week ${first} · 1 week` : `Weeks ${first}–${last} · ${spans.length} weeks`;
+    first = last + 1;
+    void (async () => {
+      try {
+        for await (const event of draftLevel({ ctx, level: "week", spans, tree, parentId: head.id, log, signal, label })) {
+          if (event.type === "node") states[i].nodes.push(event.node);
+          else {
+            states[i].final = event.nodes;
+            costUsd += event.costUsd;
+          }
+          notify();
+        }
+      } catch (error) {
+        failure ??= { error };
+        stop.abort();
+        notify();
+      }
+    })();
+  });
+
+  try {
+    for (const state of states) {
+      let sent = 0;
+      for (;;) {
+        if (failure) throw (failure as { error: unknown }).error;
+        // A level's last unit comes only with the level: the block's weeks are its final list once it is in.
+        const landed = state.final ?? state.nodes;
+        while (sent < landed.length) yield { type: "node", parentId: root.id, node: landed[sent++] };
+        if (state.final) break;
+        await new Promise<void>((resolve) => (wake = resolve));
+      }
+    }
+  } finally {
+    // A failed block, or a consumer that stopped reading, leaves no call running.
+    stop.abort();
+  }
+
+  const weeks = states.flatMap((s) => s.final!);
+  root.children = weeks;
+  layout(root);
+  const checks = levelChecks({ root, nodes: weeks, leaves: true, top: true, materials: ctx.materials, unknownIds: [], hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, split: ctx.split, drafted: true });
+  setProblems(root, checks.problems);
+  return costUsd;
+}
+
 export interface StreamPlanDraftInput extends Omit<PlanDraftRequest, "materials"> {
   /** The materials list research produced (the learner's own included). */
   materials: Material[];
@@ -547,6 +650,13 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
 
   const tops: PlanNode[] = [];
   const ctx = { ...input, materials, split, outlineModel };
+  // Many week leaves are too much writing for one call within the draft's time: they are drafted in blocks.
+  const blocks = topLevel === "week" && unitsAreLeaves(topLevel, input.granularity) ? weekLeafBlocks(input.weeks) : [];
+  if (blocks.length > 1) {
+    costUsd += yield* draftWeekBlocks(ctx, root, blocks, input.log);
+    yield { type: "finish", root: layout(root), costUsd };
+    return;
+  }
   for await (const event of draftLevel({ ctx, level: topLevel, spans: topSpans(input.weeks, input.daysPerWeek), log: input.log })) {
     if (event.type === "node") {
       tops.push(event.node);
