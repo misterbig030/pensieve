@@ -30,9 +30,15 @@ function outsideSize(total: number, size: number): boolean {
 /**
  * Where units go back on the order of a material: a chapter that comes after a later chapter of the same material in
  * an earlier unit, or a practice item after a later item of its source. Reviews are the learner's choice and are not
- * ordered. Ids are the nodes' own.
+ * ordered. Each break is named by the aliases the model was shown (`M8.27`), so it reads against the prompt and the
+ * response; a material it was not given is named by its id.
  */
-export function orderBreaks(nodes: PlanNode[], leaf: boolean): string[] {
+export function orderBreaks(nodes: PlanNode[], materials: Material[], leaf: boolean): string[] {
+  const aliases = aliasMaterials(materials);
+  const chapterName = (id: string, n: number) => aliases.alias(id, n) ?? `${id} chapter ${n}`;
+  const laterChapter = (id: string, n: number) => aliases.alias(id, n) ?? `chapter ${n}`;
+  const itemName = (id: string, n: number) => aliases.alias(id, { item: n }) ?? `${id} item ${n}`;
+  const laterItem = (id: string, n: number) => aliases.alias(id, { item: n }) ?? `item ${n}`;
   const out: string[] = [];
   const furthestChapter = new Map<string, { n: number; at: number }>();
   const furthestItem = new Map<string, { n: number; at: number }>();
@@ -45,7 +51,7 @@ export function orderBreaks(nodes: PlanNode[], leaf: boolean): string[] {
       if (r.activity === "review" || !r.chapter) continue;
       const before = furthestChapter.get(r.id);
       if (before && before.at < at && r.chapter < before.n) {
-        out.push(`${r.id} chapter ${r.chapter} in ${unitLabel(nodes, at)} after chapter ${before.n} in ${unitLabel(nodes, before.at)}`);
+        out.push(`${chapterName(r.id, r.chapter)} in ${unitLabel(nodes, at)} after ${laterChapter(r.id, before.n)} in ${unitLabel(nodes, before.at)}`);
       }
       seenChapters.push([r.id, r.chapter]);
     }
@@ -53,7 +59,7 @@ export function orderBreaks(nodes: PlanNode[], leaf: boolean): string[] {
       if (!r.id || !r.itemFrom) continue;
       const before = furthestItem.get(r.id);
       if (before && before.at < at && r.itemFrom < before.n) {
-        out.push(`${r.id} item ${r.itemFrom} in ${unitLabel(nodes, at)} after item ${before.n} in ${unitLabel(nodes, before.at)}`);
+        out.push(`${itemName(r.id, r.itemFrom)} in ${unitLabel(nodes, at)} after ${laterItem(r.id, before.n)} in ${unitLabel(nodes, before.at)}`);
       }
       seenItems.push([r.id, r.itemTo ?? r.itemFrom]);
     }

@@ -118,7 +118,7 @@ const LEAF_CRITERIA: Entry[] = [
       check: (output, ctx) => {
         const kinds: BreachKind[] = isTop(ctx) ? LEAF_ORDER : [...LEAF_ORDER, "unread-reservation"];
         const missing = isTop(ctx) ? named(unreserved(output.nodes, ctx.fixture.materials, true)) : [];
-        return findings([...breachTexts(output, kinds), ...orderBreaks(output.nodes, true), ...missing], "in order, nothing outside or left unread");
+        return findings([...breachTexts(output, kinds), ...orderBreaks(output.nodes, ctx.fixture.materials, true), ...missing], "in order, nothing outside or left unread");
       },
     }),
   },
@@ -184,7 +184,7 @@ const HEAD_CRITERIA: Entry[] = [
       applies: isHeading,
       check: (output, ctx) => {
         const missing = isTop(ctx) ? named(unreserved(output.nodes, ctx.fixture.materials, false)) : [];
-        return findings([...breachTexts(output, HEAD_ORDER), ...orderBreaks(output.nodes, false), ...missing], "in order, each in one unit");
+        return findings([...breachTexts(output, HEAD_ORDER), ...orderBreaks(output.nodes, ctx.fixture.materials, false), ...missing], "in order, each in one unit");
       },
     }),
   },

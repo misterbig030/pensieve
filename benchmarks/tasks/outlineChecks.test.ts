@@ -37,21 +37,29 @@ describe("breachesOf", () => {
 });
 
 describe("orderBreaks", () => {
+  // Aliases are positional: m1 is the prompt's M2 and m4 its M3.
+  const mats = [material("m0"), material("m1", { toc: chapters([30, 30, 30, 30]) }), material("m4")];
+
   it("is quiet when chapters and items run forward", () => {
     const nodes = [node({ covers: [cover("m1", 1), cover("m1", 2)], practiceCovers: [pcover("m4", 1, 3)] }), node({ covers: [cover("m1", 3)], practiceCovers: [pcover("m4", 4, 6)] })];
-    expect(orderBreaks(nodes, false)).toEqual([]);
+    expect(orderBreaks(nodes, mats, false)).toEqual([]);
   });
 
-  it("finds chapter 3 after chapter 4, and item 7 after item 9", () => {
+  it("finds chapter 3 after chapter 4, and item 7 after item 9, named by the aliases the model was shown", () => {
     const nodes = [node({ covers: [cover("m1", 4)], practiceCovers: [pcover("m4", 9, 9)] }), node({ covers: [cover("m1", 3)], practiceCovers: [pcover("m4", 7, 7)] })];
-    expect(orderBreaks(nodes, false)).toEqual(["m1 chapter 3 in Day 2 after chapter 4 in Day 1", "m4 item 7 in Day 2 after item 9 in Day 1"]);
+    expect(orderBreaks(nodes, mats, false)).toEqual(["M2.3 in Day 2 after M2.4 in Day 1", "M3.7 in Day 2 after M3.9 in Day 1"]);
+  });
+
+  it("names a material it was not given by its id", () => {
+    const nodes = [node({ covers: [cover("zz", 4)] }), node({ covers: [cover("zz", 3)] })];
+    expect(orderBreaks(nodes, mats, false)).toEqual(["zz chapter 3 in Day 2 after chapter 4 in Day 1"]);
   });
 
   it("reads leaves' tables and ignores reviews", () => {
     const nodes = [node({ materials: [row("m1", 4)] }), node({ materials: [{ ...row("m1", 2), activity: "review" as const }] })];
-    expect(orderBreaks(nodes, true)).toEqual([]);
+    expect(orderBreaks(nodes, mats, true)).toEqual([]);
     const broken = [node({ materials: [row("m1", 4)] }), node({ materials: [row("m1", 2)] })];
-    expect(orderBreaks(broken, true)).toHaveLength(1);
+    expect(orderBreaks(broken, mats, true)).toHaveLength(1);
   });
 });
 
