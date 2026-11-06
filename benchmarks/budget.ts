@@ -19,7 +19,7 @@ export interface Estimate {
 const JUDGE_PROMPT_TOKENS = 500;
 const JUDGE_OUTPUT_TOKENS = 1_500;
 /** A characters-to-tokens rule of thumb. */
-const CHARS_PER_TOKEN = 4;
+export const CHARS_PER_TOKEN = 4;
 /** One sample in this many is judged again by the second judge. */
 const SECOND_JUDGE_EVERY = 5;
 

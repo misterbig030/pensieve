@@ -229,6 +229,8 @@ export function renderReport(args: {
   checked: Checked;
   /** The chart's file, beside the report; `chart.svg` by default. */
   chart?: string;
+  /** Whether the header states the run's spend and cap; true by default. False for a part of a run (a group's section). */
+  spend?: boolean;
   run: {
     commit: string;
     fixtures: string[];
@@ -256,7 +258,7 @@ export function renderReport(args: {
     `- Commit: ${run.commit}`,
     `- Fixtures: ${run.fixtures.join(", ") || "none"}; ${run.epochs} epochs`,
     `- Judge: ${run.judge.model} (${run.judge.effort}); second judge: ${run.secondJudge.model} (${run.secondJudge.effort})`,
-    `- Spend: $${run.spentUsd.toFixed(2)} of the $${run.capUsd.toFixed(2)} cap`,
+    ...(args.spend === false ? [] : [`- Spend: $${run.spentUsd.toFixed(2)} of the $${run.capUsd.toFixed(2)} cap`]),
     `- Margin: ${margin}`,
     "",
   );

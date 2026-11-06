@@ -11,7 +11,10 @@ import { calibrateBenchmark, captureFixtures, rescoreBenchmark, runBenchmark } f
 import { JUDGE, JUDGE_INSTRUCTIONS, SECOND_JUDGE, judgeDimension, type JudgeCache } from "./judge";
 import type { AllocateFixture } from "./fixtures";
 import type { AllocateOutput, runAllocateSample } from "./tasks/allocate";
-import { OUTLINE_JUDGE_INSTRUCTIONS, type OutlineOutput, type runOutlineSample } from "./tasks/outline";
+import { OUTLINE_JUDGE_INSTRUCTIONS, renderOutline, type OutlineOutput, type runOutlineSample } from "./tasks/outline";
+import { renderMaterials } from "@/lib/ai/planPrompt";
+import { TASKS } from "./task";
+import type { estimateRun } from "./budget";
 import { outlineFixturePath, type OutlineFixture } from "./tasks/outlineFixtures";
 import { layout, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { CriterionResult, Sample } from "./types";
@@ -86,6 +89,24 @@ describe("runBenchmark", () => {
     expect(runSample).not.toHaveBeenCalled();
     expect(judgeFn).not.toHaveBeenCalled();
     expect(existsSync(outDir)).toBe(false);
+  });
+
+  it("estimates allocate's judging on its rendered materials, as before", async () => {
+    const estimate = vi.fn((_args: Parameters<typeof estimateRun>[0]) => cheap());
+    await runBenchmark({ ...base(), runSample: runner(), judge: judge(), estimate });
+    expect(estimate.mock.calls[0][0].renderedChars).toBe(renderMaterials(fixture("sde-1").input.materials).length);
+  });
+
+  it("runs the task named, whichever TASKS holds: a new task is not run as allocate", async () => {
+    const tasks = TASKS as unknown as Record<string, unknown>;
+    tasks.other = { ...TASKS.allocate, name: "other" };
+    try {
+      const { dir } = await runBenchmark({ ...base(), task: "other" as never, runSample: runner(), judge: judge() });
+      expect(dir.endsWith("-other")).toBe(true);
+      expect(JSON.parse(readFileSync(join(dir, "run.json"), "utf8")).task).toBe("other");
+    } finally {
+      delete tasks.other;
+    }
   });
 
   it("refuses an unknown contestant before any call", async () => {
@@ -552,6 +573,22 @@ describe("the outline task", () => {
     expect(scores.groups.leaves.map((s: { name: string }) => s.name)).toEqual(["baseline", "gpt-5.4-mini"]);
     for (const file of ["chart-top.svg", "chart-leaves.svg"]) expect(existsSync(join(dir, file)), file).toBe(true);
     expect(existsSync(join(dir, "chart.svg"))).toBe(false);
+  });
+
+  it("states the run's spend and cap once, above the group sections, which state none", async () => {
+    const { dir } = await runBenchmark({ ...outline(), task: "outline", runSample: outlineRunner(), judge: judge() });
+    const report = readFileSync(join(dir, "report.md"), "utf8");
+    const spend = [...report.matchAll(/Spend: \$[\d.]+ of the \$100\.00 cap/g)];
+    expect(spend).toHaveLength(1);
+    expect(spend[0].index).toBeLessThan(report.indexOf("## Group: top"));
+    expect(report).toContain(`- Spend: $${(8 * 0.1).toFixed(2)} of the $100.00 cap`);
+  });
+
+  it("estimates the judging on outline's whole judge view, the tree and the level as written included", async () => {
+    const estimate = vi.fn((_args: Parameters<typeof estimateRun>[0]) => cheap());
+    await runBenchmark({ ...outline(), task: "outline", runSample: outlineRunner(), judge: judge(), estimate });
+    const chars = (f: OutlineFixture) => renderOutline({ nodes: [], units: [], breaches: [], problems: [] }, f).length + f.baseline.outputTokens * 4;
+    expect(estimate.mock.calls[0][0].renderedChars).toBe((chars(TOP) + chars(LEAVES)) / 2);
   });
 
   it("filters outline fixtures by --groups", async () => {

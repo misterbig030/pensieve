@@ -19,7 +19,6 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { renderMaterials } from "@/lib/ai/planPrompt";
 import { scrubSecrets } from "@/evals/draft/record";
 import { mapLimit, stamp } from "@/evals/draft/run";
 import { cutAdvice, estimateRun, SpendCap, type Estimate } from "./budget";
@@ -49,9 +48,12 @@ function taskNamed(name: string | undefined): TaskName {
   return task as TaskName;
 }
 
-/** Calls `fn` with the named task, keeping its fixture, output and context types together. */
+/**
+ * Calls `fn` with the named task, keeping its fixture, output and context types together. The task is looked up by name,
+ * so one added to `TASKS` needs nothing here; `fn` is generic over every task, so the one cast loses nothing it reads.
+ */
 function withTask<R>(name: TaskName, fn: <F extends { id: string }, O, C>(task: BenchTask<F, O, C>) => R): R {
-  return name === "outline" ? fn(TASKS.outline) : fn(TASKS.allocate);
+  return fn(TASKS[name] as BenchTask<{ id: string }, unknown, unknown>);
 }
 
 /** Every judge criterion the task has. */
@@ -202,8 +204,8 @@ const reportRun = (args: OutputArgs, fixtures: string[]) => ({
 
 /**
  * Everything a finished or rescored round writes after its samples: scores, the report and the chart. A task with groups
- * gets them per group: `scores.json` by group, a report section and a `chart-<group>.svg` for each group in the order its
- * fixtures were named, then the routing. Returns the summaries over all the samples, and per group when there are groups.
+ * gets them per group: `scores.json` by group, a header stating the run's spend once, a report section (with no spend of
+ * its own) and a `chart-<group>.svg` for each group in the order its fixtures were named, then the routing. Returns the summaries over all the samples, and per group when there are groups.
  */
 function writeOutputs<F extends { id: string }, O, C>(
   dir: string,
@@ -226,6 +228,7 @@ function writeOutputs<F extends { id: string }, O, C>(
     const own = samples.filter((s) => groupOf.get(s.fixture) === group);
     groups[group] = summarize(own, task.criteria, contestants, margin);
     const chart = `chart-${group}.svg`;
+    // The spend is the run's, stated once above the sections, not a group's own.
     const report = renderReport({
       task: `${task.name}, ${group}`,
       summaries: groups[group],
@@ -233,6 +236,7 @@ function writeOutputs<F extends { id: string }, O, C>(
       criteria: task.criteria,
       checked,
       chart,
+      spend: false,
       run: reportRun(args, args.fixtures.filter((id) => groupOf.get(id) === group)),
     });
     // The group's report, its title dropped (the group heading stands for it) and its headings two levels down.
@@ -240,7 +244,8 @@ function writeOutputs<F extends { id: string }, O, C>(
     writeScrubbed(join(dir, chart), renderChart(groups[group]));
   }
   writeJson(join(dir, "scores.json"), { task: task.name, margin, groups });
-  writeScrubbed(join(dir, "report.md"), [`# Model benchmark: ${task.name}`, "", ...sections, renderRouting(groups)].join("\n"));
+  const header = [`# Model benchmark: ${task.name}`, "", `- Spend: ${usd(args.spentUsd)} of the ${usd(args.maxUsd)} cap`, ""];
+  writeScrubbed(join(dir, "report.md"), [...header, ...sections, renderRouting(groups)].join("\n"));
   return { summaries, groups };
 }
 
@@ -320,7 +325,7 @@ async function runTask<F extends { id: string }, O, C>(
   const checked = loadChecked(task, calibrationDir);
   loadCache(cache, print);
 
-  const renderedChars = fixtures.reduce((sum, f) => sum + renderMaterials(task.materials(f)).length, 0) / fixtures.length;
+  const renderedChars = fixtures.reduce((sum, f) => sum + task.judgeViewChars(f), 0) / fixtures.length;
   const estimated: Estimate = estimate({
     baselines: fixtures.map((f) => task.baseline(f)),
     role: task.role,

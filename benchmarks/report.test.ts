@@ -311,6 +311,16 @@ describe("renderReport", () => {
     const empty = renderReport({ task: "allocate", summaries: [], samples: [], criteria, checked: new Map(), run });
     expect(empty).not.toMatch(/NaN|Infinity/);
   });
+
+  it("leaves the spend line out when asked, and only that line", () => {
+    const summaries = summarize(samples, criteria, contestants, 0.05);
+    const args = { task: "outline, top", summaries, samples, criteria, checked: new Map(), run };
+    const full = renderReport(args);
+    const without = renderReport({ ...args, spend: false });
+    expect(full).toMatch(/^- Spend: /m);
+    expect(without).not.toContain("Spend:");
+    expect(without).toBe(full.replace(/^- Spend: .*\n/m, ""));
+  });
 });
 
 describe("renderChart", () => {

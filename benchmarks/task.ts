@@ -2,8 +2,9 @@
  * The tasks the benchmark runs, each behind one interface: how to load its fixtures, run a sample, grade it and show it
  * to the judge. `run.ts` reads only this, so a task is added here and not there.
  */
-import type { Material } from "@/lib/schemas/material";
+import { renderMaterials } from "@/lib/ai/planPrompt";
 import { DRAFT_TOPICS } from "@/evals/draft/topics";
+import { CHARS_PER_TOKEN } from "./budget";
 import { loadFixture, type AllocateFixture } from "./fixtures";
 import { ALLOCATE_CRITERIA, codeResults as allocateCodeResults, renderAllocation, runAllocateSample, type AllocateCtx, type AllocateOutput } from "./tasks/allocate";
 import { JUDGE_INSTRUCTIONS } from "./judge";
@@ -31,8 +32,8 @@ export interface BenchTask<F extends { id: string }, O, C> {
   baseline(fixture: F): { inputTokens: number; outputTokens: number } | null;
   /** The routing group a fixture belongs to: outline, its call group; allocate has none. */
   groupOf?(fixture: F): string;
-  /** The materials the fixture gives the model, whose rendered length stands in for the judged output's in the estimate. */
-  materials(fixture: F): Material[];
+  /** About how long the judge's view of one sample on this fixture is, in characters, for the estimate. */
+  judgeViewChars(fixture: F): number;
   /** The judge calls one sample takes, one per dimension it is judged on, for the estimate. */
   judgeDimensions: number;
 }
@@ -52,9 +53,13 @@ const allocate: BenchTask<AllocateFixture, AllocateOutput, AllocateCtx> = {
   judgeInstructions: JUDGE_INSTRUCTIONS,
   render: (output, fixture) => renderAllocation(output, fixture.input),
   baseline: (fixture) => fixture.baseline,
-  materials: (fixture) => fixture.input.materials,
+  // The rendered materials stand in for the allocation, as the estimate has always taken them.
+  judgeViewChars: (fixture) => renderMaterials(fixture.input.materials).length,
   judgeDimensions: new Set(ALLOCATE_JUDGE_CRITERIA.map((c) => c.dimension)).size,
 };
+
+/** A level with no units: the judge's view of it is everything but the level as written. */
+const EMPTY_LEVEL: OutlineOutput = { nodes: [], units: [], breaches: [], problems: [] };
 
 const outline: BenchTask<OutlineFixture, OutlineOutput, OutlineCtx> = {
   name: "outline",
@@ -69,7 +74,8 @@ const outline: BenchTask<OutlineFixture, OutlineOutput, OutlineCtx> = {
   render: renderOutline,
   baseline: (fixture) => fixture.baseline,
   groupOf: (fixture) => fixture.group,
-  materials: (fixture) => fixture.materials,
+  // The view around the level (request, materials, tree, set-aside, budgets), and the level at the baseline's length.
+  judgeViewChars: (fixture) => renderOutline(EMPTY_LEVEL, fixture).length + fixture.baseline.outputTokens * CHARS_PER_TOKEN,
   // A level is a leaf call or a heading call, so it is judged on that one dimension.
   judgeDimensions: 1,
 };
