@@ -5,7 +5,8 @@
  * (units split later) each have their own criteria; only the fixture's kind applies.
  */
 import { GatewayError } from "@ai-sdk/gateway";
-import { APICallError, NoObjectGeneratedError, RetryError } from "ai";
+import { APICallError, JSONParseError, NoContentGeneratedError, NoObjectGeneratedError, RetryError, StreamProviderError, TypeValidationError } from "ai";
+import { isGatewayOutOfFunds } from "@/lib/ai/gatewayFunds";
 import type { ModelCall } from "@/lib/ai/logged";
 import { draftLevel } from "@/lib/ai/planDraft";
 import { renderMaterials, renderTree } from "@/lib/ai/planPrompt";
@@ -385,7 +386,7 @@ const ACCOUNT_STATUSES = new Set([401, 402, 403]);
 /** The provider or gateway status inside an error, looking through retries and wrapped causes. */
 function statusOf(error: unknown, depth = 4): number | undefined {
   if (depth < 0 || error == null) return undefined;
-  if (APICallError.isInstance(error) || GatewayError.isInstance(error)) return error.statusCode;
+  if (APICallError.isInstance(error) || GatewayError.isInstance(error) || StreamProviderError.isInstance(error)) return error.statusCode;
   if (RetryError.isInstance(error)) return statusOf(error.lastError ?? error.errors.at(-1), depth - 1);
   if (error instanceof Error && "cause" in error) return statusOf(error.cause, depth - 1);
   return undefined;
@@ -413,15 +414,52 @@ function usageOf(error: unknown, depth = 4): { inputTokens: number; outputTokens
   return null;
 }
 
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+/**
+ * Whether the model's own answer caused the error: the SDK found no object in it, could not parse it, found it did not
+ * match the schema, or got no content. Looks through retries and causes. `draftLevel`'s own checks throw nothing (what
+ * they find comes back as breaches), so these are the only errors a contestant's output raises.
+ */
+function modelCaused(error: unknown, depth = 4): boolean {
+  if (depth < 0 || error == null) return false;
+  if (NoObjectGeneratedError.isInstance(error) || TypeValidationError.isInstance(error) || JSONParseError.isInstance(error) || NoContentGeneratedError.isInstance(error)) return true;
+  if (RetryError.isInstance(error)) return modelCaused(error.lastError ?? error.errors.at(-1), depth - 1);
+  if (error instanceof Error && "cause" in error) return modelCaused(error.cause, depth - 1);
+  return false;
+}
 
-/** The gate for a call that threw: our deadline or an abort fails it; the gateway's outage or refusal voids it. */
+/**
+ * What an error says, readable whatever was thrown: an `Error`'s message, a string, an object's `message` (a stream's
+ * error part arrives as a plain object), or else the value as JSON.
+ */
+function messageOf(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  const message = (error as { message?: unknown } | null)?.message;
+  if (typeof message === "string") return message;
+  try {
+    return JSON.stringify(error) ?? String(error);
+  } catch {
+    return String(error);
+  }
+}
+
+/**
+ * The gate for a call that threw, by who caused it. The gateway out of funds voids it and halts the run, whatever else
+ * the error says. Our deadline or an abort fails it. With a status: the gateway refusing the key voids and halts, an
+ * outage (5xx, 429) voids, another client error fails. With none: an answer the model wrote that did not parse or
+ * validate fails; anything else (a stream's error part, a network error, a provider error with no status) is the
+ * outside service's and voids, as allocate's `voidReason` does.
+ */
 function thrownGate(error: unknown, timedOut: boolean, timeLimitMs: number): Gate {
+  const message = messageOf(error);
+  // A plain object is not an Error, so its message is checked as one.
+  if (isGatewayOutOfFunds(error instanceof Error ? error : new Error(message))) return { status: "void", reason: `gateway out of funds: ${message}`, halt: true };
   if (timedOut || aborted(error)) return { status: "failed", reason: `timed out after ${timeLimitMs / 1000} s` };
   const status = statusOf(error);
-  if (status !== undefined && ACCOUNT_STATUSES.has(status)) return { status: "void", reason: `gateway ${status}: ${messageOf(error)}`, halt: true };
-  if (status !== undefined && (status >= 500 || status === 429)) return { status: "void", reason: `gateway ${status}: ${messageOf(error)}` };
-  return { status: "failed", reason: messageOf(error) };
+  if (status !== undefined && ACCOUNT_STATUSES.has(status)) return { status: "void", reason: `gateway ${status}: ${message}`, halt: true };
+  if (status !== undefined && (status >= 500 || status === 429)) return { status: "void", reason: `gateway ${status}: ${message}` };
+  if (status !== undefined || modelCaused(error)) return { status: "failed", reason: message };
+  return { status: "void", reason: message };
 }
 
 /** A unit past the app's own ceiling: a heading or week leaf over capacity, a day over its budget. */

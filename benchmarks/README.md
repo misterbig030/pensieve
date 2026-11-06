@@ -47,7 +47,9 @@ then judging) and stops if the total is over `--max-usd`, saying whether to cut 
 the run it stops starting samples and stops judging once the real spend passes the cap (checked before each judge pass,
 whose dimensions are asked at once, so a pass can run past it by its own few calls); samples already done are kept and
 scored, and the unjudged ones can be judged later with `--rescore`. A call the gateway refuses for the account (401, 402,
-403: a bad key or an exhausted budget) stops the run at once, since every later call would be refused too.
+403: a bad key or an exhausted budget) stops the run at once, since every later call would be refused too. An outline
+call also stops it when the gateway says it is out of funds, with or without a 402. An outline call that fails with no
+status voids the sample, unless it ran out of time or the model's answer did not parse or match the schema; those fail.
 
 ## Outline task
 

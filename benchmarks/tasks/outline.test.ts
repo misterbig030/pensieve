@@ -1,4 +1,4 @@
-import { APICallError, NoObjectGeneratedError } from "ai";
+import { APICallError, JSONParseError, NoContentGeneratedError, NoObjectGeneratedError, RetryError, StreamProviderError, TypeValidationError } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { draftLevel } from "@/lib/ai/planDraft";
@@ -331,9 +331,65 @@ describe("runOutlineSample", () => {
     expect(sample.gate).toMatchObject({ status: "void", halt: true });
   });
 
-  it("fails any other error with its message", async () => {
-    const sample = await runOutlineSample(LEAF, BASELINE, { draft: fakeDraft({ error: new Error("No object generated: response did not match schema.") }) });
-    expect(sample.gate).toEqual({ status: "failed", reason: "No object generated: response did not match schema." });
+  describe("an error with no status", () => {
+    const gateFor = async (error: unknown) => (await runOutlineSample(LEAF, BASELINE, { draft: fakeDraft({ error }) })).gate;
+
+    it("fails an answer that did not match the schema with its message: the model's own output", async () => {
+      const error = new NoObjectGeneratedError({ message: "No object generated: response did not match schema.", finishReason: "stop" } as unknown as ConstructorParameters<typeof NoObjectGeneratedError>[0]);
+      expect(await gateFor(error)).toEqual({ status: "failed", reason: "No object generated: response did not match schema." });
+    });
+
+    it("fails an answer that did not parse or validate, also when wrapped", async () => {
+      expect((await gateFor(new JSONParseError({ text: "{", cause: new Error("Unexpected end") }))).status).toBe("failed");
+      const invalid = new TypeValidationError({ value: {}, cause: new Error("units: required") });
+      expect((await gateFor(invalid)).status).toBe("failed");
+      expect((await gateFor(new Error("draft failed", { cause: invalid }))).status).toBe("failed");
+      expect((await gateFor(new NoContentGeneratedError())).status).toBe("failed");
+    });
+
+    it("voids a stream's error part, a plain object, with a readable reason", async () => {
+      const gate = await gateFor({ type: "overloaded_error", message: "Overloaded" });
+      expect(gate).toEqual({ status: "void", reason: "Overloaded" });
+    });
+
+    it("voids a plain object with no message, its reason the object as JSON", async () => {
+      const gate = await gateFor({ type: "error", error: { type: "api_error" } });
+      expect(gate).toEqual({ status: "void", reason: '{"type":"error","error":{"type":"api_error"}}' });
+    });
+
+    it("voids a network error or a provider stream error that gives no status, without halting", async () => {
+      expect(await gateFor(new TypeError("fetch failed"))).toEqual({ status: "void", reason: "fetch failed" });
+      expect(await gateFor(new StreamProviderError({ message: "Overloaded", type: "overloaded_error" }))).toEqual({ status: "void", reason: "Overloaded" });
+    });
+
+    it("voids and halts on the gateway's out-of-funds refusal that gives only a message", async () => {
+      const gate = await gateFor(new Error("A positive credit balance is required to use AI Gateway."));
+      expect(gate).toMatchObject({ status: "void", halt: true });
+      const wrapped = await gateFor({ message: "A positive credit balance is required." });
+      expect(wrapped).toMatchObject({ status: "void", halt: true });
+    });
+  });
+
+  describe("an error with a status", () => {
+    const gateFor = async (error: unknown) => (await runOutlineSample(LEAF, BASELINE, { draft: fakeDraft({ error }) })).gate;
+
+    it("voids a 5xx and a 429 without halting, also after retries", async () => {
+      for (const status of [500, 529, 429]) {
+        const gate = await gateFor(apiError(status));
+        expect(gate, String(status)).toEqual({ status: "void", reason: `gateway ${status}: status ${status}` });
+      }
+      const retried = new RetryError({ message: "Failed after 3 attempts", reason: "maxRetriesExceeded", errors: [apiError(503), apiError(503)] });
+      expect(await gateFor(retried)).toMatchObject({ status: "void", reason: expect.stringMatching(/^gateway 503/) });
+      expect(await gateFor(new StreamProviderError({ message: "Overloaded", statusCode: 529 }))).toEqual({ status: "void", reason: "gateway 529: Overloaded" });
+    });
+
+    it("voids and halts on 401 and 403", async () => {
+      for (const status of [401, 403]) expect(await gateFor(apiError(status)), String(status)).toMatchObject({ status: "void", halt: true });
+    });
+
+    it("fails another client error: the request the model's settings made", async () => {
+      expect(await gateFor(apiError(400))).toEqual({ status: "failed", reason: "status 400" });
+    });
   });
 
   it("fails a level past the time ceiling, and keeps its output", async () => {
