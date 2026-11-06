@@ -31,9 +31,20 @@ export type AiModelId = (typeof AVAILABLE_MODELS)[number]["id"];
  * The gateway providers a model is sent to on Pensieve's key, for a model whose provider the gateway would otherwise
  * pick cannot serve the app's calls. DeepSeek V4 Pro's cheapest provider (Baseten) has no structured output and answers
  * a schema with an empty reply; Azure and Alibaba list it. Checked against https://ai-gateway.vercel.sh/v1/models/<id>/endpoints.
+ *
+ * Through Vertex, a schema call on the Anthropic models whose thinking is optional does not think at all, whatever
+ * effort or thinking setting it sends: 0 reasoning tokens at effort high in 3 of 3 calls each, against 600–1,200 on
+ * Anthropic's API (measured 2026-11-06). The models that always think (Sonnet 5.5, Opus 5.5) think on Vertex as
+ * elsewhere. Haiku 5.5 on Vertex wrote outlines scoring 0.07–0.64 that it wrote at 0.87–1.00 on Anthropic's API, so
+ * these stay on the providers measured to think.
  */
+const THINKS_OFF_VERTEX = ["anthropic", "bedrock"] as const;
+
 export const GATEWAY_PROVIDERS: Partial<Record<AiModelId, readonly string[]>> = {
   "deepseek/deepseek-v4-pro": ["azure", "alibaba"],
+  "anthropic/claude-haiku-5.5": THINKS_OFF_VERTEX,
+  "anthropic/claude-sonnet-5": THINKS_OFF_VERTEX,
+  "anthropic/claude-opus-5": THINKS_OFF_VERTEX,
 };
 
 /** The providers the model list knows, as the prefix of each model id ("anthropic/claude-sonnet-5.5"). */

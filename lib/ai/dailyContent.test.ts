@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("ai", () => ({ generateObject: vi.fn() }));
+vi.mock("ai", async (importOriginal) => ({ ...(await importOriginal<typeof import("ai")>()), generateObject: vi.fn() }));
 import { generateObject } from "ai";
 import type { ModelCall } from "./logged";
 import { buildDailyContentPrompt, enforceCitations, generateDailyContent, type LessonPractice } from "./dailyContent";
