@@ -1,0 +1,619 @@
+{
+  "id": "aieng-1/top",
+  "topic": "aieng",
+  "sourceRun": "draft-2026-11-05T20-45-12-383Z-aieng-1",
+  "commit": "361aeb9",
+  "label": "Top level · 3 months",
+  "group": "top",
+  "leaf": false,
+  "request": {
+    "topic": "AI engineering: building applications on foundation models",
+    "instructions": "Backend engineer moving into LLM apps. About 6 hours a week, heavy on building.",
+    "granularity": "week",
+    "weeks": 12,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6
+  },
+  "materials": [
+    {
+      "id": "M1",
+      "origin": "learner",
+      "type": "link",
+      "kind": "essay",
+      "url": "https://hamel.dev/blog/posts/evals",
+      "title": "Your AI Product Needs Evals",
+      "author": "Hamel Husain",
+      "year": null,
+      "why": "Practical case that robust evaluation systems (unit tests, human review, LLM judges) separate successful LLM products from failed ones.",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:12.493Z",
+      "fetchedTitle": "Your AI Product Needs Evals – Hamel’s Blog",
+      "recommendedBy": [],
+      "sig": "hyhEf_wemTmL-MvRwIOGYstHmFraSWIPKvpk7ZWmjXU",
+      "minutes": 18,
+      "minutesBasis": "measured",
+      "pageMinutes": 17,
+      "hub": true,
+      "uses": null,
+      "toc": {
+        "source": "page",
+        "url": "https://hamel.dev/blog/posts/evals",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Motivation",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Iterating Quickly == Success",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Case Study: Lucy, A Real Estate AI Assistant",
+            "page": null,
+            "minutes": 1,
+            "sections": [
+              "Problem: How To Systematically Improve The AI?"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "The Types Of Evaluation",
+            "page": null,
+            "minutes": 12,
+            "sections": [
+              "Level 1: Unit Tests",
+              "Level 2: Human & Model Eval",
+              "Level 3: A/B Testing",
+              "Evaluating RAG"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Eval Systems Unlock Superpowers For Free",
+            "page": null,
+            "minutes": 2,
+            "sections": [
+              "Fine-Tuning",
+              "Debugging"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Conclusion",
+            "page": null,
+            "minutes": 1,
+            "sections": [
+              "Footnotes"
+            ],
+            "url": null,
+            "group": null
+          }
+        ]
+      },
+      "foundBy": [
+        "learner"
+      ],
+      "note": "Single long essay with sections on motivation, a case study, three levels of evals (unit tests, human and model review, A/B testing), and the benefits of eval systems. Best read straight through."
+    },
+    {
+      "id": "M2",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Chip Huyen",
+      "year": 2024,
+      "why": "Backbone text covering adaptation, evals, prompting, RAG, agents, fine-tuning, inference and deployment.",
+      "recommendedBy": [
+        "https://dev.to/somadevtoo/the-ai-engineers-reading-list-for-2026-10-books-that-matter-50pb",
+        "https://medium.com/the-pythonworld/5-books-every-ai-engineer-should-read-in-2026-23221e94c606",
+        "https://linkedin.com/posts/virender-bhargav_designing-machine-learning-systems-activity-7410174142387421185-LL1W"
+      ],
+      "url": "https://openlibrary.org/works/OL39671094W",
+      "title": "AI Engineering: Building Applications with Foundation Models",
+      "backbone": true,
+      "verifiedAt": "2026-11-05T20:46:01.134Z",
+      "fetchedTitle": "AI Engineering",
+      "sig": "8PZ-sbytYfYwhbNxNxOEFrgKnMR9Z0dOF-fr2V1t3Bs",
+      "minutes": 900,
+      "minutesBasis": "measured",
+      "uses": "Core path: models, evals, prompting, RAG, agents, inference, architecture",
+      "toc": {
+        "source": "catalogue",
+        "url": "https://openlibrary.org/books/OL54058212M",
+        "printPages": false,
+        "end": 1027,
+        "chapters": [
+          {
+            "n": 1,
+            "title": "Introduction to Building AI Applications with Foundation Models",
+            "page": 34,
+            "minutes": 107,
+            "sections": [
+              "The Rise of AI Engineering",
+              "Foundation Model Use Cases",
+              "Planning AI Applications",
+              "The AI Engineering Stack"
+            ]
+          },
+          {
+            "n": 2,
+            "title": "Understanding Foundation Models",
+            "page": 130,
+            "minutes": 140,
+            "sections": [
+              "Training Data",
+              "Modeling",
+              "Post-Training",
+              "Sampling"
+            ]
+          },
+          {
+            "n": 3,
+            "title": "Evaluation Methodology",
+            "page": 256,
+            "minutes": 93,
+            "sections": [
+              "Challenges of Evaluating Foundation Models",
+              "Understanding Language Modeling Metrics",
+              "Exact Evaluation",
+              "AI as a Judge",
+              "Ranking Models with Comparative Evaluation"
+            ]
+          },
+          {
+            "n": 4,
+            "title": "Evaluate AI Systems",
+            "page": 340,
+            "minutes": 126,
+            "sections": [
+              "Evaluation Criteria",
+              "Model Selection",
+              "Design Your Evaluation Pipeline"
+            ]
+          },
+          {
+            "n": 5,
+            "title": "Prompt Engineering",
+            "page": 453,
+            "minutes": 98,
+            "sections": [
+              "Introduction to Prompting",
+              "Prompt Engineering Best Practices",
+              "Defensive Prompt Engineering"
+            ]
+          },
+          {
+            "n": 6,
+            "title": "RAG and Agents",
+            "page": 541,
+            "minutes": 127,
+            "sections": [
+              "RAG",
+              "Agents",
+              "Memory"
+            ]
+          },
+          {
+            "n": 7,
+            "title": "Finetuning",
+            "page": 655,
+            "minutes": 126,
+            "sections": [
+              "Finetuning Overview",
+              "When to Finetune",
+              "Memory Bottlenecks",
+              "Finetuning Techniques"
+            ]
+          },
+          {
+            "n": 8,
+            "title": "Dataset Engineering",
+            "page": 768,
+            "minutes": 93,
+            "sections": [
+              "Data Curation",
+              "Data Augmentation and Synthesis",
+              "Data Processing"
+            ]
+          },
+          {
+            "n": 9,
+            "title": "Inference Optimization",
+            "page": 852,
+            "minutes": 99,
+            "sections": [
+              "Understanding Inference Optimization",
+              "Inference Optimization"
+            ]
+          },
+          {
+            "n": 10,
+            "title": "AI Engineering Architecture and User Feedback",
+            "page": 941,
+            "minutes": 96,
+            "sections": [
+              "AI Engineering Architecture",
+              "User Feedback"
+            ]
+          }
+        ]
+      },
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ]
+    },
+    {
+      "id": "M4",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Anthropic",
+      "year": null,
+      "why": "Workflows vs agents and simple composable patterns for LLM systems.",
+      "recommendedBy": [],
+      "url": "https://anthropic.com/research/building-effective-agents",
+      "title": "Building effective AI agents",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:19.243Z",
+      "fetchedTitle": "Building effective AI agents \\ Anthropic",
+      "sig": "--n3cJds_9PaV2tOLYB6M_zBRKK6AIAx1VanJmq14xE",
+      "minutes": 12,
+      "minutesBasis": "measured",
+      "uses": null,
+      "pageMinutes": 12,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M5",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Anthropic",
+      "year": null,
+      "why": "Designing, testing and evaluating tools for agents.",
+      "recommendedBy": [],
+      "url": "https://anthropic.com/research/writing-tools-for-agents",
+      "title": "Writing effective tools for AI agents",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:19.282Z",
+      "fetchedTitle": "Writing effective tools for AI agents \\ Anthropic",
+      "sig": "6jIJoQlrsePLH-0pC4a-OKA9hit2eWG8uQntdzgi5gc",
+      "minutes": 14,
+      "minutesBasis": "measured",
+      "uses": null,
+      "pageMinutes": 14,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M6",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Anthropic",
+      "year": null,
+      "why": "Context engineering as the successor to prompt engineering.",
+      "recommendedBy": [],
+      "url": "https://anthropic.com/research/effective-context-engineering-for-ai-agents",
+      "title": "Effective context engineering for AI agents",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:19.618Z",
+      "fetchedTitle": "Effective context engineering for AI agents \\ Anthropic",
+      "sig": "PJkU8cFiXW97oWxggYSI-UFhpCxMBCwabJhLLQvUvuY",
+      "minutes": 14,
+      "minutesBasis": "measured",
+      "uses": null,
+      "pageMinutes": 14,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M7",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Anthropic",
+      "year": null,
+      "why": "How to build evals for agents across their lifecycle.",
+      "recommendedBy": [],
+      "url": "https://anthropic.com/research/demystifying-evals-for-ai-agents",
+      "title": "Demystifying evals for AI agents",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:19.276Z",
+      "fetchedTitle": "Demystifying evals for AI agents \\ Anthropic",
+      "sig": "O8oYW-zT6VwzUbddfvgWhm_LESanZAKWFgZzfLJjiDs",
+      "minutes": 26,
+      "minutesBasis": "measured",
+      "uses": null,
+      "pageMinutes": 26,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "current"
+      ]
+    },
+    {
+      "id": "M8",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Cameron R. Wolfe",
+      "year": 2026,
+      "why": "In-depth best practices and patterns for agent evaluation.",
+      "recommendedBy": [],
+      "url": "https://cameronrwolfe.substack.com/p/agent-evals",
+      "title": "Agent Evaluation: A Detailed Guide",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:19.235Z",
+      "fetchedTitle": "Agent Evaluation: A Detailed Guide",
+      "sig": "_VQ0UoDWokUUn22DLcdPY9VAamJy_11ltQx-ATCshqI",
+      "minutes": 25,
+      "minutesBasis": "measured",
+      "uses": "Agent evaluation patterns and roadmap",
+      "pageMinutes": 50,
+      "hub": true,
+      "toc": {
+        "source": "page",
+        "url": "https://cameronrwolfe.substack.com/p/agent-evals",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Fundamentals of Agent Systems",
+            "page": null,
+            "minutes": 19,
+            "sections": [
+              "Components of an Agent",
+              "Demystifying Reasoning Models",
+              "AI Agents from First Principles",
+              "Multi-Agent Systems",
+              "Context Engineering",
+              "Agent Scaffolds"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Common Patterns in Agent Evaluation",
+            "page": null,
+            "minutes": 8,
+            "sections": [
+              "Agent Evaluation Components",
+              "Different Types of Graders",
+              "Using LLMs for Evaluation",
+              "Broader Categories of Evaluation"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Agent Evaluation Case Studies",
+            "page": null,
+            "minutes": 16,
+            "sections": [
+              "The τ-bench Series",
+              "Terminal-Bench [12]",
+              "More Useful Agent Benchmarks"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "A Roadmap for Agent Evaluation",
+            "page": null,
+            "minutes": 6,
+            "sections": [
+              "New to the newsletter?"
+            ],
+            "url": null,
+            "group": null
+          }
+        ]
+      },
+      "foundBy": [
+        "current"
+      ],
+      "note": "Single long essay with four main sections: agent fundamentals, evaluation patterns, case studies (τ-bench, Terminal-Bench) and a roadmap. The page gave no heading anchors, so every unit points to the page URL. Best read straight through."
+    },
+    {
+      "id": "M11",
+      "origin": "research",
+      "type": "link",
+      "kind": "course",
+      "author": "Hugging Face",
+      "year": null,
+      "why": "Free hands-on agents course with notebooks, quizzes and a final benchmark assignment.",
+      "recommendedBy": [
+        "https://aibuilderclub.com/blog/best-ai-agent-courses-2026"
+      ],
+      "url": "https://huggingface.co/learn/agents-course/en/unit0/introduction",
+      "title": "Welcome to the 🤗 AI Agents Course · Hugging Face",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:20.925Z",
+      "fetchedTitle": "Welcome to the 🤗 AI Agents Course · Hugging Face",
+      "sig": "eed6FB_GoVD9eIwdb034757krI6KTNa0vv3KOcXN30M",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Agent notebooks and exercises",
+      "pageMinutes": 6,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": null,
+        "perItemMinutes": 5,
+        "minutes": null,
+        "answers": false
+      },
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M12",
+      "origin": "research",
+      "type": "link",
+      "kind": "course",
+      "author": "Arize AI",
+      "year": 2025,
+      "why": "Five-step evals homework: error analysis, LLM judges, RAG retrieval metrics, pipeline diagnostics.",
+      "recommendedBy": [],
+      "url": "https://arize.com/blog/ai-evals-maven-course-homework-the-recipe-bot-workflow",
+      "title": "AI Evals Maven Course Homework: the Recipe Bot Workflow",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:23.226Z",
+      "fetchedTitle": "AI Evals Maven Course Homework: Recipe Bot With Phoenix",
+      "sig": "sbvONyehas2NseqmyKeY1M-RqmlPDqYGrbr7BXRK4sU",
+      "minutes": 10,
+      "minutesBasis": "estimated",
+      "uses": null,
+      "pageMinutes": 8,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": 5,
+        "perItemMinutes": 5,
+        "minutes": 25,
+        "answers": false
+      },
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M13",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Gururaj",
+      "year": 2026,
+      "why": "Ten questions with model answers plus a system-design drill and mock routine.",
+      "recommendedBy": [],
+      "url": "https://productionaiengineer.com/blog/ai-engineer-interview-questions",
+      "title": "AI Engineer Interview Questions (RAG & System Design)",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:20.994Z",
+      "fetchedTitle": "AI Engineer Interview Questions (RAG & System Design) — ProductionAIEngineer",
+      "sig": "8LqNRnsQSS5wOEruTu0qIgI0--a11lKaDurvgVgaOw4",
+      "minutes": 11,
+      "minutesBasis": "measured",
+      "uses": null,
+      "pageMinutes": 11,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "recall",
+        "items": 10,
+        "perItemMinutes": 3,
+        "minutes": 30,
+        "answers": true
+      },
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M14",
+      "origin": "research",
+      "type": "link",
+      "kind": "note",
+      "author": "Hamel Husain",
+      "year": 2026,
+      "why": "Short note on error analysis before writing evals.",
+      "recommendedBy": [],
+      "url": "https://hamel.dev/notes/llm/ai-product-engineering/evals-error-analysis.html",
+      "title": "Automating Error Analysis – Hamel’s Blog",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:45:20.913Z",
+      "fetchedTitle": "Automating Error Analysis – Hamel’s Blog",
+      "sig": "BQxCR2VCTgNwhpKW87GGUwU6KDjFtXREQbhqFNl_1No",
+      "minutes": 2,
+      "minutesBasis": "estimated",
+      "uses": null,
+      "pageMinutes": 1,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "practice"
+      ]
+    }
+  ],
+  "split": {
+    "readingShare": 24,
+    "practice": "building LLM applications",
+    "formats": [
+      {
+        "format": "project",
+        "share": 79,
+        "focus": "End-to-end RAG/agent app with evals",
+        "reason": "A backend engineer learns LLM apps fastest by building one service from prompts through RAG, tools, evals and deployment, with one milestone per unit."
+      },
+      {
+        "format": "lab",
+        "share": 10,
+        "focus": "Agents course notebooks, evals homework",
+        "reason": "Guided notebooks and the Recipe Bot eval workflow give working patterns to copy into the project."
+      },
+      {
+        "format": "design-exercise",
+        "share": 6,
+        "focus": "LLM system design scenarios",
+        "reason": "A few timed designs of RAG and agent systems, checked against a rubric, build architecture judgment beyond the code."
+      },
+      {
+        "format": "recall",
+        "share": 5,
+        "focus": "RAG, evals, inference concepts",
+        "reason": "Short recall on the book's key ideas and the interview questions makes the concepts stick."
+      }
+    ],
+    "reason": "About a quarter of the 72 hours goes to reading Chip Huyen's AI Engineering in order, plus short essays on agents and evals. The rest is hands-on, mostly one growing LLM application project, as you asked for a building-heavy plan."
+  },
+  "level": "month",
+  "spans": [
+    20,
+    20,
+    20
+  ],
+  "timeLimitMs": 199393,
+  "baseline": {
+    "inputTokens": 5853,
+    "outputTokens": 3180,
+    "ms": 33928
+  }
+}

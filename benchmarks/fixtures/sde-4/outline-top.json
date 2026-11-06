@@ -1,0 +1,1032 @@
+{
+  "id": "sde-4/top",
+  "topic": "sde",
+  "sourceRun": "draft-2026-11-06T00-35-48-135Z-sde-1",
+  "commit": "3800e7f",
+  "label": "Top level · 8 weeks",
+  "group": "top",
+  "leaf": false,
+  "request": {
+    "topic": "Senior software engineer interview preparation",
+    "granularity": "day",
+    "weeks": 8,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6
+  },
+  "materials": [
+    {
+      "id": "M2",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Gayle Laakmann McDowell, Mike Mroczka, Aline Lerner and Nil Mamano",
+      "year": 2025,
+      "why": "Covers the whole interview loop beyond coding problems; no system design.",
+      "recommendedBy": [
+        "https://computingforgeeks.com/books-prepare-for-coding-system-design-interview"
+      ],
+      "url": "https://beyondctci.com",
+      "title": "Beyond Cracking the Coding Interview",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:34.694Z",
+      "fetchedTitle": "Beyond Cracking the Coding Interview",
+      "sig": "CyQxpK_gic86zkum-UDBskoJ81wXXZCEo-zeJKfhzkg",
+      "minutes": 150,
+      "minutesBasis": "estimated",
+      "uses": "Behavioural rounds and coding interview principles",
+      "pageMinutes": 3,
+      "hub": false,
+      "toc": {
+        "source": "page",
+        "url": "https://github.com/dullhunk/cdyf/issues/1011",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "PART II: Ugly Truths & Hidden Realities",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "PART III: Job Searches, Start to Finish",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "PART IV: Offers & Negotiation",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "PART V: Behavioural Interviews",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "PART VI: Principles of Coding Interviews",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "PART VII: Catalogue of Technical Topics",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": null,
+            "group": null
+          }
+        ]
+      },
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ],
+      "note": "Book organised in parts (Ugly Truths, Job Searches, Offers & Negotiation, Behavioural, Coding Principles, Technical Topics); 43 chapters exceeds 40, so parts are given. Covers the whole job search, not only coding."
+    },
+    {
+      "id": "M3",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Martin Kleppmann",
+      "year": 2017,
+      "why": "Senior-level system design depth on distributed data systems, consistency and tradeoffs.",
+      "recommendedBy": [
+        "https://rockstardeveloperuniversity.com/best-coding-interview-books",
+        "https://blog.pragmaticengineer.com/my-reading-list",
+        "https://guptadeepak.com/books/designing-data-intensive-applications"
+      ],
+      "url": "https://oreilly.com/library/view/designing-data-intensive-applications/9781491903063",
+      "title": "Designing Data-Intensive Applications",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:40.114Z",
+      "fetchedTitle": "Designing Data-Intensive Applications",
+      "sig": "UHGI_IJfGeYoD3TRGXvmFbCz5GPwXPgSwaJzyjxy1Lw",
+      "minutes": 120,
+      "minutesBasis": "measured",
+      "uses": "Depth on replication, partitioning and consistency",
+      "toc": null,
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ]
+    },
+    {
+      "id": "M4",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Alex Xu",
+      "year": 2020,
+      "why": "Interview-format system design walkthroughs (Vol. 1 foundations, Vol. 2 advanced tradeoffs).",
+      "recommendedBy": [
+        "https://rockstardeveloperuniversity.com/best-coding-interview-books"
+      ],
+      "url": "https://openlibrary.org/works/OL21947791W",
+      "title": "System Design Interview",
+      "backbone": true,
+      "verifiedAt": "2026-11-06T00:36:40.114Z",
+      "fetchedTitle": "System Design Interview - an Insider's Guide",
+      "sig": "HXgWIKOJsnZOr0vbH1QjHsyK6UNkPMRhUw69Jzra_xY",
+      "minutes": 460,
+      "minutesBasis": "measured",
+      "uses": "System design framework and worked designs, in order",
+      "toc": {
+        "source": "page",
+        "url": "https://www.goodreads.com/book/show/54109255-system-design-interview-an-insider-s-guide",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Chapter 1: Scale From Zero To Millions Of Users",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 2: Back-of-the-envelope Estimation",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 3: A Framework For System Design Interviews",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 4: Design A Rate Limiter",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 5: Design Consistent Hashing",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 6: Design A Key-value Store",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 7: Design A Unique Id Generator In Distributed Systems",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 8: Design A URL Shortener",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 9: Design A Web Crawler",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 10: Design A Notification System",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 11: Design A News Feed System",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 12: Design A Chat System",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 13: Design A Search Autocomplete System",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 14: Design YouTube",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 15: Design Google Drive",
+            "page": null,
+            "minutes": 46,
+            "sections": [],
+            "url": null,
+            "group": null
+          }
+        ]
+      },
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ],
+      "note": "Open Library has no table of contents, so these are Volume 1's chapters as listed on Goodreads. Chapters 8–15 are from memory, so check them. Volume 1 covers the fundamentals and the interview framework, then one design problem per chapter. Volume 2 isn't listed."
+    },
+    {
+      "id": "M6",
+      "origin": "research",
+      "type": "link",
+      "kind": "repo",
+      "author": "Donne Martin",
+      "year": null,
+      "why": "Free system design foundation with 8 worked design exercises, OO design questions, estimation tables and Anki decks.",
+      "recommendedBy": [
+        "https://prachub.com/resources/is-github-s-system-design-primer-enough-for-senior-interviews"
+      ],
+      "url": "https://github.com/donnemartin/system-design-primer",
+      "title": "GitHub - donnemartin/system-design-primer: Learn how to design large-scale systems. Prep for the system design interview. Includes Anki flashcards.",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:55.514Z",
+      "fetchedTitle": "GitHub - donnemartin/system-design-primer: Learn how to design large-scale systems. Prep for the system design interview. Includes Anki flashcards. · GitHub",
+      "sig": "bqfcuag81iZGJh9FKzbZkV_sxdfMzledOGv9l6-Wz9I",
+      "minutes": 49,
+      "minutesBasis": "estimated",
+      "uses": "Design primer, estimation tables, design prompts",
+      "pageMinutes": 49,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "design-exercise",
+        "items": 8,
+        "perItemMinutes": null,
+        "minutes": 50,
+        "answers": true
+      },
+      "foundBy": [
+        "canonical",
+        "practice"
+      ]
+    },
+    {
+      "id": "M7",
+      "origin": "research",
+      "type": "link",
+      "kind": "course",
+      "author": null,
+      "year": null,
+      "why": "Fast modern system design essentials from FAANG hiring managers.",
+      "recommendedBy": [],
+      "url": "https://hellointerview.com/learn/system-design/in-a-hurry/introduction",
+      "title": "System Design in a Hurry | Hello Interview System Design in a Hurry",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:54.789Z",
+      "fetchedTitle": "System Design in a Hurry | Hello Interview System Design in a Hurry",
+      "sig": "GKoJzNQGIla9xh11ZRtSyLBK6GMES1CXER8STxq-qOQ",
+      "minutes": 9,
+      "minutesBasis": "estimated",
+      "uses": "Quick modern system design overview",
+      "pageMinutes": 9,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M9",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Navdeep Singh",
+      "year": 2026,
+      "why": "Guide to structuring coding-interview practice with NeetCode.",
+      "recommendedBy": [],
+      "url": "https://neetcode.io/courses/lessons/how-to-use-neetcode-effectively",
+      "title": "How to Use Neetcode Effectively (Coding Interviews)",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:54.738Z",
+      "fetchedTitle": "How to Use Neetcode Effectively (Coding Interviews)",
+      "sig": "6gJUcfEOn-MgiwV4Inl7as3Jnke7cvNxLfuZVLFP8GU",
+      "minutes": 5,
+      "minutesBasis": "measured",
+      "uses": "How to structure NeetCode practice",
+      "pageMinutes": 5,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M11",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "interviewDB Editorial Team",
+      "year": 2026,
+      "why": "Round-by-round senior prep matrix including low-level design and AI-era system design.",
+      "recommendedBy": [],
+      "url": "https://interviewdb.com/blog/senior-software-interviews-beyond-leetcode-2026",
+      "title": "Senior Software Engineer Interviews in 2026: How To Prepare…",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:54.147Z",
+      "fetchedTitle": "Senior Software Engineer Interviews in 2026: How To Prepare…",
+      "sig": "8kmCc5zFPmY5Wge0z5mJ8j_5EZmpmIIkPzOew8J3jUU",
+      "minutes": 8,
+      "minutesBasis": "measured",
+      "uses": "Round-by-round expectations for senior roles",
+      "pageMinutes": 8,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "current"
+      ]
+    },
+    {
+      "id": "M12",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": null,
+      "year": 2026,
+      "why": "Senior job search strategy and building a behavioural story bank with AI.",
+      "recommendedBy": [],
+      "url": "https://cupofcode.blog/sde-job-search-2026",
+      "title": "Senior SDE Job Search in 2026: Strategy, Luck, and AI",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:53.298Z",
+      "fetchedTitle": "Senior SDE Job Search in 2026: Strategy, Luck, and AI | Cup of Code",
+      "sig": "zUaSquLCm9Jv0NG4J-Zla1w8WSRnu5nSJ9RAaim1vMo",
+      "minutes": 16,
+      "minutesBasis": "measured",
+      "uses": "Job search strategy and building a story bank",
+      "pageMinutes": 16,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "current"
+      ]
+    },
+    {
+      "id": "M13",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": null,
+      "year": 2026,
+      "why": "Full NeetCode 150 list with topic groups, LeetCode links and time estimates for planning.",
+      "recommendedBy": [],
+      "url": "https://crackr.dev/neetcode150",
+      "title": "NeetCode 150: All 150 LeetCode Problems + Study Planner",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:58.592Z",
+      "fetchedTitle": "NeetCode 150: All 150 Problems with Study Planner (2026)",
+      "sig": "ObJOq8p-dLqRXyDoPUGeFVmdH5lzPcipBfodpEJLBio",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Coding pattern problem set",
+      "pageMinutes": 12,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "problem-set",
+        "items": 56,
+        "perItemMinutes": 10,
+        "minutes": 1370,
+        "answers": true,
+        "list": {
+          "items": [
+            {
+              "title": "Contains Duplicate",
+              "number": null,
+              "group": "Arrays & Hashing",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/contains-duplicate/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Valid Anagram",
+              "number": null,
+              "group": "Arrays & Hashing",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/valid-anagram/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Two Sum",
+              "number": null,
+              "group": "Arrays & Hashing",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/two-sum/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Group Anagrams",
+              "number": null,
+              "group": "Arrays & Hashing",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/group-anagrams/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Top K Frequent Elements",
+              "number": null,
+              "group": "Arrays & Hashing",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/top-k-frequent-elements/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Product of Array Except Self",
+              "number": null,
+              "group": "Arrays & Hashing",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/product-of-array-except-self/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Valid Sudoku",
+              "number": null,
+              "group": "Arrays & Hashing",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/valid-sudoku/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Encode and Decode Strings",
+              "number": null,
+              "group": "Arrays & Hashing",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/encode-and-decode-strings/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Longest Consecutive Sequence",
+              "number": null,
+              "group": "Arrays & Hashing",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/longest-consecutive-sequence/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Best Time to Buy and Sell Stock",
+              "number": null,
+              "group": "Sliding Window",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Longest Substring Without Repeating Characters",
+              "number": null,
+              "group": "Sliding Window",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/longest-substring-without-repeating-characters/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Longest Repeating Character Replacement",
+              "number": null,
+              "group": "Sliding Window",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/longest-repeating-character-replacement/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Permutation in String",
+              "number": null,
+              "group": "Sliding Window",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/permutation-in-string/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Minimum Window Substring",
+              "number": null,
+              "group": "Sliding Window",
+              "difficulty": "hard",
+              "url": "https://leetcode.com/problems/minimum-window-substring/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Sliding Window Maximum",
+              "number": null,
+              "group": "Sliding Window",
+              "difficulty": "hard",
+              "url": "https://leetcode.com/problems/sliding-window-maximum/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Invert Binary Tree",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/invert-binary-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Maximum Depth of Binary Tree",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/maximum-depth-of-binary-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Diameter of Binary Tree",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/diameter-of-binary-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Balanced Binary Tree",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/balanced-binary-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Same Tree",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/same-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Subtree of Another Tree",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/subtree-of-another-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Lowest Common Ancestor of a Binary Search Tree",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Binary Tree Level Order Traversal",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/binary-tree-level-order-traversal/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Binary Tree Right Side View",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/binary-tree-right-side-view/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Count Good Nodes in Binary Tree",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/count-good-nodes-in-binary-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Validate Binary Search Tree",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/validate-binary-search-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Kth Smallest Element in a BST",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/kth-smallest-element-in-a-bst/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Construct Binary Tree from Preorder and Inorder Traversal",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/construct-binary-tree-from-preorder-and-inorder-traversal/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Binary Tree Maximum Path Sum",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "hard",
+              "url": "https://leetcode.com/problems/binary-tree-maximum-path-sum/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Serialize and Deserialize Binary Tree",
+              "number": null,
+              "group": "Trees",
+              "difficulty": "hard",
+              "url": "https://leetcode.com/problems/serialize-and-deserialize-binary-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Kth Largest Element in a Stream",
+              "number": null,
+              "group": "Heap",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/kth-largest-element-in-a-stream/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Last Stone Weight",
+              "number": null,
+              "group": "Heap",
+              "difficulty": "easy",
+              "url": "https://leetcode.com/problems/last-stone-weight/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "K Closest Points to Origin",
+              "number": null,
+              "group": "Heap",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/k-closest-points-to-origin/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Kth Largest Element in an Array",
+              "number": null,
+              "group": "Heap",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/kth-largest-element-in-an-array/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Task Scheduler",
+              "number": null,
+              "group": "Heap",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/task-scheduler/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Design Twitter",
+              "number": null,
+              "group": "Heap",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/design-twitter/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Find Median from Data Stream",
+              "number": null,
+              "group": "Heap",
+              "difficulty": "hard",
+              "url": "https://leetcode.com/problems/find-median-from-data-stream/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Number of Islands",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/number-of-islands/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Max Area of Island",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/max-area-of-island/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Clone Graph",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/clone-graph/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Walls and Gates",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/walls-and-gates/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Rotting Oranges",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/rotting-oranges/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Pacific Atlantic Water Flow",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/pacific-atlantic-water-flow/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Surrounded Regions",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/surrounded-regions/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Course Schedule",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/course-schedule/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Course Schedule II",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/course-schedule-ii/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Graph Valid Tree",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/graph-valid-tree/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Number of Connected Components in an Undirected Graph",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/number-of-connected-components-in-an-undirected-graph/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Redundant Connection",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/redundant-connection/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Word Ladder",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "hard",
+              "url": "https://leetcode.com/problems/word-ladder/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Reconstruct Itinerary",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "hard",
+              "url": "https://leetcode.com/problems/reconstruct-itinerary/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Min Cost to Connect All Points",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/min-cost-to-connect-all-points/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Network Delay Time",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/network-delay-time/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Swim in Rising Water",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "hard",
+              "url": "https://leetcode.com/problems/swim-in-rising-water/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Alien Dictionary",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "hard",
+              "url": "https://leetcode.com/problems/alien-dictionary/",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Cheapest Flights Within K Stops",
+              "number": null,
+              "group": "Graphs",
+              "difficulty": "medium",
+              "url": "https://leetcode.com/problems/cheapest-flights-within-k-stops/",
+              "solutionUrl": null,
+              "minutes": null
+            }
+          ],
+          "source": "page",
+          "url": "https://crackr.dev/neetcode150"
+        },
+        "totalItems": 150
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "One page listing the NeetCode 150 LeetCode problems under 16 topic headings. Because there are over 150 problems, each unit is a topic group. It works best as a problem checklist ordered by topic."
+    }
+  ],
+  "split": {
+    "readingShare": 28,
+    "practice": "coding problems, design rounds",
+    "formats": [
+      {
+        "format": "problem-set",
+        "share": 66,
+        "focus": "Core NeetCode patterns: arrays, windows, trees, heaps, graphs",
+        "reason": "The coding round rewards quick pattern recognition, which comes from solving many problems and checking each one."
+      },
+      {
+        "format": "design-exercise",
+        "share": 16,
+        "focus": "Timed 50-minute system design prompts",
+        "reason": "Senior loops weigh system design heavily, and timed prompts compared against worked solutions build the interview framework."
+      },
+      {
+        "format": "mock",
+        "share": 11,
+        "focus": "Full coding, design and behavioural rounds",
+        "reason": "A few complete runs under real conditions expose pacing and communication gaps that isolated practice misses."
+      },
+      {
+        "format": "recall",
+        "share": 7,
+        "focus": "Design numbers, tradeoffs, story bank",
+        "reason": "Estimation figures, consistency tradeoffs and behavioural stories need to be ready to recall instantly, aloud."
+      }
+    ],
+    "reason": "About 14 hours go to reading, centred on Alex Xu's System Design Interview read in order, with short pieces on behavioural rounds, data-system depth and current senior expectations. The remaining 34 hours are practice: mostly timed NeetCode problems by pattern, plus whole system design exercises, a…"
+  },
+  "level": "week",
+  "spans": [
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5
+  ],
+  "timeLimitMs": 189952,
+  "baseline": {
+    "inputTokens": 5888,
+    "outputTokens": 3921,
+    "ms": 36073
+  }
+}

@@ -1,0 +1,247 @@
+{
+  "id": "csapp-1",
+  "topic": "csapp",
+  "sourceRun": "draft-2026-11-05T20-47-35-596Z-csapp-1",
+  "commit": "361aeb9",
+  "input": {
+    "topic": "深入理解计算机系统",
+    "weeks": 4,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6,
+    "materials": [
+      {
+        "id": "M1",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Randal E. Bryant, David R. O'Hallaron",
+        "year": 2002,
+        "why": "The backbone textbook (深入理解计算机系统, 3rd ed.): data representation, x86-64, memory hierarchy, linking, ECF, virtual memory.",
+        "recommendedBy": [
+          "https://hackway.org/docs/cs/sophomore/system/cs15213",
+          "https://computingforgeeks.com/best-books-to-learn-operating-systems",
+          "https://chend0316.github.io/cs/computer-system"
+        ],
+        "url": "https://openlibrary.org/works/OL12343250W",
+        "title": "Computer Systems: A Programmer's Perspective",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:48:08.214Z",
+        "fetchedTitle": "Computer systems",
+        "sig": "0sdKpRc-ZuOybm8GKD2JZdgBKXN288oxZhJvR-rrdkc",
+        "minutes": 2698,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true,
+        "foundBy": [
+          "backbone",
+          "canonical"
+        ]
+      },
+      {
+        "id": "M2",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": null,
+        "year": null,
+        "why": "Self-study lab handouts (Data, Bomb, Attack, Cache, Malloc, Shell, Proxy) that carry the hands-on practice for the book.",
+        "recommendedBy": [
+          "https://hackway.org/docs/cs/sophomore/system/cs15213",
+          "https://chend0316.github.io/cs/computer-system"
+        ],
+        "url": "https://csapp.cs.cmu.edu/3e/labs.html",
+        "title": "CS:APP3e, Bryant and O'Hallaron",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:47:43.808Z",
+        "fetchedTitle": "CS:APP3e, Bryant and O'Hallaron",
+        "sig": "M6C8jFGer2I8CUwqfxQLt5tcV1cURvAyH6bh1ZbI61I",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 5,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "lab",
+          "items": null,
+          "perItemMinutes": 5,
+          "minutes": null,
+          "answers": true
+        },
+        "foundBy": [
+          "canonical",
+          "practice"
+        ],
+        "note": "One page listing 11 CS:APP labs, each with README, PDF writeup and self-study handout; best for hands-on practice alongside the book."
+      },
+      {
+        "id": "M3",
+        "origin": "research",
+        "type": "link",
+        "kind": "docs",
+        "author": null,
+        "year": null,
+        "why": "Student site with the book's extra resources and Linux reference books.",
+        "recommendedBy": [],
+        "url": "https://csapp.cs.cmu.edu/3e/students.html",
+        "title": "CS:APP3e, Bryant and O'Hallaron",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:47:43.738Z",
+        "fetchedTitle": "CS:APP3e, Bryant and O'Hallaron",
+        "sig": "dbf37hgDmqE6VX1R0nk55DvGoQPxQIUokd6Fmcmve1o",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 3,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "practice"
+        ]
+      },
+      {
+        "id": "M4",
+        "origin": "research",
+        "type": "link",
+        "kind": "note",
+        "author": "Sulley",
+        "year": null,
+        "why": "Worked solutions for the 15-213 labs, for checking your own work.",
+        "recommendedBy": [],
+        "url": "https://sulley.cc/2024/09/01/20/06",
+        "title": "Solutions to CMU 15213 Labs",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:48:07.807Z",
+        "fetchedTitle": "Solutions to CMU 15213 Labs",
+        "sig": "dzu9TMbeshjscTtVfIsp_Sl6DrMe7EUepLq8NUx73JI",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 116,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "lab",
+          "items": 8,
+          "perItemMinutes": 5,
+          "minutes": null,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Lab 1: Data Lab",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://sulley.cc/2024/09/01/20/06#lab-1-data-lab",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lab 2: Bomb Lab",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://sulley.cc/2024/09/01/20/06#lab-2-bomb-lab",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lab 3: Attack Lab",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://sulley.cc/2024/09/01/20/06#lab-3-attack-lab",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lab 4: Cache Lab",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://sulley.cc/2024/09/01/20/06#lab-4-cache-lab",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lab 5: Performance Lab",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://sulley.cc/2024/09/01/20/06#lab-5-performance-lab",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lab 6: Shell Lab",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://sulley.cc/2024/09/01/20/06#lab-6-shell-lab",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lab 7: Malloc Lab",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://sulley.cc/2024/09/01/20/06#lab-7-malloc-lab",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lab 8: Proxy Lab",
+                "number": null,
+                "group": null,
+                "difficulty": null,
+                "url": "https://sulley.cc/2024/09/01/20/06#lab-8-proxy-lab",
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://sulley.cc/2024/09/01/20/06"
+          },
+          "totalItems": 8
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "One long post with a solution write-up per CSAPP lab (8 labs); best for checking your own lab work."
+      },
+      {
+        "id": "M5",
+        "origin": "research",
+        "type": "link",
+        "kind": "repo",
+        "author": null,
+        "year": null,
+        "why": "Student notes with a link to the lecture video playlist.",
+        "recommendedBy": [],
+        "url": "https://github.com/yarkhinephyo/15-213-computer-systems-notes",
+        "title": "GitHub - yarkhinephyo/15-213-computer-systems-notes: Notes on CMU Intro to Computer Systems · GitHub",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:48:07.748Z",
+        "fetchedTitle": "GitHub - yarkhinephyo/15-213-computer-systems-notes: Notes on CMU Intro to Computer Systems · GitHub",
+        "sig": "IutHL0yIc2P5FH6atZ4sIdEeZdJGJFi2JHMN9rQeJeI",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 1,
+        "hub": false,
+        "toc": null,
+        "foundBy": [
+          "practice"
+        ]
+      }
+    ]
+  },
+  "baseline": {
+    "inputTokens": 4434,
+    "outputTokens": 1368,
+    "ms": 14693
+  }
+}

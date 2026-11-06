@@ -1,0 +1,556 @@
+{
+  "id": "c25k-1/top",
+  "topic": "c25k",
+  "sourceRun": "draft-2026-11-06T00-35-48-135Z-c25k-1",
+  "commit": "3800e7f",
+  "label": "Top level · 8 weeks in 3 blocks",
+  "group": "top",
+  "leaf": false,
+  "request": {
+    "topic": "Couch to 5K",
+    "granularity": "week",
+    "weeks": 8,
+    "daysPerWeek": 3,
+    "hoursPerWeek": 3
+  },
+  "materials": [
+    {
+      "id": "M1",
+      "origin": "research",
+      "type": "link",
+      "kind": "docs",
+      "author": "NHS",
+      "year": null,
+      "why": "Official week-by-week run/walk plan, three runs a week, the backbone programme.",
+      "recommendedBy": [],
+      "url": "https://nhs.uk/better-health/get-active/get-running-with-couch-to-5k/couch-to-5k-running-plan",
+      "title": "Couch to 5K running plan - Better Health",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:55.433Z",
+      "fetchedTitle": "Couch to 5K running plan - Better Health - NHS",
+      "sig": "3TlIZ3Ai_MvLJsocnI-K4WLkWH6YAcQzUCF0zei_nu8",
+      "minutes": 15,
+      "minutesBasis": "estimated",
+      "uses": "Week-by-week run/walk programme",
+      "pageMinutes": 15,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "session",
+        "items": 27,
+        "perItemMinutes": null,
+        "minutes": null,
+        "answers": false
+      },
+      "foundBy": [
+        "canonical",
+        "practice"
+      ]
+    },
+    {
+      "id": "M2",
+      "origin": "research",
+      "type": "link",
+      "kind": "docs",
+      "author": "NHS",
+      "year": null,
+      "why": "Overview of the programme, how to start and the ways to follow it.",
+      "recommendedBy": [],
+      "url": "https://nhs.uk/better-health/get-active/get-running-with-couch-to-5k",
+      "title": "Get running with Couch to 5K - Better Health",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:55.424Z",
+      "fetchedTitle": "Get running with Couch to 5K - Better Health - NHS",
+      "sig": "TGS1NGbpcBnkhJOfdPK6k5Wnk8BaHwLxUnh0ruruofs",
+      "minutes": 6,
+      "minutesBasis": "estimated",
+      "uses": "How to start and follow the programme",
+      "pageMinutes": 5,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical",
+        "practice"
+      ]
+    },
+    {
+      "id": "M3",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": "NHS Choices",
+      "year": null,
+      "why": "Weekly audio podcasts that guide each run with timed run/walk cues.",
+      "recommendedBy": [
+        "https://nhs.uk/better-health/get-active/get-running-with-couch-to-5k"
+      ],
+      "url": "https://podcasts.apple.com/us/podcast/nhs-couch-to-5k/id394384987",
+      "title": "NHS Couch to 5K",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:23.167Z",
+      "fetchedTitle": "NHS Couch to 5K - Podcast - Apple Podcasts",
+      "sig": "VlRGIeLCbZ062o_w1TPUyT7_N3Ud6TiLtfEliCmvFbo",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Audio cues guiding each run",
+      "pageMinutes": 5,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "session",
+        "items": null,
+        "perItemMinutes": null,
+        "minutes": null,
+        "answers": false
+      },
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M4",
+      "origin": "research",
+      "type": "link",
+      "kind": "docs",
+      "author": "NHS",
+      "year": null,
+      "why": "Basic strength exercises to support running and prevent injury.",
+      "recommendedBy": [],
+      "url": "https://nhs.uk/live-well/exercise/strength-exercises",
+      "title": "Strength exercises - NHS",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:23.606Z",
+      "fetchedTitle": "Strength exercises - NHS",
+      "sig": "Pj6dj6ap_spy0DXVptjWBhZgTLvcU1RsYvf5HCD7w6A",
+      "minutes": 10,
+      "minutesBasis": "estimated",
+      "uses": "Basic strength moves for injury prevention",
+      "pageMinutes": 3,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M5",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "The Runners Physio",
+      "year": null,
+      "why": "A physio's strength exercises for runners, including calves and ankles.",
+      "recommendedBy": [],
+      "url": "https://therunnersphysio.com/favorite-strength-exercises-for-runners",
+      "title": "My Favorite Strength Exercises For Runners - The Runners Physio",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:58.566Z",
+      "fetchedTitle": "My Favorite Strength Exercises For Runners - The Runners Physio",
+      "sig": "Op5Ii0duusPs871sm85dAN-KEipwkv2MBEUCvOIHcCQ",
+      "minutes": 5,
+      "minutesBasis": "measured",
+      "uses": "Calf and ankle strength for runners",
+      "pageMinutes": 5,
+      "hub": false,
+      "toc": null,
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M6",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Prashanth Vaidya",
+      "year": 2026,
+      "why": "Compares C25K with newer structured plans to help choose an approach.",
+      "recommendedBy": [],
+      "url": "https://therunninggenie.com/blog/couch-to-5k-vs-structured-plan",
+      "title": "Couch to 5K vs Structured Beginner Plans: Which Works Better?",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:52.297Z",
+      "fetchedTitle": "Couch to 5K vs Structured Beginner Plans: Which Works Better? (2026) | The Running Genie Blog",
+      "sig": "wOVnAWLL6JpR2FBkIG4ymf-_TSSLWzcHpUIKM7fBZL8",
+      "minutes": 11,
+      "minutesBasis": "measured",
+      "uses": "Choosing and adapting a beginner plan",
+      "pageMinutes": 10,
+      "hub": true,
+      "toc": {
+        "source": "page",
+        "url": "https://therunninggenie.com/blog/couch-to-5k-vs-structured-plan",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "What Couch to 5K actually prescribes",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "What structured beginner plans typically include",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "The walk-run method itself: what the science shows",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Where C25K specifically falls short",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "What structured plans get right",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Side-by-side comparison",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Which plan suits which beginner",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "The hybrid approach",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "The completion data: what actually happens",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "What to do after the first 5K",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Common mistakes regardless of plan",
+            "page": null,
+            "minutes": 1,
+            "sections": [
+              "The Running Genie Editorial"
+            ],
+            "url": null,
+            "group": null
+          }
+        ]
+      },
+      "foundBy": [
+        "current"
+      ],
+      "note": "Single essay split into 11 H2 sections comparing C25K with structured plans; best read straight through, or jump to the section on which plan suits which beginner."
+    },
+    {
+      "id": "M8",
+      "origin": "research",
+      "type": "youtube",
+      "kind": "video",
+      "author": "NHS",
+      "year": null,
+      "why": "Short video introduction to the nine-week plan and podcasts.",
+      "recommendedBy": [],
+      "url": "https://youtube.com/watch?v=of0FZaSRk60",
+      "title": "Couch to 5K | NHS",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:23.307Z",
+      "fetchedTitle": "Couch to 5K | NHS - YouTube",
+      "sig": "ZlDzbwb8verOYq2On0ktUB6GoPFqu8tmrNhF-p2OPWU",
+      "minutes": 5,
+      "minutesBasis": "measured",
+      "uses": "Quick intro to the plan and podcasts",
+      "pageMinutes": 5,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M9",
+      "origin": "research",
+      "type": "link",
+      "kind": "docs",
+      "author": "femrun",
+      "year": 2026,
+      "why": "An 8-week table plan fitting this plan length, with run/walk repeats.",
+      "recommendedBy": [],
+      "url": "https://femrun.com/blog/5k-training-plan",
+      "title": "5K Training Plan: 8 Week Schedule for Beginners (2026) | femrun",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:22.768Z",
+      "fetchedTitle": "5K Training Plan: 8 Week Schedule for Beginners (2026) | femrun",
+      "sig": "Dc721kTdBFYpZi06a52t6rDyJ_kE8h5dbcORYP6rrP8",
+      "minutes": 8,
+      "minutesBasis": "estimated",
+      "uses": "8-week schedule matching the plan length",
+      "pageMinutes": 8,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "session",
+        "items": 24,
+        "perItemMinutes": null,
+        "minutes": null,
+        "answers": false
+      },
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M10",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": null,
+      "year": null,
+      "why": "Race-day tips for a first 5K.",
+      "recommendedBy": [],
+      "url": "https://fleetfeet.com/blog/what-you-need-to-know-to-run-your-first-5k",
+      "title": "13 Tips For Your First 5K Race | Fleet Feet",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:22.988Z",
+      "fetchedTitle": "13 Tips For Your First 5K Race | Fleet Feet",
+      "sig": "zxXkwItle-cjcFhnIKHhQjaqMNndHA5mdYi1oANUtVE",
+      "minutes": 6,
+      "minutesBasis": "measured",
+      "uses": "Preparing for the first 5K run",
+      "pageMinutes": 6,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M11",
+      "origin": "research",
+      "type": "youtube",
+      "kind": "video",
+      "author": null,
+      "year": null,
+      "why": "Follow-along beginner strength routine for runners.",
+      "recommendedBy": [],
+      "url": "https://youtube.com/watch?v=JATx1R9lCMo",
+      "title": "Beginner Strength Workout for Runners",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:23.442Z",
+      "fetchedTitle": "Beginner Strength Workout for Runners - YouTube",
+      "sig": "-1rjKn7NHe_aYyREAlwzOwVWUKKvRuFlbZeOB61ROcI",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Follow-along strength session",
+      "pageMinutes": 9,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "session",
+        "items": null,
+        "perItemMinutes": null,
+        "minutes": null,
+        "answers": false
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "Single 9-minute follow-along video with no chapters or listed parts; it works as one practice session."
+    },
+    {
+      "id": "M13",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Martinus Evans",
+      "year": 2023,
+      "why": "Beginner-friendly running guide for people outside the traditional runner image.",
+      "recommendedBy": [
+        "https://runnersworld.com/gear/a20864517/best-books-for-running"
+      ],
+      "url": "https://openlibrary.org/works/OL29200697W",
+      "title": "Slow AF Run Club: The Ultimate Guide for Anyone Who Wants to Run",
+      "backbone": true,
+      "verifiedAt": "2026-11-06T00:36:24.795Z",
+      "fetchedTitle": "Slow AF Run Club",
+      "sig": "1TCluq9svqle6D9UrhpR2Vhhk5ULUjSIVqgN1vcnrpA",
+      "minutes": 180,
+      "minutesBasis": "measured",
+      "uses": "Beginner mindset, gear, pacing and form, read in order",
+      "toc": {
+        "source": "page",
+        "url": "https://slowafrunclub.com/preorder",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Chapter One",
+            "page": null,
+            "minutes": 64,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter Two",
+            "page": null,
+            "minutes": 64,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter Three",
+            "page": null,
+            "minutes": 64,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter Four",
+            "page": null,
+            "minutes": 64,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter Five",
+            "page": null,
+            "minutes": 64,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter Six",
+            "page": null,
+            "minutes": 64,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter Seven",
+            "page": null,
+            "minutes": 64,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter Eight",
+            "page": null,
+            "minutes": 64,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter Nine",
+            "page": null,
+            "minutes": 64,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter Ten",
+            "page": null,
+            "minutes": 64,
+            "sections": [],
+            "url": null,
+            "group": null
+          }
+        ]
+      },
+      "catalogued": true,
+      "note": "Ten-chapter beginner running guide; the only contents list found is the publisher's page, which gives chapter numbers as headings. Best for new, slow or non-traditional runners."
+    }
+  ],
+  "split": {
+    "readingShare": 17,
+    "practice": "run/walk sessions",
+    "formats": [
+      {
+        "format": "session",
+        "share": 100,
+        "focus": "Guided run/walk progression plus strength",
+        "reason": "Couch to 5K is learned by doing: each week repeats a timed run/walk routine (NHS podcasts or the 8-week femrun table), with short follow-along strength work to protect calves and ankles."
+      }
+    ],
+    "reason": "About five-sixths of your 24 hours goes to the runs themselves, three guided run/walk sessions a week plus short strength routines. The rest is light reading: the NHS plan, a beginner-friendly running book read in order, and short pieces on strength and your first 5K."
+  },
+  "level": "month",
+  "spans": [
+    6,
+    9,
+    9
+  ],
+  "timeLimitMs": 211811,
+  "baseline": {
+    "inputTokens": 5158,
+    "outputTokens": 1897,
+    "ms": 18389
+  }
+}

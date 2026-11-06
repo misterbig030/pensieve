@@ -1,0 +1,567 @@
+{
+  "id": "frenchrev-1",
+  "topic": "frenchrev",
+  "sourceRun": "draft-2026-11-05T20-56-24-138Z-frenchrev-1",
+  "commit": "361aeb9",
+  "input": {
+    "topic": "The French Revolution, 1789 to 1799",
+    "weeks": 12,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6,
+    "materials": [
+      {
+        "id": "M1",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Peter McPhee",
+        "year": 2016,
+        "why": "Single-volume narrative of the whole decade 1789-1799, covering Paris, the provinces and the global setting; reviewed as the likely standard English text.",
+        "recommendedBy": [
+          "https://history.ufl.edu/wp-content/uploads/sites/113/2024/08/EUH3452The-French-Revolution-A.-Matytsin.pdf",
+          "https://ageofrevolutions.com/2016/06/08/french-revolution-summer-reading-list"
+        ],
+        "url": "https://yalebooks.yale.edu/book/9780300228694/liberty-or-death",
+        "title": "Liberty or Death: The French Revolution",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:56:37.385Z",
+        "fetchedTitle": "Liberty or Death",
+        "sig": "x-T_jvfBq9BHuvd3Ydd0lG6iqOufTw6fMxIJgogASMk",
+        "minutes": 1170,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 1170,
+        "hub": true,
+        "toc": {
+          "source": "catalogue",
+          "url": "https://openlibrary.org/books/OL27210650M",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": null,
+              "title": "Patchworks of power and privilege: France in the 1780s",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "A world of intellectual ferment",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Mismanaging crisis, 1785-88",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "The people's revolution, 1789",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Regenerating the nation, 1789-90",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "The revolution triumphant, 1790",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Fracturing Christ's family: religious schism and the king's flight, 1790-91",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Fear and fury, 1791-92, and a second revolution",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Republicans at the crossroads, 1792-93",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Liberty or death: choosing sides in violent times, 1793",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "\"Terror until the peace\", July-October 1793",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Saving a republic of virtue, October 1793-April 1794",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Terror, victory and collapse, April-July 1794",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Settling scores: the Thermidorian reaction, 1794-95",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Men with a stake in society, 1795-97",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "The great nation and its enemies, 1797-99",
+              "page": null,
+              "minutes": 69,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "The significance of the French Revolution.",
+              "page": null,
+              "minutes": 66,
+              "sections": []
+            }
+          ]
+        },
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ]
+      },
+      {
+        "id": "M2",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "William Doyle",
+        "year": 1989,
+        "why": "Accessible, more traditional narrative overview; main rival to the backbone book.",
+        "recommendedBy": [
+          "https://ageofrevolutions.com/2016/06/08/french-revolution-summer-reading-list"
+        ],
+        "url": "https://openlibrary.org/works/OL23965W",
+        "title": "The Oxford History of the French Revolution",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:57:09.573Z",
+        "fetchedTitle": "The Oxford History of the French Revolution",
+        "sig": "dddx_DgSTtGYj8IJb4GjUtg-K8_5O75pt2ZmaFFhtCo",
+        "minutes": 1185,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": {
+          "source": "page",
+          "url": "https://www.napoleon.org/en/magazine/publications/the-oxford-history-of-the-french-revolution-second-edition",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": null,
+              "title": "France under Louis XVI",
+              "page": null,
+              "minutes": 237,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Enlightened Opinion",
+              "page": null,
+              "minutes": 237,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Crisis and Collapse, 1776-1788",
+              "page": null,
+              "minutes": 237,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "The Estates-General, September 1788-July 1789",
+              "page": null,
+              "minutes": 237,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "The Principles of 1789 and the Reform of France",
+              "page": null,
+              "minutes": 237,
+              "sections": [],
+              "url": null,
+              "group": null
+            }
+          ]
+        },
+        "catalogued": true,
+        "note": "Chronological narrative history; only the first five chapter titles could be confirmed from a search snippet of the contents. Best for a traditional overview."
+      },
+      {
+        "id": "M3",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Timothy Tackett",
+        "year": 2015,
+        "why": "Companion for the 1792-1794 weeks, explaining how the Terror arose.",
+        "recommendedBy": [
+          "https://ageofrevolutions.com/2016/06/08/french-revolution-summer-reading-list"
+        ],
+        "url": "https://openlibrary.org/works/OL20227871W",
+        "title": "The Coming of the Terror in the French Revolution",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:57:09.573Z",
+        "fetchedTitle": "The Coming of the Terror in the French Revolution",
+        "sig": "fnE2M-e4i-uN9oJgxmJa31mXtHZB6VLg9H9ohDs_N5M",
+        "minutes": 1200,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true,
+        "note": "The Open Library page has only catalogue details and no table of contents, so I couldn't find any chapters to list."
+      },
+      {
+        "id": "M4",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "William Doyle",
+        "year": 1988,
+        "why": "Short pre-read for week 1, used as a short text in an APUS syllabus.",
+        "recommendedBy": [],
+        "url": "https://openlibrary.org/works/OL23960W",
+        "title": "The French Revolution: A Very Short Introduction",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:57:09.573Z",
+        "fetchedTitle": "The French Revolution",
+        "sig": "_zI6hysmxoI4FV8_r6vpafFr1JbwmzupomVNR88M4Lg",
+        "minutes": 213,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true
+      },
+      {
+        "id": "M5",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Simon Schama",
+        "year": 1989,
+        "why": "Narrative supplementary reading with vivid detail.",
+        "recommendedBy": [
+          "https://fivebooks.com/best-books/french-revolution-lynn-hunt"
+        ],
+        "url": "https://openlibrary.org/works/OL14866001W",
+        "title": "Citizens: A Chronicle of the French Revolution",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:57:09.574Z",
+        "fetchedTitle": "Citizens",
+        "sig": "3KK5-J9RKT2h1vZCImWykDsssSXrm0hB7_Kk2JdmCXI",
+        "minutes": 2370,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true,
+        "note": "The pages I could fetch (Open Library, Wikipedia and Internet Archive) only have catalogue information and no table of contents, so I found no chapter units."
+      },
+      {
+        "id": "M6",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "R. R. Palmer",
+        "year": 1941,
+        "why": "Classic study of the Committee of Public Safety and the Terror.",
+        "recommendedBy": [
+          "https://fivebooks.com/best-books/french-revolution-lynn-hunt"
+        ],
+        "url": "https://openlibrary.org/works/OL3477031W",
+        "title": "Twelve Who Ruled",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:57:09.574Z",
+        "fetchedTitle": "Twelve who ruled",
+        "sig": "MtHJe9Aq0Xjg1FCN9CHy_Vm95j6zW6yBACKZMtbEFRU",
+        "minutes": 1043,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true,
+        "note": "Open Library catalogue page only; it shows no table of contents or chapters, so the book can't be split into units."
+      },
+      {
+        "id": "M7",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "François Furet",
+        "year": 1981,
+        "why": "Key interpretive and historiographical work.",
+        "recommendedBy": [
+          "https://fivebooks.com/best-books/french-revolution-lynn-hunt"
+        ],
+        "url": "https://openlibrary.org/works/OL780258W",
+        "title": "Interpreting the French Revolution",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:57:09.574Z",
+        "fetchedTitle": "Interpreting the French Revolution",
+        "sig": "sQcJYGEKQCzVEulDfYUButBZIrkf273PuXoXGGPHsfc",
+        "minutes": 510,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true,
+        "note": "I couldn't get a table of contents. The Open Library page is only a catalogue record, and the Internet Archive page timed out. I made no units."
+      },
+      {
+        "id": "M8",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Alexis de Tocqueville",
+        "year": 1966,
+        "why": "Classic analysis of the Revolution's origins and continuities.",
+        "recommendedBy": [
+          "https://fivebooks.com/best-books/french-revolution-lynn-hunt"
+        ],
+        "url": "https://openlibrary.org/works/OL34716012W",
+        "title": "The Ancien Régime and the Revolution",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:57:09.574Z",
+        "fetchedTitle": "Ancien Regime and the French Revolution",
+        "sig": "U1FC5z6hiB-b577bhwDNsvcDLqyLT5cYrlHSvW3S6nE",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "toc": null,
+        "catalogued": true,
+        "note": "The Open Library page is only a catalogue record with no table of contents, so it has no chapters to place."
+      },
+      {
+        "id": "M9",
+        "origin": "research",
+        "type": "youtube",
+        "kind": "video",
+        "author": null,
+        "year": null,
+        "why": "15-minute video overview for orientation.",
+        "recommendedBy": [],
+        "url": "https://youtube.com/watch?v=5fJl_ZX91l0",
+        "title": "The French Revolution: Crash Course European History #21",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:56:30.659Z",
+        "fetchedTitle": "The French Revolution: Crash Course European History #21 - YouTube",
+        "sig": "Yu82pDbwkeYW0_9spWK1rMRNBV7WZFde85qNLkoMdlQ",
+        "minutes": 15,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 15,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical",
+          "current"
+        ]
+      },
+      {
+        "id": "M10",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": null,
+        "year": null,
+        "why": "University course outline on the social transformation of the Revolution, useful as a syllabus model.",
+        "recommendedBy": [],
+        "url": "https://carleton.ca/history/description/society-and-revolution-in-france-1789-1799",
+        "title": "Society and Revolution in France, 1789-1799 - Department of History",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:56:31.182Z",
+        "fetchedTitle": "Society and Revolution in France, 1789-1799 - Department of History",
+        "sig": "e005EaOByTDUqIZRIFRFrCc6r0-NY_ix0MW2HHhXp0E",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 3,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical",
+          "current"
+        ]
+      },
+      {
+        "id": "M11",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": null,
+        "year": null,
+        "why": "Review of a site with 12 essays and 350 documents, 250 images, maps and songs for primary-source work.",
+        "recommendedBy": [
+          "https://ageofrevolutions.com/french-revolution-links"
+        ],
+        "url": "https://worldhistorycommons.org/liberty-equality-fraternity",
+        "title": "Liberty, Equality, Fraternity | World History Commons",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:56:33.616Z",
+        "fetchedTitle": "Liberty, Equality, Fraternity | World History Commons",
+        "sig": "jpJnC9pp7GiIQd56BAyDZ_5MzL_e_UcqtrfGef3boGo",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 3,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "lab",
+          "items": null,
+          "perItemMinutes": 5,
+          "minutes": null,
+          "answers": false
+        },
+        "foundBy": [
+          "practice"
+        ]
+      },
+      {
+        "id": "M12",
+        "origin": "research",
+        "type": "link",
+        "kind": "docs",
+        "author": null,
+        "year": null,
+        "why": "Directory of primary-source archives (FRDA, Archives parlementaires) and online resources.",
+        "recommendedBy": [],
+        "url": "https://ageofrevolutions.com/french-revolution-links",
+        "title": "French Revolution Links",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:56:30.570Z",
+        "fetchedTitle": "French Revolution Links – Age of Revolutions",
+        "sig": "rUx-ZKAoRMZQSCzhrLSKTrlhaeWFSfI0fi-jMnEsyMg",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 4,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical",
+          "practice"
+        ]
+      },
+      {
+        "id": "M13",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": null,
+        "year": null,
+        "why": "40-question quiz matching the plan's dates, with instant feedback.",
+        "recommendedBy": [],
+        "url": "https://wayground.com/admin/quiz/6976cffc680a3cc8b09ad4aa/the-french-revolution-1789-1799",
+        "title": "The French Revolution (1789-1799) Quiz",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:57:04.455Z",
+        "fetchedTitle": "The French Revolution (1789-1799) Quiz",
+        "sig": "2utbfQ9AsyNuQHKWsd559zWQBdrgqlZ35tCUdtUepkk",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 3,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "recall",
+          "items": 40,
+          "perItemMinutes": 3,
+          "minutes": 120,
+          "answers": true
+        },
+        "foundBy": [
+          "practice"
+        ]
+      },
+      {
+        "id": "M14",
+        "origin": "research",
+        "type": "link",
+        "kind": "docs",
+        "author": null,
+        "year": null,
+        "why": "School-level essay questions with model essays and memo; entry-level only, contains errors.",
+        "recommendedBy": [],
+        "url": "https://sahistory.org.za/article/history-grade-10-topic-3-essay-questions",
+        "title": "History Grade 10 - Topic 3 Essay Questions",
+        "backbone": false,
+        "verifiedAt": "2026-11-05T20:56:33.709Z",
+        "fetchedTitle": "History Grade 10 - Topic 3 Essay Questions | South African History Online",
+        "sig": "xUqZ7nY37ZVniIt_VH_Ddsjy9DqZ8sN9YMTCbBrYZ_w",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 15,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "mock",
+          "items": 2,
+          "perItemMinutes": null,
+          "minutes": 75,
+          "answers": true
+        },
+        "foundBy": [
+          "practice"
+        ]
+      }
+    ]
+  },
+  "baseline": {
+    "inputTokens": 5826,
+    "outputTokens": 2708,
+    "ms": 26832
+  }
+}

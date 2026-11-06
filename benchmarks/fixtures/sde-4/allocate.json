@@ -1,0 +1,3685 @@
+{
+  "id": "sde-4",
+  "topic": "sde",
+  "sourceRun": "draft-2026-11-06T00-35-48-135Z-sde-1",
+  "commit": "3800e7f",
+  "input": {
+    "topic": "Senior software engineer interview preparation",
+    "weeks": 8,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6,
+    "materials": [
+      {
+        "id": "M1",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Gayle Laakmann McDowell",
+        "year": null,
+        "why": "Classic problem bank with hints and solutions plus big O, data structures and behavioural prep; no system design.",
+        "recommendedBy": [
+          "https://rockstardeveloperuniversity.com/best-coding-interview-books",
+          "https://computingforgeeks.com/books-prepare-for-coding-system-design-interview"
+        ],
+        "url": "https://crackingthecodinginterview.com",
+        "title": "Cracking the Coding Interview: 189 Programming Questions and Solutions",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:35:57.010Z",
+        "fetchedTitle": "CRACKING the CODING INTERVIEW - Home",
+        "sig": "hGeQCPxjjjUG9dCY5MniqwomGUEE5_Zj9uqZXgO4OOg",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 3,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "problem-set",
+          "items": 189,
+          "perItemMinutes": 10,
+          "minutes": 1890,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Arrays and Strings",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Linked Lists",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Stacks and Queues",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Trees and Graphs",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Bit Manipulation",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Math and Logic Puzzles",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Object-Oriented Design",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Recursion and Dynamic Programming",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sorting and Searching",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Testing",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "C and C++",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Java",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Databases",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Threads and Locks",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Moderate",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Hard",
+                "number": null,
+                "group": "Interview Questions",
+                "difficulty": null,
+                "url": "https://www.crackingthecodinginterview.com/contents.html",
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://crackingthecodinginterview.com"
+          },
+          "totalItems": 16
+        },
+        "foundBy": [
+          "backbone"
+        ],
+        "note": "Book with 189 problems grouped into interview-question chapters (data structures, then topics like recursion, sorting, moderate and hard); best for practice with hints and solutions. Chapter list is from the book's known contents, as the page text shows no chapter headings."
+      },
+      {
+        "id": "M2",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Gayle Laakmann McDowell, Mike Mroczka, Aline Lerner and Nil Mamano",
+        "year": 2025,
+        "why": "Covers the whole interview loop beyond coding problems; no system design.",
+        "recommendedBy": [
+          "https://computingforgeeks.com/books-prepare-for-coding-system-design-interview"
+        ],
+        "url": "https://beyondctci.com",
+        "title": "Beyond Cracking the Coding Interview",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:36:34.694Z",
+        "fetchedTitle": "Beyond Cracking the Coding Interview",
+        "sig": "CyQxpK_gic86zkum-UDBskoJ81wXXZCEo-zeJKfhzkg",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 3,
+        "hub": false,
+        "toc": {
+          "source": "page",
+          "url": "https://github.com/dullhunk/cdyf/issues/1011",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": null,
+              "title": "PART II: Ugly Truths & Hidden Realities",
+              "page": null,
+              "minutes": null,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "PART III: Job Searches, Start to Finish",
+              "page": null,
+              "minutes": null,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "PART IV: Offers & Negotiation",
+              "page": null,
+              "minutes": null,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "PART V: Behavioural Interviews",
+              "page": null,
+              "minutes": null,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "PART VI: Principles of Coding Interviews",
+              "page": null,
+              "minutes": null,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "PART VII: Catalogue of Technical Topics",
+              "page": null,
+              "minutes": null,
+              "sections": [],
+              "url": null,
+              "group": null
+            }
+          ]
+        },
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ],
+        "note": "Book organised in parts (Ugly Truths, Job Searches, Offers & Negotiation, Behavioural, Coding Principles, Technical Topics); 43 chapters exceeds 40, so parts are given. Covers the whole job search, not only coding."
+      },
+      {
+        "id": "M3",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Martin Kleppmann",
+        "year": 2017,
+        "why": "Senior-level system design depth on distributed data systems, consistency and tradeoffs.",
+        "recommendedBy": [
+          "https://rockstardeveloperuniversity.com/best-coding-interview-books",
+          "https://blog.pragmaticengineer.com/my-reading-list",
+          "https://guptadeepak.com/books/designing-data-intensive-applications"
+        ],
+        "url": "https://oreilly.com/library/view/designing-data-intensive-applications/9781491903063",
+        "title": "Designing Data-Intensive Applications",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:36:40.114Z",
+        "fetchedTitle": "Designing Data-Intensive Applications",
+        "sig": "UHGI_IJfGeYoD3TRGXvmFbCz5GPwXPgSwaJzyjxy1Lw",
+        "minutes": 1545,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": null,
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ]
+      },
+      {
+        "id": "M4",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Alex Xu",
+        "year": 2020,
+        "why": "Interview-format system design walkthroughs (Vol. 1 foundations, Vol. 2 advanced tradeoffs).",
+        "recommendedBy": [
+          "https://rockstardeveloperuniversity.com/best-coding-interview-books"
+        ],
+        "url": "https://openlibrary.org/works/OL21947791W",
+        "title": "System Design Interview",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:36:40.114Z",
+        "fetchedTitle": "System Design Interview - an Insider's Guide",
+        "sig": "HXgWIKOJsnZOr0vbH1QjHsyK6UNkPMRhUw69Jzra_xY",
+        "minutes": 690,
+        "minutesBasis": "measured",
+        "uses": null,
+        "toc": {
+          "source": "page",
+          "url": "https://www.goodreads.com/book/show/54109255-system-design-interview-an-insider-s-guide",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": null,
+              "title": "Chapter 1: Scale From Zero To Millions Of Users",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 2: Back-of-the-envelope Estimation",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 3: A Framework For System Design Interviews",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 4: Design A Rate Limiter",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 5: Design Consistent Hashing",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 6: Design A Key-value Store",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 7: Design A Unique Id Generator In Distributed Systems",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 8: Design A URL Shortener",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 9: Design A Web Crawler",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 10: Design A Notification System",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 11: Design A News Feed System",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 12: Design A Chat System",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 13: Design A Search Autocomplete System",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 14: Design YouTube",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            },
+            {
+              "n": null,
+              "title": "Chapter 15: Design Google Drive",
+              "page": null,
+              "minutes": 46,
+              "sections": [],
+              "url": null,
+              "group": null
+            }
+          ]
+        },
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ],
+        "note": "Open Library has no table of contents, so these are Volume 1's chapters as listed on Goodreads. Chapters 8–15 are from memory, so check them. Volume 1 covers the fundamentals and the interview framework, then one design problem per chapter. Volume 2 isn't listed."
+      },
+      {
+        "id": "M5",
+        "origin": "research",
+        "type": "link",
+        "kind": "book",
+        "author": "Adnan Aziz, Tsung-Hsien Lee and Amit Prakash",
+        "year": 2017,
+        "why": "Hardest problem bank, sorted by difficulty, for deeper coding practice.",
+        "recommendedBy": [
+          "https://linkedin.com/posts/alexxubyte_systemdesign-coding-interviewtips-activity-7125868902663745538-mTZO"
+        ],
+        "url": "https://elementsofprogramminginterviews.com",
+        "title": "Elements of Programming Interviews",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:36:34.970Z",
+        "fetchedTitle": "Elements of Programming Interviews",
+        "sig": "WmZrXdPpLEIioogZPjD2CL1QGZqZ_ojs19weYoYAIj4",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 1290,
+        "hub": true,
+        "toc": {
+          "source": "catalogue",
+          "url": "https://openlibrary.org/books/OL26943598M",
+          "printPages": false,
+          "end": null,
+          "chapters": [
+            {
+              "n": null,
+              "title": "[pt.] 1. The interview.",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Getting ready",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Strategies for a great interview",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Conducting an interview",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "[pt.] II. Data structures and algorithms.",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Primitive types",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Arrays",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Strings",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Linked lists",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Stacks and queues",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Binary trees",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Heaps",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Searching",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Hash tables",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Sorting",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Binary search trees",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Recursion",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Dynamic programming",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Greedy algorithms and invariants",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Graphs",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Parallel computing",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "[pt.] III. Domain specific problems.",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Design problems",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Language questions",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Object-oriented design",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Common tools",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "[pt.] IV. The honors class.",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Honors class",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "[pt.] V. Notation and index.",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            },
+            {
+              "n": null,
+              "title": "Notation",
+              "page": null,
+              "minutes": null,
+              "sections": []
+            }
+          ]
+        },
+        "practice": {
+          "format": "problem-set",
+          "items": null,
+          "perItemMinutes": 10,
+          "minutes": null,
+          "answers": true
+        },
+        "catalogued": true,
+        "foundBy": [
+          "backbone"
+        ]
+      },
+      {
+        "id": "M6",
+        "origin": "research",
+        "type": "link",
+        "kind": "repo",
+        "author": "Donne Martin",
+        "year": null,
+        "why": "Free system design foundation with 8 worked design exercises, OO design questions, estimation tables and Anki decks.",
+        "recommendedBy": [
+          "https://prachub.com/resources/is-github-s-system-design-primer-enough-for-senior-interviews"
+        ],
+        "url": "https://github.com/donnemartin/system-design-primer",
+        "title": "GitHub - donnemartin/system-design-primer: Learn how to design large-scale systems. Prep for the system design interview. Includes Anki flashcards.",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:35:55.514Z",
+        "fetchedTitle": "GitHub - donnemartin/system-design-primer: Learn how to design large-scale systems. Prep for the system design interview. Includes Anki flashcards. · GitHub",
+        "sig": "bqfcuag81iZGJh9FKzbZkV_sxdfMzledOGv9l6-Wz9I",
+        "minutes": 270,
+        "minutesBasis": "estimated",
+        "uses": null,
+        "pageMinutes": 49,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "design-exercise",
+          "items": 8,
+          "perItemMinutes": null,
+          "minutes": 50,
+          "answers": true
+        },
+        "foundBy": [
+          "canonical",
+          "practice"
+        ]
+      },
+      {
+        "id": "M7",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": null,
+        "year": null,
+        "why": "Fast modern system design essentials from FAANG hiring managers.",
+        "recommendedBy": [],
+        "url": "https://hellointerview.com/learn/system-design/in-a-hurry/introduction",
+        "title": "System Design in a Hurry | Hello Interview System Design in a Hurry",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:35:54.789Z",
+        "fetchedTitle": "System Design in a Hurry | Hello Interview System Design in a Hurry",
+        "sig": "GKoJzNQGIla9xh11ZRtSyLBK6GMES1CXER8STxq-qOQ",
+        "minutes": 10,
+        "minutesBasis": "estimated",
+        "uses": null,
+        "pageMinutes": 9,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M8",
+        "origin": "research",
+        "type": "link",
+        "kind": "course",
+        "author": "Erik Demaine, Jason Ku, Justin Solomon",
+        "year": 2020,
+        "why": "Rigorous algorithms theory course to refresh fundamentals.",
+        "recommendedBy": [],
+        "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020",
+        "title": "Introduction to Algorithms | Electrical Engineering and Computer Science | MIT OpenCourseWare",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:35:54.731Z",
+        "fetchedTitle": "Introduction to Algorithms | Electrical Engineering and Computer Science | MIT OpenCourseWare",
+        "sig": "jUWYGN_vLR5AfZKPdNoxT3ugr0bme3rV5_fss6OeP_w",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 2,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M9",
+        "origin": "research",
+        "type": "link",
+        "kind": "essay",
+        "author": "Navdeep Singh",
+        "year": 2026,
+        "why": "Guide to structuring coding-interview practice with NeetCode.",
+        "recommendedBy": [],
+        "url": "https://neetcode.io/courses/lessons/how-to-use-neetcode-effectively",
+        "title": "How to Use Neetcode Effectively (Coding Interviews)",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:35:54.738Z",
+        "fetchedTitle": "How to Use Neetcode Effectively (Coding Interviews)",
+        "sig": "6gJUcfEOn-MgiwV4Inl7as3Jnke7cvNxLfuZVLFP8GU",
+        "minutes": 5,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 5,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "canonical"
+        ]
+      },
+      {
+        "id": "M10",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": null,
+        "year": null,
+        "why": "Curated 150 problem list with video walkthroughs for every problem.",
+        "recommendedBy": [],
+        "url": "https://neetcode.io/practice/practice/neetcode150",
+        "title": "NeetCode 150 - Coding Interview Questions",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:35:58.095Z",
+        "fetchedTitle": "NeetCode 150 - Coding Interview Questions",
+        "sig": "iDpmqHRKkrylhN9aFEcQa3wyoyC4jxFKwlfisElHeyE",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 1,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "problem-set",
+          "items": 150,
+          "perItemMinutes": 10,
+          "minutes": 1500,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Contains Duplicate",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/duplicate-integer?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Anagram",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/is-anagram?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Two Sum",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/two-integer-sum?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Group Anagrams",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/anagram-groups?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Top K Frequent Elements",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/top-k-elements-in-list?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Encode and Decode Strings",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/string-encode-and-decode?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Product of Array Except Self",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/products-of-array-discluding-self?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Sudoku",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/valid-sudoku?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Consecutive Sequence",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/longest-consecutive-sequence?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Palindrome",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/is-palindrome?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Two Sum II Input Array Is Sorted",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/two-integer-sum-ii?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "3Sum",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/three-integer-sum?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Container With Most Water",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/max-water-container?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Trapping Rain Water",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/trapping-rain-water?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Best Time to Buy And Sell Stock",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/buy-and-sell-crypto?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Substring Without Repeating Characters",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/longest-substring-without-duplicates?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Repeating Character Replacement",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/longest-repeating-substring-with-replacement?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Permutation In String",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/permutation-string?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Minimum Window Substring",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/minimum-window-with-characters?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sliding Window Maximum",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/sliding-window-maximum?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Parentheses",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/validate-parentheses?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Min Stack",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/minimum-stack?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Evaluate Reverse Polish Notation",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/evaluate-reverse-polish-notation?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Daily Temperatures",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/daily-temperatures?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Car Fleet",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/car-fleet?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Largest Rectangle In Histogram",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/largest-rectangle-in-histogram?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Search",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/binary-search?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Search a 2D Matrix",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/search-2d-matrix?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Koko Eating Bananas",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/eating-bananas?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find Minimum In Rotated Sorted Array",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/find-minimum-in-rotated-sorted-array?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Search In Rotated Sorted Array",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/find-target-in-rotated-sorted-array?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Time Based Key Value Store",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/time-based-key-value-store?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Median of Two Sorted Arrays",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/median-of-two-sorted-arrays?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Linked List",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/reverse-a-linked-list?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Two Sorted Lists",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/merge-two-sorted-linked-lists?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Linked List Cycle",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/linked-list-cycle-detection?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reorder List",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/reorder-linked-list?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Remove Nth Node From End of List",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/remove-node-from-end-of-linked-list?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Copy List With Random Pointer",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/copy-linked-list-with-random-pointer?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Add Two Numbers",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/add-two-numbers?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find The Duplicate Number",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/find-duplicate-integer?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "LRU Cache",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/lru-cache?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge K Sorted Lists",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/merge-k-sorted-linked-lists?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Nodes In K Group",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/reverse-nodes-in-k-group?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Invert Binary Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/invert-a-binary-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Depth of Binary Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/depth-of-binary-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Diameter of Binary Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/binary-tree-diameter?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Balanced Binary Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/balanced-binary-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Same Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/same-binary-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Subtree of Another Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/subtree-of-a-binary-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lowest Common Ancestor of a Binary Search Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/lowest-common-ancestor-in-binary-search-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Level Order Traversal",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/level-order-traversal-of-binary-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Right Side View",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/binary-tree-right-side-view?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Count Good Nodes In Binary Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/count-good-nodes-in-binary-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Validate Binary Search Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/valid-binary-search-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Kth Smallest Element In a Bst",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/kth-smallest-integer-in-bst?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Construct Binary Tree From Preorder And Inorder Traversal",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/binary-tree-from-preorder-and-inorder-traversal?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Maximum Path Sum",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/binary-tree-maximum-path-sum?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Serialize And Deserialize Binary Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/serialize-and-deserialize-binary-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Kth Largest Element In a Stream",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/kth-largest-integer-in-a-stream?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Last Stone Weight",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/last-stone-weight?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "K Closest Points to Origin",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/k-closest-points-to-origin?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Kth Largest Element In An Array",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/kth-largest-element-in-an-array?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Task Scheduler",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/task-scheduling?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design Twitter",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/design-twitter-feed?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find Median From Data Stream",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/find-median-in-a-data-stream?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Subsets",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/subsets?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Combination Sum",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/combination-target-sum?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Combination Sum II",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/combination-target-sum-ii?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Permutations",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/permutations?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Subsets II",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/subsets-ii?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Generate Parentheses",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/generate-parentheses?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Search",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/search-for-word?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Palindrome Partitioning",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/palindrome-partitioning?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Letter Combinations of a Phone Number",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/combinations-of-a-phone-number?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "N Queens",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/n-queens?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Implement Trie Prefix Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/implement-prefix-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design Add And Search Words Data Structure",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/design-word-search-data-structure?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Search II",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/search-for-word-ii?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Number of Islands",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/count-number-of-islands?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Max Area of Island",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/max-area-of-island?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Clone Graph",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/clone-graph?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Walls And Gates",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/islands-and-treasure?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Rotting Oranges",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/rotting-fruit?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Pacific Atlantic Water Flow",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/pacific-atlantic-water-flow?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Surrounded Regions",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/surrounded-regions?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Course Schedule",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/course-schedule?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Course Schedule II",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/course-schedule-ii?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Graph Valid Tree",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/valid-tree?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Number of Connected Components In An Undirected Graph",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/count-connected-components?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Redundant Connection",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/redundant-connection?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Ladder",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/word-ladder?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Network Delay Time",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/network-delay-time?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reconstruct Itinerary",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/reconstruct-flight-path?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Min Cost to Connect All Points",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/min-cost-to-connect-points?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Swim In Rising Water",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/swim-in-rising-water?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Alien Dictionary",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/foreign-dictionary?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Cheapest Flights Within K Stops",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/cheapest-flight-path?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Climbing Stairs",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/climbing-stairs?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Min Cost Climbing Stairs",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/min-cost-climbing-stairs?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "House Robber",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/house-robber?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "House Robber II",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/house-robber-ii?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Palindromic Substring",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/longest-palindromic-substring?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Palindromic Substrings",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/palindromic-substrings?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Decode Ways",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/decode-ways?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Coin Change",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/coin-change?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Product Subarray",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/maximum-product-subarray?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Break",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/word-break?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Increasing Subsequence",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/longest-increasing-subsequence?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Partition Equal Subset Sum",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/partition-equal-subset-sum?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Unique Paths",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/count-paths?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Common Subsequence",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/longest-common-subsequence?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Best Time to Buy And Sell Stock With Cooldown",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/buy-and-sell-crypto-with-cooldown?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Coin Change II",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/coin-change-ii?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Target Sum",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/target-sum?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Interleaving String",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/interleaving-string?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Increasing Path In a Matrix",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/longest-increasing-path-in-matrix?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Distinct Subsequences",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/count-subsequences?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Edit Distance",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/edit-distance?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Burst Balloons",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/burst-balloons?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Regular Expression Matching",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/regular-expression-matching?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Subarray",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/maximum-subarray?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Jump Game",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/jump-game?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Jump Game II",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/jump-game-ii?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Gas Station",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/gas-station?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Hand of Straights",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/hand-of-straights?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Triplets to Form Target Triplet",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/merge-triplets-to-form-target?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Partition Labels",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/partition-labels?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Parenthesis String",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/valid-parenthesis-string?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Insert Interval",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/insert-new-interval?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Intervals",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/merge-intervals?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Non Overlapping Intervals",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/non-overlapping-intervals?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Meeting Rooms",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/meeting-schedule?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Meeting Rooms II",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/meeting-schedule-ii?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Minimum Interval to Include Each Query",
+                "number": null,
+                "group": null,
+                "difficulty": "hard",
+                "url": "https://neetcode.io/problems/minimum-interval-including-query?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Rotate Image",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/rotate-matrix?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Spiral Matrix",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/spiral-matrix?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Set Matrix Zeroes",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/set-zeroes-in-matrix?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Happy Number",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/non-cyclical-number?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Plus One",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/plus-one?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Pow(x, n)",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/pow-x-n?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Multiply Strings",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/multiply-strings?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Detect Squares",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/count-squares?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Single Number",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/single-number?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Number of 1 Bits",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/number-of-one-bits?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Counting Bits",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/counting-bits?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Bits",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/reverse-bits?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Missing Number",
+                "number": null,
+                "group": null,
+                "difficulty": "easy",
+                "url": "https://neetcode.io/problems/missing-number?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sum of Two Integers",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/sum-of-two-integers?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Integer",
+                "number": null,
+                "group": null,
+                "difficulty": "medium",
+                "url": "https://neetcode.io/problems/reverse-integer?list=neetcode150",
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "file",
+            "url": "https://raw.githubusercontent.com/krmanik/Anki-NeetCode/main/neetcode-150-list.json"
+          },
+          "totalItems": 150
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "NeetCode 150 is 150 LeetCode problems in 18 topic categories, each with a video walkthrough. The page draws the list by script, so the units are the standard topic groups, in the usual order. The list URL is a third-party copy of the list."
+      },
+      {
+        "id": "M11",
+        "origin": "research",
+        "type": "link",
+        "kind": "essay",
+        "author": "interviewDB Editorial Team",
+        "year": 2026,
+        "why": "Round-by-round senior prep matrix including low-level design and AI-era system design.",
+        "recommendedBy": [],
+        "url": "https://interviewdb.com/blog/senior-software-interviews-beyond-leetcode-2026",
+        "title": "Senior Software Engineer Interviews in 2026: How To Prepare…",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:35:54.147Z",
+        "fetchedTitle": "Senior Software Engineer Interviews in 2026: How To Prepare…",
+        "sig": "8kmCc5zFPmY5Wge0z5mJ8j_5EZmpmIIkPzOew8J3jUU",
+        "minutes": 8,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 8,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "current"
+        ]
+      },
+      {
+        "id": "M12",
+        "origin": "research",
+        "type": "link",
+        "kind": "essay",
+        "author": null,
+        "year": 2026,
+        "why": "Senior job search strategy and building a behavioural story bank with AI.",
+        "recommendedBy": [],
+        "url": "https://cupofcode.blog/sde-job-search-2026",
+        "title": "Senior SDE Job Search in 2026: Strategy, Luck, and AI",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:35:53.298Z",
+        "fetchedTitle": "Senior SDE Job Search in 2026: Strategy, Luck, and AI | Cup of Code",
+        "sig": "zUaSquLCm9Jv0NG4J-Zla1w8WSRnu5nSJ9RAaim1vMo",
+        "minutes": 16,
+        "minutesBasis": "measured",
+        "uses": null,
+        "pageMinutes": 16,
+        "hub": true,
+        "toc": null,
+        "foundBy": [
+          "current"
+        ]
+      },
+      {
+        "id": "M13",
+        "origin": "research",
+        "type": "link",
+        "kind": "tool",
+        "author": null,
+        "year": 2026,
+        "why": "Full NeetCode 150 list with topic groups, LeetCode links and time estimates for planning.",
+        "recommendedBy": [],
+        "url": "https://crackr.dev/neetcode150",
+        "title": "NeetCode 150: All 150 LeetCode Problems + Study Planner",
+        "backbone": false,
+        "verifiedAt": "2026-11-06T00:35:58.592Z",
+        "fetchedTitle": "NeetCode 150: All 150 Problems with Study Planner (2026)",
+        "sig": "ObJOq8p-dLqRXyDoPUGeFVmdH5lzPcipBfodpEJLBio",
+        "minutes": null,
+        "minutesBasis": null,
+        "uses": null,
+        "pageMinutes": 12,
+        "hub": true,
+        "toc": null,
+        "practice": {
+          "format": "problem-set",
+          "items": 150,
+          "perItemMinutes": 10,
+          "minutes": 1500,
+          "answers": true,
+          "list": {
+            "items": [
+              {
+                "title": "Contains Duplicate",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/contains-duplicate/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Anagram",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/valid-anagram/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Two Sum",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/two-sum/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Group Anagrams",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/group-anagrams/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Top K Frequent Elements",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/top-k-frequent-elements/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Product of Array Except Self",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/product-of-array-except-self/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Sudoku",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/valid-sudoku/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Encode and Decode Strings",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/encode-and-decode-strings/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Consecutive Sequence",
+                "number": null,
+                "group": "Arrays & Hashing",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/longest-consecutive-sequence/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Palindrome",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/valid-palindrome/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Two Sum II - Input Array Is Sorted",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "3Sum",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/3sum/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Container With Most Water",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/container-with-most-water/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Trapping Rain Water",
+                "number": null,
+                "group": "Two Pointers",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/trapping-rain-water/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Parentheses",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/valid-parentheses/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Min Stack",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/min-stack/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Evaluate Reverse Polish Notation",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/evaluate-reverse-polish-notation/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Generate Parentheses",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/generate-parentheses/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Daily Temperatures",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/daily-temperatures/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Car Fleet",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/car-fleet/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Largest Rectangle in Histogram",
+                "number": null,
+                "group": "Stack",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/largest-rectangle-in-histogram/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Best Time to Buy and Sell Stock",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Substring Without Repeating Characters",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/longest-substring-without-repeating-characters/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Repeating Character Replacement",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/longest-repeating-character-replacement/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Permutation in String",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/permutation-in-string/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Minimum Window Substring",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/minimum-window-substring/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sliding Window Maximum",
+                "number": null,
+                "group": "Sliding Window",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/sliding-window-maximum/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Search",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/binary-search/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Search a 2D Matrix",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/search-a-2d-matrix/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Koko Eating Bananas",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/koko-eating-bananas/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find Minimum in Rotated Sorted Array",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/find-minimum-in-rotated-sorted-array/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Search in Rotated Sorted Array",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/search-in-rotated-sorted-array/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Time Based Key-Value Store",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/time-based-key-value-store/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Median of Two Sorted Arrays",
+                "number": null,
+                "group": "Binary Search",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/median-of-two-sorted-arrays/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Linked List",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/reverse-linked-list/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Two Sorted Lists",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/merge-two-sorted-lists/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Linked List Cycle",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/linked-list-cycle/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reorder List",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/reorder-list/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Remove Nth Node From End of List",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/remove-nth-node-from-end-of-list/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Copy List with Random Pointer",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/copy-list-with-random-pointer/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Add Two Numbers",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/add-two-numbers/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find the Duplicate Number",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/find-the-duplicate-number/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "LRU Cache",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/lru-cache/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge k Sorted Lists",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/merge-k-sorted-lists/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Nodes in k-Group",
+                "number": null,
+                "group": "Linked List",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/reverse-nodes-in-k-group/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Invert Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/invert-binary-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Depth of Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/maximum-depth-of-binary-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Diameter of Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/diameter-of-binary-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Balanced Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/balanced-binary-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Same Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/same-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Subtree of Another Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/subtree-of-another-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Lowest Common Ancestor of a Binary Search Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Level Order Traversal",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/binary-tree-level-order-traversal/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Right Side View",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/binary-tree-right-side-view/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Count Good Nodes in Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/count-good-nodes-in-binary-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Validate Binary Search Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/validate-binary-search-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Kth Smallest Element in a BST",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/kth-smallest-element-in-a-bst/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Construct Binary Tree from Preorder and Inorder Traversal",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/construct-binary-tree-from-preorder-and-inorder-traversal/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Binary Tree Maximum Path Sum",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/binary-tree-maximum-path-sum/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Serialize and Deserialize Binary Tree",
+                "number": null,
+                "group": "Trees",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/serialize-and-deserialize-binary-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Implement Trie (Prefix Tree)",
+                "number": null,
+                "group": "Tries",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/implement-trie-prefix-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design Add and Search Words Data Structure",
+                "number": null,
+                "group": "Tries",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/add-and-search-word-data-structure-design/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Search II",
+                "number": null,
+                "group": "Tries",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/word-search-ii/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Kth Largest Element in a Stream",
+                "number": null,
+                "group": "Heap",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/kth-largest-element-in-a-stream/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Last Stone Weight",
+                "number": null,
+                "group": "Heap",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/last-stone-weight/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "K Closest Points to Origin",
+                "number": null,
+                "group": "Heap",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/k-closest-points-to-origin/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Kth Largest Element in an Array",
+                "number": null,
+                "group": "Heap",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/kth-largest-element-in-an-array/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Task Scheduler",
+                "number": null,
+                "group": "Heap",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/task-scheduler/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Design Twitter",
+                "number": null,
+                "group": "Heap",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/design-twitter/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Find Median from Data Stream",
+                "number": null,
+                "group": "Heap",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/find-median-from-data-stream/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Subsets",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/subsets/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Combination Sum",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/combination-sum/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Combination Sum II",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/combination-sum-ii/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Permutations",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/permutations/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Subsets II",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/subsets-ii/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Search",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/word-search/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Palindrome Partitioning",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/palindrome-partitioning/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Letter Combinations of a Phone Number",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/letter-combinations-of-a-phone-number/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "N-Queens",
+                "number": null,
+                "group": "Backtracking",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/n-queens/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Number of Islands",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/number-of-islands/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Max Area of Island",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/max-area-of-island/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Clone Graph",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/clone-graph/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Walls and Gates",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/walls-and-gates/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Rotting Oranges",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/rotting-oranges/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Pacific Atlantic Water Flow",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/pacific-atlantic-water-flow/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Surrounded Regions",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/surrounded-regions/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Course Schedule",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/course-schedule/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Course Schedule II",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/course-schedule-ii/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Graph Valid Tree",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/graph-valid-tree/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Number of Connected Components in an Undirected Graph",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/number-of-connected-components-in-an-undirected-graph/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Redundant Connection",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/redundant-connection/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Ladder",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/word-ladder/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reconstruct Itinerary",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/reconstruct-itinerary/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Min Cost to Connect All Points",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/min-cost-to-connect-all-points/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Network Delay Time",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/network-delay-time/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Swim in Rising Water",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/swim-in-rising-water/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Alien Dictionary",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/alien-dictionary/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Cheapest Flights Within K Stops",
+                "number": null,
+                "group": "Graphs",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/cheapest-flights-within-k-stops/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Climbing Stairs",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/climbing-stairs/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Min Cost Climbing Stairs",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/min-cost-climbing-stairs/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "House Robber",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/house-robber/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "House Robber II",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/house-robber-ii/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Palindromic Substring",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/longest-palindromic-substring/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Palindromic Substrings",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/palindromic-substrings/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Decode Ways",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/decode-ways/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Coin Change",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/coin-change/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Product Subarray",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/maximum-product-subarray/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Word Break",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/word-break/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Increasing Subsequence",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/longest-increasing-subsequence/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Partition Equal Subset Sum",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/partition-equal-subset-sum/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Unique Paths",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/unique-paths/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Common Subsequence",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/longest-common-subsequence/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Best Time to Buy and Sell Stock with Cooldown",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock-with-cooldown/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Coin Change II",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/coin-change-ii/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Target Sum",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/target-sum/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Interleaving String",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/interleaving-string/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Longest Increasing Path in a Matrix",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/longest-increasing-path-in-a-matrix/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Distinct Subsequences",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/distinct-subsequences/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Edit Distance",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/edit-distance/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Burst Balloons",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/burst-balloons/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Regular Expression Matching",
+                "number": null,
+                "group": "Dynamic Programming",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/regular-expression-matching/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Insert Interval",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/insert-interval/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Intervals",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/merge-intervals/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Non-overlapping Intervals",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/non-overlapping-intervals/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Meeting Rooms",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/meeting-rooms/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Meeting Rooms II",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/meeting-rooms-ii/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Minimum Interval to Include Each Query",
+                "number": null,
+                "group": "Intervals",
+                "difficulty": "hard",
+                "url": "https://leetcode.com/problems/minimum-interval-to-include-each-query/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Maximum Subarray",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/maximum-subarray/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Jump Game",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/jump-game/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Jump Game II",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/jump-game-ii/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Gas Station",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/gas-station/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Hand of Straights",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/hand-of-straights/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Merge Triplets to Form Target Triplet",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/merge-triplets-to-form-target-triplet/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Partition Labels",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/partition-labels/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Valid Parenthesis String",
+                "number": null,
+                "group": "Greedy",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/valid-parenthesis-string/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Rotate Image",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/rotate-image/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Spiral Matrix",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/spiral-matrix/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Set Matrix Zeroes",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/set-matrix-zeroes/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Happy Number",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/happy-number/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Plus One",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/plus-one/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Pow(x, n)",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/powx-n/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Multiply Strings",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/multiply-strings/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Detect Squares",
+                "number": null,
+                "group": "Math & Geometry",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/detect-squares/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Single Number",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/single-number/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Number of 1 Bits",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/number-of-1-bits/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Counting Bits",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/counting-bits/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Bits",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/reverse-bits/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Missing Number",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "easy",
+                "url": "https://leetcode.com/problems/missing-number/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Sum of Two Integers",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/sum-of-two-integers/",
+                "solutionUrl": null,
+                "minutes": null
+              },
+              {
+                "title": "Reverse Integer",
+                "number": null,
+                "group": "Bit Manipulation",
+                "difficulty": "medium",
+                "url": "https://leetcode.com/problems/reverse-integer/",
+                "solutionUrl": null,
+                "minutes": null
+              }
+            ],
+            "source": "page",
+            "url": "https://crackr.dev/neetcode150"
+          },
+          "totalItems": 150
+        },
+        "foundBy": [
+          "practice"
+        ],
+        "note": "One page listing the NeetCode 150 LeetCode problems under 16 topic headings. Because there are over 150 problems, each unit is a topic group. It works best as a problem checklist ordered by topic."
+      }
+    ]
+  },
+  "baseline": {
+    "inputTokens": 7036,
+    "outputTokens": 2570,
+    "ms": 25430
+  }
+}

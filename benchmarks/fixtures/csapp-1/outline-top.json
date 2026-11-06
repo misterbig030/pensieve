@@ -1,0 +1,192 @@
+{
+  "id": "csapp-1/top",
+  "topic": "csapp",
+  "sourceRun": "draft-2026-11-05T20-47-35-596Z-csapp-1",
+  "commit": "361aeb9",
+  "label": "Top level · 4 weeks",
+  "group": "top",
+  "leaf": false,
+  "request": {
+    "topic": "深入理解计算机系统",
+    "granularity": "day",
+    "weeks": 4,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6
+  },
+  "materials": [
+    {
+      "id": "M1",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Randal E. Bryant, David R. O'Hallaron",
+      "year": 2002,
+      "why": "The backbone textbook (深入理解计算机系统, 3rd ed.): data representation, x86-64, memory hierarchy, linking, ECF, virtual memory.",
+      "recommendedBy": [
+        "https://hackway.org/docs/cs/sophomore/system/cs15213",
+        "https://computingforgeeks.com/best-books-to-learn-operating-systems",
+        "https://chend0316.github.io/cs/computer-system"
+      ],
+      "url": "https://openlibrary.org/works/OL12343250W",
+      "title": "Computer Systems: A Programmer's Perspective",
+      "backbone": true,
+      "verifiedAt": "2026-11-05T20:48:08.214Z",
+      "fetchedTitle": "Computer systems",
+      "sig": "0sdKpRc-ZuOybm8GKD2JZdgBKXN288oxZhJvR-rrdkc",
+      "minutes": 800,
+      "minutesBasis": "measured",
+      "uses": "core chapters read in order",
+      "toc": null,
+      "catalogued": true,
+      "foundBy": [
+        "backbone",
+        "canonical"
+      ]
+    },
+    {
+      "id": "M2",
+      "origin": "research",
+      "type": "link",
+      "kind": "course",
+      "author": null,
+      "year": null,
+      "why": "Self-study lab handouts (Data, Bomb, Attack, Cache, Malloc, Shell, Proxy) that carry the hands-on practice for the book.",
+      "recommendedBy": [
+        "https://hackway.org/docs/cs/sophomore/system/cs15213",
+        "https://chend0316.github.io/cs/computer-system"
+      ],
+      "url": "https://csapp.cs.cmu.edu/3e/labs.html",
+      "title": "CS:APP3e, Bryant and O'Hallaron",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:47:43.808Z",
+      "fetchedTitle": "CS:APP3e, Bryant and O'Hallaron",
+      "sig": "M6C8jFGer2I8CUwqfxQLt5tcV1cURvAyH6bh1ZbI61I",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "self-study lab handouts",
+      "pageMinutes": 5,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": null,
+        "perItemMinutes": 5,
+        "minutes": null,
+        "answers": true
+      },
+      "foundBy": [
+        "canonical",
+        "practice"
+      ],
+      "note": "One page listing 11 CS:APP labs, each with README, PDF writeup and self-study handout; best for hands-on practice alongside the book."
+    },
+    {
+      "id": "M4",
+      "origin": "research",
+      "type": "link",
+      "kind": "note",
+      "author": "Sulley",
+      "year": null,
+      "why": "Worked solutions for the 15-213 labs, for checking your own work.",
+      "recommendedBy": [],
+      "url": "https://sulley.cc/2024/09/01/20/06",
+      "title": "Solutions to CMU 15213 Labs",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:48:07.807Z",
+      "fetchedTitle": "Solutions to CMU 15213 Labs",
+      "sig": "dzu9TMbeshjscTtVfIsp_Sl6DrMe7EUepLq8NUx73JI",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "check your own lab work",
+      "pageMinutes": 116,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": 4,
+        "perItemMinutes": 5,
+        "minutes": 20,
+        "answers": true,
+        "list": {
+          "items": [
+            {
+              "title": "Lab 1: Data Lab",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://sulley.cc/2024/09/01/20/06#lab-1-data-lab",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Lab 2: Bomb Lab",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://sulley.cc/2024/09/01/20/06#lab-2-bomb-lab",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Lab 3: Attack Lab",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://sulley.cc/2024/09/01/20/06#lab-3-attack-lab",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Lab 4: Cache Lab",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://sulley.cc/2024/09/01/20/06#lab-4-cache-lab",
+              "solutionUrl": null,
+              "minutes": null
+            }
+          ],
+          "source": "page",
+          "url": "https://sulley.cc/2024/09/01/20/06"
+        },
+        "totalItems": 8
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "One long post with a solution write-up per CSAPP lab (8 labs); best for checking your own lab work."
+    }
+  ],
+  "split": {
+    "readingShare": 56,
+    "practice": "CS:APP labs",
+    "formats": [
+      {
+        "format": "lab",
+        "share": 3,
+        "focus": "Data, Bomb, Attack, Cache labs",
+        "reason": "CS:APP is learned by doing its labs: bit tricks, reading assembly, exploiting the stack and tuning for the cache."
+      },
+      {
+        "format": "recall",
+        "share": 97,
+        "focus": "representation, assembly, memory hierarchy",
+        "reason": "Short recall questions from the chapters you read lock in the facts the labs rely on."
+      }
+    ],
+    "reason": "About 13 of the 24 hours go to reading CS:APP in order, since you cannot read all 45 hours of it. The other 11 hours go mostly to the book's own labs, with short recall drills to fix the core ideas."
+  },
+  "level": "week",
+  "spans": [
+    5,
+    5,
+    5,
+    5
+  ],
+  "timeLimitMs": 214769,
+  "baseline": {
+    "inputTokens": 3777,
+    "outputTokens": 1823,
+    "ms": 17466
+  }
+}

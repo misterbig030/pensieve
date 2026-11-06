@@ -1,0 +1,679 @@
+{
+  "id": "finance-1/top",
+  "topic": "finance",
+  "sourceRun": "draft-2026-11-05T20-49-26-738Z-finance-1",
+  "commit": "361aeb9",
+  "label": "Top level · 4 weeks",
+  "group": "top",
+  "leaf": false,
+  "request": {
+    "topic": "Personal finance basics",
+    "granularity": "day",
+    "weeks": 4,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6
+  },
+  "materials": [
+    {
+      "id": "M1",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Ramit Sethi",
+      "year": 2009,
+      "why": "Backbone: a six-week program on banking, debt, automating money and negotiating bills.",
+      "recommendedBy": [
+        "https://cnbc.com/select/best-personal-finance-books",
+        "https://moneywithkatie.com/the-best-personal-finance-books-for-learning-the-basics-and-beyond"
+      ],
+      "url": "https://openlibrary.org/works/OL8982032W",
+      "title": "I Will Teach You to Be Rich",
+      "backbone": true,
+      "verifiedAt": "2026-11-05T20:50:11.278Z",
+      "fetchedTitle": "I will teach you to be rich",
+      "sig": "MmSL3VKDbuTHWUHrfaycevOrrIF4xZoJoZUbWXPq1TQ",
+      "minutes": 680,
+      "minutesBasis": "measured",
+      "uses": "Backbone: credit, banking, automation, conscious spending, investing",
+      "toc": {
+        "source": "catalogue",
+        "url": "https://openlibrary.org/books/OL23002222M",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Introduction : would you rather be sexy or rich?",
+            "page": null,
+            "minutes": 68,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Optimize your credit cards",
+            "page": null,
+            "minutes": 68,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Beat the banks",
+            "page": null,
+            "minutes": 68,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Get ready to invest",
+            "page": null,
+            "minutes": 68,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Conscious spending",
+            "page": null,
+            "minutes": 68,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Save while sleeping",
+            "page": null,
+            "minutes": 68,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "The myth of financial expertise",
+            "page": null,
+            "minutes": 68,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Investing isn't only for rich people",
+            "page": null,
+            "minutes": 68,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "Easy maintenance",
+            "page": null,
+            "minutes": 68,
+            "sections": []
+          },
+          {
+            "n": null,
+            "title": "A rich life.",
+            "page": null,
+            "minutes": 68,
+            "sections": []
+          }
+        ]
+      },
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ]
+    },
+    {
+      "id": "M3",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Morgan Housel",
+      "year": 2020,
+      "why": "Behaviour around money rather than mechanics; supplementary reading.",
+      "recommendedBy": [
+        "https://cnbc.com/select/best-personal-finance-books",
+        "https://lendedu.com/blog/personal-finance-books"
+      ],
+      "url": "https://openlibrary.org/works/OL21640039W",
+      "title": "The Psychology of Money",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:50:11.279Z",
+      "fetchedTitle": "The Psychology of Money",
+      "sig": "s-OhelgBcgGI9v-rjJHkT9cunfLpbY7YUXmkuiVZj68",
+      "minutes": 100,
+      "minutesBasis": "measured",
+      "uses": "Selected chapters on money behaviour and saving",
+      "toc": {
+        "source": "catalogue",
+        "url": "https://openlibrary.org/books/OL51726888M",
+        "printPages": true,
+        "end": 221,
+        "chapters": [
+          {
+            "n": 1,
+            "title": "No One's Crazy",
+            "page": 9,
+            "minutes": 48,
+            "sections": []
+          },
+          {
+            "n": 2,
+            "title": "Luck & Risk",
+            "page": 23,
+            "minutes": 41,
+            "sections": []
+          },
+          {
+            "n": 3,
+            "title": "Never Enough",
+            "page": 35,
+            "minutes": 34,
+            "sections": []
+          },
+          {
+            "n": 4,
+            "title": "Confounding Compounding",
+            "page": 45,
+            "minutes": 34,
+            "sections": []
+          },
+          {
+            "n": 5,
+            "title": "Getting Wealthy vs. Staying Wealthy",
+            "page": 55,
+            "minutes": 48,
+            "sections": []
+          },
+          {
+            "n": 6,
+            "title": "Tails, You Win",
+            "page": 69,
+            "minutes": 41,
+            "sections": []
+          },
+          {
+            "n": 7,
+            "title": "Freedom",
+            "page": 81,
+            "minutes": 34,
+            "sections": []
+          },
+          {
+            "n": 8,
+            "title": "Man in the Car Paradox",
+            "page": 91,
+            "minutes": 14,
+            "sections": []
+          },
+          {
+            "n": 9,
+            "title": "Wealth is What You Don't See",
+            "page": 95,
+            "minutes": 20,
+            "sections": []
+          },
+          {
+            "n": 10,
+            "title": "Save Money",
+            "page": 101,
+            "minutes": 34,
+            "sections": []
+          },
+          {
+            "n": 11,
+            "title": "Reasonable > Rational",
+            "page": 111,
+            "minutes": 34,
+            "sections": []
+          },
+          {
+            "n": 12,
+            "title": "Surprise!",
+            "page": 121,
+            "minutes": 48,
+            "sections": []
+          },
+          {
+            "n": 13,
+            "title": "Room for Error",
+            "page": 135,
+            "minutes": 41,
+            "sections": []
+          },
+          {
+            "n": 14,
+            "title": "You'll Change",
+            "page": 147,
+            "minutes": 27,
+            "sections": []
+          },
+          {
+            "n": 15,
+            "title": "Nothing's Free",
+            "page": 155,
+            "minutes": 34,
+            "sections": []
+          },
+          {
+            "n": 16,
+            "title": "You & Me",
+            "page": 165,
+            "minutes": 34,
+            "sections": []
+          },
+          {
+            "n": 17,
+            "title": "The Seduction of Pessimism",
+            "page": 175,
+            "minutes": 48,
+            "sections": []
+          },
+          {
+            "n": 18,
+            "title": "When You'll Believe Anything",
+            "page": 189,
+            "minutes": 48,
+            "sections": []
+          },
+          {
+            "n": 19,
+            "title": "All Together Now",
+            "page": 203,
+            "minutes": 27,
+            "sections": []
+          },
+          {
+            "n": 20,
+            "title": "Confessions",
+            "page": 211,
+            "minutes": 34,
+            "sections": []
+          }
+        ]
+      },
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ]
+    },
+    {
+      "id": "M5",
+      "origin": "research",
+      "type": "link",
+      "kind": "docs",
+      "author": "U.S. SEC",
+      "year": 2026,
+      "why": "Official guide to saving vs investing, compound growth, risk, diversification, retirement accounts, with calculators.",
+      "recommendedBy": [],
+      "url": "https://investor.gov/introduction-investing",
+      "title": "Introduction to Investing | Investor.gov",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:49:31.020Z",
+      "fetchedTitle": "Introduction to Investing | Investor.gov",
+      "sig": "R6PfWIFHOSzeTaMeHe8068lDamz1QTnTMTp4EFTVmI0",
+      "minutes": 60,
+      "minutesBasis": "estimated",
+      "uses": "Official primer on fees, diversification, risk",
+      "pageMinutes": 8,
+      "hub": true,
+      "toc": {
+        "source": "page",
+        "url": "https://investor.gov/introduction-investing",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Five Questions to Ask Before You Invest",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/getting-started/five-questions-ask-you-invest",
+            "group": "Getting Started"
+          },
+          {
+            "n": null,
+            "title": "Understanding Fees",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/getting-started/understanding-fees",
+            "group": "Getting Started"
+          },
+          {
+            "n": null,
+            "title": "Asset Allocation and Diversification",
+            "page": null,
+            "minutes": 3,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/getting-started/asset-allocation",
+            "group": "Getting Started"
+          },
+          {
+            "n": null,
+            "title": "Investing on Your Own",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/getting-started/investing-your-own",
+            "group": "Getting Started"
+          },
+          {
+            "n": null,
+            "title": "Working with an Investment Professional",
+            "page": null,
+            "minutes": 3,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/getting-started/working-investment-professional",
+            "group": "Getting Started"
+          },
+          {
+            "n": null,
+            "title": "Researching Investments",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/getting-started/researching-investments",
+            "group": "Getting Started"
+          },
+          {
+            "n": null,
+            "title": "Save and Invest",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/investing-basics/save-and-invest",
+            "group": "Investing Basics"
+          },
+          {
+            "n": null,
+            "title": "Invest For Your Goals",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/investing-basics/invest-your-goals",
+            "group": "Investing Basics"
+          },
+          {
+            "n": null,
+            "title": "How Stock Markets Work",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/investing-basics/how-stock-markets-work",
+            "group": "Investing Basics"
+          },
+          {
+            "n": null,
+            "title": "Investment Accounts",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/investing-basics/investment-accounts",
+            "group": "Investing Basics"
+          },
+          {
+            "n": null,
+            "title": "What is Risk?",
+            "page": null,
+            "minutes": 3,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/investing-basics/what-risk",
+            "group": "Investing Basics"
+          },
+          {
+            "n": null,
+            "title": "The Role of the SEC",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/investing-basics/role-sec",
+            "group": "Investing Basics"
+          },
+          {
+            "n": null,
+            "title": "Investment Products",
+            "page": null,
+            "minutes": null,
+            "sections": [],
+            "url": "https://www.investor.gov/introduction-investing/investing-basics/investment-products",
+            "group": "Investing Basics"
+          }
+        ]
+      },
+      "foundBy": [
+        "canonical"
+      ],
+      "note": "Hub page with sub-pages in two groups, Getting started and Investing basics; best for a short official primer on investing, fees, diversification and risk."
+    },
+    {
+      "id": "M6",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": "Fidelity",
+      "year": 2026,
+      "why": "11-question quiz with explanations covering retirement savings, emergency funds, compounding and taxes.",
+      "recommendedBy": [],
+      "url": "https://fidelity.com/learning-center/personal-finance/financial-literacy",
+      "title": "Financial literacy quiz | Fidelity",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:49:36.280Z",
+      "fetchedTitle": "Financial literacy quiz | Fidelity",
+      "sig": "HR8SCCGslAy-_HgDtjhoPGfgKjyfzWRExUMOeI-S3eo",
+      "minutes": 15,
+      "minutesBasis": "estimated",
+      "uses": "Self-check quiz",
+      "pageMinutes": 5,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "recall",
+        "items": 11,
+        "perItemMinutes": 3,
+        "minutes": 33,
+        "answers": true,
+        "totalItems": 11
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "A single-page 11-question quiz with an expandable answer under each question. It works best as a quick self-check on retirement savings, emergency funds, investing and taxes."
+    },
+    {
+      "id": "M7",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": "Stanford Initiative for Financial Decision-Making",
+      "year": null,
+      "why": "Three standard questions on compound interest, inflation and diversification; good baseline check.",
+      "recommendedBy": [],
+      "url": "https://ifdm.stanford.edu/the-big-three/quiz",
+      "title": "Take the Big Three Quiz",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:49:35.668Z",
+      "fetchedTitle": "Take the Big Three Quiz | Initiative for Financial Decision-Making",
+      "sig": "5l4SQP1XJGiCMPjoRhYCX0LHWAmfw_mmQOtzXXKQeTI",
+      "minutes": 5,
+      "minutesBasis": "estimated",
+      "uses": "Baseline quiz on compounding, inflation, diversification",
+      "pageMinutes": 3,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "recall",
+        "items": 3,
+        "perItemMinutes": 3,
+        "minutes": 9,
+        "answers": true,
+        "totalItems": 3
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "Single-page quiz with three questions (compound interest, inflation, diversification) and answers; a quick baseline check, not divisible into separate parts."
+    },
+    {
+      "id": "M8",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": "Banzai",
+      "year": null,
+      "why": "Free interactive games and worksheets on budgeting, debt and credit.",
+      "recommendedBy": [],
+      "url": "https://banzai.org",
+      "title": "FREE financial literacy education and life skills training | Banzai",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:49:35.860Z",
+      "fetchedTitle": "FREE financial literacy education and life skills training | Banzai",
+      "sig": "mcxQaUceYlznHgapM7tWCSZqyhZ3386V5jbICtXMor0",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Interactive budgeting and credit practice",
+      "pageMinutes": 4,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": 6,
+        "perItemMinutes": 5,
+        "minutes": 30,
+        "answers": false,
+        "list": {
+          "items": [
+            {
+              "title": "Elementary Personal Finance",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://banzai.org/courses/finlit/elementary",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Middle School Personal Finance",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://banzai.org/courses/finlit/middle-school",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "High School Personal Finance",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://banzai.org/courses/finlit/high-school",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Digital Citizenship",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://banzai.org/courses/digital-citizenship",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "College and Careers",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://banzai.org/courses/college-and-careers",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Entrepreneurship",
+              "number": null,
+              "group": null,
+              "difficulty": null,
+              "url": "https://banzai.org/courses/entrepreneurship",
+              "solutionUrl": null,
+              "minutes": null
+            }
+          ],
+          "source": "page",
+          "url": "https://banzai.org"
+        },
+        "totalItems": 6
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "Banzai offers six gamified courses by grade level; the course pages are the smallest fetchable parts, and individual games need sign-up."
+    },
+    {
+      "id": "M9",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": "Stanford Initiative for Financial Decision-Making",
+      "year": null,
+      "why": "Calculators for interest, debt, savings and retirement to check your own arithmetic.",
+      "recommendedBy": [
+        "https://ifdm.stanford.edu/the-big-three/quiz"
+      ],
+      "url": "https://ifdm.stanford.edu/resourcehub/calculators",
+      "title": "Calculators",
+      "backbone": false,
+      "verifiedAt": "2026-11-05T20:50:05.507Z",
+      "fetchedTitle": "Calculators | Initiative for Financial Decision-Making",
+      "sig": "4uCIKi5NcqjkYkcI50CnrIfLsvHCyEl1L5itLDno5oo",
+      "minutes": 20,
+      "minutesBasis": "estimated",
+      "uses": "Calculators for project arithmetic",
+      "pageMinutes": 2,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "practice"
+      ]
+    }
+  ],
+  "split": {
+    "readingShare": 61,
+    "practice": "building your money system",
+    "formats": [
+      {
+        "format": "project",
+        "share": 60,
+        "focus": "Your own budget, accounts, automation, investing plan",
+        "reason": "Personal finance is learned by doing it, so each week of reading becomes one real step in setting up your own money system."
+      },
+      {
+        "format": "recall",
+        "share": 18,
+        "focus": "Compounding, inflation, debt, accounts, taxes",
+        "reason": "The Fidelity and Stanford quizzes, plus questions written from the reading, check that the core concepts stuck."
+      },
+      {
+        "format": "design-exercise",
+        "share": 17,
+        "focus": "Scenario budget and debt-payoff plans",
+        "reason": "Two timed scenarios, such as planning for a new graduate with card debt, test whether you can apply the rules to someone else's situation."
+      },
+      {
+        "format": "lab",
+        "share": 5,
+        "focus": "Budgeting and credit games",
+        "reason": "Banzai's interactive budgeting and credit exercises give quick hands-on practice."
+      }
+    ],
+    "reason": "About 60% of the time goes to reading, mainly Ramit Sethi's book in order, plus a few chapters of Housel on money behaviour and the SEC's investing primer. The other 40% goes to setting up your own budget, accounts, automation and investing plan step by step, with quizzes and scenario exercises to …"
+  },
+  "level": "week",
+  "spans": [
+    5,
+    5,
+    5,
+    5
+  ],
+  "timeLimitMs": 212798,
+  "baseline": {
+    "inputTokens": 5757,
+    "outputTokens": 1980,
+    "ms": 21179
+  }
+}

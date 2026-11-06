@@ -31,7 +31,7 @@ npx tsx benchmarks/run.ts --capture evals/results/draft-<ts>-sde-1 evals/results
 
 # Run a round. The baseline is always included. Defaults: --epochs 3, --max-usd 10, --margin 0.05.
 # Round 1 screens every proposed candidate on one fixture; round 2 confirms the top three on all of them.
-npx tsx benchmarks/run.ts --task allocate --fixtures sde-1 --epochs 2 --contestants sonnet-5.5,gpt-6.1-sol,gemini-4-argon,gpt-6.1-terra,gemini-3.8-flash,deepseek-v4-pro,haiku-5.5,gpt-6-luna
+npx tsx benchmarks/run.ts --task allocate --fixtures sde-2 --epochs 2 --contestants sonnet-5.5,gpt-6.1-sol,gemini-4-argon,gpt-6.1-terra,gemini-3.8-flash,deepseek-v4-pro,haiku-5.5,gpt-6-luna
 npx tsx benchmarks/run.ts --task allocate --fixtures sde-1,sde-2,sde-3 --contestants <top three> --max-usd 15
 
 # Score a saved round again after the criteria or judge changed, and judge what a cap left unjudged.
@@ -48,6 +48,36 @@ the run it stops starting samples and stops judging once the real spend passes t
 whose dimensions are asked at once, so a pass can run past it by its own few calls); samples already done are kept and
 scored, and the unjudged ones can be judged later with `--rescore`. A call the gateway refuses for the account (401, 402,
 403: a bad key or an exhausted budget) stops the run at once, since every later call would be refused too.
+
+## Outline task
+
+One sample is one outline call: a model is given one level of a plan and writes the outline for it. The call is the
+app's own `draftLevel`, with the options the draft passes. Only the model and its effort change.
+
+There are three groups, named for the level the call outlines:
+
+- `top`: the top level of a plan (months, weeks or blocks).
+- `inner`: a middle level that still splits into smaller parts, such as a month of weeks.
+- `leaves`: the lowest level, where the items are days, weeks or blocks of work.
+
+A fixture folder holds `allocate.json` and one `outline-<slug>.json` per outline call. `--capture` writes them from a
+draft-eval run. It replays each recorded response through the app's code with a mock model, so it makes no paid calls.
+It also rebuilds each prompt and refuses the run if a prompt differs from the recorded one. A level the run never
+reached, for example because time ran out, has no call and so no outline fixture.
+
+```bash
+npx tsx benchmarks/run.ts --capture evals/results/draft-<ts>-<topic>-1
+
+# Run an outline round. --fixtures takes full outline ids such as csapp-1/top. A bare run id like csapp-1 is not expanded.
+npx tsx benchmarks/run.ts --task outline --fixtures csapp-1/top,csapp-1/week-1 --epochs 2
+
+# Keep only some groups of those ids: top, inner, leaves.
+npx tsx benchmarks/run.ts --task outline --fixtures <ids> --groups top,leaves
+```
+
+An outline run writes `scores.json` by group. `report.md` has one `## Group:` section per group, then a `## Routing`
+section that says which model to use for each group. The run also writes `chart-<group>.svg` for each group. Sample
+files replace "/" in the fixture id with "__", so `csapp-1/top` is saved as `csapp-1__top`.
 
 ## What a run saves
 

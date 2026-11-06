@@ -1,0 +1,1617 @@
+{
+  "id": "mle-1/weeks-1-2",
+  "topic": "mle",
+  "sourceRun": "draft-2026-11-06T00-35-48-135Z-mle-1",
+  "commit": "3800e7f",
+  "label": "Weeks 1–2 · 2 weeks",
+  "group": "leaves",
+  "leaf": true,
+  "request": {
+    "topic": "MLE interview",
+    "granularity": "week",
+    "weeks": 8,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 8
+  },
+  "materials": [
+    {
+      "id": "M1",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Chip Huyen",
+      "year": 2022,
+      "why": "Broad production-ML book covering data, training, deployment, monitoring and system design; the backbone for MLE interviews.",
+      "recommendedBy": [
+        "https://prachub.com/resources/is-chip-huyen-s-designing-machine-learning-systems-enough-for-mle-interviews"
+      ],
+      "url": "https://openlibrary.org/works/OL26768541W",
+      "title": "Designing Machine Learning Systems",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:33.826Z",
+      "fetchedTitle": "Designing Machine Learning Systems",
+      "sig": "3xXdEJh7tQqg8LJ3xSS4xkMu1UD3xD-sL2Y7-3IWv9w",
+      "minutes": 264,
+      "minutesBasis": "measured",
+      "uses": "Production ML depth: data, deployment, monitoring",
+      "toc": {
+        "source": "page",
+        "url": "https://cedricchee.com/blog/ml-sys-design-book-summary",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Chapter 1: Overview of Machine Learning Systems",
+            "page": null,
+            "minutes": 88,
+            "sections": [
+              "When to Use Machine Learning #",
+              "Understanding Machine Learning Systems #",
+              "ML in Research vs. Production #",
+              "ML Systems vs. Traditional Software #",
+              "Summary #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-1-overview-of-machine-learning-systems",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 2: Introduction to Machine Learning Systems Design",
+            "page": null,
+            "minutes": 88,
+            "sections": [
+              "Business and ML Objectives #",
+              "Requirements for ML Systems #",
+              "Iterative Process #",
+              "Framing ML Problems #",
+              "Types of ML Tasks #",
+              "Objective Functions #",
+              "Mind Versus Data #",
+              "Summary #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-2-introduction-to-machine-learning-systems-design",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 3: Data Engineering Fundamentals",
+            "page": null,
+            "minutes": 88,
+            "sections": [
+              "Data Sources #",
+              "Data Formats #",
+              "Row-Major vs. Column-Major Format #",
+              "Text vs. Binary Format #",
+              "Data Models #",
+              "Data Storage Engines and Processing #",
+              "ETL: Extract, Transform, Load #",
+              "Modes of Dataflow #",
+              "Batch Processing vs. Stream Processing #",
+              "Summary #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-3-data-engineering-fundamentals",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 4: Training Data",
+            "page": null,
+            "minutes": 88,
+            "sections": [
+              "Importance of Training Data #",
+              "Data Challenges #",
+              "Sampling Techniques #",
+              "Data Labeling #",
+              "Challenges in Labeling #",
+              "Class Imbalance #",
+              "Data Augmentation #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-4-training-data",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 5: Feature Engineering",
+            "page": null,
+            "minutes": 88,
+            "sections": [
+              "Introduction to Feature Engineering #",
+              "Common Feature Engineering Techniques #",
+              "Handling Missing Values #",
+              "Data Leakage #",
+              "Engineering Good Features #",
+              "Summary #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-5-feature-engineering",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 6: Model Development and Offline Evaluation",
+            "page": null,
+            "minutes": 88,
+            "sections": [
+              "Model Development and Training #",
+              "Model Offline Evaluation #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-6-model-development-and-offline-evaluation",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 7: Model Deployment and Prediction Service",
+            "page": null,
+            "minutes": 88,
+            "sections": [
+              "Machine Learning Deployment Myths #",
+              "From Batch Prediction to Online Prediction #",
+              "Unifying Batch Pipeline and Streaming Pipeline #",
+              "Model Compression #",
+              "ML on the Cloud and on the Edge #",
+              "Compiling and Optimizing Models for Edge Devices #",
+              "ML in Browsers #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-7-model-deployment-and-prediction-service",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 8: Data Distribution Shifts and Monitoring",
+            "page": null,
+            "minutes": 88,
+            "sections": [
+              "Common Causes of ML System Failures #",
+              "Data Distribution Shifts #",
+              "Detecting Data Distribution Shifts #",
+              "Addressing Data Distribution Shifts #",
+              "Monitoring and Observability #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-8-data-distribution-shifts-and-monitoring",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 9: Continual Learning and Test in Production",
+            "page": null,
+            "minutes": 88,
+            "sections": [
+              "Continual Learning #",
+              "How Often to Update Your Models #",
+              "Test in Production #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-9-continual-learning-and-test-in-production",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 10: Infrastructure and Tooling for MLOps",
+            "page": null,
+            "minutes": 88,
+            "sections": [
+              "1. Storage and Compute #",
+              "2. Development Environment #",
+              "3. Resource Management #",
+              "4. ML Platform #",
+              "Build Versus Buy #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-10-infrastructure-and-tooling-for-mlops",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Chapter 11: The Human Side of Machine Learning",
+            "page": null,
+            "minutes": 85,
+            "sections": [
+              "User Experience #",
+              "Team Structure #",
+              "Responsible AI #"
+            ],
+            "url": "https://cedricchee.com/blog/ml-sys-design-book-summary#chapter-11-the-human-side-of-machine-learning",
+            "group": null
+          }
+        ]
+      },
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ],
+      "note": "Book of 11 chapters running from data and training through deployment, monitoring and infrastructure to team and ethics. Chapter anchors point to a third-party chapter-summary page, because the Open Library page has no table of contents."
+    },
+    {
+      "id": "M2",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Ali Aminian and Alex Xu",
+      "year": 2023,
+      "why": "Most interview-specific book on ML system design rounds, with worked case designs.",
+      "recommendedBy": [
+        "https://medium.com/javarevisited/top-5-machine-learning-system-design-interview-courses-and-books-for-ml-engineers-in-2025-8476d04960a8",
+        "https://youtube.com/watch?v=UQ0AQyhKS-8"
+      ],
+      "url": "https://openlibrary.org/works/OL34313663W",
+      "title": "Machine Learning System Design Interview",
+      "backbone": true,
+      "verifiedAt": "2026-11-06T00:36:33.826Z",
+      "fetchedTitle": "Machine Learning System Design Interview",
+      "sig": "KcF201kjgPwAmvdyKS_9lo102qLJsybvWJwWfaKX5Xo",
+      "minutes": 735,
+      "minutesBasis": "measured",
+      "uses": "Interview framework and worked ML designs, in order",
+      "toc": {
+        "source": "page",
+        "url": "https://www.goodreads.com/en/book/show/120532868-machine-learning-system-design-interview",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Introduction and Overview",
+            "page": null,
+            "minutes": 67,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Visual Search System",
+            "page": null,
+            "minutes": 67,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Google Street View Blurring System",
+            "page": null,
+            "minutes": 67,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "YouTube Video Search",
+            "page": null,
+            "minutes": 67,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Harmful Content Detection",
+            "page": null,
+            "minutes": 67,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Video Recommendation System",
+            "page": null,
+            "minutes": 67,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Event Recommendation System",
+            "page": null,
+            "minutes": 67,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Ad Click Prediction on Social Platforms",
+            "page": null,
+            "minutes": 67,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Similar Listings on Vacation Rental Platforms",
+            "page": null,
+            "minutes": 67,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Personalized News Feed",
+            "page": null,
+            "minutes": 67,
+            "sections": [],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "People You May Know",
+            "page": null,
+            "minutes": 65,
+            "sections": [],
+            "url": null,
+            "group": null
+          }
+        ]
+      },
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ],
+      "note": "Book of 11 chapters: an intro/framework chapter, then worked ML system designs (search, recommendation, ads, etc.); best for interview practice. Chapters 10 and 11 are from memory, not seen in the fetched text."
+    },
+    {
+      "id": "M5",
+      "origin": "research",
+      "type": "link",
+      "kind": "docs",
+      "author": null,
+      "year": null,
+      "why": "Concise delivery framework for the ML system design interview from FAANG hiring managers.",
+      "recommendedBy": [],
+      "url": "https://hellointerview.com/learn/ml-system-design/in-a-hurry/introduction",
+      "title": "Machine Learning System Design in a Hurry | ML System Design in a Hurry",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:54.077Z",
+      "fetchedTitle": "Machine Learning System Design in a Hurry | ML System Design in a Hurry",
+      "sig": "vUlSRthXCgMRKZhrmjpa51fPEzK4PZ5_Zy5wpyEJlt0",
+      "minutes": 10,
+      "minutesBasis": "estimated",
+      "uses": "Concise delivery framework for the round",
+      "pageMinutes": 8,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M6",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": null,
+      "year": 2026,
+      "why": "Describes the 2026 MLE loop and the shift to LLM and agent system design.",
+      "recommendedBy": [],
+      "url": "https://techscreen.app/articles/machine-learning-engineer-interview-guide-2026",
+      "title": "The Machine Learning Engineer Interview Guide (2026)",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:53.735Z",
+      "fetchedTitle": "The Machine Learning Engineer Interview Guide (2026) | TechScreen",
+      "sig": "1S3vKF0gbkFDWqRlYsfTIWiOV78W_2nH6mMofxp4p7o",
+      "minutes": 21,
+      "minutesBasis": "measured",
+      "uses": "Current MLE loop and LLM design shift",
+      "pageMinutes": 21,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "current"
+      ]
+    },
+    {
+      "id": "M7",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": null,
+      "year": 2026,
+      "why": "Walks through the 45-55 minute ML system design round from framing to monitoring.",
+      "recommendedBy": [],
+      "url": "https://aced.io/blog/machine-learning-system-design-interview-guide",
+      "title": "Machine Learning System Design Interview (2026 Guide) - Aced (formerly Exponent)",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:55.306Z",
+      "fetchedTitle": "Machine Learning System Design Interview (2026 Guide) - Aced (formerly Exponent)",
+      "sig": "NqjdjZ8Qge8Zu8EL10zrt-e9y-_j-I4lhTGcvg7YvMQ",
+      "minutes": 15,
+      "minutesBasis": "measured",
+      "uses": "Round walkthrough from framing to monitoring",
+      "pageMinutes": 15,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical",
+        "current"
+      ]
+    },
+    {
+      "id": "M8",
+      "origin": "research",
+      "type": "link",
+      "kind": "repo",
+      "author": "alirezadir",
+      "year": 2026,
+      "why": "9-step ML system design formula plus GenAI/LLM system design section.",
+      "recommendedBy": [],
+      "url": "https://github.com/alirezadir/AIMLInterviews/blob/main/src/MLSD/ml-system-design.md",
+      "title": "AIMLInterviews/src/MLSD/ml-system-design.md at main · alirezadir/AIMLInterviews",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:56.795Z",
+      "fetchedTitle": "AIMLInterviews/src/MLSD/ml-system-design.md at main · alirezadir/AIMLInterviews · GitHub",
+      "sig": "Af0slgGWGh1GcDymmUrOV-o9074nF4LpHRkRWW8w8T8",
+      "minutes": 12,
+      "minutesBasis": "estimated",
+      "uses": "Step formula and GenAI design notes",
+      "pageMinutes": 12,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M9",
+      "origin": "research",
+      "type": "link",
+      "kind": "repo",
+      "author": "andrewekhalel",
+      "year": 2026,
+      "why": "69 ML and computer vision interview questions with answers.",
+      "recommendedBy": [],
+      "url": "https://github.com/andrewekhalel/MLQuestions",
+      "title": "GitHub - andrewekhalel/MLQuestions: Machine Learning and Computer Vision Engineer - Technical Interview Questions",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:56.837Z",
+      "fetchedTitle": "GitHub - andrewekhalel/MLQuestions: Machine Learning and Computer Vision Engineer - Technical Interview Questions · GitHub",
+      "sig": "suX-fF3gFPm5_wz5mLTIUXnxi3DANDMwTnMNy8L-MrI",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "ML fundamentals recall questions",
+      "pageMinutes": 25,
+      "hub": false,
+      "toc": null,
+      "practice": {
+        "format": "recall",
+        "items": 26,
+        "perItemMinutes": 3,
+        "minutes": 78,
+        "answers": true,
+        "list": {
+          "items": [
+            {
+              "title": "What's the trade-off between bias and variance?",
+              "number": null,
+              "group": "Machine Learning Fundamentals",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Explain over- and under-fitting and how to combat them?",
+              "number": null,
+              "group": "Machine Learning Fundamentals",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is regularization, why do we use it, and give some examples of common methods?",
+              "number": null,
+              "group": "Machine Learning Fundamentals",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Can you explain the differences between supervised, unsupervised, and reinforcement learning?",
+              "number": null,
+              "group": "Machine Learning Fundamentals",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What’s the difference between a generative and discriminative model?",
+              "number": null,
+              "group": "Machine Learning Fundamentals",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Instance-Based Versus Model-Based Learning.",
+              "number": null,
+              "group": "Machine Learning Fundamentals",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is Turing test?",
+              "number": null,
+              "group": "Machine Learning Fundamentals",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Why do ensembles typically have higher scores than individual models?",
+              "number": null,
+              "group": "Algorithms and Ensembles",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What's the difference between boosting and bagging?",
+              "number": null,
+              "group": "Algorithms and Ensembles",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Explain Linear Regression, Logistic Regression, Decision Tree and Random Forest?",
+              "number": null,
+              "group": "Algorithms and Ensembles",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is data normalization and why do we need it?",
+              "number": null,
+              "group": "Data Preprocessing and Feature Engineering",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is an imbalanced dataset? Can you list some ways to deal with it?",
+              "number": null,
+              "group": "Data Preprocessing and Feature Engineering",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is data augmentation? Can you give some examples?",
+              "number": null,
+              "group": "Data Preprocessing and Feature Engineering",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "When to use a Label Encoding vs. One Hot Encoding?",
+              "number": null,
+              "group": "Data Preprocessing and Feature Engineering",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is gradient descent?",
+              "number": null,
+              "group": "Optimization and Training",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is cost function?",
+              "number": null,
+              "group": "Optimization and Training",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Define Learning Rate.",
+              "number": null,
+              "group": "Optimization and Training",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is Momentum (w.r.t NN optimization)?",
+              "number": null,
+              "group": "Optimization and Training",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is the difference between Batch Gradient Descent and Stochastic Gradient Descent?",
+              "number": null,
+              "group": "Optimization and Training",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Epoch vs. Batch vs. Iteration.",
+              "number": null,
+              "group": "Optimization and Training",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "How does a neural network work?",
+              "number": null,
+              "group": "Deep Learning and Neural Networks",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Why is ReLU better and more often used than Sigmoid in Neural Networks?",
+              "number": null,
+              "group": "Deep Learning and Neural Networks",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "List different activation neurons or functions.",
+              "number": null,
+              "group": "Deep Learning and Neural Networks",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is vanishing gradient?",
+              "number": null,
+              "group": "Deep Learning and Neural Networks",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What are dropouts?",
+              "number": null,
+              "group": "Deep Learning and Neural Networks",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "What is batch normalization and why does it work?",
+              "number": null,
+              "group": "Deep Learning and Neural Networks",
+              "difficulty": null,
+              "url": null,
+              "solutionUrl": null,
+              "minutes": null
+            }
+          ],
+          "source": "page",
+          "url": "https://github.com/andrewekhalel/MLQuestions"
+        },
+        "totalItems": 26
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "One README with ~69 interview questions and answers grouped into topic sections, plus a separate NLP README; best for interview self-quizzing."
+    },
+    {
+      "id": "M11",
+      "origin": "research",
+      "type": "link",
+      "kind": "tool",
+      "author": "NeetCode",
+      "year": null,
+      "why": "Curated 150 coding problems for the algorithm round, with video solutions.",
+      "recommendedBy": [],
+      "url": "https://neetcode.io/practice/practice/neetcode150",
+      "title": "NeetCode 150 - Coding Interview Questions",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:35:56.309Z",
+      "fetchedTitle": "NeetCode 150 - Coding Interview Questions",
+      "sig": "zjKu4f8GN5vadYqUFmwDfbTmzmp12QCUaRizuG95wU4",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "Coding-round algorithm practice",
+      "pageMinutes": 1,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "problem-set",
+        "items": 56,
+        "perItemMinutes": 10,
+        "minutes": 1310,
+        "answers": true,
+        "list": {
+          "items": [
+            {
+              "title": "Contains Duplicate",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/duplicate-integer?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Valid Anagram",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/is-anagram?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Two Sum",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/two-integer-sum?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Group Anagrams",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/anagram-groups?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Top K Frequent Elements",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/top-k-elements-in-list?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Encode and Decode Strings",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/string-encode-and-decode?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Product of Array Except Self",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/products-of-array-discluding-self?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Valid Sudoku",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/valid-sudoku?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Longest Consecutive Sequence",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/longest-consecutive-sequence?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Valid Palindrome",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/is-palindrome?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Two Sum II Input Array Is Sorted",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/two-integer-sum-ii?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "3Sum",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/three-integer-sum?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Container With Most Water",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/max-water-container?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Trapping Rain Water",
+              "number": null,
+              "group": null,
+              "difficulty": "hard",
+              "url": "https://neetcode.io/problems/trapping-rain-water?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Best Time to Buy And Sell Stock",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/buy-and-sell-crypto?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Longest Substring Without Repeating Characters",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/longest-substring-without-duplicates?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Longest Repeating Character Replacement",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/longest-repeating-substring-with-replacement?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Permutation In String",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/permutation-string?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Minimum Window Substring",
+              "number": null,
+              "group": null,
+              "difficulty": "hard",
+              "url": "https://neetcode.io/problems/minimum-window-with-characters?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Sliding Window Maximum",
+              "number": null,
+              "group": null,
+              "difficulty": "hard",
+              "url": "https://neetcode.io/problems/sliding-window-maximum?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Valid Parentheses",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/validate-parentheses?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Min Stack",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/minimum-stack?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Evaluate Reverse Polish Notation",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/evaluate-reverse-polish-notation?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Daily Temperatures",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/daily-temperatures?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Car Fleet",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/car-fleet?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Largest Rectangle In Histogram",
+              "number": null,
+              "group": null,
+              "difficulty": "hard",
+              "url": "https://neetcode.io/problems/largest-rectangle-in-histogram?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Binary Search",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/binary-search?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Search a 2D Matrix",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/search-2d-matrix?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Koko Eating Bananas",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/eating-bananas?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Find Minimum In Rotated Sorted Array",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/find-minimum-in-rotated-sorted-array?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Search In Rotated Sorted Array",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/find-target-in-rotated-sorted-array?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Time Based Key Value Store",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/time-based-key-value-store?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Median of Two Sorted Arrays",
+              "number": null,
+              "group": null,
+              "difficulty": "hard",
+              "url": "https://neetcode.io/problems/median-of-two-sorted-arrays?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Reverse Linked List",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/reverse-a-linked-list?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Merge Two Sorted Lists",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/merge-two-sorted-linked-lists?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Linked List Cycle",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/linked-list-cycle-detection?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Reorder List",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/reorder-linked-list?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Remove Nth Node From End of List",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/remove-node-from-end-of-linked-list?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Copy List With Random Pointer",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/copy-linked-list-with-random-pointer?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Add Two Numbers",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/add-two-numbers?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Find The Duplicate Number",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/find-duplicate-integer?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "LRU Cache",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/lru-cache?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Merge K Sorted Lists",
+              "number": null,
+              "group": null,
+              "difficulty": "hard",
+              "url": "https://neetcode.io/problems/merge-k-sorted-linked-lists?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Reverse Nodes In K Group",
+              "number": null,
+              "group": null,
+              "difficulty": "hard",
+              "url": "https://neetcode.io/problems/reverse-nodes-in-k-group?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Invert Binary Tree",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/invert-a-binary-tree?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Maximum Depth of Binary Tree",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/depth-of-binary-tree?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Diameter of Binary Tree",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/binary-tree-diameter?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Balanced Binary Tree",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/balanced-binary-tree?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Same Tree",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/same-binary-tree?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Subtree of Another Tree",
+              "number": null,
+              "group": null,
+              "difficulty": "easy",
+              "url": "https://neetcode.io/problems/subtree-of-a-binary-tree?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Lowest Common Ancestor of a Binary Search Tree",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/lowest-common-ancestor-in-binary-search-tree?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Binary Tree Level Order Traversal",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/level-order-traversal-of-binary-tree?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Binary Tree Right Side View",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/binary-tree-right-side-view?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Count Good Nodes In Binary Tree",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/count-good-nodes-in-binary-tree?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Validate Binary Search Tree",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/valid-binary-search-tree?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Kth Smallest Element In a Bst",
+              "number": null,
+              "group": null,
+              "difficulty": "medium",
+              "url": "https://neetcode.io/problems/kth-smallest-integer-in-bst?list=neetcode150",
+              "solutionUrl": null,
+              "minutes": null
+            }
+          ],
+          "source": "file",
+          "url": "https://raw.githubusercontent.com/krmanik/Anki-NeetCode/main/neetcode-150-list.json"
+        },
+        "totalItems": 150
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "NeetCode 150 is a list of 150 LeetCode problems in 18 topic groups, each with a video solution. It suits topic-by-topic interview practice. The page draws its list by script, so the groups come from a mirrored JSON list."
+    },
+    {
+      "id": "M14",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Chip Huyen",
+      "year": null,
+      "why": "Guide to learning design from company engineering blog case studies.",
+      "recommendedBy": [],
+      "url": "https://huyenchip.com/machine-learning-systems-design/case-studies.html",
+      "title": "Machine learning systems design",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:29.777Z",
+      "fetchedTitle": "Machine learning systems design",
+      "sig": "ouLF4CKFsKeEKnlBTfexU_7knwx7PVWTjt6RrfQzJyk",
+      "minutes": 4,
+      "minutesBasis": "measured",
+      "uses": "How to learn design from case studies",
+      "pageMinutes": 4,
+      "hub": false,
+      "toc": null,
+      "foundBy": [
+        "practice"
+      ]
+    },
+    {
+      "id": "M15",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Coursera",
+      "year": 2026,
+      "why": "Overview of fundamentals, coding, system design and practice tools.",
+      "recommendedBy": [],
+      "url": "https://coursera.org/resources/machine-learning-interview-prep-guide",
+      "title": "Machine Learning Interview Prep Guide (2026)",
+      "backbone": false,
+      "verifiedAt": "2026-11-06T00:36:29.788Z",
+      "fetchedTitle": "Machine Learning Interview Prep Guide (2026) | Coursera",
+      "sig": "yXmA19yCu055ey1yJq-e_4EdaFbSMoAr_WNQl666vMU",
+      "minutes": 8,
+      "minutesBasis": "measured",
+      "uses": "Overview of the interview areas",
+      "pageMinutes": 8,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "backbone",
+        "canonical",
+        "current",
+        "practice"
+      ]
+    }
+  ],
+  "split": {
+    "readingShare": 28,
+    "practice": "coding and design rounds",
+    "formats": [
+      {
+        "format": "problem-set",
+        "share": 47,
+        "focus": "NeetCode algorithm round",
+        "reason": "The coding round is passed by solving many timed problems, and NeetCode gives a curated set with solutions to check against."
+      },
+      {
+        "format": "design-exercise",
+        "share": 29,
+        "focus": "ML system design prompts",
+        "reason": "Timed open design prompts compared against the book's worked cases build the framing-to-monitoring delivery the round tests."
+      },
+      {
+        "format": "mock",
+        "share": 21,
+        "focus": "Full MLSD and coding interviews",
+        "reason": "A handful of full timed runs with review rehearse pacing and communication under real interview conditions."
+      },
+      {
+        "format": "recall",
+        "share": 3,
+        "focus": "ML fundamentals Q&A",
+        "reason": "Answering fundamentals questions aloud from memory prepares the rapid-fire ML theory screen."
+      }
+    ],
+    "reason": "About a quarter of the time goes to reading, mostly the ML system design interview book in order plus a few production-ML chapters and short framework guides. The rest is practice: half on algorithm problems for the coding round, with timed design prompts, full mock interviews and ML-fundamentals r…"
+  },
+  "level": "week",
+  "spans": [
+    5,
+    5
+  ],
+  "tree": {
+    "id": "root",
+    "level": "month",
+    "title": "",
+    "summary": "",
+    "len": 40,
+    "status": "pending",
+    "budgetHours": null,
+    "manualSplit": false,
+    "children": [
+      {
+        "id": "tmp-mw4c1stp-98",
+        "level": "month",
+        "title": "Interview Landscape and Design Framework Foundations",
+        "summary": "Maps the modern MLE loop, sets up the step-by-step ML system design framework with the first worked cases and the training-data chapter, and starts daily coding and fundamentals recall so later months can build on them.",
+        "len": 10,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 1,
+        "end": 10,
+        "covers": [
+          {
+            "id": "M15",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M6",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M5",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M8",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M14",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 1
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 2
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 3
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 4
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "problem-set",
+            "id": "M11",
+            "note": null,
+            "itemFrom": 1,
+            "itemTo": 19
+          },
+          {
+            "format": "recall",
+            "id": "M9",
+            "note": null,
+            "itemFrom": 1,
+            "itemTo": 16
+          }
+        ],
+        "time": {
+          "reading": 359,
+          "practice": {
+            "problem-set": 450,
+            "recall": 50,
+            "design-exercise": 100
+          }
+        }
+      },
+      {
+        "id": "tmp-mw4c1stp-99",
+        "level": "month",
+        "title": "Search, Moderation and Recommendation Designs with Deployment",
+        "summary": "Works through the video search, harmful content and recommendation case designs alongside model deployment and prediction serving, turning the framework into regular timed design exercises and first mock interviews while coding practice deepens.",
+        "len": 15,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 11,
+        "end": 25,
+        "covers": [
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 4
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 5
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 6
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 7
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 7
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "problem-set",
+            "id": "M11",
+            "note": null,
+            "itemFrom": 20,
+            "itemTo": 42
+          },
+          {
+            "format": "recall",
+            "id": "M9",
+            "note": null,
+            "itemFrom": 17,
+            "itemTo": 26
+          }
+        ],
+        "time": {
+          "reading": 356,
+          "practice": {
+            "problem-set": 551,
+            "recall": 33,
+            "design-exercise": 350,
+            "mock": 150
+          }
+        }
+      },
+      {
+        "id": "tmp-mw4c1stq-100",
+        "level": "month",
+        "title": "Ranking, Feeds and Monitoring Under Mock Pressure",
+        "summary": "Finishes with the hardest ranking and graph designs—ad click prediction, similar listings, news feed and people-you-may-know—plus distribution shift and monitoring, and spends most time on full design exercises and mock interviews to rehearse the real loop.",
+        "len": 15,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 26,
+        "end": 40,
+        "covers": [
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 8
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 9
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 10
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 11
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": 8
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "problem-set",
+            "id": "M11",
+            "note": null,
+            "itemFrom": 43,
+            "itemTo": 56
+          }
+        ],
+        "time": {
+          "reading": 354,
+          "practice": {
+            "problem-set": 298,
+            "design-exercise": 350,
+            "mock": 375
+          }
+        }
+      }
+    ],
+    "start": 1,
+    "end": 40
+  },
+  "parentId": "tmp-mw4c1stp-98",
+  "timeLimitMs": 176845,
+  "baseline": {
+    "inputTokens": 7928,
+    "outputTokens": 4283,
+    "ms": 34589
+  }
+}
