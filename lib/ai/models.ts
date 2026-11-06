@@ -27,6 +27,15 @@ export const AVAILABLE_MODELS = [
 
 export type AiModelId = (typeof AVAILABLE_MODELS)[number]["id"];
 
+/**
+ * The gateway providers a model is sent to on Pensieve's key, for a model whose provider the gateway would otherwise
+ * pick cannot serve the app's calls. DeepSeek V4 Pro's cheapest provider (Baseten) has no structured output and answers
+ * a schema with an empty reply; Azure and Alibaba list it. Checked against https://ai-gateway.vercel.sh/v1/models/<id>/endpoints.
+ */
+export const GATEWAY_PROVIDERS: Partial<Record<AiModelId, readonly string[]>> = {
+  "deepseek/deepseek-v4-pro": ["azure", "alibaba"],
+};
+
 /** The providers the model list knows, as the prefix of each model id ("anthropic/claude-sonnet-5.5"). */
 export const MODEL_PROVIDERS = ["anthropic", "google", "openai", "deepseek"] as const;
 export type ModelProvider = (typeof MODEL_PROVIDERS)[number];

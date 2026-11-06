@@ -1,13 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LanguageModel } from "ai";
+import { MockLanguageModelV4 } from "ai/test";
 import { sealSecret } from "@/lib/secrets";
 import { AVAILABLE_MODELS, providerOf } from "./models";
 
 vi.mock("@/lib/db/userApiKeys", () => ({ getUserApiKeys: vi.fn() }));
 
 import { getUserApiKeys } from "@/lib/db/userApiKeys";
-import { ANTHROPIC_API_IDS, DEFAULT_MODEL_IDS, appModel, keyCoversAll, resolveModels, resolveWith } from "./resolve";
+import { ANTHROPIC_API_IDS, DEFAULT_MODEL_IDS, appModel, keyCoversAll, onGatewayProviders, resolveModels, resolveWith } from "./resolve";
 
 const mockedKeys = vi.mocked(getUserApiKeys);
 const SECRET = randomBytes(32).toString("base64");
@@ -82,5 +83,38 @@ describe("keyCoversAll", () => {
     expect(keyCoversAll(["anthropic"])).toBe(true); // every default today is Anthropic
     expect(keyCoversAll([])).toBe(false);
     expect(keyCoversAll(["anthropic"], ["anthropic/claude-sonnet-5.5", "google/gemini-3-flash"])).toBe(false);
+  });
+});
+
+describe("onGatewayProviders", () => {
+  it("sends every call only to the named providers, keeping the call's other options", async () => {
+    const seen: unknown[] = [];
+    const inner = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        seen.push(options.providerOptions);
+        return {
+          content: [{ type: "text", text: "ok" }],
+          finishReason: { unified: "stop", raw: undefined },
+          usage: { inputTokens: { total: 1, noCache: undefined, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: undefined, reasoning: undefined } },
+          warnings: [],
+        };
+      },
+    });
+    const routed = onGatewayProviders(inner, ["azure", "alibaba"]) as unknown as MockLanguageModelV4;
+    await routed.doGenerate({ prompt: [], providerOptions: { gateway: { order: ["azure"] }, anthropic: { effort: "high" } } });
+    expect(seen).toEqual([{ gateway: { order: ["azure"], only: ["azure", "alibaba"] }, anthropic: { effort: "high" } }]);
+  });
+});
+
+describe("appModel", () => {
+  it("keeps a plain gateway id for a model the gateway may route as it likes", () => {
+    expect(appModel("anthropic/claude-opus-5.5").model).toBe("anthropic/claude-opus-5.5");
+  });
+
+  it("wraps a model with listed gateway providers, under its own id", () => {
+    const resolved = appModel("deepseek/deepseek-v4-pro");
+    expect(resolved.id).toBe("deepseek/deepseek-v4-pro");
+    expect(resolved.keyOwner).toBe("app");
+    expect(instance(resolved.model).modelId).toBe("deepseek/deepseek-v4-pro");
   });
 });

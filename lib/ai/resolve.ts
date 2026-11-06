@@ -3,10 +3,10 @@
  * from the user's own key and paid by them. Resolved once per request, right after auth(), and passed down explicitly.
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
-import type { LanguageModel } from "ai";
+import { gateway, wrapLanguageModel, type LanguageModel } from "ai";
 import { getUserApiKeys } from "@/lib/db/userApiKeys";
 import { openSecret } from "@/lib/secrets";
-import { DEFAULT_ALLOCATE_MODEL, DEFAULT_CHAT_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_RESEARCH_MODEL, providerOf, type AiModelId, type KeyOwner, type ModelProvider } from "./models";
+import { DEFAULT_ALLOCATE_MODEL, DEFAULT_CHAT_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_OUTLINE_MODEL, DEFAULT_RESEARCH_MODEL, GATEWAY_PROVIDERS, providerOf, type AiModelId, type KeyOwner, type ModelProvider } from "./models";
 
 export interface ResolvedModel {
   /** The gateway id string, or a direct instance built from the user's key. */
@@ -33,9 +33,29 @@ export const DEFAULT_MODEL_IDS: Record<ModelRole, AiModelId> = {
   allocate: DEFAULT_ALLOCATE_MODEL,
 };
 
-/** The app's own route for a model: the gateway id, paid by the app. */
+/**
+ * `model` with every call sent only to the gateway providers in `only`, whatever provider options the call sets (its
+ * own gateway options are kept).
+ */
+export function onGatewayProviders(model: LanguageModel, only: readonly string[]): LanguageModel {
+  return wrapLanguageModel({
+    model: model as Parameters<typeof wrapLanguageModel>[0]["model"],
+    middleware: {
+      transformParams: async ({ params }) => ({
+        ...params,
+        providerOptions: { ...params.providerOptions, gateway: { ...params.providerOptions?.gateway, only: [...only] } },
+      }),
+    },
+  });
+}
+
+/**
+ * The app's own route for a model: the gateway id, paid by the app. A model the gateway must send to particular
+ * providers (`GATEWAY_PROVIDERS`) is the gateway's model wrapped to say so.
+ */
 export function appModel(id: AiModelId): ResolvedModel {
-  return { model: id, id, keyOwner: "app" };
+  const only = GATEWAY_PROVIDERS[id];
+  return { model: only ? onGatewayProviders(gateway(id), only) : id, id, keyOwner: "app" };
 }
 
 /** Gateway ids use dots; Anthropic's API uses hyphens. Only ids listed here can run on a user's key. */

@@ -61,8 +61,18 @@ export const unitDraftSchema = z.object({
   practice: z.array(practiceRefDraftSchema).optional().describe("Leaves only: this unit's practice rows"),
   time: unitTimeDraftSchema.optional().describe("Headings only: this unit's minutes of must-reading and of each practice format"),
 });
+/** The most units one level call may return. */
+export const MAX_LEVEL_UNITS = 40;
+/**
+ * One level call's answer. The cap on units is checked here, not sent: Gemini refuses the outline's JSON schema
+ * ("Request contains an invalid argument") once its top-level list carries `maxItems`, so the cap is a refinement,
+ * which the schema sent to the model leaves out.
+ */
 export const unitListSchema = z.object({
-  units: z.array(unitDraftSchema).min(1).max(40),
+  units: z
+    .array(unitDraftSchema)
+    .min(1)
+    .refine((units) => units.length <= MAX_LEVEL_UNITS, { message: `At most ${MAX_LEVEL_UNITS} units` }),
 });
 export type UnitDraft = z.infer<typeof unitDraftSchema>;
 
