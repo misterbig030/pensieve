@@ -305,6 +305,32 @@ describe("runOutlineSample", () => {
       expect(sample.estimatedCostUsd).toBeCloseTo(listPriceUsd("google/gemini-3-flash", { inputTokens: 30_000, outputTokens: 7_000, cacheReadTokens: 10_000 }));
     });
 
+    it("is not charged when it was voided and the error carries no usage: nothing was billed", async () => {
+      // An outage (5xx, 429), the gateway refusing the key (401–403) and a stream's error part are voided.
+      for (const error of [apiError(503), apiError(429), apiError(402), apiError(401), { type: "overloaded_error", message: "Overloaded" }]) {
+        const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ error }) });
+        expect(sample.gate.status).toBe("void");
+        expect(sample.costUsd).toBe(0);
+        expect(sample).not.toHaveProperty("estimatedCostUsd");
+      }
+    });
+
+    it("is charged the usage a voided call's error carries", async () => {
+      const usage = { inputTokens: 30_000, outputTokens: 7_000, inputTokenDetails: { cacheReadTokens: 10_000 } };
+      const used = new NoObjectGeneratedError({ message: "No object generated.", usage, finishReason: "stop" } as unknown as ConstructorParameters<typeof NoObjectGeneratedError>[0]);
+      const error = new APICallError({ message: "status 503", url: "https://ai-gateway.vercel.sh", requestBodyValues: {}, statusCode: 503, cause: used });
+      const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ error }) });
+      expect(sample.gate.status).toBe("void");
+      expect(sample.estimatedCostUsd).toBeCloseTo(listPriceUsd("google/gemini-3-flash", { inputTokens: 30_000, outputTokens: 7_000, cacheReadTokens: 10_000 }));
+    });
+
+    it("is estimated when it failed on the model's own output and the error carries no usage", async () => {
+      const error = new JSONParseError({ text: "{", cause: new Error("Unexpected end") });
+      const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ error }), now: () => 0 });
+      expect(sample.gate.status).toBe("failed");
+      expect(sample.estimatedCostUsd).toBeCloseTo(listPriceUsd("google/gemini-3-flash", { inputTokens: 20_000, outputTokens: 4_000 }));
+    });
+
     it("is not estimated past the time ceiling, where the call reported its cost", async () => {
       const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ breaches: [breach("over-budget")] }) });
       expect(sample.gate.status).toBe("failed");
@@ -389,6 +415,13 @@ describe("runOutlineSample", () => {
 
     it("fails another client error: the request the model's settings made", async () => {
       expect(await gateFor(apiError(400))).toEqual({ status: "failed", reason: "status 400" });
+      expect(await gateFor(apiError(422))).toEqual({ status: "failed", reason: "status 422" });
+    });
+
+    it("voids and halts on a 404: the contestant names a model the gateway does not know, our config to fix", async () => {
+      expect(await gateFor(apiError(404))).toMatchObject({ status: "void", reason: expect.stringMatching(/^gateway 404/), halt: true });
+      const retried = new RetryError({ message: "Failed after 3 attempts", reason: "maxRetriesExceeded", errors: [apiError(404)] });
+      expect(await gateFor(retried)).toMatchObject({ status: "void", halt: true });
     });
   });
 

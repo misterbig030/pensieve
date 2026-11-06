@@ -382,6 +382,8 @@ export function renderOutline(output: OutlineOutput, fixture: OutlineFixture): s
 
 /** The gateway refusing the app's key itself: invalid (401), out of budget (402) or not allowed (403). */
 const ACCOUNT_STATUSES = new Set([401, 402, 403]);
+/** The gateway not knowing the model: a contestant names a model id it does not serve, our config to fix. */
+const UNKNOWN_MODEL = 404;
 
 /** The provider or gateway status inside an error, looking through retries and wrapped causes. */
 function statusOf(error: unknown, depth = 4): number | undefined {
@@ -445,8 +447,10 @@ function messageOf(error: unknown): string {
 
 /**
  * The gate for a call that threw, by who caused it. The gateway out of funds voids it and halts the run, whatever else
- * the error says. Our deadline or an abort fails it. With a status: the gateway refusing the key voids and halts, an
- * outage (5xx, 429) voids, another client error fails. With none: an answer the model wrote that did not parse or
+ * the error says. Our deadline or an abort fails it. With a status: the gateway refusing the key, or not knowing the
+ * model (404: a misconfigured contestant), voids and halts, so the run stops to be fixed; an outage (5xx, 429) voids;
+ * another client error (a 400: the model cannot serve the app's request) fails, as that is the model's to answer for.
+ * With none: an answer the model wrote that did not parse or
  * validate fails; anything else (a stream's error part, a network error, a provider error with no status) is the
  * outside service's and voids, as allocate's `voidReason` does.
  */
@@ -456,7 +460,7 @@ function thrownGate(error: unknown, timedOut: boolean, timeLimitMs: number): Gat
   if (isGatewayOutOfFunds(error instanceof Error ? error : new Error(message))) return { status: "void", reason: `gateway out of funds: ${message}`, halt: true };
   if (timedOut || aborted(error)) return { status: "failed", reason: `timed out after ${timeLimitMs / 1000} s` };
   const status = statusOf(error);
-  if (status !== undefined && ACCOUNT_STATUSES.has(status)) return { status: "void", reason: `gateway ${status}: ${message}`, halt: true };
+  if (status !== undefined && (ACCOUNT_STATUSES.has(status) || status === UNKNOWN_MODEL)) return { status: "void", reason: `gateway ${status}: ${message}`, halt: true };
   if (status !== undefined && (status >= 500 || status === 429)) return { status: "void", reason: `gateway ${status}: ${message}` };
   if (status !== undefined || modelCaused(error)) return { status: "failed", reason: message };
   return { status: "void", reason: message };
@@ -469,7 +473,9 @@ const CEILING: BreachKind[] = ["over-capacity", "over-budget"];
  * Runs the fixture's level once through the app's `draftLevel` with the contestant's outline model and effort (the
  * baseline's when the contestant leaves the role out), under the time the source run had left. A level with a unit past
  * the time ceiling fails, its output kept for the report. A call's cost is what the gateway charged, or the list price
- * where it reported none; a call that threw before reporting is charged an estimate (`estimatedCostUsd`), so it is not free.
+ * where it reported none. A call that threw before reporting is charged what its error says it used, or else, when it
+ * failed (a timeout, or the model's own output), an estimate (`estimatedCostUsd`), so a slow contestant is not free; a
+ * voided call whose error carries no usage (an outage, the key refused) was billed nothing and costs nothing.
  */
 export async function runOutlineSample(
   fixture: OutlineFixture,
@@ -500,14 +506,15 @@ export async function runOutlineSample(
   }
   const ms = Math.round(now() - startedAt);
   // The draft reports a call only once its object resolves, so a call that threw (a timeout, an outage, an answer that
-  // did not parse) reports no cost and a slow contestant would look free. Charge it what the error says it used, or else
-  // the fixture's own call at this contestant's price, with as much more output as the baseline's pace would have
-  // written in the extra time (a reasoning model that times out has been writing all along).
+  // did not parse) reports no cost and a slow contestant would look free. Charge it what the error says it used, or else,
+  // when it failed, the fixture's own call at this contestant's price, with as much more output as the baseline's pace
+  // would have written in the extra time (a reasoning model that times out has been writing all along). A void with no
+  // usage (an outage, the key refused) was billed nothing, so it adds nothing to the cap.
   let estimatedCostUsd = 0;
   if (gate.status !== "completed" && calls.length === 0) {
     const used = usageOf(thrown);
     if (used) estimatedCostUsd = listPriceUsd(role.model, used);
-    else {
+    else if (gate.status === "failed") {
       const { inputTokens, outputTokens, ms: baselineMs } = fixture.baseline;
       const pace = baselineMs > 0 ? Math.max(1, ms / baselineMs) : 1;
       estimatedCostUsd = listPriceUsd(role.model, { inputTokens, outputTokens: outputTokens * pace });

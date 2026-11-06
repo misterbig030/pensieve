@@ -373,7 +373,8 @@ async function runTask<F extends { id: string }, O, C>(
     }
   };
 
-  // Set once the gateway refuses the key: every later call would meet the same refusal, so nothing more starts.
+  // Set once a sample's gate says halt (the gateway refuses the key, is out of funds, or does not know a contestant's
+  // model): every later call would meet the same refusal, or the run's config needs fixing, so nothing more starts.
   let halted: string | null = null;
   const done = await mapLimit(planned, opts.concurrency ?? CONCURRENCY, async ({ contestant, fixture, epoch }): Promise<Sample<O> | null> => {
     if (cap.reached || halted !== null) return null;
