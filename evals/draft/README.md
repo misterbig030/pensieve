@@ -47,11 +47,17 @@ time and cost. A rescore writes `draft-<timestamp>-rescore-summary.md`.
 ## The six criteria
 
 1. **Backbone**: the allocated backbone is one of the topic's labelled books, by title and author.
-2. **Named practice list**: a read LeetCode/NeetCode list carries the problem-set time and Week 1 names its problems, none twice.
-3. **Reservations add up**: every material is reserved by some week, nothing with chapters twice, and Week 1's days use only Week 1's.
+2. **Named practice list**: a read LeetCode/NeetCode list carries the problem-set time and the first drafted units name its problems, none twice.
+3. **Reservations add up**: every material is reserved by some top-level unit (a heading's covers, a leaf's own rows), nothing with chapters twice, and the first drafted units use only their heading's reservation.
 4. **Outside services**: no outside call gave up, no Open Library read failed, and the stream did not error.
-5. **Practice time served**: every picked format that needs a source has one, and served formats get at least half their share of practice time.
-6. **Week 1 days**: the days fit the daily minutes, no text shows a material id, and nothing with chapters is used twice.
+5. **Practice time served**: every picked format that needs a source (lab, problem set) has one and gets at least half its share of practice time from its sources. A format the planner may write itself (recall, design, project, mock, session) passes however little its sources give, because the planner writes the rest of its share as generated rows.
+6. **First drafted units**: the first drafted leaves fit their minutes, no text shows a material id, and nothing with chapters is used twice.
+
+The checks read every plan shape. The top level holds the reservations whatever its level, and the "first drafted
+units" are the first run of leaves: Week 1's days, Month 1's weeks, Month 1 · Week 1's days, or the top level itself
+when its units are leaves (a one-week plan of days, a plan of week leaves). A day's minutes are its share of the week;
+a week leaf's are its own hours. As the leaf rules in `lib/ai/planPrompt.ts` allow, a chapter may run across
+consecutive leaves when each names its part in a note; a heading reserves each chapter once.
 
 Warnings do not fail a run: expected books missing, drop reasons, refused page reads, sizing slips, cost or time over
 the limit, and retries. Criteria that need labels the topic lacks score n/a.

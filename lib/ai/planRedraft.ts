@@ -20,7 +20,7 @@ import { capProblems } from "@/lib/schemas/plan";
 import type { PlanSplit } from "@/lib/studyTime";
 import type { GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL } from "./models";
-import { draftFirstBranch, draftLevel, setProblems, unitsAreLeaves, type DraftLevelInput } from "./planDraft";
+import { draftFirstBranch, draftLevel, draftWeekBlocks, setProblems, unitsAreLeaves, weekLeafBlocks, type DraftLevelInput } from "./planDraft";
 import { describe, LockedNodeError } from "./planRevision";
 import { appModel, type ResolvedModel } from "./resolve";
 
@@ -97,14 +97,23 @@ async function draftWhole(input: DraftLevelInput): Promise<{ nodes: PlanNode[]; 
   throw new Error("The outline ended without its units");
 }
 
+/** Runs the blocks of a re-draft's week leaves to their end, as `draftWhole` runs one call. */
+async function draftBlocksWhole(ctx: DraftLevelInput["ctx"], root: PlanNode, blocks: number[], keep: PlanNode[], log?: GenerationLogContext) {
+  const run = draftWeekBlocks(ctx, root, blocks, log, keep);
+  let step = await run.next();
+  while (!step.done) step = await run.next();
+  return step.value;
+}
+
 /**
  * Re-drafts the open part of a plan through the outline, as a first draft is drafted: same prompt, sizing and checks,
  * and what breaks a rule comes back as problems on the node the level was planned inside. What the learner has done or
  * started stays as it is.
  *
  * - `plan`, or `level` at the top (`parentId: null`): the top-level units up to the last one done or started are kept
- *   unchanged (`keep`); the rest of the plan is re-drafted after them. `plan` then plans the first new unit's first
- *   branch, as a new plan's first unit is.
+ *   unchanged (`keep`); the rest of the plan is re-drafted after them, in blocks when more than `LEAF_CALL_MAX_WEEKS`
+ *   week leaves are left (`draftWeekBlocks`). `plan` then plans the first new unit's first branch, as a new plan's first
+ *   unit is.
  * - `level` with a heading: the heading stays and its children are re-drafted. A completed or locked heading or child
  *   throws `LockedNodeError` before any call.
  */
@@ -157,7 +166,10 @@ export async function redraftPlan(input: RedraftInput): Promise<RedraftResult> {
   if (spans.length === 0) throw new NothingToRedraftError("The plan is no longer than the units already done or started, so there is nothing left to re-draft. Make the plan longer to plan more.");
   root.children = keep;
   layout(root);
-  const top = await draftWhole({ ctx, level, spans, keep, log: input.log });
+  // Many week leaves left are too much writing for one call within the re-draft's time: they are drafted in blocks after
+  // the kept weeks, as a new draft's are.
+  const blocks = level === "week" && unitsAreLeaves(level, input.granularity) ? weekLeafBlocks(spans.length) : [];
+  const top = blocks.length > 1 ? await draftBlocksWhole(ctx, root, blocks, keep, input.log) : await draftWhole({ ctx, level, spans, keep, log: input.log });
   root.children = [...keep, ...top.nodes];
   setProblems(root, top.problems);
   layout(root);

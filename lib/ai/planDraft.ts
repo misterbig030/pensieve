@@ -534,18 +534,30 @@ export async function* draftFirstBranch(
  * its reservation at once. The weeks come out at the top level, sent in order as they land (the first block's live, a
  * later block's once those before it are in); the headings are dropped. The joined weeks are checked against the plan,
  * as one call's would be, and their problems put on `root`. One block's failure stops the others and fails the draft.
+ *
+ * With `keep` (a re-draft), the plan's first weeks are fixed: the headings and every block are planned after them and
+ * may not take what they hold, the root's children are the kept weeks then the drafted ones, and a kept week's own
+ * breaches stay facts, as `draftLevel` keeps them. The drafted weeks come back without the kept ones.
  */
-async function* draftWeekBlocks(ctx: DraftLevelInput["ctx"], root: PlanNode, blocks: number[], log?: GenerationLogContext): AsyncGenerator<{ type: "node"; parentId: string; node: PlanNode }, number> {
+export async function* draftWeekBlocks(
+  ctx: DraftLevelInput["ctx"],
+  root: PlanNode,
+  blocks: number[],
+  log?: GenerationLogContext,
+  keep: PlanNode[] = [],
+): AsyncGenerator<{ type: "node"; parentId: string; node: PlanNode }, { nodes: PlanNode[]; problems: string[]; costUsd: number }> {
   let costUsd = 0;
   let heads: PlanNode[] = [];
-  const label = `Top level · ${ctx.weeks} weeks in ${blocks.length} blocks`;
-  for await (const event of draftLevel({ ctx, level: "month", spans: blocks.map((w) => w * ctx.daysPerWeek), log, label })) {
+  const total = blocks.reduce((sum, w) => sum + w, 0);
+  const label = `Top level · ${total} weeks in ${blocks.length} blocks`;
+  for await (const event of draftLevel({ ctx, level: "month", spans: blocks.map((w) => w * ctx.daysPerWeek), keep, log, label })) {
     if (event.type === "done") {
       heads = event.nodes;
       costUsd += event.costUsd;
     }
   }
-  const tree = layout(makeRoot(heads));
+  // The blocks are planned in a tree that holds the kept weeks first, so what those hold is taken.
+  const tree = layout(makeRoot([...keep.map((n) => cloneTree(n)), ...heads]));
 
   const stop = new AbortController();
   const signal = within(ctx.signal ? AbortSignal.any([ctx.signal, stop.signal]) : stop.signal, timeLeft(ctx.deadline));
@@ -557,7 +569,7 @@ async function* draftWeekBlocks(ctx: DraftLevelInput["ctx"], root: PlanNode, blo
     wake?.();
     wake = null;
   };
-  let first = 1;
+  let first = keep.length + 1;
   // Every block's call starts now, in order; the loop below sends their weeks in order.
   heads.forEach((head, i) => {
     const spans = childSpans(head, ctx.daysPerWeek);
@@ -600,11 +612,29 @@ async function* draftWeekBlocks(ctx: DraftLevelInput["ctx"], root: PlanNode, blo
   }
 
   const weeks = states.flatMap((s) => s.final!);
-  root.children = weeks;
+  root.children = [...keep, ...weeks];
   layout(root);
-  const checks = levelChecks({ root, nodes: weeks, leaves: true, top: true, materials: ctx.materials, unknownIds: [], hoursPerWeek: ctx.hoursPerWeek, daysPerWeek: ctx.daysPerWeek, split: ctx.split, drafted: true });
-  setProblems(root, checks.problems);
-  return costUsd;
+  // As one call with kept units checks them (`draftLevel`): with the level, so the plan's totals count them, and only the
+  // drafted weeks held to their time. A kept week's own breach can't be fixed and is no problem.
+  const drafted = new Set(weeks.map((n) => n.id));
+  const keptIds = new Set<string>();
+  for (const n of keep) walk(n, (d) => void keptIds.add(d.id));
+  const checks = levelChecks({
+    root,
+    nodes: [...keep, ...weeks],
+    leaves: true,
+    top: true,
+    materials: ctx.materials,
+    unknownIds: [],
+    hoursPerWeek: ctx.hoursPerWeek,
+    daysPerWeek: ctx.daysPerWeek,
+    split: ctx.split,
+    drafted: keep.length > 0 ? (node) => drafted.has(node.id) : true,
+    ...(keep.length > 0 ? { saved: (node: PlanNode) => keptIds.has(node.id) } : {}),
+  });
+  const problems = capProblems(checks.problems.filter((_, i) => !(checks.breaches[i].index >= 0 && checks.breaches[i].index < keep.length)));
+  setProblems(root, problems);
+  return { nodes: weeks, problems, costUsd };
 }
 
 export interface StreamPlanDraftInput extends Omit<PlanDraftRequest, "materials"> {
@@ -662,7 +692,7 @@ export async function* streamPlanDraft(input: StreamPlanDraftInput): AsyncGenera
   // Many week leaves are too much writing for one call within the draft's time: they are drafted in blocks.
   const blocks = topLevel === "week" && unitsAreLeaves(topLevel, input.granularity) ? weekLeafBlocks(input.weeks) : [];
   if (blocks.length > 1) {
-    costUsd += yield* draftWeekBlocks(ctx, root, blocks, input.log);
+    costUsd += (yield* draftWeekBlocks(ctx, root, blocks, input.log)).costUsd;
     yield { type: "finish", root: layout(root), costUsd };
     return;
   }

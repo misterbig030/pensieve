@@ -151,7 +151,7 @@ describe("rescore", () => {
     expect(rows[1].result).toBeNull();
     expect(rows[1].error).toContain("plan.json");
     // the scored folder got its report, and its run.json kept meta and gained the result
-    expect(readFileSync(join(good, "report.md"), "utf8")).toContain("Week 1 days");
+    expect(readFileSync(join(good, "report.md"), "utf8")).toContain("First drafted units");
     const saved = JSON.parse(readFileSync(join(good, "run.json"), "utf8"));
     expect(saved.meta.topic).toBe("sde");
     expect(saved.result.verdicts).toHaveLength(6);
