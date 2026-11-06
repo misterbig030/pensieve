@@ -7,7 +7,7 @@ import type { ModelCall } from "@/lib/ai/logged";
 import { ALLOCATE_TIMEOUT_MS } from "@/lib/ai/planDraft";
 import { renderMaterials } from "@/lib/ai/planPrompt";
 import type { Coverage, DroppedMaterial } from "@/lib/ai/research/events";
-import { appModel } from "@/lib/ai/resolve";
+import { appModel, type ModelRoute } from "@/lib/ai/resolve";
 import type { ServiceEvent } from "@/lib/ai/serviceEvents";
 import { isPracticeOnly } from "@/lib/materials";
 import { PRACTICE_REGISTRY } from "@/lib/practice";
@@ -268,7 +268,7 @@ export function codeResults(output: AllocateOutput, ctx: AllocateCtx): Criterion
 export async function runAllocateSample(
   fixture: AllocateFixture,
   contestant: Contestant,
-  deps: { allocate?: typeof allocatePlan; now?: () => number } = {},
+  deps: { allocate?: typeof allocatePlan; now?: () => number; route?: ModelRoute } = {},
 ): Promise<Pick<Sample<AllocateOutput>, "gate" | "output" | "calls" | "costUsd" | "estimatedCostUsd" | "ms">> {
   const allocate = deps.allocate ?? allocatePlan;
   const roleModel = contestant.roles.allocate ?? BASELINE.roles.allocate!;
@@ -278,7 +278,7 @@ export async function runAllocateSample(
   const startedAt = now();
   const { split, materials, dropped, coverage, fallback, fallbackReason } = await allocate({
     ...fixture.input,
-    model: appModel(roleModel.model),
+    model: (deps.route ?? appModel)(roleModel.model),
     effort: roleModel.effort,
     timeoutMs: ALLOCATE_TIMEOUT_MS,
     log: { onCall: (call) => calls.push(call), onService: (event) => events.push(event) },

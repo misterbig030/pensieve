@@ -8,7 +8,7 @@ import { AVAILABLE_MODELS, providerOf } from "./models";
 vi.mock("@/lib/db/userApiKeys", () => ({ getUserApiKeys: vi.fn() }));
 
 import { getUserApiKeys } from "@/lib/db/userApiKeys";
-import { ANTHROPIC_API_IDS, DEFAULT_MODEL_IDS, appModel, keyCoversAll, onGatewayProviders, resolveModels, resolveWith } from "./resolve";
+import { ANTHROPIC_API_IDS, DEFAULT_MODEL_IDS, appModel, keyCoversAll, onGatewayProviders, resolveModels, resolveWith, routeWith } from "./resolve";
 
 const mockedKeys = vi.mocked(getUserApiKeys);
 const SECRET = randomBytes(32).toString("base64");
@@ -49,6 +49,15 @@ describe("resolveWith", () => {
     expect(DEFAULT_MODEL_IDS.allocate).toBe("anthropic/claude-opus-5.5");
     expect(resolveWith({}).allocate).toEqual({ model: "anthropic/claude-opus-5.5", id: "anthropic/claude-opus-5.5", keyOwner: "app" });
     expect(resolveWith({ anthropic: "sk-ant-test" }).allocate).toMatchObject({ id: "anthropic/claude-opus-5.5", keyOwner: "user" });
+  });
+});
+
+describe("routeWith", () => {
+  it("calls an Anthropic model on the user's key and any other model on the app's", () => {
+    const route = routeWith({ anthropic: "sk-ant-test" });
+    expect(route("anthropic/claude-haiku-5.5")).toMatchObject({ id: "anthropic/claude-haiku-5.5", keyOwner: "user" });
+    expect(instance(route("anthropic/claude-haiku-5.5").model).modelId).toBe("claude-haiku-5-5");
+    expect(route("openai/gpt-5.4")).toEqual(appModel("openai/gpt-5.4"));
   });
 });
 

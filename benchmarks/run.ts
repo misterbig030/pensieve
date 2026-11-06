@@ -11,7 +11,11 @@
  * Rescore and calibrate take the task from the run's `run.json` (allocate when it names none). A task with groups
  * (outline: top, inner, leaves) gets one report section and chart per group, then which contestant each group could route to.
  *
- * Always on the app's gateway key (AI_GATEWAY_API_KEY in .env.local); never reads or writes the database.
+ *   npx tsx benchmarks/run.ts --task outline ... --key user                 Anthropic calls on the owner's stored key
+ *
+ * On the app's gateway key (AI_GATEWAY_API_KEY in .env.local) by default, and then never reads or writes the database.
+ * With `--key user` every model the owner's stored keys can call directly (Anthropic's, the Opus judge among them) runs
+ * on that key, read from the database (DATABASE_URL, EVAL_USER_ID); the others stay on the gateway key.
  */
 import "../evals/draft/env";
 import { execSync } from "node:child_process";
@@ -21,6 +25,8 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { scrubSecrets } from "@/evals/draft/record";
 import { mapLimit, stamp } from "@/evals/draft/run";
+import { routeWith, type ModelRoute } from "@/lib/ai/resolve";
+import type { ModelProvider } from "@/lib/ai/models";
 import { cutAdvice, estimateRun, SpendCap, type Estimate } from "./budget";
 import { CALIBRATION_DIR, checkedCriteria, pickCalibration, writeCalibration, type CalibrationFile } from "./calibration";
 import { contestantsFor } from "./contestants";
@@ -74,10 +80,33 @@ function gitCommit(): string {
   }
 }
 
+/** The owner's decrypted keys while a `--key user` run is on, scrubbed from every file written along with the env's. */
+const runSecrets: string[] = [];
+
 /** Writes `text` to `path` through `scrubSecrets`, creating the folder. */
 function writeScrubbed(path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, scrubSecrets(text));
+  writeFileSync(path, scrubSecrets(text, process.env, runSecrets));
+}
+
+/** A run on the owner's stored keys: how each model is called, and the decrypted keys to keep out of every file. */
+export interface UserKey {
+  route: ModelRoute;
+  secrets: string[];
+}
+
+/**
+ * The stored keys of the user `EVAL_USER_ID` names, decrypted in memory, as a route. Throws when the id is missing or
+ * the user has no Anthropic key, since the run would then be on the gateway key while saying otherwise.
+ */
+async function userKey(): Promise<UserKey> {
+  const userId = process.env.EVAL_USER_ID;
+  if (!userId) throw new Error("--key user needs EVAL_USER_ID in .env.local: the id of the user whose stored key the run should use.");
+  const [{ getUserApiKeys }, { openSecret }] = await Promise.all([import("@/lib/db/userApiKeys"), import("@/lib/secrets")]);
+  const keys: Partial<Record<ModelProvider, string>> = {};
+  for (const row of await getUserApiKeys(userId)) keys[row.provider] = openSecret(row.ciphertext, row.secretVersion);
+  if (!keys.anthropic) throw new Error(`--key user: user ${userId} has no stored Anthropic key`);
+  return { route: routeWith(keys), secrets: Object.values(keys).filter((k): k is string => !!k) };
 }
 
 const writeJson = (path: string, value: unknown) => writeScrubbed(path, JSON.stringify(value, null, 2) + "\n");
@@ -109,6 +138,14 @@ function loadCache(cache: JudgeCache, print: (line: string) => void): void {
 }
 
 type JudgeFn = typeof judgeDimension;
+/** What judging needs: the judge, its cache, the spend cap, the log and, on the owner's key, how the judges are called. */
+interface JudgeDeps {
+  judge: JudgeFn;
+  cache: JudgeCache;
+  cap: SpendCap;
+  print: (line: string) => void;
+  route?: ModelRoute;
+}
 type Checked = ReturnType<typeof checkedCriteria>;
 
 /** Why judging stopped short: the spend cap was reached, or a judge call failed. */
@@ -124,7 +161,7 @@ async function judgeAll(
   instructions: string,
   model: RoleModel,
   dimensions: Map<string, JudgeCriterion[]>,
-  deps: { judge: JudgeFn; cache: JudgeCache; cap: SpendCap; print: (line: string) => void },
+  deps: JudgeDeps,
 ): Promise<{ fresh: Map<string, CriterionResult[]>; stopped: Stop }> {
   const fresh = new Map<string, CriterionResult[]>();
   if (deps.cap.reached) return { fresh, stopped: "cap" };
@@ -132,7 +169,7 @@ async function judgeAll(
   await Promise.all(
     [...dimensions].map(async ([dimension, criteria]) => {
       try {
-        const judged = await deps.judge({ rendered, dimension, criteria, judge: model, cache: deps.cache, instructions });
+        const judged = await deps.judge({ rendered, dimension, criteria, judge: model, cache: deps.cache, instructions, route: deps.route });
         deps.cap.add(judged.costUsd);
         fresh.set(dimension, judged.results);
       } catch (error) {
@@ -157,7 +194,7 @@ async function judgeSample<F extends { id: string }, O, C>(
   sample: Sample<O>,
   fixture: F,
   second: boolean,
-  deps: { judge: JudgeFn; cache: JudgeCache; cap: SpendCap; print: (line: string) => void },
+  deps: JudgeDeps,
 ): Promise<void> {
   const output = sample.output!;
   const ctx = task.ctxFor(fixture);
@@ -273,7 +310,9 @@ export interface RunOptions {
   /** The run's start as an ISO time, for the folder's name and `run.json`. */
   now?: string;
   /** Runs one sample; the task's own by default. Takes the task's fixture. */
-  runSample?: (fixture: never, contestant: Contestant) => Promise<SampleRun<unknown>>;
+  runSample?: (fixture: never, contestant: Contestant, route?: ModelRoute) => Promise<SampleRun<unknown>>;
+  /** Runs on the owner's stored keys (`--key user`); the app's gateway key when absent. */
+  userKey?: UserKey;
   judge?: JudgeFn;
   print?: (line: string) => void;
   /** The cost estimate; `estimateRun` by default. */
@@ -314,6 +353,8 @@ async function runTask<F extends { id: string }, O, C>(
   const cache = opts.cache ?? fileJudgeCache();
   const fixturesRoot = opts.fixturesRoot ?? FIXTURES_ROOT;
   const calibrationDir = opts.calibrationDir ?? CALIBRATION_DIR;
+  const route = opts.userKey?.route;
+  if (opts.userKey) runSecrets.push(...opts.userKey.secrets);
 
   const contestants = contestantsFor(opts.contestants);
   const named = opts.fixtures.map((id) => task.loadFixture(id, fixturesRoot));
@@ -352,6 +393,7 @@ async function runTask<F extends { id: string }, O, C>(
     epochs,
     maxUsd,
     margin,
+    key: opts.userKey ? "user" : "app",
     judge: JUDGE,
     secondJudge: SECOND_JUDGE,
     commit,
@@ -372,7 +414,7 @@ async function runTask<F extends { id: string }, O, C>(
   /** One attempt: a throw is a void sample marked as ours, since the harness broke and that says nothing about the model. */
   const attempt = async (fixture: F, contestant: Contestant): Promise<SampleRun<O>> => {
     try {
-      return await runSample(fixture, contestant);
+      return await runSample(fixture, contestant, route);
     } catch (error) {
       return { gate: { status: "void" as const, reason: `harness error: ${error instanceof Error ? error.message : String(error)}` }, output: null, calls: [], costUsd: 0, ms: 0 };
     }
@@ -397,7 +439,7 @@ async function runTask<F extends { id: string }, O, C>(
 
     const sample: Sample<O> = { task: task.name, fixture: fixture.id, contestant: contestant.name, epoch, ...ran, results: [], judged: true };
     if (sample.gate.status === "completed" && sample.output) {
-      await judgeSample(task, sample, fixture, secondNames.has(sampleName(sample)), { judge, cache, cap, print });
+      await judgeSample(task, sample, fixture, secondNames.has(sampleName(sample)), { judge, cache, cap, print, route });
     }
     writeJson(join(dir, "samples", `${sampleName(sample)}.json`), sample);
     print(sampleLine(sample, task.criteria));
@@ -469,6 +511,8 @@ export interface RescoreDeps {
   concurrency?: number;
   fixturesRoot?: string;
   calibrationDir?: string;
+  /** Judges on the owner's stored keys (`--key user`); the app's gateway key when absent. */
+  userKey?: UserKey;
 }
 
 /**
@@ -500,6 +544,8 @@ async function rescoreTask<F extends { id: string }, O, C>(
   loadCache(cache, print);
   const maxUsd = deps.maxUsd ?? run.maxUsd;
   const cap = new SpendCap(maxUsd);
+  const route = deps.userKey?.route;
+  if (deps.userKey) runSecrets.push(...deps.userKey.secrets);
 
   // The same second-opinion samples as the run chose, from its plan.
   const planned = run.contestants.flatMap((c) =>
@@ -514,7 +560,7 @@ async function rescoreTask<F extends { id: string }, O, C>(
 
   await mapLimit(samples, deps.concurrency ?? CONCURRENCY, async (sample) => {
     if (sample.gate.status !== "completed" || !sample.output) return;
-    await judgeSample(task, sample, fixtures.get(sample.fixture)!, secondNames.has(sampleName(sample)), { judge, cache, cap, print });
+    await judgeSample(task, sample, fixtures.get(sample.fixture)!, secondNames.has(sampleName(sample)), { judge, cache, cap, print, route });
     writeJson(join(dir, "samples", `${sampleName(sample)}.json`), sample);
   });
 
@@ -590,6 +636,7 @@ async function main() {
       margin: { type: "string", default: "0.05" },
       rescore: { type: "string" },
       calibrate: { type: "string" },
+      key: { type: "string", default: "app" },
     },
     allowPositionals: true,
   });
@@ -600,8 +647,14 @@ async function main() {
     return;
   }
 
+  if (values.key !== "app" && values.key !== "user") throw new Error(`--key is app or user, not "${values.key}"`);
+  const owner = values.key === "user" ? await userKey() : undefined;
+
   if (values.rescore) {
-    await rescoreBenchmark(values.rescore, { maxUsd: values["max-usd"] ? numberFlag("max-usd", values["max-usd"], (n) => n > 0, "a positive number") : undefined });
+    await rescoreBenchmark(values.rescore, {
+      maxUsd: values["max-usd"] ? numberFlag("max-usd", values["max-usd"], (n) => n > 0, "a positive number") : undefined,
+      ...(owner ? { userKey: owner } : {}),
+    });
     return;
   }
 
@@ -635,6 +688,7 @@ async function main() {
     epochs: numberFlag("epochs", values.epochs, (n) => Number.isInteger(n) && n >= 1, "a whole number of 1 or more"),
     maxUsd: numberFlag("max-usd", values["max-usd"] ?? "10", (n) => n > 0, "a positive number"),
     margin: numberFlag("margin", values.margin, (n) => n >= 0, "0 or more"),
+    ...(owner ? { userKey: owner } : {}),
   });
 }
 

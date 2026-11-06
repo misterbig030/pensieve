@@ -84,13 +84,18 @@ export const DIRECT_PROVIDERS: Partial<Record<ModelProvider, DirectProvider>> = 
   },
 };
 
-/** Pure: the user's decrypted keys by provider decide each role, against the defaults and the registry. */
-export function resolveWith(
+/** How a model is called: on whose key, through which provider. */
+export type ModelRoute = (id: AiModelId) => ResolvedModel;
+
+/**
+ * Pure: how one model is called given the user's decrypted keys by provider: on the user's key when the registry can
+ * call that model directly with it, else on the app's.
+ */
+export function routeWith(
   keys: Partial<Record<ModelProvider, string>>,
-  defaults: Record<ModelRole, AiModelId> = DEFAULT_MODEL_IDS,
   registry: Partial<Record<ModelProvider, DirectProvider>> = DIRECT_PROVIDERS,
-): ModelSet {
-  const resolve = (id: AiModelId): ResolvedModel => {
+): ModelRoute {
+  return (id) => {
     const provider = providerOf(id);
     const key = keys[provider];
     const direct = registry[provider];
@@ -98,6 +103,15 @@ export function resolveWith(
     if (!key || !direct || !apiId) return appModel(id);
     return { model: direct.create(key)(apiId), id, keyOwner: "user" };
   };
+}
+
+/** Pure: the user's decrypted keys by provider decide each role, against the defaults and the registry. */
+export function resolveWith(
+  keys: Partial<Record<ModelProvider, string>>,
+  defaults: Record<ModelRole, AiModelId> = DEFAULT_MODEL_IDS,
+  registry: Partial<Record<ModelProvider, DirectProvider>> = DIRECT_PROVIDERS,
+): ModelSet {
+  const resolve = routeWith(keys, registry);
   return {
     outline: resolve(defaults.outline),
     content: resolve(defaults.content),
