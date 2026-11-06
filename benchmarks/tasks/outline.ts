@@ -5,12 +5,12 @@
  * (units split later) each have their own criteria; only the fixture's kind applies.
  */
 import { GatewayError } from "@ai-sdk/gateway";
-import { APICallError, RetryError } from "ai";
+import { APICallError, NoObjectGeneratedError, RetryError } from "ai";
 import type { ModelCall } from "@/lib/ai/logged";
 import { draftLevel } from "@/lib/ai/planDraft";
 import { renderMaterials, renderTree } from "@/lib/ai/planPrompt";
 import { appModel } from "@/lib/ai/resolve";
-import type { Breach, BreachKind } from "@/lib/materials";
+import { isPracticeOnly, type Breach, type BreachKind } from "@/lib/materials";
 import { cloneTree, findNode, layout, makeRoot, type PlanNode } from "@/lib/planTree";
 import { PRACTICE_REGISTRY } from "@/lib/practice";
 import { chapterAt, type CoverRef, type Material, type MaterialRef, type PracticeCover, type PracticeRef } from "@/lib/schemas/material";
@@ -58,10 +58,17 @@ const LEAF_ORDER: BreachKind[] = ["outside", "overlap", "whole-book", "review-be
 const HEAD_TIME: BreachKind[] = ["over-capacity", "no-time", "budget-miss", "format-total-miss", "parent-miss"];
 const HEAD_ORDER: BreachKind[] = ["outside", "overlap", "whole-book"];
 
-/** Whether a Read row of the level reads a material with no chapter list, whose order only a reader can follow. */
-function readsUnlisted(output: OutlineOutput, ctx: OutlineCtx): boolean {
-  const byId = new Map(ctx.fixture.materials.map((m) => [m.id, m]));
-  return output.nodes.some((n) => (n.materials ?? []).some((r) => (r.activity ?? "read") === "read" && byId.has(r.id) && !byId.get(r.id)!.toc));
+/**
+ * Whether the level was given a material with no chapter list to read, whose order only a reader can follow: inside a
+ * parent, one the parent set aside; at the top level, any reading material. Decided by the fixture alone, so every
+ * contestant on it is judged on the same criteria.
+ */
+function givenUnlisted(ctx: OutlineCtx): boolean {
+  const { fixture } = ctx;
+  const parent = fixture.tree && fixture.parentId ? findNode(fixture.tree, fixture.parentId) : null;
+  if (!parent) return fixture.materials.some((m) => !m.toc && !isPracticeOnly(m));
+  const byId = new Map(fixture.materials.map((m) => [m.id, m]));
+  return (parent.covers ?? []).some((c) => (c.activity ?? "read") === "read" && byId.has(c.id) && !byId.get(c.id)!.toc);
 }
 
 const LEAF_CRITERIA: Entry[] = [
@@ -116,7 +123,7 @@ const LEAF_CRITERIA: Entry[] = [
   },
   {
     criterion: judge("leaf", { id: "leaf-order-judge", weight: 1, text: "Units reading a book without a chapter list each continue where the one before stopped." }),
-    when: readsUnlisted,
+    when: (_output, ctx) => givenUnlisted(ctx),
   },
   { criterion: judge("leaf", { id: "leaf-title", weight: 2, text: "Each unit's title and summary match its rows." }) },
   { criterion: judge("leaf", { id: "leaf-practice-read", weight: 1, text: "Practice uses only what has been read by then." }) },
@@ -159,6 +166,8 @@ const HEAD_CRITERIA: Entry[] = [
         return findings([...breachTexts(output, ["reading-over-stated"]), ...off], `${sized} sized unit${sized === 1 ? "" : "s"} fit their reading time`);
       },
     }),
+    // Only with something to grade: a heading with no covers or no time sets nothing aside to measure.
+    when: (output, ctx) => setAsideOffSize(output.nodes, ctx.fixture.materials).sized > 0,
   },
   {
     criterion: judge("heading", { id: "head-set-aside-judge", weight: 1.5, text: "What each unit sets aside fits its reading time." }),
@@ -382,6 +391,18 @@ function aborted(error: unknown, depth = 4): boolean {
   return false;
 }
 
+/** The tokens an error says its call used (`NoObjectGeneratedError` carries them), looking through retries and causes. */
+function usageOf(error: unknown, depth = 4): { inputTokens: number; outputTokens: number; cacheReadTokens: number | null } | null {
+  if (depth < 0 || error == null) return null;
+  if (NoObjectGeneratedError.isInstance(error) && error.usage && (error.usage.inputTokens !== undefined || error.usage.outputTokens !== undefined)) {
+    const { inputTokens, outputTokens, inputTokenDetails } = error.usage;
+    return { inputTokens: inputTokens ?? 0, outputTokens: outputTokens ?? 0, cacheReadTokens: inputTokenDetails?.cacheReadTokens ?? null };
+  }
+  if (RetryError.isInstance(error)) return usageOf(error.lastError ?? error.errors.at(-1), depth - 1);
+  if (error instanceof Error && "cause" in error) return usageOf(error.cause, depth - 1);
+  return null;
+}
+
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** The gate for a call that threw: our deadline or an abort fails it; the gateway's outage or refusal voids it. */
@@ -400,13 +421,13 @@ const CEILING: BreachKind[] = ["over-capacity", "over-budget"];
  * Runs the fixture's level once through the app's `draftLevel` with the contestant's outline model and effort (the
  * baseline's when the contestant leaves the role out), under the time the source run had left. A level with a unit past
  * the time ceiling fails, its output kept for the report. A call's cost is what the gateway charged, or the list price
- * where it reported none.
+ * where it reported none; a call that threw before reporting is charged an estimate (`estimatedCostUsd`), so it is not free.
  */
 export async function runOutlineSample(
   fixture: OutlineFixture,
   contestant: Contestant,
   deps: { draft?: typeof draftLevel; now?: () => number } = {},
-): Promise<Pick<Sample<OutlineOutput>, "gate" | "output" | "calls" | "costUsd" | "ms">> {
+): Promise<Pick<Sample<OutlineOutput>, "gate" | "output" | "calls" | "costUsd" | "estimatedCostUsd" | "ms">> {
   const draft = deps.draft ?? draftLevel;
   const role = contestant.roles.outline ?? BASELINE.roles.outline!;
   const calls: ModelCall[] = [];
@@ -417,6 +438,7 @@ export async function runOutlineSample(
 
   let output: OutlineOutput | null = null;
   let gate: Gate = { status: "completed" };
+  let thrown: unknown;
   try {
     for await (const event of draft({ ...input, ctx: { ...input.ctx, deadline }, log: { onCall: (call) => calls.push(call) } })) {
       if (event.type === "done") output = { nodes: event.nodes, units: event.units, breaches: event.breaches, problems: event.problems };
@@ -425,9 +447,25 @@ export async function runOutlineSample(
     if (!output) gate = { status: "failed", reason: "the draft returned no level" };
     else if (over) gate = { status: "failed", reason: `over the time ceiling: ${over.text}` };
   } catch (error) {
+    thrown = error;
     gate = thrownGate(error, Date.now() >= deadline, fixture.timeLimitMs);
   }
   const ms = Math.round(now() - startedAt);
-  const costUsd = calls.reduce((sum, call) => sum + (call.costUsd ?? listPriceUsd(call.model, call)), 0);
-  return { gate, output, calls, costUsd, ms };
+  // The draft reports a call only once its object resolves, so a call that threw (a timeout, an outage, an answer that
+  // did not parse) reports no cost and a slow contestant would look free. Charge it what the error says it used, or else
+  // the fixture's own call at this contestant's price, with as much more output as the baseline's pace would have
+  // written in the extra time (a reasoning model that times out has been writing all along).
+  let estimatedCostUsd = 0;
+  if (gate.status !== "completed" && calls.length === 0) {
+    const used = usageOf(thrown);
+    if (used) estimatedCostUsd = listPriceUsd(role.model, used);
+    else {
+      const { inputTokens, outputTokens, ms: baselineMs } = fixture.baseline;
+      const pace = baselineMs > 0 ? Math.max(1, ms / baselineMs) : 1;
+      estimatedCostUsd = listPriceUsd(role.model, { inputTokens, outputTokens: outputTokens * pace });
+    }
+  }
+  // A call's cost is what the gateway charged; one it reported no charge for is priced at the list rate.
+  const costUsd = calls.reduce((sum, call) => sum + (call.costUsd ?? listPriceUsd(call.model, call)), 0) + estimatedCostUsd;
+  return { gate, output, calls, costUsd, ...(estimatedCostUsd > 0 ? { estimatedCostUsd } : {}), ms };
 }

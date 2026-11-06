@@ -1,4 +1,4 @@
-import { APICallError } from "ai";
+import { APICallError, NoObjectGeneratedError } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { draftLevel } from "@/lib/ai/planDraft";
@@ -143,21 +143,50 @@ describe("codeResults", () => {
     expect(results.find((r) => r.id === "head-time")?.met).toBe(false);
     expect(results.find((r) => r.id === "head-set-aside-code")?.met).toBe(true);
   });
+
+  it("gives head-set-aside-code no result when no heading sets aside anything to size", () => {
+    const weeks = [node({ id: "a", level: "week", time: { reading: 120, practice: {} } }), node({ id: "b", level: "week" })];
+    const results = codeResults({ nodes: weeks, units: [], breaches: [], problems: [] }, { fixture: HEADING });
+    expect(results.find((r) => r.id === "head-set-aside-code")).toBeUndefined();
+    expect(results.find((r) => r.id === "head-time")).toBeDefined();
+  });
 });
 
 describe("judgeCriteriaFor", () => {
-  it("leaves out leaf-order-judge when every material the level reads has a toc", () => {
-    const ids = judgeCriteriaFor(leafOutput(), { fixture: LEAF }).map((c) => c.id);
+  /** LEAF, with the parent setting aside the essay (no chapter list) beside the book's chapter. */
+  const WITH_ESSAY: OutlineFixture = {
+    ...LEAF,
+    materials: [BOOK, ESSAY],
+    tree: layout(makeRoot([{ ...WEEK, covers: [...WEEK.covers!, { id: "essay", note: null }] }, node({ id: "w2", level: "week", title: "Machine code", summary: "Assembly", len: 2 })])),
+  };
+
+  it("leaves out leaf-order-judge when everything the parent set aside has a toc", () => {
+    // The essay is among the materials but not set aside for this week: the level was not given it.
+    const ids = judgeCriteriaFor(leafOutput(), { fixture: { ...LEAF, materials: [BOOK, ESSAY] } }).map((c) => c.id);
     expect(ids).not.toContain("leaf-order-judge");
     expect(ids).toContain("leaf-note");
     expect(ids.every((id) => id.startsWith("leaf-"))).toBe(true);
   });
 
-  it("includes leaf-order-judge when a material the level reads has none", () => {
-    const fixture = { ...LEAF, materials: [BOOK, ESSAY] };
-    const nodes = [...DAYS, node({ id: "d3", materials: [{ id: "essay", chapter: null, tier: "must", minutes: 45, note: "The first half" }] })];
-    const ids = judgeCriteriaFor(leafOutput({ nodes }), { fixture }).map((c) => c.id);
-    expect(ids).toContain("leaf-order-judge");
+  it("includes leaf-order-judge when the parent set aside a material with no toc", () => {
+    expect(judgeCriteriaFor(leafOutput(), { fixture: WITH_ESSAY }).map((c) => c.id)).toContain("leaf-order-judge");
+  });
+
+  it("at the top level, includes leaf-order-judge for a reading material with no toc, not for a practice-only one", () => {
+    const top: OutlineFixture = { ...LEAF, group: "top", tree: undefined, parentId: undefined };
+    const ids = (materials: Material[]) => judgeCriteriaFor(leafOutput(), { fixture: { ...top, materials } }).map((c) => c.id);
+    expect(ids([BOOK, ESSAY])).toContain("leaf-order-judge");
+    const problems = material("lc", "LeetCode 75", { kind: "tool", minutes: null, practice: { format: "problem-set" } as Material["practice"] });
+    expect(ids([BOOK, problems])).not.toContain("leaf-order-judge");
+  });
+
+  it("gives every contestant on a fixture the same leaf-order-judge decision, whatever it wrote", () => {
+    const readsEssay = [...DAYS, node({ id: "d3", materials: [{ id: "essay", chapter: null, tier: "must", minutes: 45, note: "The first half" }] })];
+    const has = (fixture: OutlineFixture, out: OutlineOutput) => judgeCriteriaFor(out, { fixture }).some((c) => c.id === "leaf-order-judge");
+    for (const fixture of [LEAF, WITH_ESSAY]) {
+      expect(has(fixture, leafOutput())).toBe(has(fixture, leafOutput({ nodes: readsEssay })));
+      expect(has(fixture, leafOutput({ nodes: [] }))).toBe(has(fixture, leafOutput()));
+    }
   });
 
   it("asks the judge about minutes only for rows with no size", () => {
@@ -228,6 +257,37 @@ describe("runOutlineSample", () => {
     expect(sample.calls).toHaveLength(2);
     expect(sample.costUsd).toBeCloseTo(0.4 + listPriceUsd("anthropic/claude-opus-5.5", unpriced));
     expect(sample.ms).toBeGreaterThanOrEqual(0);
+    expect(sample.estimatedCostUsd).toBeUndefined();
+  });
+
+  describe("a call that threw before reporting", () => {
+    const flash: Contestant = { name: "flash", roles: { outline: { model: "google/gemini-3-flash", effort: "low" } } };
+    const abort = () => Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+
+    it("is charged the fixture's baseline tokens at the contestant's price, with output at the baseline's pace", async () => {
+      // The baseline wrote 4k tokens in 30 s; this call ran 90 s, so it is charged three times that.
+      const ticks = [0, 90_000];
+      const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ error: abort() }), now: () => ticks.shift()! });
+      const estimate = listPriceUsd("google/gemini-3-flash", { inputTokens: 20_000, outputTokens: 12_000 });
+      expect(sample.estimatedCostUsd).toBeGreaterThan(0);
+      expect(sample.estimatedCostUsd).toBeCloseTo(estimate);
+      expect(sample.costUsd).toBe(sample.estimatedCostUsd);
+    });
+
+    it("is charged the tokens the error says it used, when it carries them", async () => {
+      const usage = { inputTokens: 30_000, outputTokens: 7_000, inputTokenDetails: { cacheReadTokens: 10_000 } };
+      const error = new NoObjectGeneratedError({ message: "No object generated: response did not match schema.", usage, finishReason: "stop" } as unknown as ConstructorParameters<typeof NoObjectGeneratedError>[0]);
+      const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ error }) });
+      expect(sample.gate.status).toBe("failed");
+      expect(sample.estimatedCostUsd).toBeCloseTo(listPriceUsd("google/gemini-3-flash", { inputTokens: 30_000, outputTokens: 7_000, cacheReadTokens: 10_000 }));
+    });
+
+    it("is not estimated past the time ceiling, where the call reported its cost", async () => {
+      const sample = await runOutlineSample(LEAF, flash, { draft: fakeDraft({ breaches: [breach("over-budget")] }) });
+      expect(sample.gate.status).toBe("failed");
+      expect(sample.estimatedCostUsd).toBeUndefined();
+      expect(sample.costUsd).toBe(0.4);
+    });
   });
 
   it("fails an aborted call as timed out after the fixture's limit", async () => {
