@@ -119,6 +119,7 @@ type Stop = "cap" | "error" | null;
  */
 async function judgeAll(
   rendered: string,
+  instructions: string,
   model: RoleModel,
   dimensions: Map<string, JudgeCriterion[]>,
   deps: { judge: JudgeFn; cache: JudgeCache; cap: SpendCap; print: (line: string) => void },
@@ -129,7 +130,7 @@ async function judgeAll(
   await Promise.all(
     [...dimensions].map(async ([dimension, criteria]) => {
       try {
-        const judged = await deps.judge({ rendered, dimension, criteria, judge: model, cache: deps.cache });
+        const judged = await deps.judge({ rendered, dimension, criteria, judge: model, cache: deps.cache, instructions });
         deps.cap.add(judged.costUsd);
         fresh.set(dimension, judged.results);
       } catch (error) {
@@ -162,13 +163,13 @@ async function judgeSample<F extends { id: string }, O, C>(
   const dimensions = byDimension(applicable);
   const rendered = task.render(output, fixture);
   const saved = sample.results.filter((r) => r.grader === "judge");
-  const primary = await judgeAll(rendered, JUDGE, dimensions, deps);
+  const primary = await judgeAll(rendered, task.judgeInstructions, JUDGE, dimensions, deps);
   const fresh = [...primary.fresh.values()].flat();
   const judgeResults = applicable.flatMap((c) => [fresh.find((r) => r.id === c.id) ?? saved.find((r) => r.id === c.id)].filter((r) => r !== undefined));
   sample.results = [...task.codeResults(output, ctx), ...judgeResults];
   sample.judged = judgeResults.length === applicable.length;
   if (second && primary.stopped !== "error") {
-    const other = [...(await judgeAll(rendered, SECOND_JUDGE, dimensions, deps)).fresh.values()].flat();
+    const other = [...(await judgeAll(rendered, task.judgeInstructions, SECOND_JUDGE, dimensions, deps)).fresh.values()].flat();
     if (applicable.every((c) => other.some((r) => r.id === c.id))) sample.secondJudge = other;
   }
 }

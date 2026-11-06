@@ -129,7 +129,8 @@ const LEAF_CRITERIA: Entry[] = [
   { criterion: judge("leaf", { id: "leaf-practice-read", weight: 1, text: "Practice uses only what has been read by then." }) },
   { criterion: judge("leaf", { id: "leaf-done", weight: 1, text: "Each practice task says what done looks like." }) },
   { criterion: judge("leaf", { id: "leaf-focus", weight: 1, text: "Each unit has one focus." }) },
-  { criterion: judge("leaf", { id: "leaf-words-judge", weight: 0.5, text: "Written for the learner: no ids, no chapter or section names it was not given, no filler." }) },
+  // Ids are leaf-words-code's: the judge reads the level after the app has put them in words.
+  { criterion: judge("leaf", { id: "leaf-words-judge", weight: 0.5, text: "Written for the learner: no chapter or section names it was not given, no filler." }) },
   {
     criterion: code({
       id: "leaf-words-code",
@@ -191,7 +192,8 @@ const HEAD_CRITERIA: Entry[] = [
     criterion: judge("heading", {
       id: "head-words-judge",
       weight: 0.5,
-      text: "Written for the learner: no ids; a book without a chapter list named by topic, never by chapter or section.",
+      // Ids are head-words-code's: the judge reads the level after the app has put them in words.
+      text: "Written for the learner: a book without a chapter list named by topic, never by chapter or section.",
     }),
   },
   {
@@ -232,6 +234,14 @@ export function judgeCriteriaFor(output: OutlineOutput, ctx: OutlineCtx): JudgeC
 
 // ---------------------------------------------------------------------------------------------------------------
 // The judge's view
+
+/** What the judge is told it grades: one level of an outline, written for the input shown with it. */
+export const OUTLINE_JUDGE_INSTRUCTIONS = [
+  "You are grading one level of a study plan's outline, shown above: the units under \"The level as written\", drafted for the request, materials, plan, set-aside and budgets shown with them.",
+  "Judge each criterion on its own, from the outline shown alone, and say why in one sentence.",
+  'A criterion that describes a harm (something the plan should not do) is "met" when the harm is present.',
+  "Answer for every id given, once each.",
+].join("\n");
 
 const capitalize = (s: string) => `${s[0].toUpperCase()}${s.slice(1)}`;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;

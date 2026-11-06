@@ -7,10 +7,10 @@ import type { ModelCall } from "@/lib/ai/logged";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 import { calibrateBenchmark, captureFixtures, rescoreBenchmark, runBenchmark } from "./run";
-import { JUDGE, SECOND_JUDGE, judgeDimension, type JudgeCache } from "./judge";
+import { JUDGE, JUDGE_INSTRUCTIONS, SECOND_JUDGE, judgeDimension, type JudgeCache } from "./judge";
 import type { AllocateFixture } from "./fixtures";
 import type { AllocateOutput, runAllocateSample } from "./tasks/allocate";
-import type { OutlineOutput, runOutlineSample } from "./tasks/outline";
+import { OUTLINE_JUDGE_INSTRUCTIONS, type OutlineOutput, type runOutlineSample } from "./tasks/outline";
 import { outlineFixturePath, type OutlineFixture } from "./tasks/outlineFixtures";
 import { layout, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { CriterionResult, Sample } from "./types";
@@ -124,6 +124,8 @@ describe("runBenchmark", () => {
     // Three dimensions per sample, and the second judge on the first of each contestant's four samples.
     expect(judgeFn).toHaveBeenCalledTimes(8 * 3 + 2 * 3);
     expect(judgeFn.mock.calls.filter(([a]) => a.judge.model === SECOND_JUDGE.model)).toHaveLength(6);
+    // Allocate's judge is sent allocate's instructions, unchanged, so its cached answers still apply.
+    expect(judgeFn.mock.calls.every(([a]) => a.instructions === JUDGE_INSTRUCTIONS)).toBe(true);
 
     const report = readFileSync(join(dir, "report.md"), "utf8");
     expect(report).toContain("# Model benchmark: allocate");
@@ -530,6 +532,10 @@ describe("the outline task", () => {
     expect(leaf.results.filter((r) => r.grader === "judge").every((r) => r.id.startsWith("leaf-"))).toBe(true);
     // One judge call per applicable dimension: a level is a leaf or a heading, so one per sample.
     expect(judgeFn.mock.calls.every(([a]) => a.dimension === "leaf" || a.dimension === "heading")).toBe(true);
+    // Each judge call is told it grades a level of an outline, not an allocation.
+    expect(judgeFn.mock.calls.every(([a]) => a.instructions === OUTLINE_JUDGE_INSTRUCTIONS)).toBe(true);
+    // Two contestants on two fixtures, one epoch each of two, and the second judge on every fifth sample per contestant.
+    expect(judgeFn.mock.calls.filter(([a]) => a.judge.model === JUDGE.model)).toHaveLength(8);
 
     const report = readFileSync(join(dir, "report.md"), "utf8");
     expect(report).toContain("## Group: top");

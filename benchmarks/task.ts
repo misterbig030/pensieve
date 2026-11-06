@@ -6,7 +6,8 @@ import type { Material } from "@/lib/schemas/material";
 import { DRAFT_TOPICS } from "@/evals/draft/topics";
 import { loadFixture, type AllocateFixture } from "./fixtures";
 import { ALLOCATE_CRITERIA, codeResults as allocateCodeResults, renderAllocation, runAllocateSample, type AllocateCtx, type AllocateOutput } from "./tasks/allocate";
-import { codeResults as outlineCodeResults, judgeCriteriaFor, OUTLINE_CRITERIA, renderOutline, runOutlineSample, type OutlineCtx, type OutlineOutput } from "./tasks/outline";
+import { JUDGE_INSTRUCTIONS } from "./judge";
+import { codeResults as outlineCodeResults, judgeCriteriaFor, OUTLINE_CRITERIA, OUTLINE_JUDGE_INSTRUCTIONS, renderOutline, runOutlineSample, type OutlineCtx, type OutlineOutput } from "./tasks/outline";
 import { loadOutlineFixture, type OutlineFixture } from "./tasks/outlineFixtures";
 import type { Contestant, Criterion, CriterionResult, JudgeCriterion, Role, Sample } from "./types";
 
@@ -23,6 +24,8 @@ export interface BenchTask<F extends { id: string }, O, C> {
   codeResults(output: O, ctx: C): CriterionResult[];
   /** The judge criteria that apply to this output: allocate, all of its judge criteria. */
   judgeCriteria(output: O, ctx: C): JudgeCriterion[];
+  /** What the judge is told it grades, sent after the rendered output; the cache key hashes it. */
+  judgeInstructions: string;
   render(output: O, fixture: F): string;
   /** The tokens of the source run's call, for the estimate; null when it made none. */
   baseline(fixture: F): { inputTokens: number; outputTokens: number } | null;
@@ -45,6 +48,8 @@ const allocate: BenchTask<AllocateFixture, AllocateOutput, AllocateCtx> = {
   runSample: (fixture, contestant) => runAllocateSample(fixture, contestant),
   codeResults: allocateCodeResults,
   judgeCriteria: () => ALLOCATE_JUDGE_CRITERIA,
+  // Byte for byte the instructions allocate was judged on before tasks had their own, so its cached answers still apply.
+  judgeInstructions: JUDGE_INSTRUCTIONS,
   render: (output, fixture) => renderAllocation(output, fixture.input),
   baseline: (fixture) => fixture.baseline,
   materials: (fixture) => fixture.input.materials,
@@ -60,6 +65,7 @@ const outline: BenchTask<OutlineFixture, OutlineOutput, OutlineCtx> = {
   runSample: (fixture, contestant) => runOutlineSample(fixture, contestant),
   codeResults: outlineCodeResults,
   judgeCriteria: judgeCriteriaFor,
+  judgeInstructions: OUTLINE_JUDGE_INSTRUCTIONS,
   render: renderOutline,
   baseline: (fixture) => fixture.baseline,
   groupOf: (fixture) => fixture.group,

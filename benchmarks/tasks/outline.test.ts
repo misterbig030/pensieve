@@ -10,7 +10,8 @@ import { BASELINE } from "../contestants";
 import { listPriceUsd } from "../price";
 import type { Contestant } from "../types";
 import type { OutlineFixture } from "./outlineFixtures";
-import { codeResults, judgeCriteriaFor, OUTLINE_CRITERIA, renderOutline, runOutlineSample, type OutlineOutput } from "./outline";
+import { JUDGE_INSTRUCTIONS } from "../judge";
+import { codeResults, judgeCriteriaFor, OUTLINE_CRITERIA, OUTLINE_JUDGE_INSTRUCTIONS, renderOutline, runOutlineSample, type OutlineOutput } from "./outline";
 
 function chapters(minutes: number[]): ChapterList {
   return {
@@ -94,6 +95,28 @@ describe("outline criteria", () => {
       expect(c.id).toMatch(/^(leaf|head)-/);
       if (c.grader === "judge") expect(c.dimension).toBe(c.id.startsWith("leaf-") ? "leaf" : "heading");
     }
+  });
+
+  it("leaves ids to the code criteria: the judge's words criteria do not ask about them", () => {
+    // The judge reads the level after the app put ids in words, so it would always find none.
+    for (const id of ["leaf-words-judge", "head-words-judge"]) {
+      const c = OUTLINE_CRITERIA.find((x) => x.id === id)!;
+      expect(c.text, id).not.toMatch(/\bids?\b/i);
+    }
+  });
+});
+
+describe("OUTLINE_JUDGE_INSTRUCTIONS", () => {
+  it("tells the judge it grades one level of an outline, not an allocation", () => {
+    expect(OUTLINE_JUDGE_INSTRUCTIONS).toMatch(/one level of a study plan's outline/);
+    expect(OUTLINE_JUDGE_INSTRUCTIONS).not.toMatch(/allocation/i);
+    expect(OUTLINE_JUDGE_INSTRUCTIONS).toContain("Judge each criterion on its own");
+  });
+
+  it("keeps allocate's lines on harms and on answering every id", () => {
+    const shared = JUDGE_INSTRUCTIONS.split("\n").slice(2);
+    expect(shared).toHaveLength(2);
+    for (const line of shared) expect(OUTLINE_JUDGE_INSTRUCTIONS.split("\n")).toContain(line);
   });
 });
 

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -180,6 +181,27 @@ describe("judgeDimension", () => {
     await judgeDimension({ rendered: "THE OUTPUT", dimension: "coverage", criteria: CRITERIA, judge: JUDGE, cache: memoryCache(), generate: asGenerate(generate) });
     const sent = (generate.mock.calls[0][0] as { messages: { content: { text: string }[] }[] }).messages[0].content[1].text;
     expect(sent.startsWith(JUDGE_INSTRUCTIONS)).toBe(true);
+  });
+
+  it("keeps allocate's instructions and cache key byte for byte", () => {
+    // Pinned: a change here would re-key every cached allocate judgment.
+    expect(createHash("sha256").update(JUDGE_INSTRUCTIONS).digest("hex")).toBe("00b6609ba7b8a39e93876529e1bd5c760b87c19f4eb40e1316a671e24b578f7c");
+    expect(judgeKey("out", "coverage", [criterion("a")], JUDGE)).toBe("a081227de1734835ba5a1cf5fd364d9bdfa646019595d4d4cc16d6eee20a8277");
+  });
+
+  it("sends a task's own instructions when given, and keys the cache on them", async () => {
+    const own = "You are grading something else.\nAnswer for every id given, once each.";
+    const generate = fakeGenerate([
+      { id: "a", met: true, reason: "It does." },
+      { id: "b", met: true, reason: "It does." },
+    ]);
+    const cache = memoryCache();
+    await judgeDimension({ ...args(generate, cache), instructions: own });
+    const sent = (generate.mock.calls[0][0] as { messages: { content: { text: string }[] }[] }).messages[0].content[1].text;
+    expect(sent.startsWith(own)).toBe(true);
+    expect(sent).not.toContain(JUDGE_INSTRUCTIONS);
+    expect(cache.get(judgeKey("THE OUTPUT", "coverage", CRITERIA, JUDGE, own))).toHaveLength(2);
+    expect(cache.get(judgeKey("THE OUTPUT", "coverage", CRITERIA, JUDGE))).toBeUndefined();
   });
 });
 

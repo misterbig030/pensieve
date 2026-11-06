@@ -79,7 +79,10 @@ export function fileJudgeCache(path: string = CACHE_FILE): JudgeCache & { load()
   };
 }
 
-/** The fixed instructions the judge is sent after the rendered output; the cache key hashes them, so editing them reuses no old answer. */
+/**
+ * The allocate task's instructions, sent after the rendered output, and the default for a call that names none. The
+ * cache key hashes them, so editing them reuses no old answer.
+ */
 export const JUDGE_INSTRUCTIONS = [
   "You are grading the allocation of a study plan, shown above: how the learner's time is split and which materials were kept.",
   "Judge each criterion on its own, from the allocation alone, and say why in one sentence.",
@@ -113,8 +116,8 @@ const verdictsSchema = z.object({
 });
 
 /** The instructions and criteria that follow the rendered output. Weights are never shown to the judge. */
-function criteriaPrompt(criteria: JudgeCriterion[]): string {
-  return [JUDGE_INSTRUCTIONS, "", "Criteria:", ...criteria.map((c) => `- ${c.id}: ${c.text}`)].join("\n");
+function criteriaPrompt(criteria: JudgeCriterion[], instructions: string): string {
+  return [instructions, "", "Criteria:", ...criteria.map((c) => `- ${c.id}: ${c.text}`)].join("\n");
 }
 
 /**
@@ -128,15 +131,18 @@ export async function judgeDimension(args: {
   criteria: JudgeCriterion[];
   judge: RoleModel;
   cache: JudgeCache;
+  /** The task's instructions to the judge; allocate's (`JUDGE_INSTRUCTIONS`) when absent. */
+  instructions?: string;
   generate?: typeof generateObject;
 }): Promise<{ results: CriterionResult[]; costUsd: number; calls: ModelCall[] }> {
   const { rendered, dimension, criteria, judge, cache } = args;
-  const key = judgeKey(rendered, dimension, criteria, judge);
+  const taskInstructions = args.instructions ?? JUDGE_INSTRUCTIONS;
+  const key = judgeKey(rendered, dimension, criteria, judge, taskInstructions);
   const cached = cache.get(key);
   if (cached) return { results: cached, costUsd: 0, calls: [] };
 
   const generate = args.generate ?? generateObject;
-  const instructions = criteriaPrompt(criteria);
+  const instructions = criteriaPrompt(criteria, taskInstructions);
   const startedAt = performance.now();
   const { object, usage, finishReason, providerMetadata } = await generate({
     model: judge.model,
