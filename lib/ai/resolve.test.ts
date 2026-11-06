@@ -128,6 +128,7 @@ describe("appModel", () => {
     for (const id of ["anthropic/claude-haiku-5.5", "anthropic/claude-sonnet-5", "anthropic/claude-opus-5"] as const) {
       expect(GATEWAY_PROVIDERS[id], id).toEqual(["anthropic", "bedrock"]);
       expect(instance(appModel(id).model).modelId, id).toBe(id);
+      expect(appModel(id).model, id).toBe(appModel(id).model); // built once, reused by every request
     }
     // The models that always think do so on Vertex too, so the gateway still picks their provider.
     expect(GATEWAY_PROVIDERS["anthropic/claude-sonnet-5.5"]).toBeUndefined();

@@ -25,6 +25,8 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { scrubSecrets } from "@/evals/draft/record";
 import { mapLimit, stamp } from "@/evals/draft/run";
+import { isGatewayOutOfFunds } from "@/lib/ai/gatewayFunds";
+import { classifyProviderError } from "@/lib/ai/providerError";
 import { routeWith, type ModelRoute } from "@/lib/ai/resolve";
 import type { ModelProvider } from "@/lib/ai/models";
 import { cutAdvice, estimateRun, SpendCap, type Estimate } from "./budget";
@@ -145,6 +147,8 @@ interface JudgeDeps {
   cap: SpendCap;
   print: (line: string) => void;
   route?: ModelRoute;
+  /** Told when a judge's key is refused for want of funds, which every later judge call would meet too. */
+  halt?: (reason: string) => void;
 }
 type Checked = ReturnType<typeof checkedCriteria>;
 
@@ -173,7 +177,11 @@ async function judgeAll(
         deps.cap.add(judged.costUsd);
         fresh.set(dimension, judged.results);
       } catch (error) {
-        deps.print(`${model.model} could not judge ${dimension}: ${error instanceof Error ? error.message : String(error)}`);
+        const message = error instanceof Error ? error.message : String(error);
+        deps.print(`${model.model} could not judge ${dimension}: ${message}`);
+        if (classifyProviderError(error) === "credits" || isGatewayOutOfFunds(error instanceof Error ? error : new Error(message))) {
+          deps.halt?.(`judge key out of funds: ${message}`);
+        }
         stopped = "error";
       }
     }),
@@ -421,7 +429,8 @@ async function runTask<F extends { id: string }, O, C>(
   };
 
   // Set once a sample's gate says halt (the gateway refuses the key, is out of funds, or does not know a contestant's
-  // model): every later call would meet the same refusal, or the run's config needs fixing, so nothing more starts.
+  // model) or a judge's key runs out of funds: every later call would meet the same refusal, or the run's config needs
+  // fixing, so nothing more starts.
   let halted: string | null = null;
   const done = await mapLimit(planned, opts.concurrency ?? CONCURRENCY, async ({ contestant, fixture, epoch }): Promise<Sample<O> | null> => {
     if (cap.reached || halted !== null) return null;
@@ -439,7 +448,8 @@ async function runTask<F extends { id: string }, O, C>(
 
     const sample: Sample<O> = { task: task.name, fixture: fixture.id, contestant: contestant.name, epoch, ...ran, results: [], judged: true };
     if (sample.gate.status === "completed" && sample.output) {
-      await judgeSample(task, sample, fixture, secondNames.has(sampleName(sample)), { judge, cache, cap, print, route });
+      const halt = (reason: string) => void (halted ??= reason);
+      await judgeSample(task, sample, fixture, secondNames.has(sampleName(sample)), { judge, cache, cap, print, route, halt });
     }
     writeJson(join(dir, "samples", `${sampleName(sample)}.json`), sample);
     print(sampleLine(sample, task.criteria));
@@ -647,6 +657,14 @@ async function main() {
     return;
   }
 
+  // Calibration calls no model, so it never reads the owner's keys.
+  if (values.calibrate) {
+    const path = calibrateBenchmark(values.calibrate);
+    console.log(`Wrote ${path}`);
+    console.log("Open it and set each grade's owner to true or false (does the criterion hold for that output?); leave null what you cannot tell.");
+    return;
+  }
+
   if (values.key !== "app" && values.key !== "user") throw new Error(`--key is app or user, not "${values.key}"`);
   const owner = values.key === "user" ? await userKey() : undefined;
 
@@ -655,13 +673,6 @@ async function main() {
       maxUsd: values["max-usd"] ? numberFlag("max-usd", values["max-usd"], (n) => n > 0, "a positive number") : undefined,
       ...(owner ? { userKey: owner } : {}),
     });
-    return;
-  }
-
-  if (values.calibrate) {
-    const path = calibrateBenchmark(values.calibrate);
-    console.log(`Wrote ${path}`);
-    console.log("Open it and set each grade's owner to true or false (does the criterion hold for that output?); leave null what you cannot tell.");
     return;
   }
 

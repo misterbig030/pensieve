@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFil
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { generateObject } from "ai";
+import { APICallError, type generateObject } from "ai";
 import type { ModelCall } from "@/lib/ai/logged";
 import { writeRun, type RunRecord, type TimedEvent } from "@/evals/draft/record";
 import type { Material } from "@/lib/schemas/material";
@@ -312,6 +312,25 @@ describe("runBenchmark", () => {
     expect(judgeFn).not.toHaveBeenCalled();
     expect(readSamples(dir)[0].gate.status).toBe("void");
     expect(summaries[0].voids).toBe(1);
+  });
+
+  it("stops starting samples once a judge's key runs out of credits, since no later sample could be judged", async () => {
+    const runSample = runner(() => completed(0.1));
+    const refused = new APICallError({
+      message: "Your credit balance is too low to access the Anthropic API.",
+      url: "https://api.anthropic.com/v1/messages",
+      requestBodyValues: {},
+      statusCode: 400,
+      responseBody: '{"error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}',
+    });
+    const judgeFn = vi.fn(async () => {
+      throw refused;
+    }) as unknown as typeof judgeDimension;
+    const lines: string[] = [];
+    const { dir } = await runBenchmark({ ...base({ concurrency: 1, print: (line: string) => lines.push(line) }), runSample, judge: judgeFn });
+    expect(runSample).toHaveBeenCalledTimes(1);
+    expect(readSamples(dir)).toHaveLength(1);
+    expect(lines.some((l) => l.startsWith("7 of 8 samples not started: judge key out of funds"))).toBe(true);
   });
 
   it("stops starting samples once the gateway refuses the key, without re-running that one", async () => {

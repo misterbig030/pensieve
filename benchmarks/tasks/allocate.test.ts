@@ -117,6 +117,15 @@ describe("runAllocateSample", () => {
     }
   });
 
+  it("voids and halts on the owner's own key out of credits (a 400 saying so), not blaming the model", async () => {
+    const events = [failure({ status: 400, reason: "Your credit balance is too low to access the Anthropic API.", where: "allocate" })];
+    const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, events }) });
+    expect(sample.gate).toEqual({ status: "void", reason: "anthropic 400: Your credit balance is too low to access the Anthropic API.", halt: true });
+    // Any other 400 is still the contestant's.
+    const other = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, events: [failure({ status: 400, reason: "bad schema", where: "allocate" })] }) });
+    expect(other.gate.status).toBe("failed");
+  });
+
   it("does not halt on a gateway outage, which a re-run may get past", async () => {
     const sample = await runAllocateSample(FIXTURE, BASELINE, { allocate: allocation({ fallback: true, events: [failure({ status: 503, reason: "overloaded" })] }) });
     expect(sample.gate).toEqual({ status: "void", reason: "anthropic 503: overloaded" });

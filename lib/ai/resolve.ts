@@ -49,13 +49,19 @@ export function onGatewayProviders(model: LanguageModel, only: readonly string[]
   });
 }
 
+/** The wrapped gateway models `appModel` built, one per pinned id, so every request reuses the same one. */
+const pinnedModels = new Map<AiModelId, LanguageModel>();
+
 /**
  * The app's own route for a model: the gateway id, paid by the app. A model the gateway must send to particular
  * providers (`GATEWAY_PROVIDERS`) is the gateway's model wrapped to say so.
  */
 export function appModel(id: AiModelId): ResolvedModel {
   const only = GATEWAY_PROVIDERS[id];
-  return { model: only ? onGatewayProviders(gateway(id), only) : id, id, keyOwner: "app" };
+  if (!only) return { model: id, id, keyOwner: "app" };
+  let model = pinnedModels.get(id);
+  if (!model) pinnedModels.set(id, (model = onGatewayProviders(gateway(id), only)));
+  return { model, id, keyOwner: "app" };
 }
 
 /** Gateway ids use dots; Anthropic's API uses hyphens. Only ids listed here can run on a user's key. */
