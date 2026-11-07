@@ -249,7 +249,7 @@ function isAppShell(page: PageInfo): boolean {
   return (page.words ?? 0) < APP_SHELL_WORDS && (outline?.headings.length ?? 0) === 0 && (outline?.links.length ?? 0) === 0;
 }
 
-/** The `outline` result for one page; `shellNote` adds where to look when the page is an app shell. */
+/** The `outline` result for one page; `shellNote` adds where to look when the page is an app shell or keeps a list in its data. */
 function outlineResult(url: string, page: PageInfo, shellNote = false) {
   const outline = page.outline;
   let left = MAX_OUTLINE_LINKS;
@@ -273,7 +273,21 @@ function outlineResult(url: string, page: PageInfo, shellNote = false) {
     links,
     ...(cut > 0 ? { linksCut: cut } : {}),
     ...(shellNote && isAppShell(page) ? { note: APP_SHELL_NOTE } : {}),
+    ...(shellNote && (page.pageData?.records ?? 0) >= PAGE_DATA_MIN_RECORDS ? { pageData: pageDataNote(page.pageData!) } : {}),
   };
+}
+
+/** A list in a page's embedded data shorter than this is not worth an `items` call (a page's testimonials, its FAQ). */
+const PAGE_DATA_MIN_RECORDS = 5;
+const PAGE_DATA_FIELDS = 12;
+
+/**
+ * Where a page keeps a list it does not show as text: a course page drawn by script may list only its modules while its
+ * data holds every lesson, with its kind and length (aieng-2: a course's 14 labs, in no heading).
+ */
+export function pageDataNote(data: { records: number; fields: string[] }): string {
+  const fields = data.fields.slice(0, PAGE_DATA_FIELDS).join(", ");
+  return `This page also carries data for its scripts: a list of ${data.records} records, with fields ${fields}${data.fields.length > PAGE_DATA_FIELDS ? ", …" : ""}. If they are the source's problems, questions or steps, or its lessons with its labs among them, call \`items\` on this page: it reads the list from that data.`;
 }
 
 /** The `measure` result for one page: its sizes, title and top-level heading titles. */

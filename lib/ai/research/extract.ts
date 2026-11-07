@@ -1,5 +1,6 @@
 import type { GuardedResponse } from "./egress";
 import { isGithubRepoPage, parseOutline, siteLinkCount, type PageOutline } from "./outline";
+import { largestPageList } from "./pageData";
 
 /** What `fetchSource` hands the model and the gate: the page's own claims about itself, plus readable text. */
 export interface PageInfo {
@@ -21,6 +22,8 @@ export interface PageInfo {
   siteLinks?: number;
   /** A PDF's page count, when its page objects are readable in the bytes read; null when they are not. */
   pages?: number | null;
+  /** The largest list of records in the data the page carries for its scripts: how many, and their fields. HTML pages only. */
+  pageData?: { records: number; fields: string[] } | null;
 }
 
 /** About 4k tokens of English. */
@@ -179,6 +182,7 @@ export function extractHtml(raw: string, finalUrl: string): PageInfo {
     durationMinutes: parseDurationMinutes(meta.get("duration") ?? meta.get("video:duration") ?? meta.get("og:video:duration")),
     outline,
     siteLinks: siteLinkCount(outline, finalUrl),
+    pageData: largestPageList(raw),
   };
 }
 
