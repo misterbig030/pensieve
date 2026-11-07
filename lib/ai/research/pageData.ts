@@ -49,14 +49,37 @@ export function pageDataRoots(html: string): { name: string; value: unknown }[] 
  */
 export function pageDataFile(html: string): { file: DataFile; text: string } | null {
   const roots = pageDataRoots(html);
-  const sets = roots.flatMap((r) => pageDataSets(r.value, r.name));
+  const sets = pageDataSets(roots);
   if (sets.length === 0) return null;
   return { file: { kind: "json", sets }, text: roots.map((r) => JSON.stringify(r.value)).join("\n") };
 }
 
-/** The page's largest list of records in its embedded data, as a count and its fields; null when it has none. */
-export function largestPageList(html: string): { records: number; fields: string[] } | null {
-  let largest: RecordSet | null = null;
-  for (const r of pageDataRoots(html)) for (const set of pageDataSets(r.value, r.name)) if (!largest || set.records.length > largest.records.length) largest = set;
-  return largest ? { records: largest.records.length, fields: largest.keys.filter((k) => k !== KEY_FIELD) } : null;
+/** One list in a page's embedded data, as the structure finder is told of it: how many records, and their fields. */
+export interface PageList {
+  records: number;
+  fields: string[];
+}
+
+/** A list shorter than this is not worth an `items` call. */
+export const PAGE_LIST_MIN_RECORDS = 5;
+/** At most this many lists are kept, the largest first. */
+const MAX_PAGE_LISTS = 4;
+
+/**
+ * The page's lists of at least `PAGE_LIST_MIN_RECORDS` records in its embedded data, largest first, at most
+ * `MAX_PAGE_LISTS`; the same list met twice (a render tree often repeats its data) is kept once.
+ */
+export function pageLists(html: string): PageList[] {
+  const seen = new Set<string>();
+  const lists: PageList[] = [];
+  const sets = pageDataSets(pageDataRoots(html)).filter((s) => s.records.length >= PAGE_LIST_MIN_RECORDS);
+  for (const set of sets.sort((a: RecordSet, b: RecordSet) => b.records.length - a.records.length)) {
+    const fields = set.keys.filter((k) => k !== KEY_FIELD);
+    const key = `${set.records.length}:${fields.join(",")}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lists.push({ records: set.records.length, fields });
+    if (lists.length === MAX_PAGE_LISTS) break;
+  }
+  return lists;
 }

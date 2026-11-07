@@ -36,6 +36,9 @@ const MAX_DEPTH = 3;
 export const SAMPLE_RECORDS = 20;
 const OTHER_SAMPLE_RECORDS = 3;
 const MAX_SETS = 4;
+/** Sets past the sampled ones are still named, with their size and fields, up to this many: a page's data holds many. */
+const MAX_NAMED_SETS = 24;
+const NAMED_SET_FIELDS = 12;
 const SAMPLE_RECORD_CHARS = 400;
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -114,12 +117,12 @@ function jsonSets(root: unknown): RecordSet[] {
 const MAX_PAGE_DATA_NODES = 200_000;
 
 /**
- * Every run of records anywhere in data a page carries for its scripts, at any depth, each under the full path to it
- * after `prefix`: a list of records, or records keyed by name (`.*`, each record's key in `_key`). A page's data nests
- * its lists deep inside a render tree that `jsonSets` would not walk into. A record's parent is the object the list
- * sits in.
+ * Every run of records anywhere in the data a page carries for its scripts, at any depth, each under the full path to
+ * it from its root's name: a list of records, or records keyed by name (`.*`, each record's key in `_key`). A page's
+ * data nests its lists deep inside a render tree that `jsonSets` would not walk into. A record's parent is the object
+ * the list sits in. One budget of `MAX_PAGE_DATA_NODES` covers all of a page's roots.
  */
-export function pageDataSets(root: unknown, prefix: string): RecordSet[] {
+export function pageDataSets(roots: { name: string; value: unknown }[]): RecordSet[] {
   const sets: RecordSet[] = [];
   let nodes = 0;
   const add = (path: string, records: DataRecord[]) => {
@@ -139,7 +142,7 @@ export function pageDataSets(root: unknown, prefix: string): RecordSet[] {
     if (keyed) add(`${path}.*`, keyed.map((o) => ({ value: o, parent: owner })));
     for (const [key, child] of Object.entries(value)) walk(child, `${path}.${key}`, value);
   };
-  walk(root, prefix, null);
+  for (const root of roots) walk(root.value, root.name, null);
   return sets;
 }
 
@@ -239,9 +242,15 @@ function valueCounts(set: RecordSet): string[] {
   return lines;
 }
 
-/** What the model sees of a data file: each record set's path, size and keys, the values of its kind fields, and its first records. */
+/**
+ * What the model sees of a data file: for the largest record sets, each one's path, size and keys, the values of its
+ * kind fields, and its first records; every other set by its path, size and keys, so a smaller set (a course's lessons
+ * beside its menus and reviews) can still be mapped.
+ */
 export function sampleDataFile(file: DataFile): string {
-  const sets = [...file.sets].sort((a, b) => b.records.length - a.records.length).slice(0, MAX_SETS);
+  const ranked = [...file.sets].sort((a, b) => b.records.length - a.records.length);
+  const sets = ranked.slice(0, MAX_SETS);
+  const rest = ranked.slice(MAX_SETS, MAX_NAMED_SETS);
   const lines: string[] = [];
   sets.forEach((set, i) => {
     if (file.kind === "json") lines.push(`Records at path "${set.path}"${set.path === "" ? " (the top level)" : ""}: ${set.records.length}`);
@@ -258,6 +267,15 @@ export function sampleDataFile(file: DataFile): string {
     }
     lines.push("");
   });
+  if (rest.length > 0) {
+    lines.push(`Other record sets, not sampled (path: records; fields):`);
+    for (const set of rest) {
+      const keys = set.keys.filter((k) => k !== KEY_FIELD);
+      lines.push(`"${set.path}": ${set.records.length}; ${keys.slice(0, NAMED_SET_FIELDS).join(", ")}${keys.length > NAMED_SET_FIELDS ? ", …" : ""}`);
+    }
+    const unnamed = file.sets.length - MAX_NAMED_SETS;
+    if (unnamed > 0) lines.push(`(and ${unnamed} smaller sets)`);
+  }
   return lines.join("\n").trim();
 }
 

@@ -513,6 +513,26 @@ describe("the full reader", () => {
     expect(huge.truncated).toBe(true);
   });
 
+  it("stops downloading a data file at its own cap, though a page may run to the shared one", async () => {
+    const CHUNK = 64 * 1024;
+    let sent = 0;
+    const chunked: Transport = async () => ({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: (async function* () {
+        for (let i = 0; i < 32; i++) {
+          sent += CHUNK;
+          yield new Uint8Array(CHUNK).fill(32);
+        }
+      })(),
+      destroy: () => {},
+    });
+    const file = await guardedFullReader({ resolver, transport: chunked })(RAW_URL);
+    expect(file).toMatchObject({ file: true, truncated: true });
+    expect(file.text).toHaveLength(ITEM_FILE_BYTES);
+    expect(sent).toBeLessThanOrEqual(ITEM_FILE_BYTES + CHUNK);
+  });
+
   it("reads a page as its readable text, and refuses what is not text", async () => {
     const html = `<html><head><title>List</title><script>var x = 1;</script></head><body><ul>${Array.from({ length: 800 }, (_, i) => `<li>Problem number ${i}</li>`).join("")}</ul></body></html>`;
     const page = await guardedFullReader({ resolver, transport: transportFor("text/html", html) })("https://example.com/list");

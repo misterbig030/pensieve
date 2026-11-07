@@ -85,10 +85,8 @@ export const guardedFullReader =
   (options: Omit<GuardedFetchOptions, "signal" | "contentTypes" | "maxBytes"> = {}): FullReader =>
   async (url, signal) => {
     // A page is read up to the shared cap, since the data it carries for its scripts can sit deep in it; a file up to its own.
-    const res = await guardedFetch(url, { timeoutMs: ITEM_FULL_READ_MS, ...options, signal, contentTypes: FULL_READ_TYPES, maxBytes: MAX_BODY_BYTES });
-    if (res.contentType !== "text/html" && res.body.length > ITEM_FILE_BYTES) {
-      return { finalUrl: res.finalUrl, text: decodeBody(res.body.subarray(0, ITEM_FILE_BYTES), res.charset), file: true, truncated: true };
-    }
+    const maxBytes = (type: AcceptedContentType) => (type === "text/html" ? MAX_BODY_BYTES : ITEM_FILE_BYTES);
+    const res = await guardedFetch(url, { timeoutMs: ITEM_FULL_READ_MS, ...options, signal, contentTypes: FULL_READ_TYPES, maxBytes });
     const text = decodeBody(res.body, res.charset);
     if (res.contentType === "text/html") {
       // A page longer than the cut is not read in full, whatever its bytes: the finder must not take part of a list for all of it.

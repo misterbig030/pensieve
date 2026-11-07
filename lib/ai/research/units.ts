@@ -279,9 +279,13 @@ export function citedUnfetched(answer: StructureAnswer, role: StructureRole, bas
   return [...cited.values()];
 }
 
+/** Different addresses showing one text this many times are a wall, not a page and its print view or mirror. */
+const MIN_COPIES = 3;
+
 /**
- * The pages among these that show the same text as another page at a different final address: a course's lessons behind
- * a sign-in all come back as one help page. A page with no text is never a copy.
+ * The pages among these that show the same text as at least `MIN_COPIES - 1` other pages at different final addresses:
+ * a course's lessons behind a sign-in all come back as one help page. Two pages alike (a lesson and its print view) are
+ * each measured. A page with no text is never a copy.
  */
 function copiedPages(pages: SeenPage[]): Set<SeenPage> {
   const byText = new Map<string, Set<string>>();
@@ -292,7 +296,7 @@ function copiedPages(pages: SeenPage[]): Set<SeenPage> {
     const at = canonicalUrl(p.finalUrl) ?? p.finalUrl;
     byText.set(text, (byText.get(text) ?? new Set()).add(at));
   }
-  return new Set(unique.filter((p) => (byText.get(p.text.trim())?.size ?? 0) > 1));
+  return new Set(unique.filter((p) => (byText.get(p.text.trim())?.size ?? 0) >= MIN_COPIES));
 }
 
 /** The seen page at this address, by its requested or final URL. */

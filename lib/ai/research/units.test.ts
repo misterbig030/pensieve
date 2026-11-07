@@ -485,6 +485,19 @@ describe("checkUnits", () => {
     expect(measured.toc!.chapters.map((c) => c.title)).toEqual(modules);
     expect(measured.basis).toBe("measured");
     expect(measured.toc!.chapters.every((c) => c.minutes !== null && c.minutes < 10)).toBe(true);
+
+    // Two addresses alike (a lesson and its print view) are a page twice, not a wall: each is measured.
+    const print = (i: number) => `${at(i)}/print`;
+    const pair = [seen(at(0), help.replace("Reset User Workspace", modules[0])), seen(print(0), help.replace("Reset User Workspace", modules[0])), own[1]];
+    const twoUnits = [
+      unit(modules[0], at(0), { group: "Module 1", minutes: 260 }),
+      unit(modules[0], print(0), { group: "Module 2", minutes: 260 }),
+      unit(modules[1], at(1), { group: "Module 3", minutes: 260 }),
+    ];
+    const twice = check({ answer: answer(twoUnits), pages: [course, ...pair], role: "both", material });
+    expect(twice.refused).toBeNull();
+    expect(twice.facts.some((f) => f.includes("show the same text"))).toBe(false);
+    expect(twice.toc!.chapters.every((c) => c.minutes !== null && c.minutes < 10)).toBe(true);
   });
 
   it("rule 4b: practice items whose pages all show one script shell keep their titles from the list", () => {

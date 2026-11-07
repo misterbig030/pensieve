@@ -11,7 +11,7 @@ import { OUTLINE_RESERVE_MS } from "../planDraft";
 import { providerError } from "../providerError";
 import { reportingModel, type ServiceEvent } from "../serviceEvents";
 import type { ResearchEvent } from "./events";
-import { extractHtml, type PageInfo } from "./extract";
+import { extractHtml, pageListsOf, type PageInfo } from "./extract";
 import type { FullReader } from "./itemFinder";
 import {
   ANSWER_NOW,
@@ -349,20 +349,30 @@ describe("the structure finder", () => {
     // aieng-2: the RAG course's outline showed five modules; its 14 labs were only in its data, and `items` was never called.
     const COURSE = "https://www.deeplearning.ai/courses/retrieval-augmented-generation";
     const page = extractHtml(fixture("course-page-data"), COURSE);
-    expect(page.pageData).toMatchObject({ records: 77 });
+    // Beside the page, not in it: the page goes whole to the research model.
+    expect(page).not.toHaveProperty("pageData");
+    expect(pageListsOf(page).map((l) => l.records)).toEqual([77, 20, 7, 6]);
     const practice = { format: "lab" as const, items: 9, perItemMinutes: 5, minutes: 45, answers: false };
     const outlineOf = async (role: "practice" | "both" | "read", at: PageInfo = page) => {
       const { model, calls } = scripted([[{ tool: "outline", input: { url: COURSE } }], [{ tool: "answer", input: answerOf({ whole: true }) }]]);
       await createStructureFinder({ provider: null, model }).find(material({ url: COURSE, kind: "course", practice, minutes: null }), role, context({ [COURSE]: at }).ctx);
       return JSON.stringify(calls[1].prompt);
     };
-    const note = JSON.stringify(pageDataNote(page.pageData!)).slice(1, 80);
-    expect(note).toContain("a list of 77 records");
+    const full = pageDataNote(pageListsOf(page));
+    // Every sizable list is named with its fields, so the finder can tell the lessons from the FAQ and the reviews.
+    expect(full).toContain("lists of 77 records (index, slug, name, type");
+    expect(full).toContain("7 records (answer, question)");
+    expect(full).toContain("6 records (name, rating, content, jobTitle)");
+    expect(full).toMatch(/FAQ, reviews/);
+    const note = JSON.stringify(full).slice(1, 80);
     expect(await outlineOf("both")).toContain(note);
     expect(await outlineOf("practice")).toContain(note);
     expect(await outlineOf("read")).not.toContain(note);
-    // A page whose data holds only a short list (its FAQ) gets no note.
-    expect(await outlineOf("both", { ...page, pageData: { records: 4, fields: ["question", "answer"] } })).not.toContain("carries data for its scripts");
+    // A page whose data holds only a short list (a 4-question FAQ) gets no note.
+    const faq = Array.from({ length: 4 }, (_, i) => ({ question: `Q${i}?`, answer: `A${i}.` }));
+    const short = extractHtml(`<html><body><h1>Course</h1><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { faq } })}</script></body></html>`, COURSE);
+    expect(pageListsOf(short)).toEqual([]);
+    expect(await outlineOf("both", short)).not.toContain("carries data for its scripts");
   });
 
   it("keeps a list read from a GitHub file page under the raw address it was read at, when the answer names either", async () => {

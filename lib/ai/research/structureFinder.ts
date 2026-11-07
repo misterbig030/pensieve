@@ -5,9 +5,10 @@ import { buildGenerationLogRow, effortSettings, emitGenerationLog, isAnthropicMo
 import { DEFAULT_RESEARCH_MODEL, STRUCTURE_EFFORT, type AiModelId, type ReasoningEffort } from "../models";
 import { providerError } from "../providerError";
 import type { ResearchCounts, ResearchEvent } from "./events";
-import type { PageInfo } from "./extract";
+import { pageListsOf, type PageInfo } from "./extract";
 import { listGroups, readItemListAt, type FullReader } from "./itemFinder";
 import type { OutlineHeading, OutlineLink, PageOutline } from "./outline";
+import type { PageList } from "./pageData";
 import { SEARCH_RESULTS, reportingSearch, type SearchProvider, type SourceFetcher } from "./tools";
 import { reportServiceFailure } from "../serviceEvents";
 import { checkUnits, citedUnfetched, structureAnswerSchema, type SeenPage, type StructureAnswer, type StructureRole, type UnitsVerdict } from "./units";
@@ -273,21 +274,21 @@ function outlineResult(url: string, page: PageInfo, shellNote = false) {
     links,
     ...(cut > 0 ? { linksCut: cut } : {}),
     ...(shellNote && isAppShell(page) ? { note: APP_SHELL_NOTE } : {}),
-    ...(shellNote && (page.pageData?.records ?? 0) >= PAGE_DATA_MIN_RECORDS ? { pageData: pageDataNote(page.pageData!) } : {}),
+    ...(shellNote && pageListsOf(page).length > 0 ? { pageData: pageDataNote(pageListsOf(page)) } : {}),
   };
 }
 
-/** A list in a page's embedded data shorter than this is not worth an `items` call (a page's testimonials, its FAQ). */
-const PAGE_DATA_MIN_RECORDS = 5;
-const PAGE_DATA_FIELDS = 12;
+const PAGE_DATA_FIELDS = 10;
 
 /**
- * Where a page keeps a list it does not show as text: a course page drawn by script may list only its modules while its
- * data holds every lesson, with its kind and length (aieng-2: a course's 14 labs, in no heading).
+ * Where a page keeps lists it does not show as text: a course page drawn by script may list only its modules while its
+ * data holds every lesson, with its kind and length (aieng-2: a course's 14 labs, in no heading). Each list is named by
+ * its size and fields, so the finder can tell a page's lessons from its FAQ or its reviews before it spends an `items`
+ * call.
  */
-export function pageDataNote(data: { records: number; fields: string[] }): string {
-  const fields = data.fields.slice(0, PAGE_DATA_FIELDS).join(", ");
-  return `This page also carries data for its scripts: a list of ${data.records} records, with fields ${fields}${data.fields.length > PAGE_DATA_FIELDS ? ", …" : ""}. If they are the source's problems, questions or steps, or its lessons with its labs among them, call \`items\` on this page: it reads the list from that data.`;
+export function pageDataNote(lists: PageList[]): string {
+  const named = lists.map((l) => `${l.records} records (${l.fields.slice(0, PAGE_DATA_FIELDS).join(", ")}${l.fields.length > PAGE_DATA_FIELDS ? ", …" : ""})`);
+  return `This page also carries data for its scripts, with ${lists.length === 1 ? "a list" : "lists"} of ${named.join("; ")}. Only if one of them holds the source's problems, questions or steps, or its lessons with its labs among them, call \`items\` on this page: it reads the list from that data. A page's FAQ, reviews, menus or related courses are not its items.`;
 }
 
 /** The `measure` result for one page: its sizes, title and top-level heading titles. */
