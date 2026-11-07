@@ -27,6 +27,8 @@ export interface RecordSet {
 export interface DataFile {
   kind: "json" | "csv";
   sets: RecordSet[];
+  /** True when the data was too large to walk whole, so a set past the part walked is missing. */
+  cut?: boolean;
 }
 
 /** Record sets shorter than this are not lists of items. */
@@ -36,6 +38,9 @@ const MAX_DEPTH = 3;
 export const SAMPLE_RECORDS = 20;
 const OTHER_SAMPLE_RECORDS = 3;
 const MAX_SETS = 4;
+/** Sets past the sampled ones are still named, with their size and fields, up to this many: a page's data holds many. */
+const MAX_NAMED_SETS = 24;
+const NAMED_SET_FIELDS = 12;
 const SAMPLE_RECORD_CHARS = 400;
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -110,6 +115,99 @@ function jsonSets(root: unknown): RecordSet[] {
   return sets;
 }
 
+/** Nodes walked in one page's embedded data: a render tree is large, and its lists sit deep in it. */
+const MAX_PAGE_DATA_NODES = 200_000;
+/** How many levels of lists nested in records are gathered across their parents (a course's modules, their lessons). */
+const MAX_GATHERED_LEVELS = 2;
+const SAME_SET_CHARS = 300;
+
+/**
+ * Every run of records anywhere in the data a page carries for its scripts, at any depth, each under the full path to
+ * it from its root's name: a list of records, or records keyed by name (`.*`, each record's key in `_key`). A page's
+ * data nests its lists deep inside a render tree that `jsonSets` would not walk into. A record's parent is the object
+ * the list sits in. Lists nested in a run of records are also gathered across all of them (`a[].b`, as `jsonSets`
+ * does): a course's lessons kept in each of its modules are one list, each lesson's parent its module. A run met again
+ * (a render tree often carries its data twice) is kept once, at its first path. One budget of `MAX_PAGE_DATA_NODES`
+ * covers all of a page's roots; `cut` says it ran out.
+ */
+export function pageDataSets(roots: { name: string; value: unknown }[]): { sets: RecordSet[]; cut: boolean } {
+  const sets: RecordSet[] = [];
+  const seen = new Set<string>();
+  let nodes = 0;
+  let cut = false;
+  /** What two copies of one run share: its size and its first and last records. */
+  const sameAs = (values: Record<string, unknown>[]) =>
+    `${values.length}:${JSON.stringify(values[0]).slice(0, SAME_SET_CHARS)}:${JSON.stringify(values[values.length - 1]).slice(0, SAME_SET_CHARS)}`;
+  const add = (path: string, records: DataRecord[]) => {
+    if (records.length < MIN_RECORDS) return;
+    const key = sameAs(records.map((r) => r.value));
+    if (seen.has(key)) return;
+    seen.add(key);
+    sets.push({ path, records, keys: keysOf(records.map((r) => r.value)), parentKeys: keysOf(records.map((r) => r.parent).filter(isPlainObject)) });
+  };
+  /**
+   * The lists nested in these records under each key, gathered across them when at least two hold a different one: a
+   * list two parents both carry is one list, not two.
+   */
+  const gather = (path: string, objects: Record<string, unknown>[], level: number) => {
+    if (level > MAX_GATHERED_LEVELS || objects.length < 2) return;
+    for (const key of keysOf(objects)) {
+      const listed: DataRecord[] = [];
+      const keyed: DataRecord[] = [];
+      const met = new Set<string>();
+      let inLists = 0;
+      let inKeyed = 0;
+      for (const parent of objects) {
+        const list = objectsIn(parent[key]);
+        const named = list ? null : entriesIn(parent[key]);
+        const values = list ?? named;
+        if (!values || met.has(sameAs(values))) continue;
+        met.add(sameAs(values));
+        if (list) {
+          inLists += 1;
+          for (const value of list) listed.push({ value, parent });
+        } else if (named) {
+          inKeyed += 1;
+          for (const value of named) keyed.push({ value, parent });
+        }
+      }
+      nodes += listed.length + keyed.length;
+      if (inLists >= 2) {
+        add(`${path}[].${key}`, listed);
+        gather(`${path}[].${key}`, listed.map((r) => r.value), level + 1);
+      }
+      if (inKeyed >= 2) {
+        add(`${path}[].${key}.*`, keyed);
+        gather(`${path}[].${key}.*`, keyed.map((r) => r.value), level + 1);
+      }
+    }
+  };
+  const walk = (value: unknown, path: string, owner: Record<string, unknown> | null) => {
+    if (++nodes > MAX_PAGE_DATA_NODES) {
+      cut = true;
+      return;
+    }
+    if (Array.isArray(value)) {
+      const objects = objectsIn(value);
+      if (objects) {
+        add(path, objects.map((o) => ({ value: o, parent: owner })));
+        gather(path, objects, 1);
+      }
+      value.forEach((child, i) => walk(child, `${path}[${i}]`, owner));
+      return;
+    }
+    if (!isPlainObject(value)) return;
+    const keyed = entriesIn(value);
+    if (keyed) {
+      add(`${path}.*`, keyed.map((o) => ({ value: o, parent: owner })));
+      gather(`${path}.*`, keyed, 1);
+    }
+    for (const [key, child] of Object.entries(value)) walk(child, `${path}.${key}`, value);
+  };
+  for (const root of roots) walk(root.value, root.name, null);
+  return { sets, cut };
+}
+
 /** Splits CSV (or TSV) text into rows, honouring quoted fields with delimiters, doubled quotes and line breaks. */
 export function parseDelimited(text: string, delimiter: string): string[][] {
   const rows: string[][] = [];
@@ -175,16 +273,54 @@ export function parseDataFile(text: string, truncated = false): DataFile | null 
   return set ? { kind: "csv", sets: [set] } : null;
 }
 
-/** What the model sees of a data file: each record set's path, size and keys, and its first records. */
+/** A field with this few distinct short values over all records reads as a kind or a flag, and its values are listed. */
+const MAX_LISTED_VALUES = 12;
+const MAX_LISTED_VALUE_CHARS = 40;
+
+/**
+ * Each field of the set that reads as a kind or a flag, with every value it takes over all records and how often: the
+ * part of a file a source names (its notebooks, its "150") may not show in the first records.
+ */
+function valueCounts(set: RecordSet): string[] {
+  const lines: string[] = [];
+  for (const key of set.keys) {
+    if (key === KEY_FIELD) continue;
+    const counts = new Map<string, number>();
+    let kind = true;
+    for (const r of set.records) {
+      const v = r.value[key];
+      if (typeof v !== "string" && typeof v !== "boolean") continue;
+      const s = String(v);
+      counts.set(s, (counts.get(s) ?? 0) + 1);
+      if (s.length > MAX_LISTED_VALUE_CHARS || counts.size > MAX_LISTED_VALUES) {
+        kind = false;
+        break;
+      }
+    }
+    const total = [...counts.values()].reduce((a, b) => a + b, 0);
+    if (!kind || counts.size < 2 || total < set.records.length / 2 || counts.size === total) continue;
+    lines.push(`Values of ${key} over all ${set.records.length} records: ${[...counts].map(([v, n]) => `${JSON.stringify(v)} (${n})`).join(", ")}`);
+  }
+  return lines;
+}
+
+/**
+ * What the model sees of a data file: for the largest record sets, each one's path, size and keys, the values of its
+ * kind fields, and its first records; every other set by its path, size and keys, so a smaller set (a course's lessons
+ * beside its menus and reviews) can still be mapped.
+ */
 export function sampleDataFile(file: DataFile): string {
-  const sets = [...file.sets].sort((a, b) => b.records.length - a.records.length).slice(0, MAX_SETS);
+  const ranked = [...file.sets].sort((a, b) => b.records.length - a.records.length);
+  const sets = ranked.slice(0, MAX_SETS);
+  const rest = ranked.slice(MAX_SETS, MAX_NAMED_SETS);
   const lines: string[] = [];
   sets.forEach((set, i) => {
     if (file.kind === "json") lines.push(`Records at path "${set.path}"${set.path === "" ? " (the top level)" : ""}: ${set.records.length}`);
-    if (set.path.includes("*")) lines.push(`(* stands for every key of an object; each record's key is in the field ${KEY_FIELD})`);
     else lines.push(`CSV rows: ${set.records.length}`);
+    if (set.path.includes("*")) lines.push(`(* stands for every key of an object; each record's key is in the field ${KEY_FIELD})`);
     lines.push(`Fields: ${set.keys.join(", ")}`);
     if (set.parentKeys.length > 0) lines.push(`Fields of the object each record sits in (write them as ../field): ${set.parentKeys.join(", ")}`);
+    for (const line of valueCounts(set)) lines.push(line);
     const n = i === 0 ? SAMPLE_RECORDS : OTHER_SAMPLE_RECORDS;
     lines.push(`First ${Math.min(n, set.records.length)} records:`);
     for (const r of set.records.slice(0, n)) {
@@ -193,11 +329,24 @@ export function sampleDataFile(file: DataFile): string {
     }
     lines.push("");
   });
+  if (rest.length > 0) {
+    lines.push(`Other record sets, not sampled (path: records; fields):`);
+    for (const set of rest) {
+      const keys = set.keys.filter((k) => k !== KEY_FIELD);
+      lines.push(`"${set.path}": ${set.records.length}; ${keys.slice(0, NAMED_SET_FIELDS).join(", ")}${keys.length > NAMED_SET_FIELDS ? ", …" : ""}`);
+    }
+    const unnamed = file.sets.length - MAX_NAMED_SETS;
+    if (unnamed > 0) lines.push(`(and ${unnamed} smaller sets)`);
+  }
+  if (file.cut) lines.push("(This data was too large to read whole: a list past the part read is not shown.)");
   return lines.join("\n").trim();
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // The mapping
+
+export const MINUTES_UNITS = ["minutes", "seconds", "hours"] as const;
+const PER_UNIT: Record<(typeof MINUTES_UNITS)[number], number> = { minutes: 1, seconds: 1 / 60, hours: 60 };
 
 export const fieldMappingSchema = z.object({
   found: z.boolean().describe("True only when this file lists the source's items"),
@@ -206,13 +355,14 @@ export const fieldMappingSchema = z.object({
   number: z.string().nullable().describe("The field holding the item's own number or label on its site, or one that starts with it (a code like 0049-group-anagrams); null when none"),
   group: z.string().nullable().describe("The field holding the item's topic or group; ../field for the object it sits in; null when none"),
   difficulty: z.string().nullable().describe("The field holding easy/medium/hard; null when none"),
-  minutes: z.string().nullable().describe("The field holding minutes; null when none"),
+  minutes: z.string().nullable().describe("The field holding how long the item takes; null when none"),
+  minutesUnit: z.enum(MINUTES_UNITS).describe('What the "minutes" field counts: minutes, seconds or hours; "minutes" when there is no such field'),
   url: z.string().nullable().describe('A link to the item, as a template over fields, e.g. "https://example.com/p/{slug}"; null when none'),
   solutionUrl: z.string().nullable().describe('A link to its solution, as a template over fields, e.g. "https://example.com/v/{video}"; null when none'),
   subset: z
-    .object({ field: z.string(), equals: z.string() })
+    .object({ field: z.string(), equals: z.array(z.string()) })
     .nullable()
-    .describe('When the source is a named part of the file: the field that marks it and the value that means "in" (e.g. "true"); null for the whole file'),
+    .describe('When the source is a named part of the file: the field that marks it and the values that mean "in" (e.g. ["true"]); null for the whole file'),
 });
 export type FieldMapping = z.infer<typeof fieldMappingSchema>;
 
@@ -262,12 +412,13 @@ export function applyMapping(file: DataFile, mapping: FieldMapping): ItemDraft[]
   let records = set.records;
   if (mapping.subset) {
     const { field, equals } = mapping.subset;
-    const want = equals.trim().toLowerCase();
+    const want = new Set(equals.map((v) => v.trim().toLowerCase()));
     if (!records.some((r) => fieldValue(r, field) !== null)) return null;
-    records = records.filter((r) => fieldValue(r, field)?.toLowerCase() === want);
+    records = records.filter((r) => want.has(fieldValue(r, field)?.toLowerCase() ?? ""));
   }
+  const perUnit = PER_UNIT[mapping.minutesUnit] ?? 1;
   return records.map((r) => {
-    const minutes = Number(fieldValue(r, mapping.minutes));
+    const minutes = Number(fieldValue(r, mapping.minutes)) * perUnit;
     return {
       title: fieldValue(r, mapping.title) ?? "",
       number: fieldValue(r, mapping.number),

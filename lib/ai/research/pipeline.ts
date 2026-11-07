@@ -16,8 +16,13 @@ import { createWorkersArm } from "./workers";
 
 /** Reading that is not a book is looked through when it takes at least this long (its page or its estimate). */
 export const STRUCTURE_MIN_MINUTES = 90;
-/** The most sources the structure finder runs for before the allocation. */
-export const MAX_STRUCTURE_FINDERS = 6;
+/** The most sources the structure finder runs for before the allocation. They run at once, so more cost more, not longer. */
+export const MAX_STRUCTURE_FINDERS = 8;
+/**
+ * Of those, the slots kept for practice sources that need their item list, ahead of books and long reading: without a
+ * list, nothing checks the time the allocation gives a format against what its sources hold.
+ */
+export const PRACTICE_FINDER_SLOTS = 3;
 
 /** Words in a source's title or description that say it is a list of things to do. */
 const LIST_LIKE_RE = /\b(lists?|problems|questions|exercises|flashcards|cards|challenges|puzzles|katas?|steps|levels|lessons|quizzes)\b/i;
@@ -51,7 +56,10 @@ const sizeOf = (m: Material) => Math.max(m.pageMinutes ?? 0, m.minutes ?? 0);
  * The sources a structure finder runs for, in priority order, at most MAX_STRUCTURE_FINDERS. A source qualifies when
  * it has an https address, is not a note or a file, and is a book with no chapter list, a practice source that needs
  * its item list, or other reading that is a hub or at least `STRUCTURE_MIN_MINUTES` long. The learner's own come first,
- * then books by how many sites recommend them, practice by its time, and the rest by size; a tie keeps the list's order.
+ * then books by how many sites recommend them, practice by its time (unknown first), and the rest by size; a tie keeps
+ * the list's order.
+ * The first `PRACTICE_FINDER_SLOTS` practice sources always run, however many come before them; the rest of the cap
+ * goes in that order.
  */
 export function likelyStructures(materials: Material[]): Material[] {
   const ranked: { m: Material; tier: number; weight: number; i: number }[] = [];
@@ -63,13 +71,14 @@ export function likelyStructures(materials: Material[]): Material[] {
     if (!book && !practice && !reading) return;
     if (m.origin === "learner") ranked.push({ m, tier: 0, weight: 0, i });
     else if (book) ranked.push({ m, tier: 1, weight: recommendingDomains(m.url, m.recommendedBy).length, i });
-    else if (practice) ranked.push({ m, tier: 2, weight: m.practice!.minutes ?? 0, i });
+    // A practice source of unknown size needs its list most: one with a count already checks its format's time.
+    else if (practice) ranked.push({ m, tier: 2, weight: m.practice!.minutes ?? Number.MAX_SAFE_INTEGER, i });
     else ranked.push({ m, tier: 3, weight: sizeOf(m), i });
   });
-  return ranked
-    .sort((a, b) => a.tier - b.tier || b.weight - a.weight || a.i - b.i)
-    .slice(0, MAX_STRUCTURE_FINDERS)
-    .map(({ m }) => m);
+  const order = ranked.sort((a, b) => a.tier - b.tier || b.weight - a.weight || a.i - b.i);
+  const reserved = new Set(order.filter((r) => r.tier === 2).slice(0, PRACTICE_FINDER_SLOTS));
+  const chosen = new Set([...reserved, ...order.filter((r) => !reserved.has(r)).slice(0, MAX_STRUCTURE_FINDERS - reserved.size)]);
+  return order.filter((r) => chosen.has(r)).map(({ m }) => m);
 }
 
 /**

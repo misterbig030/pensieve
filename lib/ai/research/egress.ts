@@ -82,7 +82,8 @@ export interface GuardedFetchOptions {
   resolver?: Resolver;
   transport?: Transport;
   timeoutMs?: number;
-  maxBytes?: number;
+  /** The most bytes of the body to read, or a cap per content type (known from the headers, before the body is read). */
+  maxBytes?: number | ((contentType: AcceptedContentType) => number);
   /** The content types to read; `ACCEPTED_CONTENT_TYPES` when omitted. Anything else is refused before the body is read. */
   contentTypes?: readonly AcceptedContentType[];
   /** Open Library's pace and contact for a hop to it; the process's one pacer and `OPEN_LIBRARY_CONTACT` when omitted. */
@@ -386,7 +387,8 @@ export async function guardedFetch(raw: string, options: GuardedFetchOptions = {
       throw new EgressError("content-encoding", `Unsupported content encoding ${res.headers["content-encoding"]}`);
     }
     try {
-      const { bytes, truncated } = await readCapped(body, maxBytes, res.destroy);
+      const cap = typeof maxBytes === "function" ? maxBytes(type as AcceptedContentType) : maxBytes;
+      const { bytes, truncated } = await readCapped(body, cap, res.destroy);
       return { finalUrl: url.href, status: res.status, contentType: type as AcceptedContentType, charset, body: bytes, truncated };
     } catch (error) {
       res.destroy();

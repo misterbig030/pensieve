@@ -34,6 +34,8 @@ export const structureAnswerSchema = z.object({
   whole: z.boolean(),
   units: z.array(z.object({ title: z.string(), at: z.string(), kind: z.enum(["read", "practice"]), group: z.string().nullable(), minutes: z.number().nullable() })),
   listUrl: z.string().nullable(),
+  /** Lists `items` read that are not the source's items; one read list not named here is kept when `listUrl` is null. */
+  notItems: z.array(z.string()).optional(),
 });
 export type StructureAnswer = z.infer<typeof structureAnswerSchema>;
 
@@ -98,7 +100,7 @@ export function checkUnits(input: {
   // Rule 1: whole or empty means no reading units and no size change; a list from the `items` tool still counts.
   if (answer.whole || answer.units.length === 0) {
     const facts = ["whole"];
-    const list = practiceList(answer.listUrl, lists, practiceRole, [], material.url, pages, facts);
+    const list = practiceList(answer, lists, practiceRole, [], material.url, pages, facts);
     return { toc: null, minutes: null, basis: null, list, refused: null, facts };
   }
 
@@ -113,23 +115,29 @@ export function checkUnits(input: {
   if (discarded > 0) facts.push(`${discarded} ${role === "read" ? "practice" : "reading"} units discarded: the source is ${role} only`);
 
   // Rules 3 and 4: units point to fetched pages, and their titles are on them.
-  const placed: Placed[] = [];
+  const found: Placed[] = [];
   const unfetched: Record<UnitKind, number> = { read: 0, practice: 0 };
   const untitled: Record<UnitKind, number> = { read: 0, practice: 0 };
   units.forEach((unit, index) => {
     const target = locate(unit, pages, source, book);
     const title = target ? seenTitle(unit.title, target.page, target.heading, pages, book) : null;
     if (target && title) {
-      placed.push({ unit, index, title, ...target, ...sizeOf(unit, target.page, target.heading) });
+      found.push({ unit, index, title, ...target, ...sizeOf(unit, target.page, target.heading) });
       return;
     }
     if (target) untitled[unit.kind]++;
     else unfetched[unit.kind]++;
   });
+  // Rule 4b: linked units on different pages that show the same text saw a sign-in wall or a page drawn by script, so
+  // that page's size is not theirs: they keep the model's minutes, estimated, as an unmeasured page does.
+  const copies = copiedPages(found.filter((p) => p.heading === null).map((p) => p.page));
+  const placed = found.map((p) => (p.heading === null && copies.has(p.page) ? { ...p, ...claimedMinutes(p.unit) } : p));
+  const copied = found.filter((p) => p.heading === null && copies.has(p.page)).length;
   const allUnfetched = unfetched.read + unfetched.practice;
   const allUntitled = untitled.read + untitled.practice;
   if (allUnfetched > 0) facts.push(`${allUnfetched} of ${units.length} units point to no fetched page or heading`);
   if (allUntitled > 0) facts.push(`${allUntitled} of ${units.length} titles not on the page`);
+  if (copied > 0) facts.push(`${copied} of ${units.length} units point to pages that show the same text as one another: not measured`);
 
   // Rule 5: too many unseen, per kind. Unseen reading units drop the reading (and refuse the verdict when no practice
   // list is left); unseen practice units only keep the practice units from becoming an item list.
@@ -150,7 +158,7 @@ export function checkUnits(input: {
   // Rules 5 and 8 to 11 judge the reading units. Reading that fails them is dropped; the verdict is refused only when
   // no practice list is left either, so a practice source's steps survive a stray reading unit beside them.
   const tocDraft = readingUnseen ? { dropped: readingUnseen } : readingToc({ material, reading, practice: role === "both" ? practice : [], book, home, source });
-  const list = practiceList(answer.listUrl, lists, practiceRole, material.practice && practiceSeen ? practice : [], material.url, pages, facts);
+  const list = practiceList(answer, lists, practiceRole, material.practice && practiceSeen ? practice : [], material.url, pages, facts);
   if ("dropped" in tocDraft) {
     if (!list) return refuse(`units refused: ${tocDraft.dropped}`);
     facts.push(`reading units dropped: ${tocDraft.dropped}`);
@@ -273,6 +281,26 @@ export function citedUnfetched(answer: StructureAnswer, role: StructureRole, bas
   return [...cited.values()];
 }
 
+/** Different addresses showing one text this many times are a wall, not a page and its print view or mirror. */
+const MIN_COPIES = 3;
+
+/**
+ * The pages among these that show the same text as at least `MIN_COPIES - 1` other pages at different final addresses:
+ * a course's lessons behind a sign-in all come back as one help page. Two pages alike (a lesson and its print view) are
+ * each measured. A page with no text is never a copy.
+ */
+function copiedPages(pages: SeenPage[]): Set<SeenPage> {
+  const byText = new Map<string, Set<string>>();
+  const unique = [...new Set(pages)];
+  for (const p of unique) {
+    const text = p.text.trim();
+    if (!text) continue;
+    const at = canonicalUrl(p.finalUrl) ?? p.finalUrl;
+    byText.set(text, (byText.get(text) ?? new Set()).add(at));
+  }
+  return new Set(unique.filter((p) => (byText.get(p.text.trim())?.size ?? 0) >= MIN_COPIES));
+}
+
 /** The seen page at this address, by its requested or final URL. */
 function pageAt(pages: SeenPage[], url: string): SeenPage | null {
   const key = canonicalUrl(url);
@@ -380,6 +408,11 @@ function sizeOf(unit: Unit, page: SeenPage, heading: number | null): { minutes: 
   if (heading !== null) return { minutes: boundedMinutes(page.outline!.headings[heading].words / WORDS_PER_MINUTE), measured: true };
   if (page.durationMinutes !== null && page.durationMinutes > 0) return { minutes: boundedMinutes(page.durationMinutes), measured: true };
   if (page.pdfPages === null && (page.words ?? 0) >= MIN_MEASURED_WORDS) return { minutes: boundedMinutes(page.words! / WORDS_PER_MINUTE), measured: true };
+  return claimedMinutes(unit);
+}
+
+/** The model's own minutes for a unit, estimated; null when it gave none. */
+function claimedMinutes(unit: Unit): { minutes: number | null; measured: boolean } {
   const claimed = unit.minutes;
   return { minutes: claimed !== null && Number.isFinite(claimed) && claimed > 0 ? boundedMinutes(claimed) : null, measured: false };
 }
@@ -589,12 +622,14 @@ function unitItems(p: Placed, sourceUrl: string): ItemDraft[] {
 }
 
 /**
- * Rule 13, for a role with practice only. The `items` tool's list when `listUrl` names one; otherwise the practice
- * units given (none when the material has no practice or too many were unseen) as items, a section of a problem table
- * as the problems in its rows. Either way it goes through `validateItemList` against what the tools returned.
+ * Rule 13, for a role with practice only. The `items` tool's list when `listUrl` names one, or when `listUrl` is null,
+ * the answer gives no practice units, and `items` read just one list that `notItems` does not set aside (aieng RAG
+ * course: 14 labs read from the page's data, then an answer with listUrl null); otherwise the practice units given
+ * (none when the material has no practice or too many were unseen) as items, a section of a problem table as the
+ * problems in its rows. Either way it goes through `validateItemList` against what the tools returned.
  */
 function practiceList(
-  listUrl: string | null,
+  answer: Pick<StructureAnswer, "listUrl" | "notItems">,
   lists: PracticeList[],
   practiceRole: boolean,
   practice: Placed[],
@@ -604,11 +639,17 @@ function practiceList(
 ): PracticeList | null {
   if (!practiceRole) return null;
   // The `items` tool reads a GitHub file page at its raw address, and the answer may name either.
-  const key = listUrl ? canonicalUrl(githubRawUrl(listUrl)) : null;
-  const named = key ? lists.find((l) => canonicalUrl(githubRawUrl(l.url)) === key) : undefined;
-  if (named) {
-    const list = validateItemList({ url: named.url, source: named.source, items: named.items }, seenText(pages));
-    facts.push(list ? `practice list from ${named.url}: ${list.items.length} items` : "practice list refused by the item check");
+  const keyOf = (url: string) => canonicalUrl(githubRawUrl(url));
+  const { listUrl } = answer;
+  const key = listUrl ? keyOf(listUrl) : null;
+  const named = key ? lists.find((l) => keyOf(l.url) === key) : undefined;
+  const setAside = new Set((answer.notItems ?? []).map(keyOf));
+  const only = !listUrl && practice.length === 0 && lists.length === 1 && !setAside.has(keyOf(lists[0].url)) ? lists[0] : undefined;
+  const kept = named ?? only;
+  if (kept) {
+    const list = validateItemList({ url: kept.url, source: kept.source, items: kept.items }, seenText(pages));
+    const from = kept === named ? kept.url : `${kept.url}, the one list \`items\` read`;
+    facts.push(list ? `practice list from ${from}: ${list.items.length} items` : "practice list refused by the item check");
     return list;
   }
   if (practice.length === 0) return null;

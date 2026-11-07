@@ -9,6 +9,7 @@ const mapping = (extra: Partial<FieldMapping> = {}): FieldMapping => ({
   group: null,
   difficulty: null,
   minutes: null,
+  minutesUnit: "minutes",
   url: null,
   solutionUrl: null,
   subset: null,
@@ -91,9 +92,19 @@ describe("data files", () => {
 
   it("keeps the named subset in file order, matching the flag's value in any case", () => {
     const file = parseDataFile(JSON.stringify([{ t: "A", in: true }, { t: "B", in: false }, { t: "C", in: "TRUE" }, { t: "D" }]))!;
-    expect(applyMapping(file, mapping({ subset: { field: "in", equals: "True" } }))!.map((d) => d.title)).toEqual(["A", "C"]);
-    expect(applyMapping(file, mapping({ subset: { field: "nope", equals: "true" } }))).toBeNull();
+    expect(applyMapping(file, mapping({ subset: { field: "in", equals: ["True"] } }))!.map((d) => d.title)).toEqual(["A", "C"]);
+    expect(applyMapping(file, mapping({ subset: { field: "nope", equals: ["true"] } }))).toBeNull();
     expect(applyMapping(file, mapping({ path: "elsewhere" }))).toBeNull();
     expect(applyMapping(file, mapping({ found: false }))).toBeNull();
+  });
+
+  it("keeps every kind a subset names, and reads minutes in the unit the mapping gives", () => {
+    const file = parseDataFile(JSON.stringify([{ t: "A", k: "lab", h: 1.5 }, { t: "B", k: "video", h: 0.1 }, { t: "C", k: "graded lab", h: "2" }]))!;
+    const drafts = applyMapping(file, mapping({ minutes: "h", minutesUnit: "hours", subset: { field: "k", equals: ["lab", "Graded lab"] } }))!;
+    expect(drafts.map((d) => [d.title, d.minutes])).toEqual([
+      ["A", 90],
+      ["C", 120],
+    ]);
+    expect(applyMapping(file, mapping({ minutes: "h" }))!.map((d) => d.minutes)).toEqual([1.5, 0.1, 2]);
   });
 });
