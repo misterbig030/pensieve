@@ -616,6 +616,9 @@ describe("reading an item list from a page's own data", () => {
     expect(model.doGenerateCalls).toHaveLength(1);
     expect(promptOf(model, 0)).toContain("the data this page carries for its scripts");
     expect(promptOf(model, 0)).toContain("graded_notebook");
+    // Research's 9 is a guess that the 9 plain notebooks happen to match: the mapping is told not to drop the graded ones for it.
+    expect(promptOf(model, 0)).toContain("each kind of lab, graded and ungraded alike");
+    expect(promptOf(model, 0)).toContain("The count research gave above is a guess from the source's description, not a count of this data: never leave out a kind of record that is one of the source's steps so that the rest match it.");
     expect(result.list).toMatchObject({ source: "file", url: COURSE_URL });
     expect(result.list!.items).toHaveLength(14);
     expect(result.list!.items.find((i) => i.title === "Implementing retriever functions in a RAG system")).toMatchObject({ minutes: 180 });

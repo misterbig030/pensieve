@@ -409,8 +409,10 @@ describe("the structure finder", () => {
     const named = await run(COURSE);
     expect(named.result.list!.items).toHaveLength(14);
     expect(named.result.list!.items.reduce((sum, i) => sum + (i.minutes ?? 0), 0)).toBe(1130);
-    // The `items` result says how to keep the list.
-    expect(named.prompt).toContain(`Set \\"listUrl\\" to ${COURSE} in your answer`);
+    // The `items` result shows the first labs it read, so the finder judges the list by them, and says how to keep it.
+    expect(named.prompt).toContain("- A brief Python refresher (10 min)");
+    expect(named.prompt).toContain("Introduction to RAG systems (180 min)");
+    expect(named.prompt).toContain(`Set \\"listUrl\\" to ${COURSE} in your answer if these are this source's own practice (its labs, problems, questions or steps), even when they are only some of its lessons`);
     expect(named.prompt).toContain(`put ${COURSE} in \\"notItems\\"`);
     expect(named.prompt).toContain('- \\"notItems\\"');
 

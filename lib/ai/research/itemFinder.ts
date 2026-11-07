@@ -296,7 +296,12 @@ function buildMappingPrompt(source: Material, reads: Read[], fileUrl: string, fi
     `- "title", "number", "group", "difficulty", "minutes": the field that holds each, or null when the file has none. Write ../field for a field of the object a record sits in. For "number", a field that starts with the item's number (such as a code like 0049-group-anagrams) will do: code keeps the number.`,
     `- "minutesUnit": what the "minutes" field counts (minutes, seconds or hours); "minutes" when there is no such field.`,
     `- "url" and "solutionUrl": a link template over fields, such as https://example.com/problems/{slug} or https://example.com/watch?v={video}, only when the pages or the file above show that link pattern with its full address; "{field}" when a field holds the whole link. Otherwise null. Never invent a link.`,
-    `- "subset": when the source is a named part of the file (for example "the 150" marked by a flag field in a file of 450, or the labs among a course's videos and quizzes), the field that marks it and every value that means "in" (e.g. ["true"], or each kind of lab); null for the whole file.`,
+    `- "subset": when the source is a named part of the file (for example "the 150" marked by a flag field in a file of 450, or the labs among a course's videos and quizzes), the field that marks it and every value that means "in" (e.g. ["true"], or each kind of lab, graded and ungraded alike); null for the whole file.`,
+    // aieng RAG course, live twice: research guessed 9 steps, the data holds 9 "notebook" and 5 "graded_notebook" labs,
+    // and the mapping kept only the 9 that matched the guess.
+    ...(source.practice?.items
+      ? [`The count research gave above is a guess from the source's description, not a count of this ${embedded ? "data" : "file"}: never leave out a kind of record that is one of the source's ${noun} so that the rest match it.`]
+      : []),
     `If the file does not list this source's ${noun}, return found: false.`,
   ].join("\n");
 }
