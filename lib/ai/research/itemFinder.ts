@@ -259,8 +259,21 @@ function nounOf(source: Material): string {
   return (source.practice && ITEM_NOUN[source.practice.format]) ?? "items";
 }
 
-/** The source, what research said of it, and what was read: the head of every prompt. */
-function sourceLines(source: Material, reads: Read[]): string[] {
+/**
+ * True when the source's own name carries research's count, as "NeetCode 150" does: then the count names the part of a
+ * file the source is, not a guess.
+ */
+export function countNamed(source: Material): boolean {
+  const n = source.practice?.items;
+  return !!n && new RegExp(`(^|\\D)${n}(\\D|$)`).test(source.title);
+}
+
+/**
+ * The source, what research said of it, and what was read: the head of every prompt. `count: false` leaves research's
+ * count out: a mapping shown a guessed 9 kept the 9 "notebook" labs of a course's data that matched it and dropped its
+ * 5 "graded_notebook" ones (aieng RAG course, live, twice of twice).
+ */
+function sourceLines(source: Material, reads: Read[], { count = true }: { count?: boolean } = {}): string[] {
   const practice = source.practice;
   const noun = nounOf(source);
   const lines = [
@@ -268,7 +281,7 @@ function sourceLines(source: Material, reads: Read[]): string[] {
     ...[
       source.why ? `Research said: ${source.why}` : null,
       source.uses ? `The part it would use: ${source.uses}.` : null,
-      practice?.items ? `It was said to hold about ${practice.items} ${noun}.` : null,
+      count && practice?.items ? `It was said to hold about ${practice.items} ${noun}.` : null,
     ].filter((l): l is string => l !== null),
   ];
   for (const r of reads) {
@@ -286,7 +299,7 @@ function buildMappingPrompt(source: Material, reads: Read[], fileUrl: string, fi
   const noun = nounOf(source);
   const what = embedded ? "the data this page carries for its scripts" : `a ${file.kind === "json" ? "JSON" : "CSV"} file`;
   return [
-    ...sourceLines(source, reads),
+    ...sourceLines(source, reads, { count: countNamed(source) }),
     "",
     `--- ${fileUrl} --- (${what}, read in full; its records are sampled below)`,
     sampleDataFile(file),
@@ -297,11 +310,6 @@ function buildMappingPrompt(source: Material, reads: Read[], fileUrl: string, fi
     `- "minutesUnit": what the "minutes" field counts (minutes, seconds or hours); "minutes" when there is no such field.`,
     `- "url" and "solutionUrl": a link template over fields, such as https://example.com/problems/{slug} or https://example.com/watch?v={video}, only when the pages or the file above show that link pattern with its full address; "{field}" when a field holds the whole link. Otherwise null. Never invent a link.`,
     `- "subset": when the source is a named part of the file (for example "the 150" marked by a flag field in a file of 450, or the labs among a course's videos and quizzes), the field that marks it and every value that means "in" (e.g. ["true"], or each kind of lab, graded and ungraded alike); null for the whole file.`,
-    // aieng RAG course, live twice: research guessed 9 steps, the data holds 9 "notebook" and 5 "graded_notebook" labs,
-    // and the mapping kept only the 9 that matched the guess.
-    ...(source.practice?.items
-      ? [`The count research gave above is a guess from the source's description, not a count of this ${embedded ? "data" : "file"}: never leave out a kind of record that is one of the source's ${noun} so that the rest match it.`]
-      : []),
     `If the file does not list this source's ${noun}, return found: false.`,
   ].join("\n");
 }

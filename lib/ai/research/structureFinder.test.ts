@@ -17,6 +17,8 @@ import type { FullReader } from "./itemFinder";
 import {
   ANSWER_NOW,
   APP_SHELL_NOTE,
+  ITEM_SAMPLE,
+  itemSample,
   pageDataNote,
   MEASURE_BATCH,
   PausableClock,
@@ -132,6 +134,17 @@ function context(pages: Record<string, PageInfo> = { [PRIMER]: primerInfo }, log
 }
 
 const answerOf = (over: Partial<StructureAnswer>): StructureAnswer => ({ note: "", whole: false, units: [], listUrl: null, ...over });
+
+describe("itemSample", () => {
+  it("names the first items of a list with their group and minutes, and no more", () => {
+    const item = (n: number, group: string | null, minutes: number | null) => ({ title: `Lab ${n}`, number: null, group, difficulty: null, url: null, solutionUrl: null, minutes });
+    const items = [item(1, "Module 1", 30), item(2, "Module 1", null), item(3, null, 45), ...[4, 5, 6, 7].map((n) => item(n, "Module 2", 20))];
+    const sample = itemSample({ items });
+    expect(sample).toHaveLength(ITEM_SAMPLE);
+    expect(sample.slice(0, 3)).toEqual(["Lab 1 [Module 1] (30 min)", "Lab 2 [Module 1]", "Lab 3 (45 min)"]);
+    expect(sample).not.toContain("Lab 6 [Module 2] (20 min)");
+  });
+});
 
 describe("the structure finder", () => {
   it("outlines the primer and keeps the thirty sections it answers with", async () => {
@@ -410,9 +423,14 @@ describe("the structure finder", () => {
     expect(named.result.list!.items).toHaveLength(14);
     expect(named.result.list!.items.reduce((sum, i) => sum + (i.minutes ?? 0), 0)).toBe(1130);
     // The `items` result shows the first labs it read, so the finder judges the list by them, and says how to keep it.
+    expect(named.prompt).toContain("the first 5 of 14, to judge the list by");
     expect(named.prompt).toContain("- A brief Python refresher (10 min)");
     expect(named.prompt).toContain("Introduction to RAG systems (180 min)");
+    // The sixth lab is past the sample.
+    expect(named.prompt).not.toContain("Implementing retriever functions");
     expect(named.prompt).toContain(`Set \\"listUrl\\" to ${COURSE} in your answer if these are this source's own practice (its labs, problems, questions or steps), even when they are only some of its lessons`);
+    expect(named.prompt).toContain("or another source's list");
+    expect(named.prompt).toContain("do not give its items as units");
     expect(named.prompt).toContain(`put ${COURSE} in \\"notItems\\"`);
     expect(named.prompt).toContain('- \\"notItems\\"');
 

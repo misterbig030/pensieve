@@ -13,6 +13,7 @@ import { readableText, type PageInfo } from "./extract";
 import { pageDataFile } from "./pageData";
 import { SAMPLE_RECORDS } from "./dataFile";
 import {
+  countNamed,
   ITEM_FILE_BYTES,
   githubRawUrl,
   guardedFullReader,
@@ -127,6 +128,21 @@ const run = (model: MockLanguageModelV4, read: FullReader, url = RAW_URL, log?: 
 const promptOf = (model: MockLanguageModelV4, call: number) => JSON.stringify(model.doGenerateCalls[call].prompt);
 
 describe("item lists", () => {
+  it("shows the mapping research's count only when the source's name carries it", async () => {
+    const named = { ...source, practice: { ...source.practice!, items: 150 } };
+    expect(countNamed(named)).toBe(true);
+    expect(countNamed(source)).toBe(false); // 8 is research's count; the name says 150
+    expect(countNamed({ ...named, title: "NeetCode 1500" })).toBe(false);
+    expect(countNamed({ ...named, practice: undefined })).toBe(false);
+
+    const model = answers({ ...MAPPING, subset: { field: "neetcode150", equals: ["true"] } });
+    await readItemListAt(named, RAW_URL, { fetcher: fetcherFor({}).fetcher, emit: () => {} }, { model, read: fileRead(FIXTURE), pages: [repoPage] });
+    expect(promptOf(model, 0)).toContain("It was said to hold about 150 problems.");
+    const guessed = answers({ ...MAPPING, subset: { field: "neetcode150", equals: ["true"] } });
+    await run(guessed, fileRead(FIXTURE)).found;
+    expect(promptOf(guessed, 0)).not.toContain("It was said to hold about");
+  });
+
   it("returns the subset the source names", async () => {
     const flagged = ENTRIES.filter((e) => e.neetcode150);
     // The model only says how the file's fields map; code picks the subset and copies every field.
@@ -616,9 +632,9 @@ describe("reading an item list from a page's own data", () => {
     expect(model.doGenerateCalls).toHaveLength(1);
     expect(promptOf(model, 0)).toContain("the data this page carries for its scripts");
     expect(promptOf(model, 0)).toContain("graded_notebook");
-    // Research's 9 is a guess that the 9 plain notebooks happen to match: the mapping is told not to drop the graded ones for it.
+    // Research's 9 is a guess that the 9 plain notebooks happen to match: the mapping is not shown it, and keeps both kinds.
     expect(promptOf(model, 0)).toContain("each kind of lab, graded and ungraded alike");
-    expect(promptOf(model, 0)).toContain("The count research gave above is a guess from the source's description, not a count of this data: never leave out a kind of record that is one of the source's steps so that the rest match it.");
+    expect(promptOf(model, 0)).not.toContain("It was said to hold about 9");
     expect(result.list).toMatchObject({ source: "file", url: COURSE_URL });
     expect(result.list!.items).toHaveLength(14);
     expect(result.list!.items.find((i) => i.title === "Implementing retriever functions in a RAG system")).toMatchObject({ minutes: 180 });
