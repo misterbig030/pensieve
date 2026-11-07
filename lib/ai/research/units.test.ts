@@ -460,6 +460,50 @@ describe("checkUnits", () => {
     expect(v.list!.items.map((i) => i.title)).toEqual(INTERVIEW_QUESTIONS.map(([, q]) => q));
   });
 
+  it("aieng-2 RAG course: module units whose lesson pages are one sign-in help page keep the model's minutes, not 3 each", () => {
+    // As the draft saw it: the course page links each module, and every lesson address returns the same help page.
+    const COURSE = "https://www.deeplearning.ai/courses/retrieval-augmented-generation";
+    const LESSONS = "https://learn.deeplearning.ai/courses/retrieval-augmented-generation/lesson";
+    const modules = ["RAG Overview", "Information Retrieval and Search Foundations", "Information Retrieval with Vector Databases", "LLMs and Text Generation", "RAG Systems in Production"];
+    const at = (i: number) => `${LESSONS}/m${i + 1}/module-${i + 1}-introduction`;
+    const course = seen(COURSE, `<html><head><title>RAG</title></head><body><main><h1>Retrieval Augmented Generation (RAG)</h1><p>${filler(400)}</p><ul>${modules.map((m, i) => `<li><a href="${at(i)}">${m}</a></li>`).join("")}</ul></main></body></html>`);
+    const help = `<html><head><title>Retrieval Augmented Generation (RAG) - DeepLearning.AI</title></head><body><main><h2>Reset User Workspace</h2><p>${filler(700)}</p></main></body></html>`;
+    const lessons = modules.map((_, i) => seen(at(i), help));
+    const units = modules.map((m, i) => unit(m, at(i), { group: `Module ${i + 1}`, minutes: 260 }));
+    const material = { url: COURSE, kind: "course" as const, practice: { ...LAB, items: 9, minutes: 45 } };
+
+    const v = check({ answer: answer(units), pages: [course, ...lessons], role: "both", material });
+    expect(v.refused).toBeNull();
+    expect(v.toc!.chapters.map((c) => [c.title, c.minutes])).toEqual(modules.map((m) => [m, 260]));
+    expect(v.minutes).toBe(1300);
+    expect(v.basis).toBe("estimated");
+    expect(v.facts).toContain("5 of 5 units point to pages that show the same text as one another: not measured");
+
+    // The same modules on lesson pages of their own are measured from them.
+    const own = modules.map((m, i) => seen(at(i), help.replace("Reset User Workspace", m)));
+    const measured = check({ answer: answer(units), pages: [course, ...own], role: "both", material });
+    expect(measured.toc!.chapters.map((c) => c.title)).toEqual(modules);
+    expect(measured.basis).toBe("measured");
+    expect(measured.toc!.chapters.every((c) => c.minutes !== null && c.minutes < 10)).toBe(true);
+  });
+
+  it("rule 4b: practice items whose pages all show one script shell keep their titles from the list", () => {
+    const LIST = "https://example.com/problems";
+    const titles = ["Two Sum", "Valid Anagram", "Group Anagrams"];
+    const at = (i: number) => `https://leetcode.com/problems/p${i}/`;
+    const list = seen(LIST, `<html><body><main><h1>Problems</h1><ul>${titles.map((t, i) => `<li><a href="${at(i)}">${t}</a></li>`).join("")}</ul></main></body></html>`);
+    const shell = `<html><head><title>LeetCode</title></head><body><main><p>${filler(80)}</p></main></body></html>`;
+    const pages = [list, ...titles.map((_, i) => seen(at(i), shell))];
+    const v = check({
+      answer: answer(titles.map((t, i) => unit(t, at(i), { kind: "practice" }))),
+      pages,
+      role: "practice",
+      material: { url: LIST, practice: { format: "problem-set", items: 3, perItemMinutes: 20, minutes: 60, answers: false } },
+    });
+    expect(v.refused).toBeNull();
+    expect(v.list!.items.map((i) => i.title)).toEqual(titles);
+  });
+
   it("rule 9: reading units are put in page order, a linked unit after the heading it sits under", () => {
     const page = seen(
       REPO,

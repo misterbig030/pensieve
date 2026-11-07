@@ -6,7 +6,7 @@ import type { ServiceEvent } from "../serviceEvents";
 import type { ResearchArm } from "./agent";
 import type { ResearchEvent } from "./events";
 import type { PageInfo } from "./extract";
-import { MAX_STRUCTURE_FINDERS, STRUCTURE_MIN_MINUTES, defaultStructureFinder, likelyStructures, researchMaterials, structureRole } from "./pipeline";
+import { MAX_STRUCTURE_FINDERS, PRACTICE_FINDER_SLOTS, STRUCTURE_MIN_MINUTES, defaultStructureFinder, likelyStructures, researchMaterials, structureRole } from "./pipeline";
 import type { StructureFinder, StructureResult } from "./structureFinder";
 import { SourceFetcher, type PageFetcher } from "./tools";
 import type { BookLookup } from "./verify";
@@ -99,9 +99,26 @@ describe("likelyStructures", () => {
     const d100 = mat({ id: "D100", minutes: 100 });
     const d400 = mat({ id: "D400", minutes: 120, pageMinutes: 400 });
     const d200 = mat({ id: "D200", pageMinutes: 200 });
-    const picked = likelyStructures([d100, p300, book1, d400, learner, p600, book3, d200]);
-    expect(MAX_STRUCTURE_FINDERS).toBe(6);
-    expect(picked.map((m) => m.id)).toEqual(["L", "B3", "B1", "P600", "P300", "D400"]);
+    const d90 = mat({ id: "D90", minutes: 90 });
+    const picked = likelyStructures([d100, p300, book1, d400, learner, p600, book3, d200, d90]);
+    expect(MAX_STRUCTURE_FINDERS).toBe(8);
+    expect(picked.map((m) => m.id)).toEqual(["L", "B3", "B1", "P600", "P300", "D400", "D200", "D100"]);
+  });
+
+  it("keeps PRACTICE_FINDER_SLOTS for practice sources, however many books and learner's sources come first", () => {
+    // aieng-2: the learner's essay and three books without chapter lists took the interview questions' slot of old.
+    expect(PRACTICE_FINDER_SLOTS).toBe(3);
+    const books = Array.from({ length: 8 }, (_, i) => mat({ id: `B${i}`, kind: "book" }));
+    const learner = mat({ id: "L", origin: "learner", kind: "essay", hub: true, verifiedAt: null });
+    const rag = mat({ id: "RAG", kind: "course", practice: practice({ format: "lab", items: 9, minutes: 45 }) });
+    const recipe = mat({ id: "RECIPE", kind: "essay", practice: practice({ format: "lab", items: 5, minutes: 25 }) });
+    const interview = mat({ id: "QA", kind: "essay", title: "AI Engineer Interview Questions", practice: practice({ format: "recall", items: null, minutes: null }) });
+    const extra = mat({ id: "P4", kind: "course", practice: practice({ minutes: 10 }) });
+    const picked = likelyStructures([learner, ...books, interview, recipe, rag, extra]).map((m) => m.id);
+    // The questions' size is unknown, so they rank first; the fourth practice source, the smallest known, is left out.
+    expect(picked).toEqual(["L", "B0", "B1", "B2", "B3", "QA", "RAG", "RECIPE"]);
+    // With fewer contenders the practice slots take nothing from the rest.
+    expect(likelyStructures([learner, ...books.slice(0, 3), interview, recipe, rag]).map((m) => m.id)).toEqual(["L", "B0", "B1", "B2", "QA", "RAG", "RECIPE"]);
   });
 
   it("never picks a short essay that is not a hub, and picks one at the size bar", () => {
@@ -160,7 +177,8 @@ describe("likelyStructures", () => {
       ai("M13", { url: "https://productionaiengineer.com/blog/ai-engineer-interview-questions", minutes: 11, pageMinutes: 11, practice: practice({ format: "recall", items: 10, perItemMinutes: 3, minutes: 30, answers: true }) }),
       ai("M14", { type: "note", url: "https://hamel.dev/notes/llm/ai-product-engineering/evals-error-analysis.html", minutes: 2, pageMinutes: 1 }),
     ];
-    expect(likelyStructures(lineup).map((m) => m.id)).toEqual(["M1", "M3", "M13", "M12", "M11", "M10"]);
+    // The lab course of unknown size leads the practice; the cap of 8 now reaches the two longest essays too.
+    expect(likelyStructures(lineup).map((m) => m.id)).toEqual(["M1", "M3", "M11", "M13", "M12", "M10", "M8", "M7"]);
   });
 
   it("needs an https address and a type that is not a note or a file, and skips a book that has its chapters", () => {
