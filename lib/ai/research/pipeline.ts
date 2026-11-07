@@ -20,7 +20,7 @@ export const STRUCTURE_MIN_MINUTES = 90;
 export const MAX_STRUCTURE_FINDERS = 6;
 
 /** Words in a source's title or description that say it is a list of things to do. */
-const LIST_LIKE_RE = /\b(lists?|problems|questions|exercises|flashcards|cards|challenges|puzzles|katas?|steps|levels|lessons)\b/i;
+const LIST_LIKE_RE = /\b(lists?|problems|questions|exercises|flashcards|cards|challenges|puzzles|katas?|steps|levels|lessons|quizzes)\b/i;
 
 /**
  * The role a finder looks for: practice only (no reading time, or a chapter list already, which its reading units would
@@ -33,12 +33,15 @@ export function structureRole(m: Material): StructureRole {
 
 /**
  * A practice source worth finding an item list for: verified, of a format counted by item (problems, recall, labs),
- * with no list yet, and with a count research gave or a description that reads like a list.
+ * with no list yet, and with a count research gave or a description that reads like a list. A format the plan can't
+ * write rows for itself (a lab, a problem set) with neither a list nor a count always needs one: without it, nothing
+ * checks the time the allocation gives that format against what the source holds.
  */
 function needsItemList(m: Material): boolean {
   const p = m.practice;
   if (!p || p.list || !m.verifiedAt || PRACTICE_REGISTRY[p.format].perItemMinutes === null) return false;
-  return (p.items ?? 0) > 0 || LIST_LIKE_RE.test(`${m.title} ${m.why ?? ""} ${m.uses ?? ""}`);
+  if ((p.items ?? 0) > 0) return true;
+  return PRACTICE_REGISTRY[p.format].generated === "never" || LIST_LIKE_RE.test(`${m.title} ${m.why ?? ""} ${m.uses ?? ""}`);
 }
 
 /** How long a material reads, as far as research can tell: the larger of its own page and its estimate. */
