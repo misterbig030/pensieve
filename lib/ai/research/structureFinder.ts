@@ -144,10 +144,20 @@ const ROLE_LINES: Record<StructureRole, string[]> = {
   ],
   both: [
     `This source is both reading and practice. Give its reading units with kind "read" and its practice units (such as its labs or exercise sets) with kind "practice".`,
+    `A section that sets questions, problems, exercises or steps to do is practice, even with its answers beside it: give it kind "practice", never "read". Reading is the prose that teaches.`,
     "If its problems, questions or steps are listed somewhere, call `items` on the page or file that holds the whole list, and set \"listUrl\" to that address; otherwise null.",
     "A site that draws its list by script shows no list on its page; such a source often publishes the list in its open-source repository as a data file: find that file before answering without a list.",
   ],
 };
+
+/**
+ * What a recall source's practice is: its questions. A finder told only "practice units such as labs" marks a page's
+ * question groups as reading (aieng-1: four groups of interview questions, all "read").
+ */
+const RECALL_LINES = [
+  `Its practice is recall: its questions are its practice units, each with kind "practice". Where the page makes each question a heading, give each question as a unit; otherwise give the sections that hold them.`,
+  "When the source's own page holds the questions, call `items` on the source's own address so that every question becomes an item, and set \"listUrl\" to it.",
+];
 
 export function buildStructurePrompt(material: Material, role: StructureRole): string {
   const by = material.kind === "book" && material.author ? ` by ${material.author}` : "";
@@ -160,6 +170,7 @@ export function buildStructurePrompt(material: Material, role: StructureRole): s
     "Find this source's units: the smallest parts a study plan can place on its own, such as a chapter, a README section, a linked file or folder, a lecture or a lab. Use the tools to read the source and measure its parts; they only fetch and measure, and code checks your answer against what they returned.",
     ...(material.kind === "book" ? ["For a book, its units are its chapters, from a page that shows its table of contents."] : []),
     ...ROLE_LINES[role],
+    ...(role !== "read" && material.practice?.format === "recall" ? RECALL_LINES : []),
     "",
     "Answer by calling `answer`:",
     "- \"units\" in the source's own order. Write each title exactly as the page writes it.",

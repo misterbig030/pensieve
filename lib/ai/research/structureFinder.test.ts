@@ -532,6 +532,27 @@ describe("the structure prompt", () => {
     for (const role of ["read", "practice", "both"] as const) expect(buildStructurePrompt(material(), role)).toContain("`measure` it before");
   });
 
+  it("tells a finder that questions are practice, and a recall source to read its questions with `items` (aieng-1)", () => {
+    // aieng-1 marked an interview page's four question groups "read", and its answer was refused at 66% coverage.
+    const asPractice = 'give it kind "practice", never "read"';
+    expect(buildStructurePrompt(material(), "both")).toContain(asPractice);
+    expect(buildStructurePrompt(material(), "read")).not.toContain(asPractice);
+    const recall = material({
+      kind: "essay",
+      url: "https://productionaiengineer.com/blog/ai-engineer-interview-questions",
+      title: "AI Engineer Interview Questions (RAG & System Design)",
+      practice: { format: "recall", items: 10, perItemMinutes: 3, minutes: 30, answers: true },
+    });
+    for (const role of ["practice", "both"] as const) {
+      const prompt = buildStructurePrompt(recall, role);
+      expect(prompt).toContain("Its practice is recall: its questions are its practice units");
+      expect(prompt).toContain("call `items` on the source's own address");
+    }
+    expect(buildStructurePrompt(recall, "read")).not.toContain("Its practice is recall");
+    const lab = material({ practice: { format: "lab", items: 5, perItemMinutes: 5, minutes: 25, answers: false } });
+    expect(buildStructurePrompt(lab, "both")).not.toContain("Its practice is recall");
+  });
+
   it("leaves the outline its reserve and the allocation its least time", () => {
     expect(STRUCTURE_RESERVE_MS).toBe(STRUCTURE_ALLOCATE_MIN_MS + OUTLINE_RESERVE_MS);
   });

@@ -147,45 +147,16 @@ export function checkUnits(input: {
   const reading = inPageOrder(kept.filter((p) => p.unit.kind === "read"), home);
   const practice = inPageOrder(kept.filter((p) => p.unit.kind === "practice"), home);
 
-  // Rule 8: coverage, for reading heading units on each page. Books skip it.
-  if (!book) {
-    for (const page of new Set(reading.filter((p) => p.heading !== null).map((p) => p.page))) {
-      const total = page.outline?.words ?? 0;
-      if (total <= 0) continue;
-      const covered = reading.filter((p) => p.page === page && p.heading !== null).reduce((sum, p) => sum + page.outline!.headings[p.heading!].words, 0);
-      if (covered < MIN_UNIT_COVERAGE * total) return refuse(`units refused: cover ${Math.floor((100 * covered) / total)}% of the page`);
-    }
+  // Rules 8 to 11 judge the reading units. Reading that fails them is dropped; the verdict is refused only when no
+  // practice list is left either, so a practice source's steps survive a stray reading unit beside them.
+  const tocDraft = readingToc({ material, reading, practice: role === "both" ? practice : [], book, home, source });
+  const list = practiceList(answer.listUrl, lists, practiceRole, material.practice && practiceSeen ? practice : [], material.url, pages, facts);
+  if ("dropped" in tocDraft) {
+    if (!list) return refuse(`units refused: ${tocDraft.dropped}`);
+    facts.push(`reading units dropped: ${tocDraft.dropped}`);
+    return { toc: null, minutes: null, basis: null, list, refused: null, facts };
   }
-
-  // Rule 9: count. A role with reading but an answer with none leaves the toc empty without refusing.
-  if (reading.length > 0 && reading.length < MIN_CHAPTERS) return refuse(`units refused: ${reading.length} reading units, fewer than ${MIN_CHAPTERS}`);
-  if (reading.length > MAX_CHAPTERS) return refuse(`units refused: ${reading.length} reading units, more than ${MAX_CHAPTERS}`);
-
-  // Rules 10 and 11: the toc.
-  let toc: ChapterList | null = null;
-  if (reading.length > 0) {
-    const tocUrl = book && home && home !== source ? home.url : material.url;
-    const draft: ChapterList = {
-      source: "page",
-      url: tocUrl,
-      printPages: false,
-      end: null,
-      chapters: reading.map((p): Chapter => ({
-        n: null,
-        title: clip(p.title, MAX_HEADING)!,
-        page: null,
-        minutes: book ? null : p.minutes,
-        sections: p.heading !== null ? sectionsOf(p.page.outline!.headings, p.heading) : [],
-        url: unitUrl(p.unit.at, tocUrl),
-        group: clip(p.unit.group, MAX_HEADING),
-      })),
-    };
-    // A book's chapters share out its size only when that size was measured: an estimate is no size to share.
-    const bookMinutes = material.minutesBasis === "measured" ? (material.minutes ?? null) : null;
-    const parsed = chapterListSchema.safeParse(book ? withChapterSizes(draft, bookMinutes) : draft);
-    if (!parsed.success) return refuse("units refused: the units do not make a chapter list");
-    toc = parsed.data;
-  }
+  const { toc } = tocDraft;
 
   // Rule 12: the new size. A book keeps its catalogue size.
   let minutes: number | null = null;
@@ -199,9 +170,74 @@ export function checkUnits(input: {
     }
   }
 
-  // Rule 13: practice. It never refuses the reading toc; it only makes no list.
-  const list = practiceList(answer.listUrl, lists, practiceRole, material.practice && practiceSeen ? practice : [], material.url, pages, facts);
+  // Rule 13 (above, beside the toc): practice. It never refuses the reading toc; it only makes no list.
   return { toc, minutes, basis, list, refused: null, facts };
+}
+
+/**
+ * Rules 8 to 11: the reading units as a chapter list, or why they make none.
+ * - Rule 8, coverage: heading units on a page must cover `MIN_UNIT_COVERAGE` of its words. A source that is both
+ *   reading and practice counts its practice heading units too: a page's exercises are not reading it left out. A
+ *   heading inside another counted heading's section counts once. Books skip it.
+ * - Rule 9, count: between MIN_CHAPTERS and MAX_CHAPTERS; none leaves the toc empty.
+ * - Rules 10 and 11: the units make a chapter list (a book's sized from its measured size).
+ */
+function readingToc(input: {
+  material: Pick<Material, "url" | "minutes" | "minutesBasis">;
+  reading: Placed[];
+  /** Practice units that count toward coverage: the role's when it is both, else none. */
+  practice: Placed[];
+  book: boolean;
+  home: SeenPage | null;
+  source: SeenPage | null;
+}): { toc: ChapterList | null } | { dropped: string } {
+  const { material, reading, practice, book, home, source } = input;
+  if (!book) {
+    for (const page of new Set(reading.filter((p) => p.heading !== null).map((p) => p.page))) {
+      const total = page.outline?.words ?? 0;
+      if (total <= 0) continue;
+      const counted = [...reading, ...practice].filter((p) => p.page === page && p.heading !== null).map((p) => p.heading!);
+      const covered = headingWords(page.outline!.headings, counted);
+      if (covered < MIN_UNIT_COVERAGE * total) return { dropped: `cover ${Math.floor((100 * covered) / total)}% of the page` };
+    }
+  }
+
+  if (reading.length === 0) return { toc: null };
+  if (reading.length < MIN_CHAPTERS) return { dropped: `${reading.length} reading units, fewer than ${MIN_CHAPTERS}` };
+  if (reading.length > MAX_CHAPTERS) return { dropped: `${reading.length} reading units, more than ${MAX_CHAPTERS}` };
+
+  const tocUrl = book && home && home !== source ? home.url : material.url;
+  const draft: ChapterList = {
+    source: "page",
+    url: tocUrl,
+    printPages: false,
+    end: null,
+    chapters: reading.map((p): Chapter => ({
+      n: null,
+      title: clip(p.title, MAX_HEADING)!,
+      page: null,
+      minutes: book ? null : p.minutes,
+      sections: p.heading !== null ? sectionsOf(p.page.outline!.headings, p.heading) : [],
+      url: unitUrl(p.unit.at, tocUrl),
+      group: clip(p.unit.group, MAX_HEADING),
+    })),
+  };
+  // A book's chapters share out its size only when that size was measured: an estimate is no size to share.
+  const bookMinutes = material.minutesBasis === "measured" ? (material.minutes ?? null) : null;
+  const parsed = chapterListSchema.safeParse(book ? withChapterSizes(draft, bookMinutes) : draft);
+  return parsed.success ? { toc: parsed.data } : { dropped: "the units do not make a chapter list" };
+}
+
+/** The words under these headings, each heading's section once: one inside another counted section adds nothing. */
+function headingWords(headings: OutlineHeading[], counted: number[]): number {
+  let words = 0;
+  let end = -1;
+  for (const i of [...new Set(counted)].sort((a, b) => a - b)) {
+    if (i < end) continue;
+    words += headings[i].words;
+    end = spanEnd(headings, i);
+  }
+  return words;
 }
 
 /** Why units went unseen: "3 of 22 titles not on the page", "6 of 7 point to no fetched page or heading", or both. */

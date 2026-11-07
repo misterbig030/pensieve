@@ -119,7 +119,48 @@ describe("likelyStructures", () => {
     expect(likelyStructures([mat({ kind: "course", practice: practice({ format: "mock", items: null }), why: "A full mock interview" })])).toEqual([]);
     // No count, but its description reads like a list.
     expect(likelyStructures([mat({ kind: "course", practice: practice({ items: null }), why: "A list of problems with solutions" })])).toHaveLength(1);
-    expect(likelyStructures([mat({ kind: "course", practice: practice({ items: null }), why: "Hands-on practice" })])).toEqual([]);
+    // A format the plan writes rows for (recall, from the reading) needs a count or a list-like description.
+    expect(likelyStructures([mat({ kind: "course", practice: practice({ format: "recall", items: null }), why: "Hands-on practice" })])).toEqual([]);
+  });
+
+  it("always picks a lab or problem set with neither a list nor a count: nothing else checks its time against the source", () => {
+    // aieng-1's M11: a short hub course page, a lab with no count, a description with no list word of old.
+    const hf = (over: Partial<Material> = {}) =>
+      mat({ kind: "course", hub: true, pageMinutes: 6, minutes: null, why: "Hands-on practice", practice: practice({ format: "lab", items: null, perItemMinutes: 5, minutes: null, answers: false }), ...over });
+    expect(likelyStructures([hf()])).toHaveLength(1);
+    expect(likelyStructures([hf({ practice: practice({ format: "problem-set", items: null, minutes: null }) })])).toHaveLength(1);
+    // Course words now read as a list for a format the plan can write rows for.
+    expect(likelyStructures([mat({ kind: "course", practice: practice({ format: "recall", items: null }), why: "Free hands-on agents course with notebooks, quizzes and a final benchmark assignment." })])).toHaveLength(1);
+    for (const word of ["units", "modules", "notebooks", "quizzes", "assignments", "labs"]) {
+      expect(likelyStructures([mat({ kind: "course", practice: practice({ format: "recall", items: null }), why: `Six ${word}` })])).toHaveLength(1);
+    }
+  });
+
+  it("puts aieng-1's lab course inside the cap, ahead of the long reading it outranks", () => {
+    // The sources aieng-1's structure stage chose from (research.done), with what the ranking reads.
+    const ai = (id: string, over: Partial<Material>) => mat({ id, kind: "essay", hub: true, ...over });
+    const lineup = [
+      ai("M1", { origin: "learner", url: "https://hamel.dev/blog/posts/evals", minutes: 18, pageMinutes: 17, toc: TOC, verifiedAt: null }),
+      ai("M2", { kind: "book", hub: undefined, url: "https://openlibrary.org/works/OL39671094W", minutes: 1105, toc: { ...TOC, source: "catalogue" }, recommendedBy: ["https://a.org/1", "https://b.org/2", "https://c.org/3"] }),
+      ai("M3", { kind: "book", hub: undefined, url: "https://openlibrary.org/works/OL39669896W", recommendedBy: ["https://a.org/1", "https://b.org/2"] }),
+      ai("M4", { url: "https://anthropic.com/research/building-effective-agents", minutes: 12, pageMinutes: 12 }),
+      ai("M7", { url: "https://anthropic.com/research/demystifying-evals-for-ai-agents", minutes: 26, pageMinutes: 26 }),
+      ai("M8", { url: "https://cameronrwolfe.substack.com/p/agent-evals", minutes: 49, pageMinutes: 50 }),
+      ai("M10", { kind: "video", type: "youtube", url: "https://youtube.com/watch?v=rV3HJ4LEZ7k", minutes: 673, pageMinutes: 673 }),
+      ai("M11", {
+        kind: "course",
+        url: "https://huggingface.co/learn/agents-course/en/unit0/introduction",
+        title: "Welcome to the 🤗 AI Agents Course · Hugging Face",
+        why: "Free hands-on agents course with notebooks, quizzes and a final benchmark assignment.",
+        minutes: null,
+        pageMinutes: 6,
+        practice: practice({ format: "lab", items: null, perItemMinutes: 5, minutes: null, answers: false }),
+      }),
+      ai("M12", { kind: "course", url: "https://arize.com/blog/ai-evals-maven-course-homework-the-recipe-bot-workflow", minutes: 10, pageMinutes: 8, practice: practice({ format: "lab", items: 5, perItemMinutes: 5, minutes: 25, answers: false }) }),
+      ai("M13", { url: "https://productionaiengineer.com/blog/ai-engineer-interview-questions", minutes: 11, pageMinutes: 11, practice: practice({ format: "recall", items: 10, perItemMinutes: 3, minutes: 30, answers: true }) }),
+      ai("M14", { type: "note", url: "https://hamel.dev/notes/llm/ai-product-engineering/evals-error-analysis.html", minutes: 2, pageMinutes: 1 }),
+    ];
+    expect(likelyStructures(lineup).map((m) => m.id)).toEqual(["M1", "M3", "M13", "M12", "M11", "M10"]);
   });
 
   it("needs an https address and a type that is not a note or a file, and skips a book that has its chapters", () => {

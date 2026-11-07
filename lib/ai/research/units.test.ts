@@ -76,6 +76,87 @@ function hubPages(): SeenPage[] {
   return [hub, week(1, "Intro"), week(2, "Audio"), week(3, "Week 3: Transformers"), week(4, "Vocoders")];
 }
 
+const LAB: MaterialPractice = { format: "lab", items: null, perItemMinutes: 5, minutes: null, answers: false };
+
+/**
+ * A page with a given outline, without HTML: each heading [level, title, words] gets the anchor its title slugs to, and
+ * the page's text is its headings and `text`. For pages the eval logged only as outlines.
+ */
+function outlined(url: string, title: string, words: number, headings: [number, string, number, (string | null)?][], text = ""): SeenPage {
+  const hs = headings.map(([level, t, w, anchor]) => ({ level, title: t, anchor: anchor === undefined ? slug(t) : anchor, words: w, links: [] }));
+  return { url, finalUrl: url, title, words, durationMinutes: null, pdfPages: null, outline: { words, headings: hs, links: [] }, text: `${hs.map((h) => h.title).join("\n")}\n${text}` };
+}
+
+// aieng-1 (draft-2026-11-05T20-45-12-383Z): two pages whose outlines calls.json logged, cut at 1500 characters. Totals,
+// the first headings and every answered heading's title and anchor are as logged; the sizes of the rest are set to give
+// the coverage the eval reported (4% and 66%).
+const RECIPE = "https://arize.com/blog/ai-evals-maven-course-homework-the-recipe-bot-workflow";
+const RECIPE_STEPS: [string, number][] = [
+  ["Step 1: Prompt Design and Iteration", 300],
+  ["Step 2: Synthetic Data and Error Analysis", 330],
+  ["Step 3: Evaluators with LLM-as-a-Judge", 320],
+  ["Step 4: Retrieval Evaluation for RAG", 310],
+  ["Step 5: State-Level Diagnostics with Evals", 290],
+];
+const recipePage = () =>
+  outlined(RECIPE, "AI Evals Maven Course Homework: Recipe Bot With Phoenix", 1908, [
+    [1, "AI Evals Maven Course Homework: the Recipe Bot Workflow", 1905, null],
+    [3, "Build better agents with Arize", 40, null],
+    ...RECIPE_STEPS.map(([t, w]): [number, string, number] => [2, t, w]),
+    [2, "Recap", 80],
+  ]);
+const RECIPE_ANSWER = answer(
+  [...RECIPE_STEPS.map(([t]) => unit(t, `${RECIPE}#${slug(t)}`, { kind: "practice" })), unit("Recap", `${RECIPE}#recap`)],
+  { note: "Blog post walking through five homework steps for a Recipe Bot evals course using Phoenix; best as a short overview before the linked GitHub tutorials." },
+);
+
+const INTERVIEW = "https://productionaiengineer.com/blog/ai-engineer-interview-questions";
+const QUESTION_GROUPS = "The questions, with model answers";
+/** The page's ten questions, reconstructed: the log cut the page before them. */
+const INTERVIEW_QUESTIONS: [string, string][] = [
+  ["LLM fundamentals", "How does a transformer decide what to attend to?"],
+  ["LLM fundamentals", "When would you fine-tune instead of prompting?"],
+  ["RAG and retrieval", "How do you choose a chunk size for retrieval?"],
+  ["RAG and retrieval", "How do you evaluate a retriever on its own?"],
+  ["RAG and retrieval", "When does hybrid search beat dense retrieval?"],
+  ["Agents and tool use", "How do you stop an agent looping on a failing tool?"],
+  ["Agents and tool use", "How do you decide what becomes a tool?"],
+  ["Production, LLMOps, and evals", "How do you catch a regression before users do?"],
+  ["Production, LLMOps, and evals", "What do you log for every model call?"],
+  ["Production, LLMOps, and evals", "How do you keep an LLM judge honest?"],
+];
+const interviewPage = () =>
+  outlined(
+    INTERVIEW,
+    "AI Engineer Interview Questions (RAG & System Design) — ProductionAIEngineer",
+    2644,
+    [
+      [1, "AI Engineer Interview Questions (RAG & System Design)", 2632, null],
+      [2, QUESTION_GROUPS, 1061],
+      [3, "LLM fundamentals", 195],
+      [3, "RAG and retrieval", 313],
+      [3, "Agents and tool use", 201],
+      [3, "Production, LLMOps, and evals", 347],
+      [2, "The system design round: a worked drill", 362],
+      [2, "The take-home project: what reviewers actually check", 260],
+      [2, "The behavioral round: narrating a project", 220],
+      [2, "How to practice", 300],
+      [2, "FAQ", 220],
+    ],
+    INTERVIEW_QUESTIONS.map(([, q]) => q).join("\n"),
+  );
+const INTERVIEW_ANSWER = answer(
+  [
+    ...["LLM fundamentals", "RAG and retrieval", "Agents and tool use", "Production, LLMOps, and evals"].map((t) => unit(t, `${INTERVIEW}#${slug(t)}`, { group: QUESTION_GROUPS })),
+    unit("The system design round: a worked drill", `${INTERVIEW}#the-system-design-round-a-worked-drill`, { kind: "practice" }),
+    unit("The take-home project: what reviewers actually check", `${INTERVIEW}#the-take-home-project-what-reviewers-actually-check`),
+    unit("The behavioral round: narrating a project", `${INTERVIEW}#the-behavioral-round-narrating-a-project`),
+    unit("How to practice", `${INTERVIEW}#how-to-practice`, { kind: "practice" }),
+    unit("FAQ", `${INTERVIEW}#faq`),
+  ],
+  { note: "Single essay: ten interview questions with model answers in four topic groups, then system design drill, take-home, behavioral, practice routine and FAQ. Good for interview prep." },
+);
+
 describe("checkUnits", () => {
   it("rule 1: a whole answer, or one with no units, keeps the material whole", () => {
     const whole = { toc: null, minutes: null, basis: null, list: null, refused: null, facts: ["whole"] };
@@ -301,6 +382,70 @@ describe("checkUnits", () => {
     const units = ["Alpha", "Beta", "Gamma"].map((t) => unit(t, `${REPO}#${slug(t)}`));
     expect(check({ answer: answer(units), pages: [page] }).refused).toBe("units refused: cover 41% of the page");
     expect(check({ answer: answer([...units, unit("Delta", `${REPO}#delta`)]), pages: [page] }).refused).toBeNull();
+  });
+
+  it("rule 8: a source that is both counts its practice headings toward coverage, each section once", () => {
+    // Alpha (400 words, Alpha drill's 300 inside it) + Beta + Gamma cover 600 of its 1000 words; Delta is left out.
+    const outline = outlined(REPO, "a/b", 1000, [
+      [2, "Alpha", 400],
+      [3, "Alpha drill", 300],
+      [2, "Beta", 100],
+      [2, "Gamma", 100],
+      [2, "Delta", 400],
+    ]);
+    const reading = ["Alpha", "Beta", "Gamma"].map((t) => unit(t, `${REPO}#${slug(t)}`));
+    const both = { role: "both" as const, material: { kind: "course" as const, practice: LAB } };
+    // A drill inside Alpha's section adds nothing: still 60%, and one drill makes no list, so the answer is refused.
+    const nested = check({ answer: answer([...reading, unit("Alpha drill", `${REPO}#alpha-drill`, { kind: "practice" })]), pages: [outline], ...both });
+    expect(nested.refused).toBe("units refused: cover 60% of the page");
+    // Delta as practice covers the rest: the reading is kept, and a reading-only source with the same answer is refused.
+    const units = [...reading, unit("Delta", `${REPO}#delta`, { kind: "practice" })];
+    expect(check({ answer: answer(units), pages: [outline], ...both }).toc!.chapters.map((c) => c.title)).toEqual(["Alpha", "Beta", "Gamma"]);
+    expect(check({ answer: answer(units), pages: [outline], material: { kind: "course", practice: LAB } }).refused).toBe("units refused: cover 60% of the page");
+  });
+
+  it("aieng-1 Recipe Bot: one stray reading unit beside five lab steps drops the reading and keeps the steps", () => {
+    // The finder's answer, as calls.json logged it: five steps as practice and the page's Recap as reading.
+    const v = check({ answer: RECIPE_ANSWER, pages: [recipePage()], role: "both", material: { url: RECIPE, kind: "course", practice: { ...LAB, items: 5, minutes: 25 } } });
+    expect(v.refused).toBeNull();
+    expect(v.toc).toBeNull();
+    expect(v.minutes).toBeNull();
+    expect(v.basis).toBeNull();
+    expect(v.list!.url).toBe(RECIPE);
+    expect(v.list!.items.map((i) => [i.title, i.url])).toEqual(RECIPE_STEPS.map(([t]) => [t, `${RECIPE}#${slug(t)}`]));
+    // With the steps counted the units cover 85% of the page; one reading unit is still too few for a chapter list.
+    expect(v.facts).toContain("reading units dropped: 1 reading units, fewer than 3");
+    // Read alone, Recap covers what the eval saw: 4%.
+    expect(check({ answer: RECIPE_ANSWER, pages: [recipePage()], material: { url: RECIPE, kind: "course" } }).refused).toBe("units refused: cover 4% of the page");
+  });
+
+  it("a reading answer that fails coverage is dropped, and the practice units stay a list", () => {
+    const units = [...RECIPE_ANSWER.units.slice(0, 3), RECIPE_ANSWER.units[5]];
+    const v = check({ answer: answer(units), pages: [recipePage()], role: "both", material: { url: RECIPE, kind: "course", practice: LAB } });
+    expect(v.refused).toBeNull();
+    expect(v.toc).toBeNull();
+    expect(v.list!.items.map((i) => i.title)).toEqual(RECIPE_STEPS.slice(0, 3).map(([t]) => t));
+    expect(v.facts).toContain("reading units dropped: cover 53% of the page");
+  });
+
+  it("aieng-1 interview questions: practice headings lift the old answer's 66%, and questions as practice make the list", () => {
+    const material = { url: INTERVIEW, kind: "course" as const, practice: { format: "recall" as const, items: 10, perItemMinutes: 3, minutes: 30, answers: true } };
+    // The finder's answer, as calls.json logged it: the four question groups as reading.
+    expect(check({ answer: INTERVIEW_ANSWER, pages: [interviewPage()], material }).refused).toBe("units refused: cover 66% of the page");
+    const old = check({ answer: INTERVIEW_ANSWER, pages: [interviewPage()], role: "both", material });
+    expect(old.refused).toBeNull();
+    expect(old.toc!.chapters).toHaveLength(7);
+    // The answer the tightened prompt asks for: the question groups are practice, and `items` read the page's questions.
+    const units = INTERVIEW_ANSWER.units.map((u) => (u.group === "The questions, with model answers" ? { ...u, kind: "practice" as const } : u));
+    const questions: PracticeList = {
+      url: INTERVIEW,
+      source: "page",
+      items: INTERVIEW_QUESTIONS.map(([group, title]) => ({ title, number: null, group, difficulty: null, url: null, solutionUrl: null, minutes: null })),
+    };
+    const v = check({ answer: answer(units, { listUrl: INTERVIEW }), pages: [interviewPage()], role: "both", material, lists: [questions] });
+    expect(v.refused).toBeNull();
+    expect(v.toc!.chapters.map((c) => c.title)).toEqual(["The take-home project: what reviewers actually check", "The behavioral round: narrating a project", "FAQ"]);
+    expect(v.list!.items.map((i) => i.title)).toEqual(INTERVIEW_QUESTIONS.map(([, q]) => q));
   });
 
   it("rule 9: reading units are put in page order, a linked unit after the heading it sits under", () => {
