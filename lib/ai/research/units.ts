@@ -131,10 +131,10 @@ export function checkUnits(input: {
   if (allUnfetched > 0) facts.push(`${allUnfetched} of ${units.length} units point to no fetched page or heading`);
   if (allUntitled > 0) facts.push(`${allUntitled} of ${units.length} titles not on the page`);
 
-  // Rule 5: too many unseen, per kind. Unseen reading units refuse the verdict; unseen practice units only keep the
-  // practice units from becoming an item list.
+  // Rule 5: too many unseen, per kind. Unseen reading units drop the reading (and refuse the verdict when no practice
+  // list is left); unseen practice units only keep the practice units from becoming an item list.
   const readCount = units.filter((u) => u.kind === "read").length;
-  if (unfetched.read + untitled.read > MAX_UNSEEN_SHARE * readCount) return refuse(`units refused: ${unseenWhy(readCount, unfetched.read, untitled.read)}`);
+  const readingUnseen = unfetched.read + untitled.read > MAX_UNSEEN_SHARE * readCount ? unseenWhy(readCount, unfetched.read, untitled.read) : null;
   const practiceCount = units.length - readCount;
   const practiceSeen = unfetched.practice + untitled.practice <= MAX_UNSEEN_SHARE * practiceCount;
   if (!practiceSeen) facts.push(`practice units refused: ${unseenWhy(practiceCount, unfetched.practice, untitled.practice)}`);
@@ -147,9 +147,9 @@ export function checkUnits(input: {
   const reading = inPageOrder(kept.filter((p) => p.unit.kind === "read"), home);
   const practice = inPageOrder(kept.filter((p) => p.unit.kind === "practice"), home);
 
-  // Rules 8 to 11 judge the reading units. Reading that fails them is dropped; the verdict is refused only when no
-  // practice list is left either, so a practice source's steps survive a stray reading unit beside them.
-  const tocDraft = readingToc({ material, reading, practice: role === "both" ? practice : [], book, home, source });
+  // Rules 5 and 8 to 11 judge the reading units. Reading that fails them is dropped; the verdict is refused only when
+  // no practice list is left either, so a practice source's steps survive a stray reading unit beside them.
+  const tocDraft = readingUnseen ? { dropped: readingUnseen } : readingToc({ material, reading, practice: role === "both" ? practice : [], book, home, source });
   const list = practiceList(answer.listUrl, lists, practiceRole, material.practice && practiceSeen ? practice : [], material.url, pages, facts);
   if ("dropped" in tocDraft) {
     if (!list) return refuse(`units refused: ${tocDraft.dropped}`);

@@ -419,6 +419,18 @@ describe("checkUnits", () => {
     expect(check({ answer: RECIPE_ANSWER, pages: [recipePage()], material: { url: RECIPE, kind: "course" } }).refused).toBe("units refused: cover 4% of the page");
   });
 
+  it("unseen reading units drop the reading and keep the practice units, and refuse an answer with no list", () => {
+    // Recap points at an anchor the page lacks: 1 of 1 reading units unseen.
+    const units = [...RECIPE_ANSWER.units.slice(0, 5), unit("Recap", `${RECIPE}#summary`)];
+    const material = { url: RECIPE, kind: "course" as const, practice: LAB };
+    const v = check({ answer: answer(units), pages: [recipePage()], role: "both", material });
+    expect(v.refused).toBeNull();
+    expect(v.toc).toBeNull();
+    expect(v.list!.items).toHaveLength(5);
+    expect(v.facts).toContain("reading units dropped: 1 of 1 point to no fetched page or heading");
+    expect(check({ answer: answer(units.slice(3)), pages: [recipePage()], role: "both", material }).refused).toBe("units refused: 1 of 1 point to no fetched page or heading");
+  });
+
   it("a reading answer that fails coverage is dropped, and the practice units stay a list", () => {
     const units = [...RECIPE_ANSWER.units.slice(0, 3), RECIPE_ANSWER.units[5]];
     const v = check({ answer: answer(units), pages: [recipePage()], role: "both", material: { url: RECIPE, kind: "course", practice: LAB } });

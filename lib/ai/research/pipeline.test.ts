@@ -129,11 +129,11 @@ describe("likelyStructures", () => {
       mat({ kind: "course", hub: true, pageMinutes: 6, minutes: null, why: "Hands-on practice", practice: practice({ format: "lab", items: null, perItemMinutes: 5, minutes: null, answers: false }), ...over });
     expect(likelyStructures([hf()])).toHaveLength(1);
     expect(likelyStructures([hf({ practice: practice({ format: "problem-set", items: null, minutes: null }) })])).toHaveLength(1);
-    // Course words now read as a list for a format the plan can write rows for.
-    expect(likelyStructures([mat({ kind: "course", practice: practice({ format: "recall", items: null }), why: "Free hands-on agents course with notebooks, quizzes and a final benchmark assignment." })])).toHaveLength(1);
-    for (const word of ["units", "modules", "notebooks", "quizzes", "assignments", "labs"]) {
-      expect(likelyStructures([mat({ kind: "course", practice: practice({ format: "recall", items: null }), why: `Six ${word}` })])).toHaveLength(1);
-    }
+    // For recall, which the plan can write rows for, only words that promise questions read as a list: quizzes do,
+    // a course's notebooks and modules do not.
+    const recall = (why: string) => mat({ kind: "course", practice: practice({ format: "recall", items: null }), why });
+    expect(likelyStructures([recall("Free hands-on agents course with notebooks, quizzes and a final benchmark assignment.")])).toHaveLength(1);
+    expect(likelyStructures([recall("A course in six modules with notebooks")])).toEqual([]);
   });
 
   it("puts aieng-1's lab course inside the cap, ahead of the long reading it outranks", () => {

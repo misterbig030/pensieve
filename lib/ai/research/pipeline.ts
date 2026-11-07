@@ -20,7 +20,7 @@ export const STRUCTURE_MIN_MINUTES = 90;
 export const MAX_STRUCTURE_FINDERS = 6;
 
 /** Words in a source's title or description that say it is a list of things to do. */
-const LIST_LIKE_RE = /\b(lists?|problems|questions|exercises|flashcards|cards|challenges|puzzles|katas?|steps|levels|lessons|units|modules|notebooks|quizzes|assignments|labs)\b/i;
+const LIST_LIKE_RE = /\b(lists?|problems|questions|exercises|flashcards|cards|challenges|puzzles|katas?|steps|levels|lessons|quizzes)\b/i;
 
 /**
  * The role a finder looks for: practice only (no reading time, or a chapter list already, which its reading units would
