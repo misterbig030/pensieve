@@ -352,7 +352,7 @@ describe("the structure finder", () => {
     const page = extractHtml(fixture("course-page-data"), COURSE);
     // Beside the page, not in it: the page goes whole to the research model.
     expect(page).not.toHaveProperty("pageData");
-    expect(pageListsOf(page).map((l) => l.records)).toEqual([77, 20, 7, 6]);
+    expect(pageListsOf(page).lists.map((l) => l.records)).toEqual([77, 20, 20, 7]);
     const practice = { format: "lab" as const, items: 9, perItemMinutes: 5, minutes: 45, answers: false };
     const outlineOf = async (role: "practice" | "both" | "read", at: PageInfo = page) => {
       const { model, calls } = scripted([[{ tool: "outline", input: { url: COURSE } }], [{ tool: "answer", input: answerOf({ whole: true }) }]]);
@@ -363,8 +363,12 @@ describe("the structure finder", () => {
     // Every sizable list is named with its fields, so the finder can tell the lessons from the FAQ and the reviews.
     expect(full).toContain("lists of 77 records (index, slug, name, type");
     expect(full).toContain("7 records (answer, question)");
-    expect(full).toContain("6 records (name, rating, content, jobTitle)");
+    expect(full).toContain("20 records (key, type)");
     expect(full).toMatch(/FAQ, reviews/);
+    expect(full).not.toContain("too large");
+    // Data too large to walk whole is said, with or without a list.
+    expect(pageDataNote({ lists: [], cut: true })).toContain("too large to read whole");
+    expect(pageDataNote({ lists: [], cut: false })).toBeNull();
     const note = JSON.stringify(full).slice(1, 80);
     expect(await outlineOf("both")).toContain(note);
     expect(await outlineOf("practice")).toContain(note);
@@ -372,7 +376,7 @@ describe("the structure finder", () => {
     // A page whose data holds only a short list (a 4-question FAQ) gets no note.
     const faq = Array.from({ length: 4 }, (_, i) => ({ question: `Q${i}?`, answer: `A${i}.` }));
     const short = extractHtml(`<html><body><h1>Course</h1><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { faq } })}</script></body></html>`, COURSE);
-    expect(pageListsOf(short)).toEqual([]);
+    expect(pageListsOf(short)).toEqual({ lists: [], cut: false });
     expect(await outlineOf("both", short)).not.toContain("carries data for its scripts");
   });
 
@@ -395,8 +399,8 @@ describe("the structure finder", () => {
       subset: { field: "type", equals: ["notebook", "graded_notebook"] },
     };
     const practice = { format: "lab" as const, items: 9, perItemMinutes: 5, minutes: 45, answers: false };
-    const run = async (listUrl: string | null) => {
-      const { model, calls } = scripted([[{ tool: "items", input: { url: COURSE } }], [{ tool: "answer", input: answerOf({ whole: true, listUrl }) }]], [LABS]);
+    const run = async (listUrl: string | null, notItems?: string[]) => {
+      const { model, calls } = scripted([[{ tool: "items", input: { url: COURSE } }], [{ tool: "answer", input: answerOf({ whole: true, listUrl, notItems }) }]], [LABS]);
       const result = await createStructureFinder({ provider: null, model, read }).find(material({ url: COURSE, kind: "course", practice, minutes: null }), "both", context().ctx);
       return { result, prompt: JSON.stringify(calls[calls.length - 1].prompt) };
     };
@@ -406,12 +410,18 @@ describe("the structure finder", () => {
     expect(named.result.list!.items).toHaveLength(14);
     expect(named.result.list!.items.reduce((sum, i) => sum + (i.minutes ?? 0), 0)).toBe(1130);
     // The `items` result says how to keep the list.
-    expect(named.prompt).toContain(`set \\"listUrl\\" to ${COURSE} in your answer`);
+    expect(named.prompt).toContain(`Set \\"listUrl\\" to ${COURSE} in your answer`);
+    expect(named.prompt).toContain(`put ${COURSE} in \\"notItems\\"`);
+    expect(named.prompt).toContain('- \\"notItems\\"');
 
     // Not named, with no practice units of its own: the one list read is the source's.
     const unnamed = await run(null);
     expect(unnamed.result.list!.items).toHaveLength(14);
     expect(unnamed.result.facts.some((f) => f.includes("the one list `items` read"))).toBe(true);
+
+    // Set aside: the answer said the list it read is not the source's items (a page's related courses), so none is kept.
+    const setAside = await run(null, [COURSE]);
+    expect(setAside.result.list).toBeNull();
   });
 
   it("keeps a list read from a GitHub file page under the raw address it was read at, when the answer names either", async () => {

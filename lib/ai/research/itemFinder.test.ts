@@ -624,6 +624,25 @@ describe("reading an item list from a page's own data", () => {
     expect(readableText(html)).not.toContain("Implementing retriever functions in a RAG system");
   });
 
+  it("transcribes a page whose data holds only short lists, with no mapping call", async () => {
+    // A nav menu of four links: fewer records than any list of items worth mapping.
+    const nav = [1, 2, 3, 4].map((i) => ({ label: `Link ${i}`, href: `/l${i}` }));
+    const page = `<html><body><h1>Labs</h1><script type="application/json">${JSON.stringify({ nav })}</script><p>Lab one. Lab two.</p></body></html>`;
+    const read = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text: readableText(page), file: false, truncated: false, data: pageDataFile(page) }));
+    expect(pageDataFile(page)).not.toBeNull();
+    const model = answers({ found: false, url: null, items: [] });
+    await readItemListAt(course, COURSE_URL, noEmit(), { model, read });
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(promptOf(model, 0)).toContain("List the source's steps in the source's own order");
+    // Six labs where research counted twenty: under half the claim, so not mapped either.
+    const six = [1, 2, 3, 4, 5, 6].map((i) => ({ title: `Lab ${i}`, kind: "lab" }));
+    const short = `<html><body><script type="application/json">${JSON.stringify({ six })}</script></body></html>`;
+    const many = answers({ found: false, url: null, items: [] });
+    const readShort = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text: "Labs", file: false, truncated: false, data: pageDataFile(short) }));
+    await readItemListAt({ ...course, practice: { ...course.practice!, items: 20 } }, COURSE_URL, noEmit(), { model: many, read: readShort });
+    expect(many.doGenerateCalls).toHaveLength(1);
+  });
+
   it("transcribes the page when its data holds no list of the source's items", async () => {
     const model = answers({ ...LAB_MAPPING, found: false }, { found: false, url: null, items: [] });
     const result = await readItemListAt(course, COURSE_URL, noEmit(), { model, read: pageRead });

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { applyMapping, sampleDataFile, type FieldMapping } from "./dataFile";
+import { validateItemList } from "./itemFinder";
 import { pageDataFile, pageDataRoots, pageLists } from "./pageData";
 
 function fixture(name: string): string {
@@ -41,8 +42,8 @@ describe("page data", () => {
     expect(lessons.keys).toEqual(expect.arrayContaining(["name", "type", "time"]));
     // The record sits in the course object: its fields are the lessons' parent fields.
     expect(lessons.parentKeys).toContain("totalDurationSeconds");
-    expect(pageLists(COURSE)[0]).toMatchObject({ records: 77 });
-    expect(pageLists(COURSE)[0].fields).not.toContain("_key");
+    expect(pageLists(COURSE).lists[0]).toMatchObject({ records: 77 });
+    expect(pageLists(COURSE).lists[0].fields).not.toContain("_key");
     // The lesson names are in the data's text, where a mapped title must appear.
     expect(data.text).toContain("Implementing retriever functions in a RAG system");
   });
@@ -64,16 +65,17 @@ describe("page data", () => {
   });
 
   it("lists the page's sizable lists once each, largest first, at most four", () => {
-    expect(pageLists(COURSE).map((l) => [l.records, l.fields[0]])).toEqual([
+    expect(pageLists(COURSE).lists.map((l) => [l.records, l.fields[0]])).toEqual([
       [77, "index"],
       [20, "id"],
+      // The contents of the course's five listing entries, gathered across them.
+      [20, "key"],
       [7, "answer"],
-      [6, "name"],
     ]);
     // A render tree that carries one list twice names it once.
     const lessons = Array.from({ length: 6 }, (_, i) => ({ title: `Lab ${i}`, kind: "lab" }));
     const twice = `<script type="application/json">${JSON.stringify({ a: { lessons }, b: { lessons } })}</script>`;
-    expect(pageLists(twice)).toEqual([{ records: 6, fields: ["title", "kind"] }]);
+    expect(pageLists(twice).lists).toEqual([{ records: 6, fields: ["title", "kind"] }]);
   });
 
   it("maps the labs out of the lessons, both kinds, their seconds as minutes", () => {
@@ -89,14 +91,50 @@ describe("page data", () => {
 
   it("walks one budget of nodes for the whole page, not one per script block", () => {
     // Three blocks of 70k records, 140k nodes each: the page's budget of 200k runs out in the second.
-    const block = JSON.stringify(Array.from({ length: 70_000 }, (_, i) => ({ t: i })));
-    const html = Array.from({ length: 3 }, () => `<script type="application/json">${block}</script>`).join("");
-    expect(pageDataFile(html)!.file.sets.map((s) => s.path)).toEqual(["script1", "script2"]);
+    const block = (b: number) => JSON.stringify(Array.from({ length: 70_000 }, (_, i) => ({ t: b * 100_000 + i })));
+    const html = [0, 1, 2].map((b) => `<script type="application/json">${block(b)}</script>`).join("");
+    const data = pageDataFile(html)!;
+    expect(data.file.sets.map((s) => s.path)).toEqual(["script1", "script2"]);
+    // The cut is said, to the mapping call and to the structure finder.
+    expect(data.file.cut).toBe(true);
+    expect(sampleDataFile(data.file)).toContain("This data was too large to read whole");
+    expect(pageLists(html).cut).toBe(true);
+    expect(pageDataFile(COURSE)!.file.cut).toBe(false);
+  });
+
+  it("gathers a list kept in each of several records, such as a course's lessons in each of its modules", () => {
+    const modules = [1, 2, 3].map((m) => ({ title: `Module ${m}`, lessons: [1, 2, 3, 4].map((l) => ({ name: `Lesson ${m}.${l}`, kind: l === 4 ? "lab" : "video" })) }));
+    const html = `<script type="application/json">${JSON.stringify({ course: { modules } })}</script>`;
+    const data = pageDataFile(html)!;
+    const lessons = data.file.sets.find((s) => s.path === "script1.course.modules[].lessons")!;
+    expect(lessons.records).toHaveLength(12);
+    expect(lessons.parentKeys).toContain("title");
+    expect(pageLists(html).lists).toContainEqual({ records: 12, fields: ["name", "kind"] });
+    const labs = applyMapping(data.file, { ...LABS, path: "script1.course.modules[].lessons", group: "../title", minutes: null, minutesUnit: "minutes", subset: { field: "kind", equals: ["lab"] } })!;
+    expect(labs.map((d) => [d.title, d.group])).toEqual([
+      ["Lesson 1.4", "Module 1"],
+      ["Lesson 2.4", "Module 2"],
+      ["Lesson 3.4", "Module 3"],
+    ]);
+  });
+
+  it("keeps a list the page's data carries twice once, at its first path", () => {
+    const lessons = Array.from({ length: 6 }, (_, i) => ({ title: `Lab ${i}`, kind: "lab" }));
+    const html = `<script type="application/json">${JSON.stringify({ a: { lessons }, b: { lessons } })}</script>`;
+    expect(pageDataFile(html)!.file.sets.map((s) => s.path)).toEqual(["script1.a.lessons"]);
+  });
+
+  it("keeps the data's strings as its text, so a title with a line break in it is still found", () => {
+    const lessons = [1, 2, 3, 4, 5].map((i) => ({ title: `Lab ${i}:\n"Retrievers" \\ part ${i}`, kind: "lab" }));
+    const html = `<script type="application/json">${JSON.stringify({ lessons })}</script>`;
+    const data = pageDataFile(html)!;
+    const drafts = applyMapping(data.file, { ...LABS, path: "script1.lessons", title: "title", minutes: null, minutesUnit: "minutes", subset: null })!;
+    expect(validateItemList({ url: "https://example.com/course", source: "file", items: drafts }, data.text)?.items).toHaveLength(5);
   });
 
   it("finds nothing on a page with no data for its scripts", () => {
     expect(pageDataFile("<html><body><h1>Course</h1><p>Lessons</p></body></html>")).toBeNull();
-    expect(pageLists('<script type="application/json">{"a":1}</script>')).toEqual([]);
+    expect(pageLists('<script type="application/json">{"a":1}</script>').lists).toEqual([]);
   });
 
   it("reads a JSON script block's lists, such as __NEXT_DATA__", () => {
@@ -105,6 +143,6 @@ describe("page data", () => {
     const data = pageDataFile(html)!;
     expect(data.file.sets.map((s) => s.path)).toEqual(["script1.props.pageProps.course.lessons"]);
     // Four lessons are too few to tell the structure finder of.
-    expect(pageLists(html)).toEqual([]);
+    expect(pageLists(html).lists).toEqual([]);
   });
 });

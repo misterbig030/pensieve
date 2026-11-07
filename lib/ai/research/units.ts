@@ -34,6 +34,8 @@ export const structureAnswerSchema = z.object({
   whole: z.boolean(),
   units: z.array(z.object({ title: z.string(), at: z.string(), kind: z.enum(["read", "practice"]), group: z.string().nullable(), minutes: z.number().nullable() })),
   listUrl: z.string().nullable(),
+  /** Lists `items` read that are not the source's items; one read list not named here is kept when `listUrl` is null. */
+  notItems: z.array(z.string()).optional(),
 });
 export type StructureAnswer = z.infer<typeof structureAnswerSchema>;
 
@@ -98,7 +100,7 @@ export function checkUnits(input: {
   // Rule 1: whole or empty means no reading units and no size change; a list from the `items` tool still counts.
   if (answer.whole || answer.units.length === 0) {
     const facts = ["whole"];
-    const list = practiceList(answer.listUrl, lists, practiceRole, [], material.url, pages, facts);
+    const list = practiceList(answer, lists, practiceRole, [], material.url, pages, facts);
     return { toc: null, minutes: null, basis: null, list, refused: null, facts };
   }
 
@@ -156,7 +158,7 @@ export function checkUnits(input: {
   // Rules 5 and 8 to 11 judge the reading units. Reading that fails them is dropped; the verdict is refused only when
   // no practice list is left either, so a practice source's steps survive a stray reading unit beside them.
   const tocDraft = readingUnseen ? { dropped: readingUnseen } : readingToc({ material, reading, practice: role === "both" ? practice : [], book, home, source });
-  const list = practiceList(answer.listUrl, lists, practiceRole, material.practice && practiceSeen ? practice : [], material.url, pages, facts);
+  const list = practiceList(answer, lists, practiceRole, material.practice && practiceSeen ? practice : [], material.url, pages, facts);
   if ("dropped" in tocDraft) {
     if (!list) return refuse(`units refused: ${tocDraft.dropped}`);
     facts.push(`reading units dropped: ${tocDraft.dropped}`);
@@ -620,12 +622,14 @@ function unitItems(p: Placed, sourceUrl: string): ItemDraft[] {
 }
 
 /**
- * Rule 13, for a role with practice only. The `items` tool's list when `listUrl` names one; otherwise the practice
- * units given (none when the material has no practice or too many were unseen) as items, a section of a problem table
- * as the problems in its rows. Either way it goes through `validateItemList` against what the tools returned.
+ * Rule 13, for a role with practice only. The `items` tool's list when `listUrl` names one, or when `listUrl` is null,
+ * the answer gives no practice units, and `items` read just one list that `notItems` does not set aside (aieng RAG
+ * course: 14 labs read from the page's data, then an answer with listUrl null); otherwise the practice units given
+ * (none when the material has no practice or too many were unseen) as items, a section of a problem table as the
+ * problems in its rows. Either way it goes through `validateItemList` against what the tools returned.
  */
 function practiceList(
-  listUrl: string | null,
+  answer: Pick<StructureAnswer, "listUrl" | "notItems">,
   lists: PracticeList[],
   practiceRole: boolean,
   practice: Placed[],
@@ -635,19 +639,17 @@ function practiceList(
 ): PracticeList | null {
   if (!practiceRole) return null;
   // The `items` tool reads a GitHub file page at its raw address, and the answer may name either.
-  const key = listUrl ? canonicalUrl(githubRawUrl(listUrl)) : null;
-  const named = key ? lists.find((l) => canonicalUrl(githubRawUrl(l.url)) === key) : undefined;
-  if (named) {
-    const list = validateItemList({ url: named.url, source: named.source, items: named.items }, seenText(pages));
-    facts.push(list ? `practice list from ${named.url}: ${list.items.length} items` : "practice list refused by the item check");
-    return list;
-  }
-  // An answer that names no list and gives no practice units of its own leaves the one list `items` read as the
-  // source's (aieng RAG course: 14 labs read from the page's data, then an answer with listUrl null).
-  if (!listUrl && practice.length === 0 && lists.length === 1) {
-    const only = lists[0];
-    const list = validateItemList({ url: only.url, source: only.source, items: only.items }, seenText(pages));
-    facts.push(list ? `practice list from ${only.url}, the one list \`items\` read: ${list.items.length} items` : "practice list refused by the item check");
+  const keyOf = (url: string) => canonicalUrl(githubRawUrl(url));
+  const { listUrl } = answer;
+  const key = listUrl ? keyOf(listUrl) : null;
+  const named = key ? lists.find((l) => keyOf(l.url) === key) : undefined;
+  const setAside = new Set((answer.notItems ?? []).map(keyOf));
+  const only = !listUrl && practice.length === 0 && lists.length === 1 && !setAside.has(keyOf(lists[0].url)) ? lists[0] : undefined;
+  const kept = named ?? only;
+  if (kept) {
+    const list = validateItemList({ url: kept.url, source: kept.source, items: kept.items }, seenText(pages));
+    const from = kept === named ? kept.url : `${kept.url}, the one list \`items\` read`;
+    facts.push(list ? `practice list from ${from}: ${list.items.length} items` : "practice list refused by the item check");
     return list;
   }
   if (practice.length === 0) return null;

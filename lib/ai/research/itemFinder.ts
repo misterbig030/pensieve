@@ -22,7 +22,7 @@ import { applyMapping, fieldMappingSchema, parseDataFile, sampleDataFile, type D
 import { MAX_BODY_BYTES, describeEgressError, guardedFetch, type AcceptedContentType, type GuardedFetchOptions } from "./egress";
 import type { ResearchCounts, ResearchEvent } from "./events";
 import { decodeBody, readableText } from "./extract";
-import { pageDataFile } from "./pageData";
+import { PAGE_LIST_MIN_RECORDS, pageDataFile } from "./pageData";
 import type { SourceFetcher } from "./tools";
 import { canonicalUrl } from "./verify";
 
@@ -369,6 +369,18 @@ export interface ItemReadResult {
 }
 
 /** A read as a caller sees it: its addresses and its text. */
+/**
+ * A page's data, kept to its lists that could be the source's items: at least `PAGE_LIST_MIN_RECORDS` records, and at
+ * least half the count research claimed. Null when none is, so a page whose data holds only menus and breadcrumbs goes
+ * straight to transcription, with no mapping call.
+ */
+function listData(data: PageData | null, claimed: number | null): PageData | null {
+  if (!data) return null;
+  const least = Math.max(PAGE_LIST_MIN_RECORDS, claimed ? Math.ceil(claimed / 2) : 0);
+  const sets = data.file.sets.filter((s) => s.records.length >= least);
+  return sets.length > 0 ? { ...data, file: { ...data.file, sets } } : null;
+}
+
 function pageOf(r: Read): { url: string; finalUrl: string; text: string } {
   return { url: r.url, finalUrl: r.finalUrl, text: r.text };
 }
@@ -473,7 +485,7 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
   // 2. Data, a data file or the data a page carries for its scripts: the model maps its fields from a sample, code
   // reads every record. Titles taken from a page's data must appear in that data, since the page's text may not show them.
   const file = full.file && !given ? parseDataFile(full.text, full.truncated) : null;
-  const embedded = !full.file ? (full.data ?? null) : null;
+  const embedded = !full.file ? listData(full.data ?? null, claimed) : null;
   const data = file ?? embedded?.file ?? null;
   if (data) {
     const readText = [textOf([...reads, full]), embedded?.text ?? ""].join("\n");

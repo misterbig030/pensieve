@@ -1,6 +1,6 @@
 import type { GuardedResponse } from "./egress";
 import { isGithubRepoPage, parseOutline, siteLinkCount, type PageOutline } from "./outline";
-import { pageLists, type PageList } from "./pageData";
+import { pageLists, type PageLists } from "./pageData";
 
 /** What `fetchSource` hands the model and the gate: the page's own claims about itself, plus readable text. */
 export interface PageInfo {
@@ -29,11 +29,11 @@ export interface PageInfo {
  * it, because the page goes whole to the research model as `fetchSource`'s result, and only the structure finder's
  * outline uses them.
  */
-const PAGE_LISTS = new WeakMap<PageInfo, PageList[]>();
+const PAGE_LISTS = new WeakMap<PageInfo, PageLists>();
 
 /** The lists of records in the data this page carries for its scripts, largest first; none for a page not read as HTML. */
-export function pageListsOf(page: PageInfo): PageList[] {
-  return PAGE_LISTS.get(page) ?? [];
+export function pageListsOf(page: PageInfo): PageLists {
+  return PAGE_LISTS.get(page) ?? { lists: [], cut: false };
 }
 
 /** About 4k tokens of English. */
@@ -193,8 +193,9 @@ export function extractHtml(raw: string, finalUrl: string): PageInfo {
     outline,
     siteLinks: siteLinkCount(outline, finalUrl),
   };
-  const lists = pageLists(raw);
-  if (lists.length > 0) PAGE_LISTS.set(info, lists);
+  // About a millisecond for a 300 KB course page, and the node budget bounds a larger one.
+  const data = pageLists(raw);
+  if (data.lists.length > 0 || data.cut) PAGE_LISTS.set(info, data);
   return info;
 }
 

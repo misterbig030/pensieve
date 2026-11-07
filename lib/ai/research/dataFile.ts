@@ -27,6 +27,8 @@ export interface RecordSet {
 export interface DataFile {
   kind: "json" | "csv";
   sets: RecordSet[];
+  /** True when the data was too large to walk whole, so a set past the part walked is missing. */
+  cut?: boolean;
 }
 
 /** Record sets shorter than this are not lists of items. */
@@ -115,35 +117,95 @@ function jsonSets(root: unknown): RecordSet[] {
 
 /** Nodes walked in one page's embedded data: a render tree is large, and its lists sit deep in it. */
 const MAX_PAGE_DATA_NODES = 200_000;
+/** How many levels of lists nested in records are gathered across their parents (a course's modules, their lessons). */
+const MAX_GATHERED_LEVELS = 2;
+const SAME_SET_CHARS = 300;
 
 /**
  * Every run of records anywhere in the data a page carries for its scripts, at any depth, each under the full path to
  * it from its root's name: a list of records, or records keyed by name (`.*`, each record's key in `_key`). A page's
  * data nests its lists deep inside a render tree that `jsonSets` would not walk into. A record's parent is the object
- * the list sits in. One budget of `MAX_PAGE_DATA_NODES` covers all of a page's roots.
+ * the list sits in. Lists nested in a run of records are also gathered across all of them (`a[].b`, as `jsonSets`
+ * does): a course's lessons kept in each of its modules are one list, each lesson's parent its module. A run met again
+ * (a render tree often carries its data twice) is kept once, at its first path. One budget of `MAX_PAGE_DATA_NODES`
+ * covers all of a page's roots; `cut` says it ran out.
  */
-export function pageDataSets(roots: { name: string; value: unknown }[]): RecordSet[] {
+export function pageDataSets(roots: { name: string; value: unknown }[]): { sets: RecordSet[]; cut: boolean } {
   const sets: RecordSet[] = [];
+  const seen = new Set<string>();
   let nodes = 0;
+  let cut = false;
+  /** What two copies of one run share: its size and its first and last records. */
+  const sameAs = (values: Record<string, unknown>[]) =>
+    `${values.length}:${JSON.stringify(values[0]).slice(0, SAME_SET_CHARS)}:${JSON.stringify(values[values.length - 1]).slice(0, SAME_SET_CHARS)}`;
   const add = (path: string, records: DataRecord[]) => {
     if (records.length < MIN_RECORDS) return;
+    const key = sameAs(records.map((r) => r.value));
+    if (seen.has(key)) return;
+    seen.add(key);
     sets.push({ path, records, keys: keysOf(records.map((r) => r.value)), parentKeys: keysOf(records.map((r) => r.parent).filter(isPlainObject)) });
   };
+  /**
+   * The lists nested in these records under each key, gathered across them when at least two hold a different one: a
+   * list two parents both carry is one list, not two.
+   */
+  const gather = (path: string, objects: Record<string, unknown>[], level: number) => {
+    if (level > MAX_GATHERED_LEVELS || objects.length < 2) return;
+    for (const key of keysOf(objects)) {
+      const listed: DataRecord[] = [];
+      const keyed: DataRecord[] = [];
+      const met = new Set<string>();
+      let inLists = 0;
+      let inKeyed = 0;
+      for (const parent of objects) {
+        const list = objectsIn(parent[key]);
+        const named = list ? null : entriesIn(parent[key]);
+        const values = list ?? named;
+        if (!values || met.has(sameAs(values))) continue;
+        met.add(sameAs(values));
+        if (list) {
+          inLists += 1;
+          for (const value of list) listed.push({ value, parent });
+        } else if (named) {
+          inKeyed += 1;
+          for (const value of named) keyed.push({ value, parent });
+        }
+      }
+      nodes += listed.length + keyed.length;
+      if (inLists >= 2) {
+        add(`${path}[].${key}`, listed);
+        gather(`${path}[].${key}`, listed.map((r) => r.value), level + 1);
+      }
+      if (inKeyed >= 2) {
+        add(`${path}[].${key}.*`, keyed);
+        gather(`${path}[].${key}.*`, keyed.map((r) => r.value), level + 1);
+      }
+    }
+  };
   const walk = (value: unknown, path: string, owner: Record<string, unknown> | null) => {
-    if (++nodes > MAX_PAGE_DATA_NODES) return;
+    if (++nodes > MAX_PAGE_DATA_NODES) {
+      cut = true;
+      return;
+    }
     if (Array.isArray(value)) {
       const objects = objectsIn(value);
-      if (objects) add(path, objects.map((o) => ({ value: o, parent: owner })));
+      if (objects) {
+        add(path, objects.map((o) => ({ value: o, parent: owner })));
+        gather(path, objects, 1);
+      }
       value.forEach((child, i) => walk(child, `${path}[${i}]`, owner));
       return;
     }
     if (!isPlainObject(value)) return;
     const keyed = entriesIn(value);
-    if (keyed) add(`${path}.*`, keyed.map((o) => ({ value: o, parent: owner })));
+    if (keyed) {
+      add(`${path}.*`, keyed.map((o) => ({ value: o, parent: owner })));
+      gather(`${path}.*`, keyed, 1);
+    }
     for (const [key, child] of Object.entries(value)) walk(child, `${path}.${key}`, value);
   };
   for (const root of roots) walk(root.value, root.name, null);
-  return sets;
+  return { sets, cut };
 }
 
 /** Splits CSV (or TSV) text into rows, honouring quoted fields with delimiters, doubled quotes and line breaks. */
@@ -276,6 +338,7 @@ export function sampleDataFile(file: DataFile): string {
     const unnamed = file.sets.length - MAX_NAMED_SETS;
     if (unnamed > 0) lines.push(`(and ${unnamed} smaller sets)`);
   }
+  if (file.cut) lines.push("(This data was too large to read whole: a list past the part read is not shown.)");
   return lines.join("\n").trim();
 }
 
