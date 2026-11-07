@@ -1,5 +1,6 @@
 import type { GuardedResponse } from "./egress";
 import { isGithubRepoPage, parseOutline, siteLinkCount, type PageOutline } from "./outline";
+import { pageLists, type PageLists } from "./pageData";
 
 /** What `fetchSource` hands the model and the gate: the page's own claims about itself, plus readable text. */
 export interface PageInfo {
@@ -21,6 +22,18 @@ export interface PageInfo {
   siteLinks?: number;
   /** A PDF's page count, when its page objects are readable in the bytes read; null when they are not. */
   pages?: number | null;
+}
+
+/**
+ * The lists in the data each HTML page carries for its scripts (`pageListsOf`). They are kept beside the page, not in
+ * it, because the page goes whole to the research model as `fetchSource`'s result, and only the structure finder's
+ * outline uses them.
+ */
+const PAGE_LISTS = new WeakMap<PageInfo, PageLists>();
+
+/** The lists of records in the data this page carries for its scripts, largest first; none for a page not read as HTML. */
+export function pageListsOf(page: PageInfo): PageLists {
+  return PAGE_LISTS.get(page) ?? { lists: [], cut: false };
 }
 
 /** About 4k tokens of English. */
@@ -159,7 +172,7 @@ export function extractHtml(raw: string, finalUrl: string): PageInfo {
   const h1 = clean(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1]);
   const full = readableText(html);
   const outline = parseOutline(html, finalUrl);
-  return {
+  const info: PageInfo = {
     finalUrl,
     title,
     ogTitle: firstMeta(meta, ["og:title", "citation_title", "twitter:title", "dc.title"]),
@@ -180,6 +193,10 @@ export function extractHtml(raw: string, finalUrl: string): PageInfo {
     outline,
     siteLinks: siteLinkCount(outline, finalUrl),
   };
+  // About a millisecond for a 300 KB course page, and the node budget bounds a larger one.
+  const data = pageLists(raw);
+  if (data.lists.length > 0 || data.cut) PAGE_LISTS.set(info, data);
+  return info;
 }
 
 /** Reads a PDF's document-info Title and Author when they are stored as plain strings. The body text is not read. */

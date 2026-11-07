@@ -19,9 +19,10 @@ import { reportServiceFailure } from "../serviceEvents";
 import { CANDIDATE_STEP_EFFORT, DEFAULT_RESEARCH_MODEL, type AiModelId, type ReasoningEffort } from "../models";
 import { providerError } from "../providerError";
 import { applyMapping, fieldMappingSchema, parseDataFile, sampleDataFile, type DataFile, type FieldMapping } from "./dataFile";
-import { describeEgressError, guardedFetch, type AcceptedContentType, type GuardedFetchOptions } from "./egress";
+import { MAX_BODY_BYTES, describeEgressError, guardedFetch, type AcceptedContentType, type GuardedFetchOptions } from "./egress";
 import type { ResearchCounts, ResearchEvent } from "./events";
 import { decodeBody, readableText } from "./extract";
+import { PAGE_LIST_MIN_RECORDS, pageDataFile } from "./pageData";
 import type { SourceFetcher } from "./tools";
 import { canonicalUrl } from "./verify";
 
@@ -45,6 +46,8 @@ const ITEM_ANSWER_MS = 90_000;
 export const ITEM_FILE_BYTES = 400 * 1024;
 /** A page (or a file that is not data) read in full is cut to this much text: a 500-item list fits. */
 export const ITEM_FULL_PAGE_CHARS = 60_000;
+/** How much of a page the mapping call over the page's own data sees. */
+const MAPPING_PAGE_CHARS = 16_000;
 /** What a full read accepts: pages, plain text and data files; never a PDF. */
 const FULL_READ_TYPES: readonly AcceptedContentType[] = ["text/html", "text/plain", "application/json", "text/csv"];
 
@@ -60,24 +63,41 @@ export interface FullRead {
   file: boolean;
   /** True when the body was cut at `ITEM_FILE_BYTES`. */
   truncated: boolean;
+  /** For a page: the data it carries for its scripts, as a data file, and that data's JSON as text; null when none. */
+  data?: PageData | null;
+}
+
+/** A page's embedded data (`pageDataFile`). */
+export interface PageData {
+  file: DataFile;
+  text: string;
 }
 
 export type FullReader = (url: string, signal?: AbortSignal) => Promise<FullRead>;
 
 /**
  * Reads one URL whole under the egress rules: a JSON, CSV or plain-text file up to `ITEM_FILE_BYTES`, or an HTML page
- * as its readable text up to `ITEM_FULL_PAGE_CHARS`. Only this reader widens the guard's content types; the shared
+ * (up to the shared `MAX_BODY_BYTES`) as its readable text up to `ITEM_FULL_PAGE_CHARS` with the data it carries for its
+ * scripts. Only this reader widens the guard's content types; the shared
  * page fetcher keeps HTML, PDF and plain text with its usual cut.
  */
 export const guardedFullReader =
   (options: Omit<GuardedFetchOptions, "signal" | "contentTypes" | "maxBytes"> = {}): FullReader =>
   async (url, signal) => {
-    const res = await guardedFetch(url, { timeoutMs: ITEM_FULL_READ_MS, ...options, signal, contentTypes: FULL_READ_TYPES, maxBytes: ITEM_FILE_BYTES });
+    // A page is read up to the shared cap, since the data it carries for its scripts can sit deep in it; a file up to its own.
+    const maxBytes = (type: AcceptedContentType) => (type === "text/html" ? MAX_BODY_BYTES : ITEM_FILE_BYTES);
+    const res = await guardedFetch(url, { timeoutMs: ITEM_FULL_READ_MS, ...options, signal, contentTypes: FULL_READ_TYPES, maxBytes });
     const text = decodeBody(res.body, res.charset);
     if (res.contentType === "text/html") {
       // A page longer than the cut is not read in full, whatever its bytes: the finder must not take part of a list for all of it.
       const readable = readableText(text);
-      return { finalUrl: res.finalUrl, text: readable.slice(0, ITEM_FULL_PAGE_CHARS), file: false, truncated: res.truncated || readable.length > ITEM_FULL_PAGE_CHARS };
+      return {
+        finalUrl: res.finalUrl,
+        text: readable.slice(0, ITEM_FULL_PAGE_CHARS),
+        file: false,
+        truncated: res.truncated || readable.length > ITEM_FULL_PAGE_CHARS,
+        data: pageDataFile(text),
+      };
     }
     return { finalUrl: res.finalUrl, text, file: true, truncated: res.truncated };
   };
@@ -231,6 +251,8 @@ interface Read {
   full: boolean;
   file: boolean;
   truncated: boolean;
+  /** A page's embedded data, when the full read found some. */
+  data?: PageData | null;
 }
 
 function nounOf(source: Material): string {
@@ -256,20 +278,25 @@ function sourceLines(source: Material, reads: Read[]): string[] {
   return lines;
 }
 
-/** The mapping call: the pages read (where link patterns show), and a sample of the data file's records. */
-function buildMappingPrompt(source: Material, reads: Read[], fileUrl: string, file: DataFile): string {
+/**
+ * The mapping call: the pages read (where link patterns show), and a sample of the records of a data file, or of the
+ * data a page carries for its scripts (`embedded`).
+ */
+function buildMappingPrompt(source: Material, reads: Read[], fileUrl: string, file: DataFile, embedded: boolean): string {
   const noun = nounOf(source);
+  const what = embedded ? "the data this page carries for its scripts" : `a ${file.kind === "json" ? "JSON" : "CSV"} file`;
   return [
     ...sourceLines(source, reads),
     "",
-    `--- ${fileUrl} --- (a ${file.kind === "json" ? "JSON" : "CSV"} file, read in full; its records are sampled below)`,
+    `--- ${fileUrl} --- (${what}, read in full; its records are sampled below)`,
     sampleDataFile(file),
     "",
-    `Code will apply your mapping to every record of this file, in the file's order. Map the file to the source's ${noun}:`,
+    `Code will apply your mapping to every record of this ${embedded ? "data" : "file"}, in its order. Map it to the source's ${noun}:`,
     `- "path": for JSON, the path of the records that are the ${noun}, exactly as listed above; null for CSV.`,
     `- "title", "number", "group", "difficulty", "minutes": the field that holds each, or null when the file has none. Write ../field for a field of the object a record sits in. For "number", a field that starts with the item's number (such as a code like 0049-group-anagrams) will do: code keeps the number.`,
+    `- "minutesUnit": what the "minutes" field counts (minutes, seconds or hours); "minutes" when there is no such field.`,
     `- "url" and "solutionUrl": a link template over fields, such as https://example.com/problems/{slug} or https://example.com/watch?v={video}, only when the pages or the file above show that link pattern with its full address; "{field}" when a field holds the whole link. Otherwise null. Never invent a link.`,
-    `- "subset": when the source is a named part of the file (for example "the 150" marked by a flag field in a file of 450), the field that marks it and the value that means "in" (e.g. "true"); null for the whole file.`,
+    `- "subset": when the source is a named part of the file (for example "the 150" marked by a flag field in a file of 450, or the labs among a course's videos and quizzes), the field that marks it and every value that means "in" (e.g. ["true"], or each kind of lab); null for the whole file.`,
     `If the file does not list this source's ${noun}, return found: false.`,
   ].join("\n");
 }
@@ -342,6 +369,18 @@ export interface ItemReadResult {
 }
 
 /** A read as a caller sees it: its addresses and its text. */
+/**
+ * A page's data, kept to its lists that could be the source's items: at least `PAGE_LIST_MIN_RECORDS` records, and at
+ * least half the count research claimed. Null when none is, so a page whose data holds only menus and breadcrumbs goes
+ * straight to transcription, with no mapping call.
+ */
+function listData(data: PageData | null, claimed: number | null): PageData | null {
+  if (!data) return null;
+  const least = Math.max(PAGE_LIST_MIN_RECORDS, claimed ? Math.ceil(claimed / 2) : 0);
+  const sets = data.file.sets.filter((s) => s.records.length >= least);
+  return sets.length > 0 ? { ...data, file: { ...data.file, sets } } : null;
+}
+
 function pageOf(r: Read): { url: string; finalUrl: string; text: string } {
   return { url: r.url, finalUrl: r.finalUrl, text: r.text };
 }
@@ -398,7 +437,9 @@ function modelAsker(
 
 /**
  * Reads `url` in full (a page already given in `options.pages` is not read again), then: a data file goes to the
- * mapping call, code applies the mapping to every record; a page goes to the transcription call. Each model call is on
+ * mapping call, code applies the mapping to every record; a page that carries data for its scripts goes to the mapping
+ * call over that data first, and to the transcription call when it yields no list; any other page goes to the
+ * transcription call. Each model call is on
  * its own clock (`ITEM_MAP_MS`, `ITEM_ANSWER_MS`), the read on `ITEM_FULL_READ_MS`, so a slow stage never starves the
  * next. A data file that cannot be mapped is not transcribed: the source is left to count. Nothing here throws except a
  * provider refusal on the user's own key.
@@ -429,7 +470,7 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
     try {
       const got = await readFull(target, clock(ITEM_FULL_READ_MS));
       ctx.emit({ type: "research.fetch", url: target, ok: true });
-      full = { url: target, finalUrl: got.finalUrl, text: got.text, full: true, file: got.file, truncated: got.truncated };
+      full = { url: target, finalUrl: got.finalUrl, text: got.text, full: true, file: got.file, truncated: got.truncated, data: got.data ?? null };
     } catch (error) {
       ctx.emit({ type: "research.fetch", url: target, ok: false, reason: describeEgressError(error) });
       return none();
@@ -437,24 +478,34 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
   }
   const reads = context.filter((r) => r !== given);
 
-  // 2. A data file: the model maps its fields from a sample, code reads every record.
-  const data = full.file && !given ? parseDataFile(full.text, full.truncated) : null;
+  // Whatever is not mapped as a data file (a page, or a plain-text file) is cut to the page size before the model sees it.
+  const page: Read = { ...full, text: full.text.slice(0, ITEM_FULL_PAGE_CHARS), truncated: full.truncated || full.text.length > ITEM_FULL_PAGE_CHARS };
+  const pages: Read[] = [...reads, page];
+
+  // 2. Data, a data file or the data a page carries for its scripts: the model maps its fields from a sample, code
+  // reads every record. Titles taken from a page's data must appear in that data, since the page's text may not show them.
+  const file = full.file && !given ? parseDataFile(full.text, full.truncated) : null;
+  const embedded = !full.file ? listData(full.data ?? null, claimed) : null;
+  const data = file ?? embedded?.file ?? null;
   if (data) {
-    const readText = textOf([...reads, full]);
+    const readText = [textOf([...reads, full]), embedded?.text ?? ""].join("\n");
     const fromMapping = (mapping: FieldMapping): PracticeList | null => {
       const drafts = applyMapping(data, mapping);
       return drafts ? validateItemList({ url: full.url, source: "file", items: drafts }, readText) : null;
     };
-    const mapping = await ask(fieldMappingSchema, buildMappingPrompt(source, reads, full.url, data), "Research · items · mapping", ITEM_MAP_MS, (m) =>
-      itemListFacts(fromMapping(m), claimed),
-    );
-    return { list: mapping ? fromMapping(mapping) : null, counts, costUsd, pages: [...reads, full].map(pageOf) };
+    // A page beside its own data is cut short: the mapping call is on a short clock, and the page is there for what the
+    // source is and its link patterns, not for its list.
+    const beside = embedded ? [...reads, { ...page, text: page.text.slice(0, MAPPING_PAGE_CHARS), truncated: page.truncated || page.text.length > MAPPING_PAGE_CHARS }] : reads;
+    const prompt = buildMappingPrompt(source, beside, full.url, data, embedded !== null);
+    const mapping = await ask(fieldMappingSchema, prompt, "Research · items · mapping", ITEM_MAP_MS, (m) => itemListFacts(fromMapping(m), claimed));
+    const list = mapping ? fromMapping(mapping) : null;
+    // A page whose data does not list the items may still list them in its text.
+    if (file) return { list, counts, costUsd, pages: [...reads, full].map(pageOf) };
+    // The page goes back with its data, where the list's titles are: the finder checks them again against what was read.
+    if (list) return { list, counts, costUsd, pages: [...reads.map(pageOf), { ...pageOf(page), text: `${page.text}\n${embedded!.text}` }] };
   }
 
   // 3. Otherwise a page that lists them, transcribed.
-  // Whatever is not mapped as data (a page, or a plain-text file) is cut to the page size before the model sees it.
-  const page: Read = { ...full, text: full.text.slice(0, ITEM_FULL_PAGE_CHARS), truncated: full.truncated || full.text.length > ITEM_FULL_PAGE_CHARS };
-  const pages: Read[] = [...reads, page];
   const resolve = (answer: ItemsAnswer): PracticeList | null => {
     if (!answer.found || !answer.url) return null;
     const asked = canonicalUrl(answer.url);

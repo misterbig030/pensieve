@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { gunzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { APICallError } from "@ai-sdk/provider";
@@ -8,7 +9,8 @@ import { providerError } from "../providerError";
 import type { ServiceEvent } from "../serviceEvents";
 import type { ResolvedAddress, Transport } from "./egress";
 import type { ResearchEvent } from "./events";
-import type { PageInfo } from "./extract";
+import { readableText, type PageInfo } from "./extract";
+import { pageDataFile } from "./pageData";
 import { SAMPLE_RECORDS } from "./dataFile";
 import {
   ITEM_FILE_BYTES,
@@ -110,6 +112,7 @@ const MAPPING = {
   group: "pattern",
   difficulty: "difficulty",
   minutes: null,
+  minutesUnit: "minutes",
   url: "https://leetcode.com/problems/{link}",
   solutionUrl: "https://www.youtube.com/watch?v={video}",
   subset: null,
@@ -127,7 +130,7 @@ describe("item lists", () => {
   it("returns the subset the source names", async () => {
     const flagged = ENTRIES.filter((e) => e.neetcode150);
     // The model only says how the file's fields map; code picks the subset and copies every field.
-    const model = answers({ ...MAPPING, subset: { field: "neetcode150", equals: "true" } });
+    const model = answers({ ...MAPPING, subset: { field: "neetcode150", equals: ["true"] } });
     const read = fileRead(FIXTURE);
     const { events, found } = run(model, read);
     const result = await found;
@@ -160,7 +163,7 @@ describe("item lists", () => {
   });
 
   it("takes an item's number from the start of a code field (0049-group-anagrams is 49)", async () => {
-    const model = answers({ ...MAPPING, number: "code", subset: { field: "neetcode150", equals: "true" } });
+    const model = answers({ ...MAPPING, number: "code", subset: { field: "neetcode150", equals: ["true"] } });
     const result = await run(model, fileRead(FIXTURE)).found;
     const items = result.list!.items;
     expect(items.find((i) => i.title === "Group Anagrams")!.number).toBe("49");
@@ -240,7 +243,7 @@ describe("item lists", () => {
     const wrongPath = answers({ ...MAPPING, path: "nowhere" });
     expect((await run(wrongPath, fileRead(FIXTURE)).found).list).toBeNull();
     expect(wrongPath.doGenerateCalls).toHaveLength(1);
-    const noFlag = answers({ ...MAPPING, subset: { field: "neetcode300", equals: "true" } });
+    const noFlag = answers({ ...MAPPING, subset: { field: "neetcode300", equals: ["true"] } });
     expect((await run(noFlag, fileRead(FIXTURE)).found).list).toBeNull();
     expect(noFlag.doGenerateCalls).toHaveLength(1);
   });
@@ -510,6 +513,26 @@ describe("the full reader", () => {
     expect(huge.truncated).toBe(true);
   });
 
+  it("stops downloading a data file at its own cap, though a page may run to the shared one", async () => {
+    const CHUNK = 64 * 1024;
+    let sent = 0;
+    const chunked: Transport = async () => ({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: (async function* () {
+        for (let i = 0; i < 32; i++) {
+          sent += CHUNK;
+          yield new Uint8Array(CHUNK).fill(32);
+        }
+      })(),
+      destroy: () => {},
+    });
+    const file = await guardedFullReader({ resolver, transport: chunked })(RAW_URL);
+    expect(file).toMatchObject({ file: true, truncated: true });
+    expect(file.text).toHaveLength(ITEM_FILE_BYTES);
+    expect(sent).toBeLessThanOrEqual(ITEM_FILE_BYTES + CHUNK);
+  });
+
   it("reads a page as its readable text, and refuses what is not text", async () => {
     const html = `<html><head><title>List</title><script>var x = 1;</script></head><body><ul>${Array.from({ length: 800 }, (_, i) => `<li>Problem number ${i}</li>`).join("")}</ul></body></html>`;
     const page = await guardedFullReader({ resolver, transport: transportFor("text/html", html) })("https://example.com/list");
@@ -526,6 +549,17 @@ describe("the full reader", () => {
     const page = await guardedFullReader({ resolver, transport: transportFor("text/html", html) })("https://example.com/list");
     expect(page.text).toHaveLength(ITEM_FULL_PAGE_CHARS);
     expect(page.truncated).toBe(true);
+  });
+
+  it("hands over the data a page carries for its scripts, read past the file cap", async () => {
+    const lessons = Array.from({ length: 30 }, (_, i) => ({ name: `Lab ${i}`, type: "notebook", time: 600 }));
+    const html = `<html><body><h1>Course</h1>${"<p>filler</p>".repeat(40_000)}<script>self.__next_f.push([1,${JSON.stringify(`1a:${JSON.stringify({ lessons })}\n`)}])</script></body></html>`;
+    expect(html.length).toBeGreaterThan(ITEM_FILE_BYTES);
+    const page = await guardedFullReader({ resolver, transport: transportFor("text/html", html) })("https://example.com/course");
+    expect(page.file).toBe(false);
+    expect(page.data!.file.sets.map((s) => [s.path, s.records.length])).toEqual([["row1a.lessons", 30]]);
+    const plain = await guardedFullReader({ resolver, transport: transportFor("text/html", "<html><body><p>No data</p></body></html>") })("https://example.com/p");
+    expect(plain.data).toBeNull();
   });
 });
 
@@ -545,5 +579,75 @@ describe("githubRawUrl", () => {
     ]) {
       expect(githubRawUrl(same)).toBe(same);
     }
+  });
+});
+
+describe("reading an item list from a page's own data", () => {
+  /** aieng-2's RAG course: a Next.js page whose text shows five modules and whose data holds all 77 lessons. */
+  const html = gunzipSync(readFileSync(join(__dirname, "__fixtures__", "pages", "course-page-data.html.gz"))).toString("utf8");
+  const COURSE_URL = "https://www.deeplearning.ai/courses/retrieval-augmented-generation";
+  const course: Material = {
+    ...source,
+    id: "M10",
+    url: COURSE_URL,
+    title: "Retrieval Augmented Generation (RAG)",
+    why: "Hands-on course on designing each RAG component, with code examples and graded assignments.",
+    practice: { format: "lab", items: 9, perItemMinutes: 5, minutes: 45, answers: false },
+  };
+  const pageRead = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text: readableText(html), file: false, truncated: false, data: pageDataFile(html) }));
+  const LAB_MAPPING = {
+    ...MAPPING,
+    path: "row73[3][3].children[0][3].courses[0].lessons.*",
+    title: "name",
+    group: null,
+    difficulty: null,
+    minutes: "time",
+    minutesUnit: "seconds",
+    url: null,
+    solutionUrl: null,
+    subset: { field: "type", equals: ["notebook", "graded_notebook"] },
+  };
+  const noEmit = () => ({ fetcher: fetcherFor({}).fetcher, emit: () => {} });
+
+  it("maps the page's data: every lab, of both kinds, with its minutes, though no heading names them", async () => {
+    expect(readableText(html)).not.toContain("Implementing retriever functions");
+    const model = answers(LAB_MAPPING);
+    const result = await readItemListAt(course, COURSE_URL, noEmit(), { model, read: pageRead });
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(promptOf(model, 0)).toContain("the data this page carries for its scripts");
+    expect(promptOf(model, 0)).toContain("graded_notebook");
+    expect(result.list).toMatchObject({ source: "file", url: COURSE_URL });
+    expect(result.list!.items).toHaveLength(14);
+    expect(result.list!.items.find((i) => i.title === "Implementing retriever functions in a RAG system")).toMatchObject({ minutes: 180 });
+    // The page goes back with its data, so the finder's own check finds the titles there.
+    expect(result.pages).toEqual([{ url: COURSE_URL, finalUrl: COURSE_URL, text: `${readableText(html)}\n${pageDataFile(html)!.text}` }]);
+    expect(readableText(html)).not.toContain("Implementing retriever functions in a RAG system");
+  });
+
+  it("transcribes a page whose data holds only short lists, with no mapping call", async () => {
+    // A nav menu of four links: fewer records than any list of items worth mapping.
+    const nav = [1, 2, 3, 4].map((i) => ({ label: `Link ${i}`, href: `/l${i}` }));
+    const page = `<html><body><h1>Labs</h1><script type="application/json">${JSON.stringify({ nav })}</script><p>Lab one. Lab two.</p></body></html>`;
+    const read = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text: readableText(page), file: false, truncated: false, data: pageDataFile(page) }));
+    expect(pageDataFile(page)).not.toBeNull();
+    const model = answers({ found: false, url: null, items: [] });
+    await readItemListAt(course, COURSE_URL, noEmit(), { model, read });
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(promptOf(model, 0)).toContain("List the source's steps in the source's own order");
+    // Six labs where research counted twenty: under half the claim, so not mapped either.
+    const six = [1, 2, 3, 4, 5, 6].map((i) => ({ title: `Lab ${i}`, kind: "lab" }));
+    const short = `<html><body><script type="application/json">${JSON.stringify({ six })}</script></body></html>`;
+    const many = answers({ found: false, url: null, items: [] });
+    const readShort = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text: "Labs", file: false, truncated: false, data: pageDataFile(short) }));
+    await readItemListAt({ ...course, practice: { ...course.practice!, items: 20 } }, COURSE_URL, noEmit(), { model: many, read: readShort });
+    expect(many.doGenerateCalls).toHaveLength(1);
+  });
+
+  it("transcribes the page when its data holds no list of the source's items", async () => {
+    const model = answers({ ...LAB_MAPPING, found: false }, { found: false, url: null, items: [] });
+    const result = await readItemListAt(course, COURSE_URL, noEmit(), { model, read: pageRead });
+    expect(model.doGenerateCalls).toHaveLength(2);
+    expect(promptOf(model, 1)).toContain("List the source's steps in the source's own order");
+    expect(result.list).toBeNull();
   });
 });

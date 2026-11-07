@@ -11,11 +11,13 @@ import { OUTLINE_RESERVE_MS } from "../planDraft";
 import { providerError } from "../providerError";
 import { reportingModel, type ServiceEvent } from "../serviceEvents";
 import type { ResearchEvent } from "./events";
-import { extractHtml, type PageInfo } from "./extract";
+import { extractHtml, pageListsOf, readableText, type PageInfo } from "./extract";
+import { pageDataFile } from "./pageData";
 import type { FullReader } from "./itemFinder";
 import {
   ANSWER_NOW,
   APP_SHELL_NOTE,
+  pageDataNote,
   MEASURE_BATCH,
   PausableClock,
   STRUCTURE_ALLOCATE_MIN_MS,
@@ -344,12 +346,90 @@ describe("the structure finder", () => {
     expect(await outlineOf("practice", words)).not.toContain(note);
   });
 
+  it("tells a practice finder that a course page keeps its lessons in its data, so `items` can read its labs", async () => {
+    // aieng-2: the RAG course's outline showed five modules; its 14 labs were only in its data, and `items` was never called.
+    const COURSE = "https://www.deeplearning.ai/courses/retrieval-augmented-generation";
+    const page = extractHtml(fixture("course-page-data"), COURSE);
+    // Beside the page, not in it: the page goes whole to the research model.
+    expect(page).not.toHaveProperty("pageData");
+    expect(pageListsOf(page).lists.map((l) => l.records)).toEqual([77, 20, 20, 7]);
+    const practice = { format: "lab" as const, items: 9, perItemMinutes: 5, minutes: 45, answers: false };
+    const outlineOf = async (role: "practice" | "both" | "read", at: PageInfo = page) => {
+      const { model, calls } = scripted([[{ tool: "outline", input: { url: COURSE } }], [{ tool: "answer", input: answerOf({ whole: true }) }]]);
+      await createStructureFinder({ provider: null, model }).find(material({ url: COURSE, kind: "course", practice, minutes: null }), role, context({ [COURSE]: at }).ctx);
+      return JSON.stringify(calls[1].prompt);
+    };
+    const full = pageDataNote(pageListsOf(page));
+    // Every sizable list is named with its fields, so the finder can tell the lessons from the FAQ and the reviews.
+    expect(full).toContain("lists of 77 records (index, slug, name, type");
+    expect(full).toContain("7 records (answer, question)");
+    expect(full).toContain("20 records (key, type)");
+    expect(full).toMatch(/FAQ, reviews/);
+    expect(full).not.toContain("too large");
+    // Data too large to walk whole is said, with or without a list.
+    expect(pageDataNote({ lists: [], cut: true })).toContain("too large to read whole");
+    expect(pageDataNote({ lists: [], cut: false })).toBeNull();
+    const note = JSON.stringify(full).slice(1, 80);
+    expect(await outlineOf("both")).toContain(note);
+    expect(await outlineOf("practice")).toContain(note);
+    expect(await outlineOf("read")).not.toContain(note);
+    // A page whose data holds only a short list (a 4-question FAQ) gets no note.
+    const faq = Array.from({ length: 4 }, (_, i) => ({ question: `Q${i}?`, answer: `A${i}.` }));
+    const short = extractHtml(`<html><body><h1>Course</h1><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { faq } })}</script></body></html>`, COURSE);
+    expect(pageListsOf(short)).toEqual({ lists: [], cut: false });
+    expect(await outlineOf("both", short)).not.toContain("carries data for its scripts");
+  });
+
+  it("keeps the labs `items` reads from a course page's data, whose titles are in no page text", async () => {
+    // aieng RAG course, live: `items` mapped the 14 labs, then the answer named no list and they were lost.
+    const COURSE = "https://www.deeplearning.ai/courses/retrieval-augmented-generation";
+    const html = fixture("course-page-data");
+    const read = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text: readableText(html), file: false, truncated: false, data: pageDataFile(html) }));
+    const LABS = {
+      found: true,
+      path: "row73[3][3].children[0][3].courses[0].lessons.*",
+      title: "name",
+      number: null,
+      group: null,
+      difficulty: null,
+      minutes: "time",
+      minutesUnit: "seconds",
+      url: null,
+      solutionUrl: null,
+      subset: { field: "type", equals: ["notebook", "graded_notebook"] },
+    };
+    const practice = { format: "lab" as const, items: 9, perItemMinutes: 5, minutes: 45, answers: false };
+    const run = async (listUrl: string | null, notItems?: string[]) => {
+      const { model, calls } = scripted([[{ tool: "items", input: { url: COURSE } }], [{ tool: "answer", input: answerOf({ whole: true, listUrl, notItems }) }]], [LABS]);
+      const result = await createStructureFinder({ provider: null, model, read }).find(material({ url: COURSE, kind: "course", practice, minutes: null }), "both", context().ctx);
+      return { result, prompt: JSON.stringify(calls[calls.length - 1].prompt) };
+    };
+
+    // Named: the titles are checked against the page's data, where they are.
+    const named = await run(COURSE);
+    expect(named.result.list!.items).toHaveLength(14);
+    expect(named.result.list!.items.reduce((sum, i) => sum + (i.minutes ?? 0), 0)).toBe(1130);
+    // The `items` result says how to keep the list.
+    expect(named.prompt).toContain(`Set \\"listUrl\\" to ${COURSE} in your answer`);
+    expect(named.prompt).toContain(`put ${COURSE} in \\"notItems\\"`);
+    expect(named.prompt).toContain('- \\"notItems\\"');
+
+    // Not named, with no practice units of its own: the one list read is the source's.
+    const unnamed = await run(null);
+    expect(unnamed.result.list!.items).toHaveLength(14);
+    expect(unnamed.result.facts.some((f) => f.includes("the one list `items` read"))).toBe(true);
+
+    // Set aside: the answer said the list it read is not the source's items (a page's related courses), so none is kept.
+    const setAside = await run(null, [COURSE]);
+    expect(setAside.result.list).toBeNull();
+  });
+
   it("keeps a list read from a GitHub file page under the raw address it was read at, when the answer names either", async () => {
     const BLOB = "https://github.com/acme/problems/blob/main/list.json";
     const RAW = "https://raw.githubusercontent.com/acme/problems/main/list.json";
     const file = JSON.stringify(["Two Sum", "Valid Anagram", "Group Anagrams"].map((problem) => ({ problem })));
     const read = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text: file, file: true, truncated: false }));
-    const mapping = { found: true, path: "", title: "problem", number: null, group: null, difficulty: null, minutes: null, url: null, solutionUrl: null, subset: null };
+    const mapping = { found: true, path: "", title: "problem", number: null, group: null, difficulty: null, minutes: null, minutesUnit: "minutes", url: null, solutionUrl: null, subset: null };
     const practice = { format: "problem-set" as const, items: 3, perItemMinutes: 20, minutes: 60, answers: true };
     for (const listUrl of [BLOB, RAW]) {
       const { model } = scripted([[{ tool: "items", input: { url: BLOB } }], [{ tool: "answer", input: answerOf({ whole: true, listUrl }) }]], [mapping]);
