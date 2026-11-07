@@ -619,7 +619,9 @@ describe("reading an item list from a page's own data", () => {
     expect(result.list).toMatchObject({ source: "file", url: COURSE_URL });
     expect(result.list!.items).toHaveLength(14);
     expect(result.list!.items.find((i) => i.title === "Implementing retriever functions in a RAG system")).toMatchObject({ minutes: 180 });
-    expect(result.pages).toEqual([{ url: COURSE_URL, finalUrl: COURSE_URL, text: readableText(html) }]);
+    // The page goes back with its data, so the finder's own check finds the titles there.
+    expect(result.pages).toEqual([{ url: COURSE_URL, finalUrl: COURSE_URL, text: `${readableText(html)}\n${pageDataFile(html)!.text}` }]);
+    expect(readableText(html)).not.toContain("Implementing retriever functions in a RAG system");
   });
 
   it("transcribes the page when its data holds no list of the source's items", async () => {

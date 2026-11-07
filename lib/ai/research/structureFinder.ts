@@ -438,7 +438,12 @@ export function createStructureFinder(options: StructureFinderOptions): Structur
               for (const p of read.pages) itemPages.push({ ...p, title: null, words: null, durationMinutes: null, pdfPages: null, outline: null });
               if (!read.list) return { url, items: 0 };
               lists.push(read.list);
-              return { url: read.list.url, items: read.list.items.length, groups: listGroups(read.list).length };
+              return {
+                url: read.list.url,
+                items: read.list.items.length,
+                groups: listGroups(read.list).length,
+                keep: `If these are the source's items, set "listUrl" to ${read.list.url} in your answer: without it they are dropped.`,
+              };
             } catch (error) {
               // The item reading runs under the run's signal, not the finder's clock.
               reportServiceFailure(log, error, "structure", ctx.signal);

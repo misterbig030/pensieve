@@ -488,7 +488,9 @@ export async function readItemListAt(source: Material, url: string, ctx: ItemRea
     const mapping = await ask(fieldMappingSchema, prompt, "Research · items · mapping", ITEM_MAP_MS, (m) => itemListFacts(fromMapping(m), claimed));
     const list = mapping ? fromMapping(mapping) : null;
     // A page whose data does not list the items may still list them in its text.
-    if (file || list) return { list, counts, costUsd, pages: (file ? [...reads, full] : pages).map(pageOf) };
+    if (file) return { list, counts, costUsd, pages: [...reads, full].map(pageOf) };
+    // The page goes back with its data, where the list's titles are: the finder checks them again against what was read.
+    if (list) return { list, counts, costUsd, pages: [...reads.map(pageOf), { ...pageOf(page), text: `${page.text}\n${embedded!.text}` }] };
   }
 
   // 3. Otherwise a page that lists them, transcribed.

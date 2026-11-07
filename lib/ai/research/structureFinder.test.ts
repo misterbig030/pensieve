@@ -11,7 +11,8 @@ import { OUTLINE_RESERVE_MS } from "../planDraft";
 import { providerError } from "../providerError";
 import { reportingModel, type ServiceEvent } from "../serviceEvents";
 import type { ResearchEvent } from "./events";
-import { extractHtml, pageListsOf, type PageInfo } from "./extract";
+import { extractHtml, pageListsOf, readableText, type PageInfo } from "./extract";
+import { pageDataFile } from "./pageData";
 import type { FullReader } from "./itemFinder";
 import {
   ANSWER_NOW,
@@ -373,6 +374,44 @@ describe("the structure finder", () => {
     const short = extractHtml(`<html><body><h1>Course</h1><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { faq } })}</script></body></html>`, COURSE);
     expect(pageListsOf(short)).toEqual([]);
     expect(await outlineOf("both", short)).not.toContain("carries data for its scripts");
+  });
+
+  it("keeps the labs `items` reads from a course page's data, whose titles are in no page text", async () => {
+    // aieng RAG course, live: `items` mapped the 14 labs, then the answer named no list and they were lost.
+    const COURSE = "https://www.deeplearning.ai/courses/retrieval-augmented-generation";
+    const html = fixture("course-page-data");
+    const read = vi.fn<FullReader>(async (url) => ({ finalUrl: url, text: readableText(html), file: false, truncated: false, data: pageDataFile(html) }));
+    const LABS = {
+      found: true,
+      path: "row73[3][3].children[0][3].courses[0].lessons.*",
+      title: "name",
+      number: null,
+      group: null,
+      difficulty: null,
+      minutes: "time",
+      minutesUnit: "seconds",
+      url: null,
+      solutionUrl: null,
+      subset: { field: "type", equals: ["notebook", "graded_notebook"] },
+    };
+    const practice = { format: "lab" as const, items: 9, perItemMinutes: 5, minutes: 45, answers: false };
+    const run = async (listUrl: string | null) => {
+      const { model, calls } = scripted([[{ tool: "items", input: { url: COURSE } }], [{ tool: "answer", input: answerOf({ whole: true, listUrl }) }]], [LABS]);
+      const result = await createStructureFinder({ provider: null, model, read }).find(material({ url: COURSE, kind: "course", practice, minutes: null }), "both", context().ctx);
+      return { result, prompt: JSON.stringify(calls[calls.length - 1].prompt) };
+    };
+
+    // Named: the titles are checked against the page's data, where they are.
+    const named = await run(COURSE);
+    expect(named.result.list!.items).toHaveLength(14);
+    expect(named.result.list!.items.reduce((sum, i) => sum + (i.minutes ?? 0), 0)).toBe(1130);
+    // The `items` result says how to keep the list.
+    expect(named.prompt).toContain(`set \\"listUrl\\" to ${COURSE} in your answer`);
+
+    // Not named, with no practice units of its own: the one list read is the source's.
+    const unnamed = await run(null);
+    expect(unnamed.result.list!.items).toHaveLength(14);
+    expect(unnamed.result.facts.some((f) => f.includes("the one list `items` read"))).toBe(true);
   });
 
   it("keeps a list read from a GitHub file page under the raw address it was read at, when the answer names either", async () => {

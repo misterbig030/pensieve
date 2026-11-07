@@ -642,6 +642,14 @@ function practiceList(
     facts.push(list ? `practice list from ${named.url}: ${list.items.length} items` : "practice list refused by the item check");
     return list;
   }
+  // An answer that names no list and gives no practice units of its own leaves the one list `items` read as the
+  // source's (aieng RAG course: 14 labs read from the page's data, then an answer with listUrl null).
+  if (!listUrl && practice.length === 0 && lists.length === 1) {
+    const only = lists[0];
+    const list = validateItemList({ url: only.url, source: only.source, items: only.items }, seenText(pages));
+    facts.push(list ? `practice list from ${only.url}, the one list \`items\` read: ${list.items.length} items` : "practice list refused by the item check");
+    return list;
+  }
   if (practice.length === 0) return null;
   const perUnit = practice.map((p) => unitItems(p, sourceUrl));
   const items = perUnit.flat();
