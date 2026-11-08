@@ -346,17 +346,16 @@ function placeForChecks(tree: PlanNode | undefined, parentId: string | undefined
   return { root, placed: copies, kept: [] };
 }
 
-/**
- * Drafts one level of units under `parentId` (or the top level) in one call, yielding each node as it lands. The level
- * is checked once and kept as written: what breaks a rule comes back as the learner's `problems`, never fixed in code.
- */
-export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; problems: string[]; costUsd: number; units: UnitDraft[]; breaches: Breach[] }> {
+/** What a level's prompt is built from: the request's context and the level, without the call's model, signal or deadline. */
+export type LevelPromptSource = Pick<DraftLevelInput, "level" | "spans" | "tree" | "parentId" | "keep"> & {
+  ctx: Pick<DraftLevelInput["ctx"], "topic" | "instructions" | "materials" | "granularity" | "weeks" | "daysPerWeek" | "hoursPerWeek" | "split">;
+};
+
+/** The units prompt's input for a level, as `draftLevel` builds it; the benchmark's judge reads the same. */
+export function unitsPromptInput(input: LevelPromptSource): UnitsPromptInput {
   const { ctx, level } = input;
-  const leaf = unitsAreLeaves(level, ctx.granularity);
   const keep = input.parentId ? [] : (input.keep ?? []);
-  // References are resolved when there are materials, or practice to assign (rows written without a source).
-  const aliases = ctx.materials.length > 0 || (ctx.split?.formats ?? []).length > 0 ? aliasMaterials(ctx.materials) : undefined;
-  const promptInput: UnitsPromptInput = {
+  return {
     topic: ctx.topic,
     instructions: ctx.instructions,
     materials: ctx.materials,
@@ -370,8 +369,21 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
     tree: input.tree,
     parentId: input.parentId,
     ...(keep.length > 0 ? { keep } : {}),
-    unitsAreLeaves: leaf,
+    unitsAreLeaves: unitsAreLeaves(level, ctx.granularity),
   };
+}
+
+/**
+ * Drafts one level of units under `parentId` (or the top level) in one call, yielding each node as it lands. The level
+ * is checked once and kept as written: what breaks a rule comes back as the learner's `problems`, never fixed in code.
+ */
+export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type: "node"; node: PlanNode } | { type: "done"; nodes: PlanNode[]; problems: string[]; costUsd: number; units: UnitDraft[]; breaches: Breach[] }> {
+  const { ctx, level } = input;
+  const leaf = unitsAreLeaves(level, ctx.granularity);
+  const keep = input.parentId ? [] : (input.keep ?? []);
+  // References are resolved when there are materials, or practice to assign (rows written without a source).
+  const aliases = ctx.materials.length > 0 || (ctx.split?.formats ?? []).length > 0 ? aliasMaterials(ctx.materials) : undefined;
+  const promptInput = unitsPromptInput(input);
   const parentNode = input.tree && input.parentId ? findNode(input.tree, input.parentId) : null;
   const where = input.tree && parentNode ? fullLabelOf(input.tree, parentNode) : "Top level";
   const n = input.spans.length;

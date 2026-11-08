@@ -12,7 +12,8 @@ import { MockLanguageModelV4 } from "ai/test";
 import { z } from "zod";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { AiModelId, ReasoningEffort } from "@/lib/ai/models";
-import { DRAFT_BUDGET_MS, STEP_MIN_MS, draftLevel, unitsAreLeaves, weekLeafBlocks, type DraftLevelInput } from "@/lib/ai/planDraft";
+import { DRAFT_BUDGET_MS, STEP_MIN_MS, draftLevel, unitsAreLeaves, unitsPromptInput, weekLeafBlocks, type DraftLevelInput, type LevelPromptSource } from "@/lib/ai/planDraft";
+import type { UnitsPromptInput } from "@/lib/ai/planPrompt";
 import type { ResolvedModel } from "@/lib/ai/resolve";
 import { childLevel, childSpans, cloneTree, fullLabelOf, layout, makeRoot, topLevelFor, topSpans, walk, DEFAULT_HOURS_PER_WEEK, type Granularity, type PlanLevel, type PlanNode } from "@/lib/planTree";
 import { materialSchema, type Material } from "@/lib/schemas/material";
@@ -86,6 +87,12 @@ export function fixtureSlug(label: string): string {
 
 /** The draft's input for the fixture's call, on `outlineModel` at `effort`: what the app passes, the model and effort aside. */
 export function levelInput(f: OutlineFixture, outlineModel: ResolvedModel, effort?: ReasoningEffort): DraftLevelInput {
+  const source = levelSource(f);
+  return { ...source, ctx: { ...source.ctx, outlineModel, ...(effort ? { effort } : {}) }, label: f.label };
+}
+
+/** The fixture's call as its prompt is built from it, with no model: what `levelInput` passes, the model aside. */
+function levelSource(f: OutlineFixture): LevelPromptSource {
   return {
     ctx: {
       topic: f.request.topic,
@@ -96,15 +103,17 @@ export function levelInput(f: OutlineFixture, outlineModel: ResolvedModel, effor
       daysPerWeek: f.request.daysPerWeek,
       hoursPerWeek: f.request.hoursPerWeek,
       split: f.split,
-      outlineModel,
-      ...(effort ? { effort } : {}),
     },
     level: f.level,
     spans: [...f.spans],
     ...(f.tree ? { tree: cloneTree(f.tree) } : {}),
     ...(f.parentId ? { parentId: f.parentId } : {}),
-    label: f.label,
   };
+}
+
+/** The input the fixture's units prompt was built from, as the draft builds it. */
+export function promptInputOf(f: OutlineFixture): UnitsPromptInput {
+  return unitsPromptInput(levelSource(f));
 }
 
 /** The user text of a prompt as a model receives it. */
