@@ -278,6 +278,27 @@ describe("renderOutline", () => {
     expect(text).toMatch(/Each day: about 2 h/);
   });
 
+  it("shows the backbone's sections and each listed item, as the contestant's prompt does", () => {
+    const book = { ...BOOK, toc: { ...chapters([120]), chapters: [{ n: 1, title: "Chapter 1", page: null, sections: ["Information is bits", "Programs are translated"], minutes: 120 }] } };
+    const item = (title: string, group: string, minutes: number) => ({ title, number: null, group, difficulty: null, url: null, solutionUrl: null, minutes });
+    const lab = material("lab", "Prompt tutorial", {
+      kind: "course",
+      minutes: null,
+      practice: {
+        format: "lab",
+        items: 3,
+        perItemMinutes: null,
+        minutes: 75,
+        answers: false,
+        list: { source: "page", url: "https://x/lab", items: [item("01_Basic_Prompt_Structure.ipynb", "Beginner", 20), item("02_Being_Clear_and_Direct.ipynb", "Beginner", 25), item("03_Assigning_Roles.ipynb", "Intermediate", 30)] },
+      },
+    });
+    const view = renderOutline(leafOutput(), { ...LEAF, materials: [book, lab] });
+    expect(view).toContain("Information is bits; Programs are translated");
+    expect(view).toContain("M2.1 01_Basic_Prompt_Structure.ipynb · Beginner · 20 min");
+    expect(view).toContain("M2.3 03_Assigning_Roles.ipynb · Intermediate · 30 min");
+  });
+
   it("places a top-level call's units at the top", () => {
     const weeks = [node({ id: "a", level: "week", title: "Foundations", summary: "s", len: 2 }), node({ id: "b", level: "week", title: "Machines", summary: "s", len: 2 })];
     const top = renderOutline({ nodes: weeks, units: [], breaches: [], problems: [] }, HEADING);

@@ -380,7 +380,8 @@ export function renderOutline(output: OutlineOutput, fixture: OutlineFixture): s
     `Time: ${plural(request.weeks, "week")}, ${plural(request.daysPerWeek, "study day")} a week, about ${plural(request.hoursPerWeek, "hour")} a week`,
     "",
     "The materials",
-    fixture.materials.length > 0 ? renderMaterials(fixture.materials) : "none",
+    // The backbone's sections and every listed item, which the leaf prompts show, so the judge can check notes and rows against them.
+    fixture.materials.length > 0 ? renderMaterials(fixture.materials, undefined, { sections: true, items: true }) : "none",
     "",
     `The plan around this level${fixture.parentId ? " (the unit being planned is marked >>)" : ""}`,
     treeWithLevel(output, fixture),

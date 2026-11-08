@@ -207,6 +207,8 @@ function sizeNote(m: Material): string {
 export interface RenderMaterialsOptions {
   /** Print section headings under the backbone's chapters. */
   sections?: boolean;
+  /** Print every item of a listed practice source, one per line, under its groups. */
+  items?: boolean;
 }
 
 /**
@@ -269,7 +271,9 @@ export function renderMaterials(materials: Material[], aliases: MaterialAliases 
       const book = m.kind === "book";
       const resource = m.toc ? `${m.why ? "" : "."} Refer to its ${book ? "chapters" : "units"} by id; ${alias} itself is not a resource.` : "";
       const line = `${alias} [${tags}] "${m.title}"${byline ? ` — ${byline}` : ""}${where}${sizeNote(m)}${m.why ? `. ${m.why}` : ""}${resource}`;
-      const list = m.practice?.list ? [renderItemGroups(m.practice.format, m.practice.list, aliases, m)] : [];
+      const listed = m.practice?.list;
+      const itemLines = listed && options.items ? listed.items.map((_, i) => itemLine(m.practice!.format, listed, aliases, m.id, i + 1)) : [];
+      const list = listed ? [renderItemGroups(m.practice!.format, listed, aliases, m), ...itemLines] : [];
       return m.toc ? [line, ...renderChapters(m.toc, { sections: !!options.sections && m.backbone, alias, book }), ...list] : [line, ...list];
     })
     .join("\n");

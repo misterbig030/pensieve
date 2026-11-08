@@ -817,6 +817,14 @@ describe("a source with units and items in prompts", () => {
     expect(renderMaterials([itemsOnly])).toContain("\n  M1 items 1–9 Arrays & Hashing");
     expect(renderMaterials([itemsOnly])).not.toContain("M1.i");
   });
+  it("lists every item under the groups only when asked, by the id a row takes", () => {
+    const n = LISTED_PROBLEMS.list!.items.length;
+    const listed = renderMaterials([itemsOnly], undefined, { items: true }).split("\n");
+    expect(listed.filter((l) => /^ {2}M1\.\d+ /.test(l))).toHaveLength(n);
+    expect(listed[2]).toMatch(/^ {2}M1\.1 /);
+    expect(renderMaterials([both], undefined, { items: true })).toMatch(/\n {2}M1\.i1 /);
+    expect(renderMaterials([itemsOnly]).split("\n").filter((l) => /^ {2}M1\.\d+ /.test(l))).toHaveLength(0);
+  });
 });
 
 describe("units toward a budget in the outline prompt", () => {
