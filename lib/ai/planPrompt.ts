@@ -460,7 +460,7 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
   const time = input.unitsAreLeaves ? (input.level === "day" ? null : leafTimeRules(input, aliases)) : headingTimeRules(input, aliases);
   if (time) parts.push(time);
   if (hasMaterials) parts.push(input.unitsAreLeaves ? leafMaterialRules(input, aliases) : headingMaterialRules(input, aliases));
-  const practice = input.unitsAreLeaves ? leafPracticeRules(input, aliases) : headingPracticeRules(input, aliases);
+  const practice = input.unitsAreLeaves ? leafPractice(input, aliases).text : headingPracticeRules(input, aliases);
   if (practice) parts.push(practice);
   return parts.join("\n");
 }
@@ -753,11 +753,11 @@ function cutSourceRule(picks: PickSources[], materials: Material[]): string | nu
  * The practice rules for leaves: the week's reading and each pick's minutes (a pick that can't be assigned is left out
  * and its minutes go to reading), each pick's focus, what it is, where its rows come from and when one is done, then
  * the row shape and the rule that keeps a long task whole. A listed source's items still to do follow its pick's line,
- * one per line, and each is one row.
+ * one per line, and each is one row. Those item lines come back apart too, as `items`.
  */
-function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): string | null {
+function leafPractice(input: UnitsPromptInput, aliases: MaterialAliases): { text: string | null; items: string[] } {
   const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
-  if (picks.length === 0) return null;
+  if (picks.length === 0) return { text: null, items: [] };
   const days = input.level === "day";
   const noun = UNIT_NOUN[input.level];
   const parent = parentNodeOf(input);
@@ -781,6 +781,7 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   // A block is never split to fit a week's slice: it is budgeted over the plan, less what earlier units placed.
   const planBlocks = planBlockBudgets(input.split, budgetFor(input.weeks, input.hoursPerWeek) * 60, input.materials);
   let firstItem: string | null = null;
+  const items: string[] = [];
   for (const p of picks) {
     const spec = PRACTICE_REGISTRY[p.pick.format];
     const size = days ? blockMinutes(p.pick.format, day) : spec.fixedMinutes;
@@ -812,6 +813,7 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     if (from.items.length > 0) sizing = "Each listed item takes the minutes on its line.";
     lines.push(`- ${pickName(p.pick.format)}: ${time}, aimed at ${p.pick.focus}. The learner ${spec.prompt}. ${from.text} Done when: ${spec.doneWhen}.${sizing ? ` ${sizing}` : ""}`);
     lines.push(...from.items);
+    items.push(...from.items);
     firstItem ??= from.items[0]?.trim().split(" ")[0] ?? null;
   }
   const cutRule = cutSourceRule(picks, input.materials);
@@ -836,7 +838,16 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
           : `, except ${blocks.join(" and ")}: a week that holds a block takes its minutes from the other formats, and a week without one gives its time to them`;
   const across = days ? "Across the week" : `Across the ${noun}s`;
   lines.push(`${across}, each format's minutes add up to about its time${except}. Place a task longer than half a day's budget (about ${formatTime(half)}) on a day of its own.`);
-  return lines.join("\n");
+  return { text: lines.join("\n"), items };
+}
+
+/**
+ * The listed items a leaf level's prompt gives its units, one line each, exactly as the prompt prints them
+ * (`  M4.12 49. Group Anagrams · Arrays & Hashing · medium · 25 min`): the reserved items not yet done. None for
+ * headings, whose prompt shows a list only as its groups.
+ */
+export function leafItemLines(input: UnitsPromptInput): string[] {
+  return input.unitsAreLeaves ? leafPractice(input, aliasMaterials(input.materials)).items : [];
 }
 
 /**

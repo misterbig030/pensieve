@@ -2,6 +2,7 @@ import { APICallError, JSONParseError, NoContentGeneratedError, NoObjectGenerate
 import { describe, expect, it, vi } from "vitest";
 import type { ModelCall } from "@/lib/ai/logged";
 import type { draftLevel } from "@/lib/ai/planDraft";
+import { buildUnitsPrompt } from "@/lib/ai/planPrompt";
 import type { ResolvedModel } from "@/lib/ai/resolve";
 import type { Breach } from "@/lib/materials";
 import { layout, makeRoot, type PlanNode } from "@/lib/planTree";
@@ -10,7 +11,7 @@ import type { UnitDraft } from "@/lib/schemas/plan";
 import { BASELINE } from "../contestants";
 import { listPriceUsd } from "../price";
 import type { Contestant } from "../types";
-import type { OutlineFixture } from "./outlineFixtures";
+import { promptInputOf, type OutlineFixture } from "./outlineFixtures";
 import { JUDGE_INSTRUCTIONS } from "../judge";
 import { codeResults, judgeCriteriaFor, OUTLINE_CRITERIA, OUTLINE_JUDGE_INSTRUCTIONS, renderOutline, runOutlineSample, type OutlineOutput } from "./outline";
 import { minutesOffSize, setAsideOffSize } from "./outlineChecks";
@@ -283,6 +284,42 @@ describe("renderOutline", () => {
     const top = renderOutline({ nodes: weeks, units: [], breaches: [], problems: [] }, HEADING);
     expect(top).toContain("Foundations");
     expect(top).not.toContain(">>");
+  });
+});
+
+describe("renderOutline's materials, as the contestant's prompt shows them", () => {
+  const withSections = (m: Material, sections: string[]): Material => ({ ...m, toc: { ...chapters([120]), chapters: [{ n: 1, title: "Chapter 1", page: null, sections, minutes: 120 }] } });
+  const book = withSections(BOOK, ["Information is bits", "Programs are translated"]);
+  const other = withSections(material("other", "Another book"), ["Side section"]);
+  const item = (title: string, group: string) => ({ title, number: null, group, difficulty: null, url: null, solutionUrl: null, minutes: 20 });
+  const items = [item("01_Basic_Prompt_Structure.ipynb", "Beginner"), item("02_Being_Clear_and_Direct.ipynb", "Beginner"), item("03_Assigning_Roles.ipynb", "Intermediate")];
+  const lab = material("lab", "Prompt tutorial", { kind: "course", minutes: null, practice: { format: "lab", items: 3, perItemMinutes: null, minutes: 60, answers: false, list: { source: "page", url: "https://x/lab", items } } });
+  const materials = [book, other, lab];
+  const split: OutlineFixture["split"] = { readingShare: 50, practice: "labs", reason: "", formats: [{ format: "lab", share: 100, focus: "prompting", reason: "" }] };
+  // Week 1 sets aside the first two notebooks.
+  const week: PlanNode = { ...WEEK, practiceCovers: [{ format: "lab", id: "lab", note: null, itemFrom: 1, itemTo: 2 }], time: { reading: 120, practice: { lab: 40 } } };
+  const leaf: OutlineFixture = { ...LEAF, materials, split, tree: layout(makeRoot([week, node({ id: "w2", level: "week", title: "Machine code", summary: "Assembly", len: 2 })])) };
+  const leafView = renderOutline(leafOutput(), leaf);
+  const topView = renderOutline({ nodes: [], units: [], breaches: [], problems: [] }, { ...HEADING, materials, split });
+
+  it("shows the backbone's sections at every level, and no other book's", () => {
+    for (const view of [leafView, topView]) {
+      expect(view).toContain("Information is bits; Programs are translated");
+      expect(view).not.toContain("Side section");
+    }
+  });
+
+  it("lists, at a leaf level, exactly the item lines its prompt gave the units", () => {
+    const listed = leafView.split("\n").filter((l) => /^ {2}M3\.\d+ /.test(l));
+    expect(listed).toEqual(["  M3.1 01_Basic_Prompt_Structure.ipynb · Beginner · 20 min", "  M3.2 02_Being_Clear_and_Direct.ipynb · Beginner · 20 min"]);
+    const prompt = buildUnitsPrompt(promptInputOf(leaf));
+    for (const line of listed) expect(prompt).toContain(`\n${line}\n`);
+  });
+
+  it("shows a heading level's lists only as their groups, as its prompt does", () => {
+    expect(topView).toContain("  M3 items 1–2 Beginner");
+    expect(topView).not.toMatch(/\n {2}M3\.\d+ /);
+    expect(topView).not.toContain("The listed items the level was given");
   });
 });
 

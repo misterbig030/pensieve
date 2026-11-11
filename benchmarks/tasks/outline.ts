@@ -9,7 +9,7 @@ import { APICallError, JSONParseError, NoContentGeneratedError, NoObjectGenerate
 import { isGatewayOutOfFunds } from "@/lib/ai/gatewayFunds";
 import type { ModelCall } from "@/lib/ai/logged";
 import { draftLevel } from "@/lib/ai/planDraft";
-import { renderMaterials, renderTree } from "@/lib/ai/planPrompt";
+import { leafItemLines, renderMaterials, renderTree } from "@/lib/ai/planPrompt";
 import { classifyProviderError } from "@/lib/ai/providerError";
 import { appModel, type ModelRoute } from "@/lib/ai/resolve";
 import { isPracticeOnly, type Breach, type BreachKind } from "@/lib/materials";
@@ -22,7 +22,7 @@ import { BASELINE } from "../contestants";
 import { listPriceUsd } from "../price";
 import type { CodeCriterion, Contestant, Criterion, CriterionResult, Gate, JudgeCriterion, Sample } from "../types";
 import { breachesOf, idsInText, minutesOffSize, orderBreaks, setAsideOffSize, unreserved, type SizeCheck } from "./outlineChecks";
-import { levelInput, type OutlineFixture } from "./outlineFixtures";
+import { levelInput, promptInputOf, type OutlineFixture } from "./outlineFixtures";
 
 /** The level as the draft returned it: the app's nodes, the units as the model wrote them, and the checks' findings. */
 export type OutlineOutput = { nodes: PlanNode[]; units: UnitDraft[]; breaches: Breach[]; problems: string[] };
@@ -366,6 +366,15 @@ function levelLines(output: OutlineOutput, byId: Map<string, Material>): string[
 }
 
 /**
+ * At a leaf level, the listed items its prompt gave the units, one line each and from the prompt's own code, so the
+ * judge checks the rows against what the model was shown; none for headings, whose prompt shows a list only as groups.
+ */
+function itemLines(fixture: OutlineFixture): string[] {
+  const items = leafItemLines(promptInputOf(fixture));
+  return items.length > 0 ? ["The listed items the level was given, one row each", ...items, ""] : [];
+}
+
+/**
  * The level as the judge reads it: the request, the materials, the plan around the level with its parent marked, what
  * the parent set aside, the level's budgets, and the level as written. It names no model, so the judge cannot tell who
  * wrote it, and shows no JSON.
@@ -380,8 +389,10 @@ export function renderOutline(output: OutlineOutput, fixture: OutlineFixture): s
     `Time: ${plural(request.weeks, "week")}, ${plural(request.daysPerWeek, "study day")} a week, about ${plural(request.hoursPerWeek, "hour")} a week`,
     "",
     "The materials",
-    fixture.materials.length > 0 ? renderMaterials(fixture.materials) : "none",
+    // The backbone's sections, as every level's prompt shows them, so the judge can check notes against them.
+    fixture.materials.length > 0 ? renderMaterials(fixture.materials, undefined, { sections: true }) : "none",
     "",
+    ...itemLines(fixture),
     `The plan around this level${fixture.parentId ? " (the unit being planned is marked >>)" : ""}`,
     treeWithLevel(output, fixture),
     "",

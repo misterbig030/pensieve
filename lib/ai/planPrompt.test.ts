@@ -7,7 +7,7 @@ import { AIE_MATERIALS, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineerin
 import { coverRefDraftSchema } from "@/lib/schemas/material";
 import type { ChapterList, Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
 import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
-import { assignRefs, buildPlanChatSystemPrompt, buildRevisionPrompt, buildUnitsPrompt, practiceTag, renderChapters, renderMaterials, renderRefs, renderTree } from "./planPrompt";
+import { assignRefs, buildPlanChatSystemPrompt, buildRevisionPrompt, buildUnitsPrompt, leafItemLines, practiceTag, renderChapters, renderMaterials, renderRefs, renderTree } from "./planPrompt";
 
 function tree() {
   return makeRoot([
@@ -718,6 +718,21 @@ describe("listed practice sources in prompts", () => {
     const unlisted = at([{ format: "problem-set", id: "Q", note: "Graphs" }]);
     expect(unlisted).toContain("a week without one gives its time to them");
     expect(unlisted).toContain("over the whole plan");
+  });
+
+  it("gives back the item lines a leaf prompt lists, as it prints them, and none for headings", () => {
+    // Week 1 reserves items 1–9; Week 2, split by hand, already did item 5.
+    const doneDay = makeNode({ id: "d5", level: "day", title: "D", summary: "s", len: 1, practice: [item(5)] });
+    const tree = layout(makeRoot([week("w1", { practiceCovers: [reserve(1, 9)] }), week("w2", { manualSplit: true, children: [doneDay] })]));
+    const input: Parameters<typeof buildUnitsPrompt>[0] = { topic: "Interviews", materials, granularity: "day", level: "day", spans: [1, 1, 1, 1, 1], weeks: 8, daysPerWeek: 5, hoursPerWeek: 6, split: sde, tree, parentId: "w1", unitsAreLeaves: true };
+    const lines = leafItemLines(input);
+    expect(lines.map((l) => l.trim().split(" ")[0])).toEqual(["M2.1", "M2.2", "M2.3", "M2.4", "M2.6", "M2.7", "M2.8", "M2.9"]);
+    // The same lines, in the same order, as the prompt shows them.
+    const prompt = buildUnitsPrompt(input).split("\n");
+    const at = prompt.indexOf(lines[0]);
+    expect(at).toBeGreaterThan(-1);
+    expect(prompt.slice(at, at + lines.length)).toEqual(lines);
+    expect(leafItemLines({ ...input, level: "week", spans: [5, 5, 5], tree: undefined, parentId: undefined, unitsAreLeaves: false })).toEqual([]);
   });
 
   it("gives the days of a week with a run whole blocks that fit the week, or none", () => {
