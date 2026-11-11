@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { budgetMissSlack, isPracticeOnly, pickSources } from "@/lib/materials";
+import { budgetMissSlack, isPracticeOnly, keptPositions, pickSources } from "@/lib/materials";
 import {
   MAX_PRACTICE_PICKS,
   PRACTICE_FORMATS,
@@ -12,7 +12,6 @@ import {
   type PracticeGenerated,
 } from "@/lib/practice";
 import {
-  MIN_CHAPTERS,
   MIN_PRACTICE_ITEMS,
   PRACTICE_DIFFICULTIES,
   clip,
@@ -158,10 +157,14 @@ function sizeOf(m: Material): string {
   return `reading ${measured ? "" : "about "}${formatMinutes(m.minutes)}${m.minutesBasis ? ` (${m.minutesBasis})` : ""}`;
 }
 
+/** The most unit titles shown in a group of a source that is not a book; the rest are named by their positions. */
+const MAX_TITLES_SHOWN = 12;
+
 /**
  * A material's reading units by group, in first-seen order, each by its bracketed position, which is how the allocation
  * keeps units: `  [1–3] building blocks — 3 sections, 10 min: [1] Cache (5 min) · [2] Load balancer (3 min) · [3] CDN
- * (2 min)`. Units with no group go under the material's title. Every unit is shown: `MAX_CHAPTERS` bounds the list.
+ * (2 min)`. Units with no group go under the material's title. A book shows every chapter; any other source shows at most
+ * MAX_TITLES_SHOWN titles a group and the rest as positions (`· [13–18] 6 more`), which it can keep by run all the same.
  */
 function unitLines(m: Material): string[] {
   const groups = new Map<string, { positions: number[]; units: Chapter[] }>();
@@ -176,8 +179,11 @@ function unitLines(m: Material): string[] {
   return [...groups].map(([name, { positions, units }]) => {
     const total = units.reduce((sum, u) => sum + (u.minutes ?? 0), 0);
     const count = `${units.length} ${noun}${units.length === 1 ? "" : "s"}${total > 0 ? `, ${formatMinutes(total)}` : ""}`;
-    const titles = units.map((u, i) => `[${positions[i]}] ${u.title}${u.minutes !== null ? ` (${formatMinutes(u.minutes)})` : ""}`);
-    return `  [${runs(positions)}] ${name} — ${count}: ${titles.join(" · ")}`;
+    const shown = m.kind === "book" ? units.length : MAX_TITLES_SHOWN;
+    const titles = units.slice(0, shown).map((u, i) => `[${positions[i]}] ${u.title}${u.minutes !== null ? ` (${formatMinutes(u.minutes)})` : ""}`);
+    const rest = positions.slice(shown);
+    const more = rest.length > 0 ? [`[${runs(rest)}] ${rest.length} more`] : [];
+    return `  [${runs(positions)}] ${name} — ${count}: ${[...titles, ...more].join(" · ")}`;
   });
 }
 
@@ -269,7 +275,7 @@ export function buildAllocationPrompt(input: AllocationInput): string {
     "- Only a book matched in the catalogue, or one of the learner's own, can be the backbone. Choose none when no book suits.",
     "",
     "How to answer:",
-    "- parts: one entry for every material listed, by id, with its budget or a drop; a researched material with no entry is not used. purpose says in a few words what the plan uses a material for. For a material with units, units names the ones the plan keeps, as runs of bracketed positions (from, to) in order: the plan reads every unit you keep and no other, so keep the ones this learner needs and leave out the rest; null keeps every unit. Their minutes are its reading time, so give it no minutes. For other reading, minutes is the budget: the minutes of reading or watching the plan gives that material. A budget past a measured size is cut back to it. Give minutes for any kept reading whose size is unknown, so its time is counted. For a practice source with a list, groups names the groups the plan keeps whole, as listed, and itemRange is one run of bracketed positions (from, to) it keeps besides them, such as part of a group; the kept items are in list order, and their time is that format's time, so its share of the practice follows from them. For a practice source without a list, items is how many of its items the plan works through. Leave a field null to keep that material whole.",
+    "- parts: one entry for every material listed, by id, with its budget or a drop; a researched material with no entry is not used. purpose says in a few words what the plan uses a material for. For a material with units, units names the ones the plan keeps, as runs of bracketed positions (from, to) in order: the plan reads every unit you keep and no other, so keep the ones this learner needs and leave out the rest; null keeps every unit. Their minutes are its reading time, so give it no minutes, unless its units show none: then minutes is the time of the units you keep. For other reading, minutes is the budget: the minutes of reading or watching the plan gives that material. A budget past a measured size is cut back to it. Give minutes for any kept reading whose size is unknown, so its time is counted. For a practice source with a list, groups names the groups the plan keeps whole, as listed, and itemRange is one run of bracketed positions (from, to) it keeps besides them, such as part of a group; the kept items are in list order, and their time is that format's time, so its share of the practice follows from them. For a practice source without a list, items is how many of its items the plan works through. Leave a field null to keep that material whole.",
     "- drop: true, with dropReason, for a researched material the plan won't use; say why in a few words. Length alone is not a reason.",
     "- backbone: the id of the book the plan follows in order, or null when no book suits. The backbone stays in the plan: give it a part.",
     `- picks: the formats the practice time goes to, at most ${MAX_PRACTICE_PICKS}, each with its share of the practice time (the shares sum to 100), a focus saying what it is aimed at, and a one-sentence reason. Pick none when the plan is all reading.`,
@@ -340,12 +346,18 @@ function unitPositions(id: string, runs: AllocationPart["units"], n: number): { 
   return { positions: [...keep].sort((a, b) => a - b), facts };
 }
 
+/** The minutes of a list's units at `positions`, or null when any of them has none. */
+function unitMinutes(toc: ChapterList, positions: number[]): number | null {
+  const units = positions.map((p) => toc.chapters[p - 1]);
+  return units.every((u) => u.minutes !== null) ? units.reduce((sum, u) => sum + u.minutes!, 0) : null;
+}
+
 /**
- * A material with units, cut to the units the part keeps: the list holds them in order, marked `kept` so the outline
- * reads every one, and the material's minutes are theirs when each has minutes (else the model's budget, else their
- * share of the whole). No units named, or none that fit the list: every unit. A book's chapters keep their own numbers,
- * and a chapter whose successor was cut keeps where its span ends. Fewer units than a list holds keeps no list: the
- * material is then read as a part, named in `uses`.
+ * A material with units, marked with the units the part keeps (`ChapterList.kept`): the list stays whole, so positions
+ * never move and the units left out stay reachable, and the outline reads every kept unit and no other. The material's
+ * minutes are the kept units' when each has minutes (else the model's budget, else their share of the whole). No units
+ * named, or none that fit the list: every unit, unless the part gave a budget well under the whole, which is the model
+ * budgeting rather than keeping. That budget stands, with no units marked, and the outline chooses units up to it.
  */
 function keptUnits(m: Material, toc: ChapterList, part: AllocationPart): { material: Material; facts: string[] } {
   const all = toc.chapters.length;
@@ -354,41 +366,72 @@ function keptUnits(m: Material, toc: ChapterList, part: AllocationPart): { mater
   if (named && chosen.length === 0) facts.push(`${m.id}: no unit named fits its list; kept whole`);
   const positions = chosen.length > 0 ? chosen : toc.chapters.map((_, i) => i + 1);
   const cut = positions.length < all;
-  const numbered = toc.chapters.some((c) => c.n !== null);
-  const units: Chapter[] = positions.map((p) => {
-    const unit = cut && m.kind === "book" && !numbered ? { ...toc.chapters[p - 1], n: p } : toc.chapters[p - 1];
-    const successor = toc.chapters[p];
-    return cut && successor && !positions.includes(p + 1) ? { ...unit, end: successor.page } : unit;
-  });
 
-  // Every unit kept: the material's own size, no more than its units hold (`budgetCap`). A cut: the kept units' own
-  // minutes, else the model's budget (capped, as other reading's is), else their share of the whole.
+  // Every unit kept: the material's own size, no more than its units hold (`budgetCap`), else its units' total.
+  const whole = m.minutes ? Math.min(m.minutes, budgetCap(m) ?? m.minutes) : unitMinutes(toc, positions);
+  if (!cut && finite(part.minutes) && whole !== null && Math.round(part.minutes) < whole - budgetMissSlack(whole)) {
+    const budget = Math.max(1, Math.round(part.minutes));
+    facts.push(`${m.id}: a budget of ${budget} min and no units kept; the outline chooses units up to it`);
+    return { material: { ...m, minutes: budget }, facts };
+  }
+
+  // A cut: the kept units' own minutes, else the model's budget (capped, as other reading's is), else their share.
   let minutes = m.minutes ?? null;
   let minutesBasis = m.minutesBasis;
-  const sized = units.every((u) => u.minutes !== null);
-  if (!cut && m.minutes) minutes = Math.min(m.minutes, budgetCap(m) ?? m.minutes);
-  else if (sized) minutes = units.reduce((sum, u) => sum + u.minutes!, 0);
+  const sized = unitMinutes(toc, positions);
+  if (!cut && whole !== null) minutes = whole;
+  else if (sized !== null) minutes = sized;
   else if (finite(part.minutes)) {
     minutes = Math.min(Math.round(part.minutes), budgetCap(m) ?? MAX_MINUTES);
     if (!m.minutes) minutesBasis = "estimated";
-  } else if (m.minutes && cut) minutes = Math.round((m.minutes * units.length) / all);
+  } else if (m.minutes && cut) minutes = Math.round((m.minutes * positions.length) / all);
   if (minutes !== null) minutes = Math.max(1, Math.min(minutes, MAX_MINUTES));
   if (finite(part.minutes) && minutes !== null && Math.abs(Math.round(part.minutes) - minutes) > budgetMissSlack(minutes)) {
     facts.push(`${m.id}: budget ${Math.round(part.minutes)} min → ${minutes} min from its kept units`);
   }
-
-  if (units.length < MIN_CHAPTERS) {
-    const names = units.every((u) => u.n !== null) ? `ch. ${runs(units.map((u) => u.n!))}` : units.map((u) => u.title).join("; ");
-    facts.push(`${m.id}: ${units.length} unit${units.length === 1 ? "" : "s"} kept, fewer than a list holds; read as a part`);
-    return { material: { ...m, minutes, minutesBasis, uses: clip(m.uses ? `${names}: ${m.uses}` : names, 120), toc: null }, facts };
-  }
-  const after = cut ? toc.chapters[positions[positions.length - 1]] : undefined;
-  return { material: { ...m, minutes, minutesBasis, toc: { ...toc, chapters: units, end: after ? after.page : toc.end, kept: true } }, facts };
+  return { material: { ...m, minutes, minutesBasis, toc: { ...toc, kept: positions } }, facts };
 }
 
-/** A material whose units are all kept, marked so the outline reads every one; any other material unchanged. */
+/** A material with every unit kept, marked so the outline reads every one; any other material unchanged. */
 function withAllUnits(m: Material): Material {
-  return m.toc && !isPracticeOnly(m) ? { ...m, toc: { ...m.toc, kept: true } } : m;
+  return m.toc && !isPracticeOnly(m) ? { ...m, toc: { ...m.toc, kept: m.toc.chapters.map((_, i) => i + 1) } } : m;
+}
+
+/**
+ * Reading past the plan's whole time leaves nothing for practice, and the outline may drop no kept unit. Each kept list
+ * then gives up its share of the excess, in proportion to its share of the reading, from its last kept units, keeping
+ * at least its first; reading without a kept list keeps its budget, as it always has. A list whose units
+ * have no minutes can't be trimmed, so it goes back to a budget the outline chooses units up to. Facts say what moved.
+ */
+function fitKeptReading(materials: Material[], totalMinutes: number): { materials: Material[]; facts: string[] } {
+  const reading = materials.filter((m) => !isPracticeOnly(m));
+  const readingMinutes = reading.reduce((sum, m) => sum + (m.minutes ?? 0), 0);
+  const lists = reading.filter((m) => keptPositions(m.toc) && m.minutes);
+  if (readingMinutes <= totalMinutes || lists.length === 0) return { materials, facts: [] };
+  // Each list's share of the excess is its share of the reading: it keeps what fits the plan's time at that rate.
+  const share = totalMinutes / readingMinutes;
+  const facts: string[] = [];
+  const fitted = materials.map((m) => {
+    if (!lists.includes(m)) return m;
+    const toc = m.toc!;
+    const kept = keptPositions(toc)!;
+    const target = Math.max(1, Math.round(m.minutes! * share));
+    if (unitMinutes(toc, kept) === null) {
+      const unmarked = { ...toc };
+      delete unmarked.kept;
+      facts.push(`${m.id}: kept units past the plan's ${totalMinutes} min; a budget of ${target} min, the outline chooses units up to it`);
+      return { ...m, minutes: target, toc: unmarked };
+    }
+    const keep = [kept[0]];
+    for (const p of kept.slice(1)) {
+      if (unitMinutes(toc, [...keep, p])! > target) break;
+      keep.push(p);
+    }
+    const minutes = unitMinutes(toc, keep)!;
+    facts.push(`${m.id}: kept units past the plan's ${totalMinutes} min; kept ${runs(keep)}, ${minutes} min`);
+    return { ...m, minutes, toc: { ...toc, kept: keep } };
+  });
+  return { materials: fitted, facts };
 }
 
 /**
@@ -644,6 +687,9 @@ export function applyAllocation(draft: AllocationDraft, input: AllocationInput):
     materialFacts.push(...readingFacts, ...practiceFacts);
     materials.push(practice === read.practice ? read : { ...read, practice });
   }
+  const fitted = fitKeptReading(materials, totalMinutes);
+  materials.splice(0, materials.length, ...fitted.materials);
+  materialFacts.push(...fitted.facts);
 
   const reading = materials.filter((m) => !isPracticeOnly(m));
   const readingMinutes = reading.reduce((sum, m) => sum + (m.minutes ?? 0), 0);

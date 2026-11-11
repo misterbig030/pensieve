@@ -201,9 +201,9 @@ describe("streamPlanDraft and the allocation", () => {
     if (allocated.type !== "allocated") throw new Error("no allocated event");
     expect(allocated.dropped).toEqual([]);
     expect(allocated.materials).toHaveLength(1);
-    // The allocation keeps chapters 1–3: the list is cut to them, marked kept for the outline, and their minutes are its time.
-    expect(allocated.materials[0].toc?.chapters.map((c) => c.n)).toEqual([1, 2, 3]);
-    expect(allocated.materials[0].toc?.kept).toBe(true);
+    // The allocation keeps chapters 1–3: the whole list stays, marked with them for the outline, and their minutes are its time.
+    expect(allocated.materials[0].toc?.chapters).toHaveLength(6);
+    expect(allocated.materials[0].toc?.kept).toEqual([1, 2, 3]);
     expect(allocated.materials[0].minutes).toBe(300);
     // The reading share follows the kept chapters: 300 of the 2400 minutes.
     expect(events[1]).toEqual({

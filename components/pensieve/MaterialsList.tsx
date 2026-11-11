@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PRACTICE_OPEN_PREFIX, isPracticeOpen, type Coverage, type DroppedMaterial, type ResearchNotice } from "@/lib/ai/research/events";
-import { isPracticeOnly } from "@/lib/materials";
+import { isPracticeOnly, keptPositions } from "@/lib/materials";
 import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { approxDuration } from "@/lib/researchProgress";
 import { KIND_LABEL, KIND_ORDER, hostOf, type Material, type MaterialKind, type MaterialPractice } from "@/lib/schemas/material";
@@ -337,6 +337,12 @@ function MaterialRow({ material: m, onRemove }: { material: Material; onRemove?:
   );
 }
 
+/** "6 of 10 chapters" when the plan keeps some of a list's units, else "10 chapters". */
+function chapterCount(toc: NonNullable<Material["toc"]>): string {
+  const kept = keptPositions(toc);
+  return kept && kept.length < toc.chapters.length ? `${kept.length} of ${toc.chapters.length} chapters` : `${toc.chapters.length} chapters`;
+}
+
 /** "≈ 5 h · ch. 1, 7–9 · estimated": the size of the part the plan uses, and whether code measured it. */
 function SizeLine({ material: m }: { material: Material }) {
   if (!m.minutes && !m.uses && !m.toc) return null;
@@ -344,7 +350,7 @@ function SizeLine({ material: m }: { material: Material }) {
     m.minutes ? approxDuration(m.minutes) : null,
     m.uses,
     m.minutes ? (m.minutesBasis === "measured" ? "measured" : "estimated") : null,
-    m.toc ? `${m.toc.chapters.length} chapters` : null,
+    m.toc ? chapterCount(m.toc) : null,
   ].filter(Boolean);
   const sizeTitle = m.minutesBasis === "measured" ? "Counted from a page count, a runtime or the page's own length" : "A judgement, so treat it as rough";
   const chaptersTitle = m.toc ? `; chapters from ${m.toc.source === "catalogue" ? "Open Library" : (hostOf(m.toc.url) ?? "a page")}` : "";
