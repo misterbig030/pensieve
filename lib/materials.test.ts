@@ -444,6 +444,16 @@ describe("budget-miss", () => {
     expect(misses(check([[1, 2, 3], [4, 5], [6, 7, 8]], hub))).toEqual([]);
     expect(misses(check([[1], [2]], hub))).toEqual([]);
   });
+  it("a list the allocation kept is held to every unit, not to minutes", () => {
+    const kept = (units: (number | null)[] = UNITS, budget: number | null = 50) => ({ ...primer(units, budget), toc: { ...tocOf(units), kept: true } });
+    // Every unit reserved: no miss, though 48 min is not the 120 min budget.
+    expect(misses(check([[1, 2, 3], [4, 5], [6, 7, 8]], kept(UNITS, 120)))).toEqual([]);
+    // Units left out are named, in runs, whatever their minutes or whether they have any.
+    expect(misses(check([[1, 2, 3], [4, 5]], kept()))).toEqual(["M2 keeps units M2.6–M2.8, which no unit reserves; the plan reads every unit it keeps"]);
+    expect(misses(check([[1, 2, 3], [4, 6, 7, 8]], kept([3, 5, 2, 10, null, 8, 4, 8])))).toEqual(["M2 keeps unit M2.5, which no unit reserves; the plan reads every unit it keeps"]);
+    // Below the top level the parent's reservation is what holds.
+    expect(misses(check([[1]], kept(), false))).toEqual([]);
+  });
   it("a material with units of any kind reserved as a whole is a whole-book breach naming its units", () => {
     const repo = { id: "R", kind: "repo" as const, minutes: null, toc: tocOf([20, 20]) };
     const nodes = [makeNode({ id: "w1", level: "week", title: "W1", summary: "s", len: 7, covers: [{ id: "R", note: null }] })];

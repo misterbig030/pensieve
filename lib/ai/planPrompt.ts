@@ -4,6 +4,7 @@ import {
   fitWeekToDays,
   formatAliases,
   itemAliases,
+  isPracticeOnly,
   itemRun,
   leafActivities,
   pickSources,
@@ -971,6 +972,17 @@ function unlistedBookRule(input: UnitsPromptInput, aliases: MaterialAliases): st
   return `${names} ${one ? "has" : "have"} no chapter list: name the part each unit reads by topic, in a few words ("the chapters on evaluation"), never by its sections. You were not given ${one ? "its" : "their"} chapters or sections, and from memory they may not match the learner's edition. Never write a chapter number, chapter title or section name you were not given.`;
 }
 
+/**
+ * Which units of a resource the top level takes. The allocation keeps a resource's units (`ChapterList.kept`), and the
+ * plan reads every one; a list saved before that is chosen from up to its budget, as the outline did then. A practice
+ * source with no reading is never marked, so it does not decide.
+ */
+function unitChoice(materials: Material[]): string {
+  return materials.every((m) => !m.toc || m.toc.kept || isPracticeOnly(m))
+    ? "Its listed units are the ones the plan keeps: take every one"
+    : "Choose the units that serve its purpose and add up to about its budget";
+}
+
 function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): string {
   const backbone = input.materials.findIndex((m) => m.backbone);
   const kids = UNIT_NOUN[childLevel(input.level) ?? "day"];
@@ -980,7 +992,7 @@ function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases)
   ];
   if (input.materials.some((m) => m.toc)) {
     lines.push(
-      `A resource with units (Mn.1, Mn.2, …) is reserved by its units, never as a whole. Choose the units that serve its purpose and add up to about its budget, and reserve them in order across consecutive units at this level, each unit in exactly one.`,
+      `A resource with units (Mn.1, Mn.2, …) is reserved by its units, never as a whole. ${unitChoice(input.materials)}, and reserve them in order across consecutive units at this level, each unit in exactly one.`,
     );
   }
   if (input.materials[backbone]?.toc) lines.push(`The backbone's units run in order through the plan.`);
@@ -1018,7 +1030,7 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   ];
   // The top level is held to each budget whether its units are headings or leaves; under a parent, the reservation was.
   if (!input.parentId && input.materials.some((m) => m.toc)) {
-    lines.push(`A resource with units (Mn.1, Mn.2, …) is read by its units, never as a whole. Choose the units that serve its purpose and add up to about its budget.`);
+    lines.push(`A resource with units (Mn.1, Mn.2, …) is read by its units, never as a whole. ${unitChoice(input.materials)}.`);
   }
   const size = input.materials.some((m) => m.minutes) ? "Each resource's size is in the list. " : "";
   lines.push(

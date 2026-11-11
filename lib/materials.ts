@@ -977,8 +977,9 @@ function formatChapters(chapters: number[]): string {
  * `practice-overlap`: an item another unit already did, or one two units of a level take; a run two headings reserve.
  * `practice-generated`: a row the model wrote where the registry forbids it (a format never written, or recall not from
  * the unit's own reading).
- * `budget-miss`: at the top level, a material whose units all have minutes and whose reserved units add up to more or
- * less than its budget, past `budgetMissSlack`.
+ * `budget-miss`: at the top level, a unit of a list the allocation kept (`ChapterList.kept`) that no unit reserves; on a
+ * list saved before, a material whose units all have minutes and whose reserved units add up to more or less than its
+ * budget, past `budgetMissSlack`.
  * `over-capacity`: a unit's minutes (a heading's stated `time`, a week leaf's must-reading and practice rows) past
  * `budgetCeiling` of its hours.
  * `format-total-miss`: at the top level, a picked format's minutes across the units more or less than its plan total
@@ -1556,6 +1557,16 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   // need add up to it.
   if (input.top) {
     for (const m of input.materials) {
+      // A list the allocation kept is read whole: every unit is reserved somewhere, whatever its minutes.
+      if (listed(m.id) && m.toc!.kept) {
+        const reserved = new Set(input.nodes.flatMap((n) => refsOf(n).filter((r) => isRead(r) && r.id === m.id).map((r) => r.chapter ?? 0)));
+        const missing = m.toc!.chapters.flatMap((_, i) => (reserved.has(i + 1) ? [] : [{ id: m.id, chapter: i + 1 }]));
+        if (missing.length === 0) continue;
+        const alias = aliases.alias(m.id) ?? m.id;
+        const what = `${missing.length === 1 ? "unit" : "units"} ${formatAliases(missing, aliases)}`;
+        breach("budget-miss", -1, "The plan", [], `${alias} keeps ${what}, which no unit reserves; the plan reads every unit it keeps`);
+        continue;
+      }
       const budget = m.minutes;
       if (!listed(m.id) || budget === null || budget === undefined || !m.toc!.chapters.every((c) => c.minutes !== null)) continue;
       if (m.kind === "book" && m.minutesBasis !== "measured") continue;
