@@ -951,7 +951,7 @@ export function chapterRegressions(steps: ChapterStep[]): string[] {
 
 /**
  * Chapters up to the last reserved one that no heading reserves: of the backbone's own chapters when its list is known
- * (`listed`, which after an allocation holds only the kept ones), else every number from 1.
+ * (`listed`, which after an allocation holds only the kept ones, `listedChapters`), else every number from 1.
  */
 export function chapterGaps(reserved: number[], listed?: number[]): number[] {
   if (reserved.length === 0) return [];
@@ -961,9 +961,24 @@ export function chapterGaps(reserved: number[], listed?: number[]): number[] {
   return [...new Set(candidates)].filter((c) => c <= last && !have.has(c)).sort((a, b) => a - b);
 }
 
-/** The backbone's chapter numbers as the checks name them: each chapter's own number, else its position. */
+/**
+ * The positions of a list's kept units (`ChapterList.kept`), in order and within the list; null for a list saved before
+ * the allocation kept units, where every unit is open to the outline.
+ */
+export function keptPositions(toc: Pick<ChapterList, "chapters" | "kept"> | null | undefined): number[] | null {
+  if (!toc?.kept) return null;
+  return [...new Set(toc.kept)].filter((p) => p >= 1 && p <= toc.chapters.length).sort((a, b) => a - b);
+}
+
+/** Whether the plan may read a list's unit at `position`: one it kept, or any on a list from before units were kept. */
+export function isKeptUnit(toc: Pick<ChapterList, "chapters" | "kept"> | null | undefined, position: number): boolean {
+  const kept = keptPositions(toc);
+  return kept === null || kept.includes(position);
+}
+
+/** The backbone's kept chapter numbers as the checks name them: each chapter's own number, else its position. */
 function listedChapters(toc: CheckMaterial["toc"]): number[] | undefined {
-  return toc?.chapters.map((c, i) => c.n ?? i + 1);
+  return toc?.chapters.flatMap((c, i) => (isKeptUnit(toc, i + 1) ? [c.n ?? i + 1] : []));
 }
 
 function formatChapters(chapters: number[]): string {
@@ -977,8 +992,9 @@ function formatChapters(chapters: number[]): string {
  * `practice-overlap`: an item another unit already did, or one two units of a level take; a run two headings reserve.
  * `practice-generated`: a row the model wrote where the registry forbids it (a format never written, or recall not from
  * the unit's own reading).
- * `budget-miss`: at the top level, a material whose units all have minutes and whose reserved units add up to more or
- * less than its budget, past `budgetMissSlack`.
+ * `budget-miss`: at the top level, a unit the allocation kept (`ChapterList.kept`) that no unit reserves, or a unit of
+ * that list it did not keep that one reads; on a list without kept units, a material whose units all have minutes and whose reserved units add up to more or less than its
+ * budget, past `budgetMissSlack`.
  * `over-capacity`: a unit's minutes (a heading's stated `time`, a week leaf's must-reading and practice rows) past
  * `budgetCeiling` of its hours.
  * `format-total-miss`: at the top level, a picked format's minutes across the units more or less than its plan total
@@ -1556,6 +1572,23 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
   // need add up to it.
   if (input.top) {
     for (const m of input.materials) {
+      // A list the allocation kept is read as kept: every kept unit is reserved somewhere, whatever its minutes, and no other.
+      const kept = listed(m.id) ? keptPositions(m.toc) : null;
+      if (kept) {
+        const reserved = new Set(input.nodes.flatMap((n) => refsOf(n).filter((r) => isRead(r) && r.id === m.id).map((r) => r.chapter ?? 0)));
+        const alias = aliases.alias(m.id) ?? m.id;
+        const missing = kept.filter((p) => !reserved.has(p)).map((chapter) => ({ id: m.id, chapter }));
+        if (missing.length > 0) {
+          const what = `${missing.length === 1 ? "unit" : "units"} ${formatAliases(missing, aliases)}`;
+          breach("budget-miss", -1, "The plan", [], `${alias} keeps ${what}, which no unit reserves; the plan reads every unit it keeps`);
+        }
+        const outside = [...reserved].filter((p) => p >= 1 && p <= m.toc!.chapters.length && !kept.includes(p)).sort((a, b) => a - b);
+        if (outside.length > 0) {
+          const what = formatAliases(outside.map((chapter) => ({ id: m.id, chapter })), aliases);
+          breach("budget-miss", -1, "The plan", [], `${what} ${outside.length === 1 ? "is" : "are"} not among the units ${alias} keeps; the plan reads only those`);
+        }
+        continue;
+      }
       const budget = m.minutes;
       if (!listed(m.id) || budget === null || budget === undefined || !m.toc!.chapters.every((c) => c.minutes !== null)) continue;
       if (m.kind === "book" && m.minutesBasis !== "measured") continue;

@@ -64,6 +64,12 @@ export const chapterListSchema = z.object({
   /** The position after the last chapter (first back-matter entry or the page count); null when unknown or without positions. */
   end: z.number().int().min(0).nullable(),
   chapters: z.array(chapterSchema).min(MIN_CHAPTERS).max(MAX_CHAPTERS),
+  /**
+   * The positions (1-based, in order) of the units the allocation kept: the plan reads every one of them and no other,
+   * and the list stays whole so positions never move. Absent on lists saved before the allocation chose units, where
+   * the outline chooses units up to the budget.
+   */
+  kept: z.array(z.number().int().min(1).max(MAX_CHAPTERS)).max(MAX_CHAPTERS).optional(),
 });
 export type ChapterList = z.infer<typeof chapterListSchema>;
 

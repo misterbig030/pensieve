@@ -4,6 +4,8 @@ import {
   fitWeekToDays,
   formatAliases,
   itemAliases,
+  isKeptUnit,
+  isPracticeOnly,
   itemRun,
   leafActivities,
   pickSources,
@@ -214,10 +216,12 @@ export interface RenderMaterialsOptions {
  * about 2 h — Introduction to Prompting; …`. The alias prefix appears when the book's alias is given; the number, the
  * pages, the size and the sections each appear only when known (and, for sections, asked for). Units that have groups
  * get a group line before the first unit of each (`  building blocks:`); a source that is not a book names them units.
+ * Units the allocation did not keep (`ChapterList.kept`) are left out; the rest keep their positions in the alias.
  */
 export function renderChapters(toc: ChapterList, options: { sections: boolean; alias?: string; book?: boolean }): string[] {
   let group: string | null = null;
   const lines = toc.chapters.flatMap((c, i) => {
+    if (!isKeptUnit(toc, i + 1)) return [];
     const parts = [`${options.alias ? `${options.alias}.${i + 1} ` : ""}${c.n !== null ? `ch. ${c.n} ` : ""}"${c.title}"`];
     if (toc.printPages && c.page !== null) {
       // A chapter whose successor was cut carries its own end; otherwise its span ends where the next one starts.
@@ -971,6 +975,25 @@ function unlistedBookRule(input: UnitsPromptInput, aliases: MaterialAliases): st
   return `${names} ${one ? "has" : "have"} no chapter list: name the part each unit reads by topic, in a few words ("the chapters on evaluation"), never by its sections. You were not given ${one ? "its" : "their"} chapters or sections, and from memory they may not match the learner's edition. Never write a chapter number, chapter title or section name you were not given.`;
 }
 
+/**
+ * Which units of each resource this level takes. Under a parent: every unit of the parent's reservation. At the top
+ * level: every unit the allocation kept (`ChapterList.kept`, the only ones listed), less those the fixed units of a
+ * re-draft hold; a list without kept units (saved before, or given a budget instead) is chosen from up to its budget, as
+ * the outline did then. Each resource is told its own way; a practice source with no reading is never marked, so it
+ * does not count.
+ */
+function unitChoice(input: UnitsPromptInput, aliases: MaterialAliases): string {
+  if (input.parentId) return "Take every unit of this unit's reservation";
+  const take = `take every one${keptTree(input) ? " the fixed units do not hold" : ""}`;
+  const listed = input.materials.filter((m) => m.toc && !isPracticeOnly(m));
+  const budgeted = listed.filter((m) => !m.toc!.kept);
+  if (budgeted.length === 0) return `Its listed units are the ones the plan keeps: ${take}`;
+  const choose = "choose the units that serve its purpose and add up to about its budget";
+  if (budgeted.length === listed.length) return choose[0].toUpperCase() + choose.slice(1);
+  const names = budgeted.map((m) => aliases.alias(m.id) ?? m.id).join(", ");
+  return `For ${names}, ${choose}; for any other, its listed units are the ones the plan keeps: ${take}`;
+}
+
 function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): string {
   const backbone = input.materials.findIndex((m) => m.backbone);
   const kids = UNIT_NOUN[childLevel(input.level) ?? "day"];
@@ -980,7 +1003,7 @@ function headingMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases)
   ];
   if (input.materials.some((m) => m.toc)) {
     lines.push(
-      `A resource with units (Mn.1, Mn.2, …) is reserved by its units, never as a whole. Choose the units that serve its purpose and add up to about its budget, and reserve them in order across consecutive units at this level, each unit in exactly one.`,
+      `A resource with units (Mn.1, Mn.2, …) is reserved by its units, never as a whole. ${unitChoice(input, aliases)}, and reserve them in order across consecutive units at this level, each unit in exactly one.`,
     );
   }
   if (input.materials[backbone]?.toc) lines.push(`The backbone's units run in order through the plan.`);
@@ -1018,7 +1041,7 @@ function leafMaterialRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   ];
   // The top level is held to each budget whether its units are headings or leaves; under a parent, the reservation was.
   if (!input.parentId && input.materials.some((m) => m.toc)) {
-    lines.push(`A resource with units (Mn.1, Mn.2, …) is read by its units, never as a whole. Choose the units that serve its purpose and add up to about its budget.`);
+    lines.push(`A resource with units (Mn.1, Mn.2, …) is read by its units, never as a whole. ${unitChoice(input, aliases)}.`);
   }
   const size = input.materials.some((m) => m.minutes) ? "Each resource's size is in the list. " : "";
   lines.push(

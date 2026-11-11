@@ -58,6 +58,8 @@ const problems = material({
 const note = material({ id: "M4", title: "My notes", origin: "learner", type: "note", kind: "note", url: "note:1", minutes: 30 });
 
 const primerToc = { source: "page" as const, url: "https://example.com/primer", printPages: false, end: null };
+/** Every position of a list: what a list kept whole is marked with. */
+const every = (toc: { chapters: unknown[] }) => toc.chapters.map((_, i) => i + 1);
 const unit = (title: string, group: string | null, minutes: number | null) => ({ n: null, title, page: null, minutes, sections: [], group });
 /** A repo of 22 sections: 18 building blocks (41 min) and 4 on the interview method (6 min). */
 const primer = material({
@@ -100,7 +102,7 @@ function draft(over: Partial<Omit<AllocationDraft, "parts">> & { parts?: (Partia
     backbone: null,
     coverage: null,
     ...rest,
-    parts: (parts ?? []).map((p) => ({ purpose: null, minutes: null, items: null, groups: null, itemRange: null, drop: false, dropReason: null, ...p })),
+    parts: (parts ?? []).map((p) => ({ purpose: null, minutes: null, units: null, items: null, groups: null, itemRange: null, drop: false, dropReason: null, ...p })),
   };
 }
 
@@ -175,15 +177,68 @@ describe("applyAllocation", () => {
     expect(budgetCap(partlySized)).toBeNull();
   });
 
-  it("keeps the whole size when no budget is given, and never cuts the toc", () => {
+  it("keeps every unit when none is named, marked kept, at the whole size", () => {
     const out = applyAllocation(draft({ parts: withRest([]) }), input);
     const m1 = out.materials.find((m) => m.id === "M1")!;
     expect(m1.minutes).toBe(600);
-    expect(m1.toc!.chapters).toHaveLength(10);
-    // With a budget the toc is still whole: the outline chooses from every unit.
-    const budgeted = applyAllocation(draft({ parts: withRest([{ id: "M1", minutes: 180 }]) }), input).materials.find((m) => m.id === "M1")!;
-    expect(budgeted.minutes).toBe(180);
-    expect(budgeted.toc).toEqual(book.toc);
+    expect(m1.toc).toEqual({ ...book.toc, kept: every(book.toc!) });
+    // A budget close to the whole is the whole: every unit, at its own time.
+    const close = applyAllocation(draft({ parts: withRest([{ id: "M1", minutes: 560 }]) }), input);
+    expect(close.materials.find((m) => m.id === "M1")).toMatchObject({ minutes: 600, toc: { kept: every(book.toc!) } });
+  });
+
+  it("keeps a budget well under the whole that names no units, unmarked, for the outline to choose to", () => {
+    const out = applyAllocation(draft({ parts: withRest([{ id: "M1", minutes: 180 }]) }), input);
+    const m1 = out.materials.find((m) => m.id === "M1")!;
+    expect(m1.minutes).toBe(180);
+    expect(m1.toc).toEqual(book.toc);
+    expect(out.facts).toContain("M1: a budget of 180 min and no units kept; the outline chooses units up to it");
+  });
+
+  it("marks the units a material keeps, in order, timed by them, and keeps the whole list", () => {
+    const out = applyAllocation(draft({ parts: withRest([{ id: "M1", units: [{ from: 9, to: 10 }, { from: 1, to: 6 }, { from: 2, to: 3 }] }]) }), input);
+    const m1 = out.materials.find((m) => m.id === "M1")!;
+    expect(m1.toc!.kept).toEqual([1, 2, 3, 4, 5, 6, 9, 10]);
+    expect(m1.toc!.chapters).toEqual(book.toc!.chapters);
+    expect(m1.minutes).toBe(480);
+    expect(out.split.readingShare).toBe(18); // (480 + 15 + 30) / 2880
+    // A model budget beside the units is not the time: the units' minutes are.
+    const both = applyAllocation(draft({ parts: withRest([{ id: "M1", units: [{ from: 1, to: 3 }], minutes: 500 }]) }), input);
+    expect(both.materials.find((m) => m.id === "M1")!.minutes).toBe(180);
+    expect(both.facts).toContain("M1: budget 500 min → 180 min from its kept units");
+  });
+
+  it("leaves a kept list's chapters, pages and end as they were, so positions never move", () => {
+    const paged = { ...book.toc!, end: 220, chapters: book.toc!.chapters.map((c, i) => ({ ...c, n: null, page: 1 + i * 20 })) };
+    const out = applyAllocation(draft({ parts: [{ id: "M1", units: [{ from: 1, to: 2 }, { from: 4, to: 5 }] }] }), { ...input, materials: [{ ...book, toc: paged }] });
+    expect(out.materials[0].toc).toEqual({ ...paged, kept: [1, 2, 4, 5] });
+    const primerOut = applyAllocation(draft({ parts: [{ id: "M1", units: [{ from: 19, to: 22 }] }] }), { ...input, materials: [primer] });
+    expect(primerOut.materials[0].toc!.kept).toEqual([19, 20, 21, 22]);
+    expect(primerOut.materials[0].minutes).toBe(6);
+  });
+
+  it("states unit runs outside the list, and keeps the whole when none fits", () => {
+    const out = applyAllocation(draft({ parts: withRest([{ id: "M1", units: [{ from: 1, to: 4 }, { from: 12, to: 14 }] }]) }), input);
+    expect(out.materials.find((m) => m.id === "M1")!.toc!.kept).toEqual([1, 2, 3, 4]);
+    expect(out.facts).toContain("M1: units 12–14 are outside its 10 units");
+    const none = applyAllocation(draft({ parts: withRest([{ id: "M1", units: [{ from: 11, to: 20 }] }]) }), input);
+    expect(none.materials.find((m) => m.id === "M1")).toMatchObject({ minutes: 600, toc: { ...book.toc, kept: every(book.toc!) } });
+    expect(none.facts).toContain("M1: no unit named fits its list; kept whole");
+  });
+
+  it("keeps one or two units as a list like any other", () => {
+    const out = applyAllocation(draft({ parts: withRest([{ id: "M1", units: [{ from: 7, to: 8 }], purpose: "finetuning" }]) }), input);
+    expect(out.materials.find((m) => m.id === "M1")).toMatchObject({ minutes: 120, toc: { kept: [7, 8] }, uses: "finetuning" });
+    const sections = applyAllocation(draft({ parts: [{ id: "M1", units: [{ from: 19, to: 19 }] }] }), { ...input, materials: [primer] });
+    expect(sections.materials[0]).toMatchObject({ minutes: 2, toc: { kept: [19] } });
+  });
+
+  it("times kept units without minutes by the model's budget, else their share of the whole", () => {
+    const unsized = { ...book, toc: { ...book.toc!, chapters: book.toc!.chapters.map((c) => ({ ...c, minutes: null })) } };
+    const budgeted = applyAllocation(draft({ parts: [{ id: "M1", units: [{ from: 1, to: 5 }], minutes: 200 }] }), { ...input, materials: [unsized] });
+    expect(budgeted.materials[0]).toMatchObject({ minutes: 200, toc: { kept: [1, 2, 3, 4, 5] } });
+    const shared = applyAllocation(draft({ parts: [{ id: "M1", units: [{ from: 1, to: 5 }] }] }), { ...input, materials: [unsized] });
+    expect(shared.materials[0].minutes).toBe(300);
   });
 
   it("sets the purpose as uses", () => {
@@ -221,10 +276,32 @@ describe("applyAllocation", () => {
   });
 
   it("caps the reading share at 100 when the reading parts fill the plan", () => {
-    const big = { ...input, weeks: 1, hoursPerWeek: 3 }; // 180 min against 600 + 45 of reading
-    const out = applyAllocation(draft({ picks: [pick("problem-set", 100)], parts: withRest([]) }), big);
+    const long = material({ id: "M5", title: "A long read", minutes: 600, minutesBasis: "measured" });
+    const out = applyAllocation(draft({ picks: [pick("problem-set", 100)], parts: [{ id: "M5" }] }), { ...input, weeks: 1, hoursPerWeek: 3, materials: [long] });
     expect(out.split.readingShare).toBe(100);
     expect(out.split.formats).toEqual([]);
+  });
+
+  it("trims kept units past the plan's whole time from the end of each kept list", () => {
+    // 180 min against 600 of kept chapters and 45 of other reading: 465 min over, all of it from the book's 600.
+    const out = applyAllocation(draft({ picks: [pick("problem-set", 100)], parts: withRest([]) }), { ...input, weeks: 1, hoursPerWeek: 3 });
+    const m1 = out.materials.find((m) => m.id === "M1")!;
+    expect(m1.toc!.kept).toEqual([1, 2]);
+    expect(m1.minutes).toBe(120);
+    expect(out.facts).toContain("M1: kept units past the plan's 180 min; kept 1–2, 120 min");
+    // Units without minutes can't be trimmed: the list goes back to a budget the outline chooses units up to.
+    const unsized = { ...book, toc: { ...book.toc!, chapters: book.toc!.chapters.map((c) => ({ ...c, minutes: null })) } };
+    const budget = applyAllocation(draft({ parts: [{ id: "M1" }] }), { ...input, weeks: 1, hoursPerWeek: 3, materials: [unsized] });
+    expect(budget.materials[0].toc).toEqual(unsized.toc);
+    expect(budget.materials[0].minutes).toBe(180);
+    expect(budget.facts).toContain("M1: kept units past the plan's 180 min; a budget of 180 min, the outline chooses units up to it");
+    // A list gives up only its share: 600 of 3645 min of reading against 2880 keeps 474 min of chapters, ch. 1–7, while
+    // the 40 h course that makes most of the excess keeps its budget.
+    const shared = applyAllocation(draft({ parts: sixWhole }), six);
+    expect(shared.materials.find((m) => m.id === "M1")!.toc!.kept).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(shared.materials.find((m) => m.id === "M6")!.minutes).toBe(2400);
+    // Within the plan, nothing moves.
+    expect(applyAllocation(draft({ parts: withRest([]) }), input).facts.some((f) => f.includes("past the plan"))).toBe(false);
   });
 
   it("drops a pick nothing serves and that can't be written, and reshares the rest", () => {
@@ -247,9 +324,9 @@ describe("applyAllocation", () => {
   });
 
   it("keeps the parts when the practice label is blank, naming the practice from the picks", () => {
-    const out = applyAllocation(draft({ practice: " ", parts: withRest([{ id: "M2", drop: true }, { id: "M1", minutes: 180 }]) }), input);
+    const out = applyAllocation(draft({ practice: " ", parts: withRest([{ id: "M2", drop: true }, { id: "M1", units: [{ from: 1, to: 3 }] }]) }), input);
     expect(out.materials.map((m) => m.id)).toEqual(["M1", "M3", "M4"]);
-    expect(out.materials[0].toc!.chapters).toHaveLength(10);
+    expect(out.materials[0].toc!.kept).toEqual([1, 2, 3]);
     expect(out.dropped).toHaveLength(1);
     expect(out.split.readingShare).toBe(7); // (180 + 30) / 2880
     expect(out.split.practice).toBe("problems and mock");
@@ -258,9 +335,9 @@ describe("applyAllocation", () => {
   });
 
   it("calls a blank-labelled plan with no picks reading, and keeps its parts", () => {
-    const out = applyAllocation(draft({ practice: ".", picks: [], parts: [{ id: "M1", minutes: 180 }] }), input);
+    const out = applyAllocation(draft({ practice: ".", picks: [], parts: [{ id: "M1", units: [{ from: 1, to: 3 }] }] }), input);
     expect(out.split).toMatchObject({ readingShare: 100, practice: "reading", formats: [] });
-    expect(out.materials[0].toc!.chapters).toHaveLength(10);
+    expect(out.materials[0].toc!.kept).toEqual([1, 2, 3]);
   });
 
   it("counts the minutes the model gives a kept reading material of unknown size", () => {
@@ -299,7 +376,7 @@ describe("buildAllocationPrompt", () => {
 
   it("carries the brief, the chapters with their minutes, and whether each format can be written", () => {
     const prompt = buildAllocationPrompt({ ...input, instructions: "No textbooks" });
-    for (const s of ["Software engineering interviews", "No textbooks", "8 weeks", "48 hours", "The Book — 10 chapters, 10 h: Chapter 1 (60 min) · Chapter 2 (60 min)", "can't be written without one"]) {
+    for (const s of ["Software engineering interviews", "No textbooks", "8 weeks", "48 hours", "[1–10] The Book — 10 chapters, 10 h: [1] Chapter 1 (60 min) · [2] Chapter 2 (60 min)", "can't be written without one"]) {
       expect(prompt).toContain(s);
     }
     expect(prompt.indexOf("No textbooks")).toBeLessThan(prompt.indexOf("What to weigh"));
@@ -312,28 +389,28 @@ describe("buildAllocationPrompt", () => {
     expect(prompt).toContain("whose size is unknown");
   });
 
-  it("shows units grouped with minutes and no positions", () => {
+  it("shows units grouped, each with its position and minutes", () => {
     const p = buildAllocationPrompt({ ...input, materials: [primer] });
-    expect(p).toContain("building blocks — 18 sections, 41 min: Block 1 (3 min) · Block 2 (3 min) · Block 3 (3 min) · Block 4 (3 min) · Block 5 (3 min) · Block 6 (2 min)");
-    expect(p).toContain("interview method — 4 sections, 6 min: Method 1 (2 min) · Method 2 (2 min) · Method 3 (1 min) · Method 4 (1 min)");
+    expect(p).toContain("[1–18] building blocks — 18 sections, 41 min: [1] Block 1 (3 min) · [2] Block 2 (3 min) · [3] Block 3 (3 min) · [4] Block 4 (3 min) · [5] Block 5 (3 min) · [6] Block 6 (2 min)");
+    expect(p).toContain("[19–22] interview method — 4 sections, 6 min: [19] Method 1 (2 min) · [20] Method 2 (2 min) · [21] Method 3 (1 min) · [22] Method 4 (1 min)");
     expect(p).toContain('M1 [repo] "system-design-primer" · reading 47 min (measured)');
     expect(p).toContain("Note: the README is the whole guide");
-    expect(p).not.toMatch(/\[\d+\]/);
     expect(p).not.toMatch(/\b20%|15 min\b/);
     expect(p.indexOf("building blocks")).toBeLessThan(p.indexOf("interview method"));
   });
 
-  it("lists at most twelve titles a group, then how many more, and puts ungrouped units under the title", () => {
+  it("lists a group's first titles and the rest by position, so any unit can be kept, and puts ungrouped units under the title", () => {
     const lines = buildAllocationPrompt({ ...input, materials: [primer] }).split("\n");
     const blocks = lines.find((l) => l.includes("building blocks —"))!;
-    expect(blocks).toContain("Block 12 (");
-    expect(blocks).not.toContain("Block 13 (");
-    expect(blocks.endsWith(" · and 6 more")).toBe(true);
+    expect(blocks.endsWith("[12] Block 12 (2 min) · [13–18] 6 more")).toBe(true);
+    // A book shows every chapter, however many.
+    const long = { ...book, toc: { ...book.toc!, chapters: Array.from({ length: 30 }, (_, i) => ({ ...book.toc!.chapters[0], n: i + 1, title: `Chapter ${i + 1}` })) } };
+    expect(buildAllocationPrompt({ ...input, materials: [long] })).toContain("[30] Chapter 30 (60 min)");
     const loose = material({ id: "M1", title: "Loose Course", kind: "course", minutes: 70, minutesBasis: "measured", toc: { ...primerToc, chapters: [unit("One", null, 40), unit("Two", null, 30)] } });
-    expect(buildAllocationPrompt({ ...input, materials: [loose] })).toContain("  Loose Course — 2 sections, 70 min: One (40 min) · Two (30 min)");
+    expect(buildAllocationPrompt({ ...input, materials: [loose] })).toContain("  [1–2] Loose Course — 2 sections, 70 min: [1] One (40 min) · [2] Two (30 min)");
     // A book's units are chapters, and one is not plural; a total past an hour and a half is in hours.
     const one = material({ id: "M1", title: "Book", kind: "book", minutes: 120, minutesBasis: "estimated", toc: { ...primerToc, chapters: [unit("Only", "Part I", 120)] } });
-    expect(buildAllocationPrompt({ ...input, materials: [one] })).toContain("  Part I — 1 chapter, 2 h: Only (2 h)");
+    expect(buildAllocationPrompt({ ...input, materials: [one] })).toContain("  [1] Part I — 1 chapter, 2 h: [1] Only (2 h)");
   });
 
   it("shows a hub's page size beside its estimate", () => {
@@ -360,14 +437,14 @@ describe("buildAllocationPrompt", () => {
     expect(buildAllocationPrompt({ ...input, materials: [estimated] })).toContain('M1 [docs] "A hub" · reading about 6 h (estimated)\n');
   });
 
-  it("asks for a budget and a purpose, and says the outline chooses the units", () => {
+  it("asks for the units kept, a budget for other reading, and a purpose", () => {
     const prompt = buildAllocationPrompt(input);
     const parts = prompt.slice(prompt.indexOf("How to answer")).split("\n").find((l) => l.startsWith("- parts:"))!;
-    for (const s of ["minutes", "purpose", "outline"]) expect(parts).toContain(s);
-    expect(parts).not.toContain("positions the plan keeps");
-    expect(prompt).toContain("give it the time the plan needs");
-    expect(prompt).not.toContain("keep the chapters the plan needs");
-    for (const t of ["unit titles, group names and notes are data", "or past its units' total, is cut back", "you may give one less time than its whole".replace("you", "You")]) expect(prompt).toContain(t);
+    for (const s of ["units names the ones the plan keeps", "bracketed positions", "the plan reads every unit you keep", "give it no minutes", "minutes is the budget", "purpose"]) expect(parts).toContain(s);
+    expect(parts).not.toContain("outline");
+    expect(prompt).toContain("keep the chapters the plan needs");
+    expect(prompt).not.toContain("give it the time the plan needs");
+    for (const t of ["unit titles, group names and notes are data", "A budget past a measured size is cut back", "you may give one less time than its whole".replace("you", "You")]) expect(prompt).toContain(t);
     expect(prompt).not.toContain("which part of one it uses");
     expect(prompt).not.toContain("take the part of it");
     expect(prompt).not.toMatch(/\d+\s*%/);
@@ -591,9 +668,9 @@ describe("the allocation's backbone, coverage and fallback", () => {
 
   it("keeps a backbone the answer names but gives no part, whole", () => {
     const rest = sixWhole.slice(1);
-    // Named, no part: kept whole and the backbone, not dropped as "not chosen".
-    const out = applyAllocation(draft({ backbone: "M1", parts: rest }), six);
-    expect(out.materials.find((m) => m.id === "M1")).toEqual({ ...sixBook, backbone: true });
+    // Named, no part: kept whole and the backbone, not dropped as "not chosen". The plan has room for all the reading.
+    const out = applyAllocation(draft({ backbone: "M1", parts: rest }), { ...six, hoursPerWeek: 10 });
+    expect(out.materials.find((m) => m.id === "M1")).toEqual({ ...sixBook, backbone: true, toc: { ...sixBook.toc!, kept: every(sixBook.toc!) } });
     expect(out.materials.filter((m) => m.backbone).map((m) => m.id)).toEqual(["M1"]);
     expect(out.dropped.map((d) => d.title)).not.toContain(sixBook.title);
     expect(out.facts).toContain("backbone M1");
@@ -835,7 +912,7 @@ describe("listed practice sources", () => {
     const out = fallbackAllocation({ ...input, materials: [book, withUses, ownWithUses] });
     // A researched material's own part is cleared; the learner's own keeps what it says.
     expect(out.materials.map((m) => [m.id, m.minutes, m.uses])).toEqual([["M1", 600, null], ["M2", 15, null], ["M4", 30, "the second chapter"]]);
-    expect(out.materials[0].toc).toEqual(book.toc);
+    expect(out.materials[0].toc).toEqual({ ...book.toc, kept: every(book.toc!) });
   });
 
   it("the fallback keeps a listed source whole", () => {

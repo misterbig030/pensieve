@@ -165,7 +165,7 @@ describe("streamPlanDraft and the allocation", () => {
   });
 
   const weeks = (n: number): UnitDraft[] => Array.from({ length: n }, (_, i) => ({ title: `W${i + 1}`, summary: "s" }));
-  const budgeted = { ...ALLOCATION, parts: [{ id: "M1", purpose: null, minutes: 300, items: null, drop: false, dropReason: null }] };
+  const budgeted = { ...ALLOCATION, parts: [{ id: "M1", purpose: null, minutes: null, units: [{ from: 1, to: 3 }], items: null, drop: false, dropReason: null }] };
 
   it("emits the plan's coverage with the allocated materials, and null when the allocation fails", async () => {
     const coverage = { covered: ["Branching"], open: ["Rebasing"] };
@@ -201,10 +201,11 @@ describe("streamPlanDraft and the allocation", () => {
     if (allocated.type !== "allocated") throw new Error("no allocated event");
     expect(allocated.dropped).toEqual([]);
     expect(allocated.materials).toHaveLength(1);
-    // The budget sizes the material, and its chapter list stays whole for the outline to choose from.
+    // The allocation keeps chapters 1–3: the whole list stays, marked with them for the outline, and their minutes are its time.
     expect(allocated.materials[0].toc?.chapters).toHaveLength(6);
+    expect(allocated.materials[0].toc?.kept).toEqual([1, 2, 3]);
     expect(allocated.materials[0].minutes).toBe(300);
-    // The reading share follows the budget: 300 of the 2400 minutes.
+    // The reading share follows the kept chapters: 300 of the 2400 minutes.
     expect(events[1]).toEqual({
       type: "split",
       split: { readingShare: 13, practice: "building projects", reason: "A craft topic.", formats: [{ format: "project", share: 100, focus: "a small tool", reason: "Learning by building." }] },

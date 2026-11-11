@@ -476,6 +476,45 @@ describe("chapters as resources in prompts", () => {
     const under = buildUnitsPrompt({ topic: "t", materials: AIE_MATERIALS, granularity: "day", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "day", spans: Array(7).fill(1), weeks: 13, daysPerWeek: 7, tree: root, parentId: "w1", unitsAreLeaves: true });
     expect(under).not.toContain("add up to about its budget");
   });
+  it("units the allocation kept are all taken, at headings and top-level leaves; a list without kept units is chosen to its budget", () => {
+    const every = (toc: { chapters: unknown[] }) => toc.chapters.map((_, i) => i + 1);
+    const kept = AIE_MATERIALS.map((m) => (m.toc ? { ...m, toc: { ...m.toc, kept: every(m.toc) } } : m));
+    const heading = buildUnitsPrompt({ topic: "t", materials: kept, granularity: "week", level: "month", spans: [30, 30, 30], weeks: 13, daysPerWeek: 7, unitsAreLeaves: false });
+    expect(heading).toContain("is reserved by its units, never as a whole. Its listed units are the ones the plan keeps: take every one, and reserve them in order across consecutive units at this level, each unit in exactly one.");
+    expect(heading).not.toContain("add up to about its budget");
+    const leaf = buildUnitsPrompt({ topic: "t", materials: kept, granularity: "week", hoursPerWeek: 6, split: { readingShare: 40, practice: "projects", reason: "r" }, level: "week", spans: [7, 7], weeks: 2, daysPerWeek: 7, unitsAreLeaves: true });
+    expect(leaf).toContain("is read by its units, never as a whole. Its listed units are the ones the plan keeps: take every one.");
+    // A list without kept units keeps the old rule, so its budget still holds; the others are still taken whole.
+    const second = { ...kept[0], id: "aie2", title: "A second book", backbone: false };
+    const mixed = [kept[0], ...kept.slice(1), { ...second, toc: { ...second.toc!, kept: undefined } }];
+    expect(buildUnitsPrompt({ topic: "t", materials: mixed, granularity: "week", level: "month", spans: [30, 30, 30], weeks: 13, daysPerWeek: 7, unitsAreLeaves: false })).toContain(
+      `For M${mixed.length}, choose the units that serve its purpose and add up to about its budget; for any other, its listed units are the ones the plan keeps: take every one, and reserve them`,
+    );
+    const legacy = AIE_MATERIALS;
+    expect(buildUnitsPrompt({ topic: "t", materials: legacy, granularity: "week", level: "month", spans: [30, 30, 30], weeks: 13, daysPerWeek: 7, unitsAreLeaves: false })).toContain(
+      "never as a whole. Choose the units that serve its purpose and add up to about its budget, and reserve them",
+    );
+  });
+  it("below the top level a heading takes its reservation, and a re-draft leaves the fixed units' chapters alone", () => {
+    const every = (toc: { chapters: unknown[] }) => toc.chapters.map((_, i) => i + 1);
+    const kept = AIE_MATERIALS.map((m) => (m.toc ? { ...m, toc: { ...m.toc, kept: every(m.toc) } } : m));
+    const root = makeRoot([makeNode({ id: "m1", level: "month", title: "Foundations", summary: "s", len: 28, covers: [{ id: "aie", chapter: 1, note: null }, { id: "aie", chapter: 2, note: null }] })]);
+    const weeks = buildUnitsPrompt({ topic: "t", materials: kept, granularity: "day", level: "week", spans: [7, 7, 7, 7], weeks: 13, daysPerWeek: 7, tree: root, parentId: "m1", unitsAreLeaves: false });
+    expect(weeks).toContain("never as a whole. Take every unit of this unit's reservation, and reserve them in order");
+    expect(weeks).not.toContain("the ones the plan keeps");
+    const fixed = [makeNode({ id: "w1", level: "week", title: "Start", summary: "s", len: 7, covers: [{ id: "aie", chapter: 1, note: null }] })];
+    const redraft = buildUnitsPrompt({ topic: "t", materials: kept, granularity: "week", level: "month", spans: [30, 30], weeks: 13, daysPerWeek: 7, keep: fixed, unitsAreLeaves: false });
+    expect(redraft).toContain("Its listed units are the ones the plan keeps: take every one the fixed units do not hold, and reserve them");
+  });
+  it("lists only the units the allocation kept, each at its own position", () => {
+    const book = AIE_MATERIALS[0];
+    const kept = [{ ...book, toc: { ...book.toc!, kept: [1, 3] } }, ...AIE_MATERIALS.slice(1)];
+    const prompt = buildUnitsPrompt({ topic: "t", materials: kept, granularity: "week", level: "month", spans: [30, 30], weeks: 8, daysPerWeek: 7, unitsAreLeaves: false });
+    expect(prompt).toContain(`  M1.1 ch. ${book.toc!.chapters[0].n}`);
+    expect(prompt).toContain(`  M1.3 ch. ${book.toc!.chapters[2].n}`);
+    expect(prompt).not.toContain("  M1.2 ");
+    expect(prompt).not.toContain("  M1.4 ");
+  });
   it("an unlisted backbone keeps the topic-only rule at both levels", () => {
     const m = [{ ...AIE_MATERIALS[0], toc: null }];
     expect(buildUnitsPrompt({ topic: "t", materials: m, granularity: "week", level: "month", spans: [30], weeks: 4, daysPerWeek: 7, unitsAreLeaves: false })).toContain("Never write a chapter number, chapter title or section name you were not given.");
