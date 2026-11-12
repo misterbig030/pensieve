@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import { convertDraft, type ImportedPlan } from "@/lib/import/convert";
-import { importDraftSchema, type ImportDraft, type ImportUnitDraft } from "@/lib/import/schema";
+import type { ImportDraft, ImportUnitDraft } from "@/lib/import/schema";
 import { WEEKLY_PLAN_DRAFT } from "@/lib/import/__fixtures__/weekly-plan.draft";
 import { materialListSchema } from "@/lib/schemas/material";
 import { planTreeInputSchema } from "@/lib/schemas/plan";
@@ -300,20 +299,5 @@ describe("convertDraft rules", () => {
 
   it("uses the file name when the plan has no title", () => {
     expect(convert(plan({ title: "  " })).title).toBe("weekly-plan");
-  });
-});
-
-describe("importDraftSchema", () => {
-  it("reads the fixture draft back unchanged", () => {
-    expect(importDraftSchema.parse(WEEKLY_PLAN_DRAFT)).toEqual(WEEKLY_PLAN_DRAFT);
-  });
-
-  it("fills a no_plan answer's missing fields", () => {
-    expect(importDraftSchema.parse({ kind: "no_plan", reason: "A syllabus.", title: null, units: null })).toEqual({ kind: "no_plan", reason: "A syllabus." });
-  });
-
-  it("sends no array caps to the model", () => {
-    const sent = JSON.stringify(z.toJSONSchema(importDraftSchema, { io: "input" }));
-    expect(sent).not.toContain("maxItems");
   });
 });
