@@ -855,7 +855,9 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   // Days held to reserved runs fit their blocks round the items. Units that share an even split (a parent from before
   // units stated their time, or the plan's at the top) take a block format's minutes from the plan's, so a week's
   // follow its blocks; under a parent that states its time, blocks are its minutes like any format's.
-  const blocks = picks.filter((p) => isBlockFormat(p.pick.format) && budgets.blocks[p.pick.format] !== 0).map((p) => `${PRACTICE_REGISTRY[p.pick.format].label}'s`);
+  // On an imported plan, a block format its parent gives none (stated above) is no block the days may write.
+  const none = (f: PracticeFormat) => !!input.importText && shared.stated && (budgets.practice[f] ?? 0) === 0 && runs[f] === undefined;
+  const blocks = picks.filter((p) => isBlockFormat(p.pick.format) && budgets.blocks[p.pick.format] !== 0 && !none(p.pick.format)).map((p) => `${PRACTICE_REGISTRY[p.pick.format].label}'s`);
   const except =
     blocks.length === 0
       ? ""
@@ -990,7 +992,16 @@ function heldReads(tree: PlanNode, skip: ReadonlySet<string>, aliases: MaterialA
 
 /** What the rest of a unit's time is for, in the plan's words. */
 function practiceOf(input: UnitsPromptInput): string {
-  return input.split ? practiceLabelOf(draftedSplit(input.split, input.materials)) : "building and practice";
+  if (!input.split) return "building and practice";
+  const split = draftedSplit(input.split, input.materials);
+  // An imported plan's parent that states its time names only the formats it gives minutes: the others are none here.
+  const parent = parentNodeOf(input);
+  if (input.importText && parent && input.tree) {
+    const budgets = unitBudgets(input.tree, parent, input);
+    const formats = (split.formats ?? []).filter((p) => (budgets.practice[p.format] ?? 0) > 0);
+    if (budgets.stated && formats.length > 0) return practiceLabelOf({ ...split, formats });
+  }
+  return practiceLabelOf(split);
 }
 
 /**

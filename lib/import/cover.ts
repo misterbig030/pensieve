@@ -1,6 +1,7 @@
 import { isImportedRow } from "@/lib/materials";
-import { PRACTICE_REGISTRY } from "@/lib/practice";
-import type { PlanNode } from "@/lib/planTree";
+import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
+import { budgetFor, type PlanNode } from "@/lib/planTree";
+import { MAX_UNIT_MINUTES, type UnitTime } from "@/lib/schemas/plan";
 import type { CoverRef, MaterialRef, PracticeCover, PracticeRef } from "@/lib/schemas/material";
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
@@ -27,11 +28,17 @@ function holds(days: PlanNode[], row: PracticeCover): boolean {
   });
 }
 
-/** Whether some day's Read table holds the same part of the same resource as `row`: its chapter, or else its note. */
-function reads(days: PlanNode[], row: CoverRef): boolean {
-  return days
-    .flatMap((d) => d.materials ?? [])
-    .some((m) => m.id === row.id && (row.chapter ? m.chapter === row.chapter : !m.chapter && norm(m.note) === norm(row.note)));
+/**
+ * Whether some day's Read table holds the same part of the same resource as `row`. A chapter is held by a day row of
+ * that chapter. A part with no chapter (a note, "Ch. 1–3") is held by any day row of the resource, since the days may
+ * put the part in their own words or cut it smaller, as an item-less practice row holds its whole source (`holds`);
+ * only a day row whose note is another of the week's reserved parts of that resource word for word is that part's.
+ */
+function reads(days: PlanNode[], row: CoverRef, reserved: readonly CoverRef[]): boolean {
+  const rows = days.flatMap((d) => d.materials ?? []).filter((m) => m.id === row.id);
+  if (row.chapter) return rows.some((m) => m.chapter === row.chapter);
+  const others = new Set(reserved.filter((c) => c !== row && c.id === row.id && !c.chapter && norm(c.note) !== norm(row.note)).map((c) => norm(c.note)));
+  return rows.some((m) => !m.chapter && (norm(m.note) === norm(row.note) || !others.has(norm(m.note))));
 }
 
 const practiceMinutes = (day: PlanNode) => (day.practice ?? []).reduce((sum, r) => sum + r.minutes, 0);
@@ -72,11 +79,31 @@ export function coverImportedRows(parent: PlanNode, days: PlanNode[]): { days: P
     appended++;
   }
   for (const row of (parent.covers ?? []).filter((c) => c.tier === "must")) {
-    if (reads(out, row)) continue;
+    if (reads(out, row, parent.covers ?? [])) continue;
     const ref: MaterialRef = { id: row.id, tier: "must", minutes: row.minutes ?? null, note: row.note, ...(row.chapter ? { chapter: row.chapter } : {}), ...(row.activity ? { activity: row.activity } : {}) };
     const day = lightest(out, readingMinutes);
     day.materials = [...(day.materials ?? []), ref];
     appended++;
   }
   return { days: out, appended };
+}
+
+/**
+ * The time of an imported week split into days, from its own reservations: its must reading's minutes and each format's
+ * rows' minutes. Stated on the week, it is what its days share, so the plan-wide split never re-budgets the learner's
+ * week: a format the week holds no rows of gets none. Must reading the file gave no minutes takes what is left of the
+ * week's budget (`budgetHours`, else the plan's weekly hours) after the rest. Call it once `covers` and `practiceCovers`
+ * hold the week's rows.
+ */
+export function splitWeekTime(week: PlanNode, hoursPerWeek?: number): UnitTime {
+  const practice: Partial<Record<PracticeFormat, number>> = {};
+  for (const c of week.practiceCovers ?? []) practice[c.format] = Math.min(MAX_UNIT_MINUTES, (practice[c.format] ?? 0) + (c.minutes ?? 0));
+  const must = (week.covers ?? []).filter((c) => c.tier === "must");
+  let reading = must.reduce((sum, c) => sum + (c.minutes ?? 0), 0);
+  if (must.some((c) => c.minutes === null || c.minutes === undefined)) {
+    const budget = (week.budgetHours ?? budgetFor(1, hoursPerWeek)) * 60;
+    const taken = reading + Object.values(practice).reduce((sum, m) => sum + (m ?? 0), 0);
+    reading += Math.max(0, budget - taken);
+  }
+  return { reading: Math.min(MAX_UNIT_MINUTES, reading), practice };
 }

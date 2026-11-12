@@ -12,7 +12,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY, numberRuns, shareOut, type PracticeFormat, type PracticePick } from "@/lib/practice";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY, itemMinutes, numberRuns, shareOut, type PracticeFormat, type PracticePick } from "@/lib/practice";
 import {
   MATERIAL_KINDS,
   MAX_PRACTICE_ITEMS,
@@ -237,22 +237,60 @@ function buildMaterials(draft: Extract<ImportDraft, { kind: "plan" }>, skipped: 
   walk(draft.units);
 
   const lists = new Map<string, string[]>();
+  const formats = new Map<string, PracticeFormat>();
   for (const material of materials) {
     const format = formatOf.get(material.id) ?? mostCommon(rowFormats.get(material.id));
     const items = (labels.get(material.id) ?? []).slice(0, MAX_PRACTICE_ITEMS);
     if (!format || items.length < MIN_PRACTICE_ITEMS) continue;
+    lists.set(material.id, items);
+    formats.set(material.id, format);
+  }
+
+  // An item takes the minutes the row naming it gives it (its even share of the row's), so the list and the rows agree.
+  const minutes = new Map<string, (number | null)[]>([...lists].map(([id, items]) => [id, items.map(() => null)]));
+  const time = (units: ImportUnitDraft[]) => {
+    for (const unit of units) {
+      for (const row of unit.practice) {
+        const material = row.id ? byDraftId.get(row.id.trim()) : undefined;
+        const list = material ? lists.get(material.id) : undefined;
+        const given = givenMinutes(row.minutes);
+        if (!material || !list || given === null) continue;
+        const positions = itemPositionsOf(row.items, list);
+        const shares = shareOut(Math.round(given), positions.map(() => 1));
+        const own = minutes.get(material.id)!;
+        positions.forEach((p, i) => (own[p - 1] ??= rowMinutes(shares[i])));
+      }
+      if (unit.children) time(unit.children);
+    }
+  };
+  time(draft.units);
+
+  for (const material of materials) {
+    const items = lists.get(material.id);
+    const format = formats.get(material.id);
+    if (!items || !format) continue;
     const perItemMinutes = PRACTICE_REGISTRY[format].perItemMinutes ?? 10;
+    const listed = items.map((label, i) => toItem(label, minutes.get(material.id)![i]));
     material.practice = {
       format,
       items: items.length,
       perItemMinutes,
-      minutes: Math.min(60000, items.length * perItemMinutes),
+      minutes: Math.min(60000, listed.reduce((sum, item) => sum + itemMinutes(format, item), 0)),
       answers: false,
-      list: { source: "file", url: material.url, items: items.map(toItem) },
+      list: { source: "file", url: material.url, items: listed },
     };
-    lists.set(material.id, items);
   }
   return { materials, byDraftId, byId: new Map(materials.map((m) => [m.id, m])), labels: lists };
+}
+
+/** The minutes a row gives, or null when the file gives it none. */
+function givenMinutes(minutes: number | null): number | null {
+  return minutes !== null && Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+}
+
+/** The positions in `list` (1-based) of the items a row names, in the row's order, each once. */
+function itemPositionsOf(items: string[] | null | undefined, list: string[]): number[] {
+  return [...new Set((items ?? []).map((l) => list.indexOf(l.trim()) + 1).filter((p) => p > 0))];
 }
 
 function addLabels(labels: Map<string, string[]>, id: string, items: string[] | null | undefined) {
@@ -264,7 +302,7 @@ function addLabels(labels: Map<string, string[]>, id: string, items: string[] | 
   labels.set(id, list);
 }
 
-function toItem(label: string): PracticeItem {
+function toItem(label: string, minutes: number | null): PracticeItem {
   return {
     title: clip(label, 300)!,
     // The file gives a label, not a number and a title: the label is the title, so a row never reads "703. 703".
@@ -273,7 +311,7 @@ function toItem(label: string): PracticeItem {
     difficulty: null,
     url: null,
     solutionUrl: null,
-    minutes: null,
+    minutes,
   };
 }
 
@@ -450,12 +488,10 @@ function readRow(row: ImportPracticeDraft, ctx: Ctx) {
   const spec = PRACTICE_REGISTRY[format];
   const material = row.id ? (ctx.book.byDraftId.get(row.id.trim()) ?? null) : null;
   const list = material ? ctx.book.labels.get(material.id) : undefined;
-  const positions = list
-    ? [...new Set((row.items ?? []).map((l) => list.indexOf(l.trim()) + 1).filter((p) => p > 0))]
-    : [];
+  const positions = list ? itemPositionsOf(row.items, list) : [];
   const task = clip(row.task, 300) ?? clip(row.done, 300) ?? spec.label;
   const done = clip(row.done, 300) ?? spec.doneWhen;
-  const given = row.minutes !== null && Number.isFinite(row.minutes) && row.minutes > 0 ? row.minutes : null;
+  const given = givenMinutes(row.minutes);
   return { format, material, list: list ?? [], positions, task, done, given, perItem: spec.perItemMinutes ?? 10, block: spec.fixedMinutes ?? DEFAULT_ROW_MINUTES };
 }
 

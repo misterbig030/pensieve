@@ -16,6 +16,7 @@ import { assignmentsOf, draftedSplit, removeMaterialRefs } from "@/lib/materials
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
+import { splitWeekTime } from "@/lib/import/cover";
 import { importMessages, type ImportedFile } from "@/lib/import/messages";
 import { pushModelCalls } from "@/lib/modelCalls";
 import { readNdjson } from "@/lib/ndjson";
@@ -457,7 +458,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             const parent = findNode(next, nodeId);
             if (!parent) return t;
             parent.children = [...(parent.children ?? []), event.node];
-            if (reason === "split") splitWeek(parent);
+            if (reason === "split") splitWeek(parent, props.imported ? hoursPerWeek : null);
             return layout(next, 1, new Set([nodeId]));
           });
           setPending((p) => {
@@ -479,7 +480,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             // The level planned inside this node: its problems are replaced with the ones just found.
             if (event.problems.length > 0) parent.problems = event.problems;
             else delete parent.problems;
-            if (reason === "split") splitWeek(parent);
+            if (reason === "split") splitWeek(parent, props.imported ? hoursPerWeek : null);
             return layout(next);
           });
           setPending((p) => {
@@ -955,10 +956,14 @@ function countExpected(root: PlanNode, pending: Record<string, PendingSlots>): n
   return countArrived(root) + Object.values(pending).reduce((sum, s) => sum + s.count, 0);
 }
 
-/** A week split into days by hand: its Read table and practice rows become the reservation its days were planned from, an item row a one-item reservation. */
-function splitWeek(week: PlanNode): void {
+/**
+ * A week split into days by hand: its Read table and practice rows become the reservation its days were planned from, an
+ * item row a one-item reservation. On an imported plan (`importedHours`, the plan's weekly hours) a week that held rows
+ * also states its time from them, as the server planned its days (`splitWeekTime`).
+ */
+function splitWeek(week: PlanNode, importedHours: number | null): void {
+  const held = (week.materials?.length ?? 0) > 0 || (week.practice?.length ?? 0) > 0;
   week.manualSplit = true;
-  week.budgetHours = null;
   if (week.materials) {
     week.covers = week.materials.map((r) => ({ id: r.id, note: r.note, chapter: r.chapter, activity: r.activity, tier: r.tier, minutes: r.minutes }));
     delete week.materials;
@@ -967,6 +972,9 @@ function splitWeek(week: PlanNode): void {
     week.practiceCovers = week.practice.map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes, ...(r.itemFrom && r.itemTo ? { itemFrom: r.itemFrom, itemTo: r.itemTo } : {}), ...(r.imported ? { imported: true } : {}) }));
     delete week.practice;
   }
+  // Its budget is read before it goes: untimed must reading takes what is left of it.
+  if (importedHours !== null && held) week.time = splitWeekTime(week, importedHours);
+  week.budgetHours = null;
 }
 
 function materialsText(materials: Material[]): string {

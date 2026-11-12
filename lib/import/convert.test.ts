@@ -88,9 +88,28 @@ describe("convertDraft on weekly-plan.md", () => {
 
   it("makes the numbered source a practice list from the file", () => {
     const leetcode = convert().materials.find((m) => m.title === "LeetCode")!;
-    expect(leetcode.practice).toMatchObject({ format: "problem-set", items: 41, perItemMinutes: 10, minutes: 410, answers: false });
+    expect(leetcode.practice).toMatchObject({ format: "problem-set", items: 41, perItemMinutes: 10, answers: false });
     expect(leetcode.practice!.list).toMatchObject({ source: "file", url: leetcode.url });
-    expect(leetcode.practice!.list!.items[0]).toEqual({ title: "703", number: null, group: null, difficulty: null, url: null, solutionUrl: null, minutes: null });
+    // Each item takes its share of the row that names it: Heap's 300 minutes over seven problems.
+    expect(leetcode.practice!.list!.items[0]).toEqual({ title: "703", number: null, group: null, difficulty: null, url: null, solutionUrl: null, minutes: 43 });
+    expect(leetcode.practice!.minutes).toBe(leetcode.practice!.list!.items.reduce((sum, i) => sum + i.minutes!, 0));
+  });
+
+  it("gives each listed item the minutes of the row that names it", () => {
+    const { tree, materials } = convert();
+    const items = materials.find((m) => m.title === "LeetCode")!.practice!.list!.items;
+    for (const week of tree) for (const row of (week.practice ?? []).filter((p) => p.itemFrom)) expect(items[row.itemFrom! - 1].minutes).toBe(row.minutes);
+  });
+
+  it("leaves an item's minutes to the format when its row gives none", () => {
+    const { materials } = convert(
+      plan({
+        materials: [{ id: "M1", title: "Kata site", author: null, kind: "tool", practiceFormat: "problem-set", items: ["1", "2", "3"] }],
+        units: [unit("W", { practice: [{ format: "problem-set", id: "M1", items: ["1", "2", "3"], task: "Katas", done: "Pass", minutes: null }] })],
+      }),
+    );
+    expect(materials[0].practice!.list!.items.map((i) => i.minutes)).toEqual([null, null, null]);
+    expect(materials[0].practice!.minutes).toBe(30);
   });
 
   it("budget comes from the file", () => {

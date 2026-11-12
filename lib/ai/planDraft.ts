@@ -1,6 +1,6 @@
 import { streamObject } from "ai";
 import type { z } from "zod";
-import { coverImportedRows } from "@/lib/import/cover";
+import { coverImportedRows, splitWeekTime } from "@/lib/import/cover";
 import {
   aliasMaterials,
   levelChecks,
@@ -756,6 +756,10 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
     delete node.practice;
     node.manualSplit = true;
   }
+  // An imported track's split week states its own time, from the rows it holds: its days share the learner's minutes,
+  // not the plan-wide split, so no format the week holds no rows of is offered. Other tracks' splits stay as they were.
+  // A week the file left empty is open, so its days are planned as a drafted week's are.
+  if (input.reason === "split" && input.importText && ((node.covers?.length ?? 0) > 0 || (node.practiceCovers?.length ?? 0) > 0)) node.time = splitWeekTime(node, input.hoursPerWeek);
   // A week split into a number of days other than its own takes that length before its days are planned.
   if (input.reason === "split" && input.splitDays && input.splitDays !== node.len) {
     node.len = input.splitDays;

@@ -75,4 +75,18 @@ describe("coverImportedRows", () => {
     expect(out.appended).toBe(1);
     expect(out.days[2].materials).toEqual([{ id: "b1", tier: "must", minutes: 30, note: null, chapter: 2 }]);
   });
+
+  it("takes a reading of a resource without chapters as held by any day reading that resource in other words", () => {
+    // The days put "Ch. 1–3" their own way: a part the week reserves no other way is theirs, so it is not added again.
+    const parent = week([], [{ id: "b1", note: "Ch. 1–3", chapter: null, tier: "must", minutes: 90 }]);
+    const days = [day("d1", [], [{ id: "b1", tier: "must", minutes: 45, note: "Chapters 1 and 2", chapter: null }]), day("d2", [], [{ id: "b1", tier: "must", minutes: 45, note: "Chapter 3", chapter: null }])];
+    expect(coverImportedRows(parent, days).appended).toBe(0);
+  });
+
+  it("still appends a part a day's reading holds only under another reserved part's own note", () => {
+    const parent = week([], [{ id: "b1", note: "Ch. 1–3", chapter: null, tier: "must", minutes: 90 }, { id: "b1", note: "Ch. 4", chapter: null, tier: "must", minutes: 30 }]);
+    const out = coverImportedRows(parent, [day("d1", [], [{ id: "b1", tier: "must", minutes: 90, note: "Ch. 1–3", chapter: null }]), day("d2")]);
+    expect(out.appended).toBe(1);
+    expect(out.days[1].materials).toEqual([{ id: "b1", tier: "must", minutes: 30, note: "Ch. 4" }]);
+  });
 });
