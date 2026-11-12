@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan import mocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Geist+Mono&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5ead8; --fg: #201e1d; --card: #ebddc5; --primary: #c67139; --on-primary: #f5ead8;
+  --muted: color-mix(in srgb, #201e1d 55%, transparent);
+  --faint: color-mix(in srgb, #201e1d 38%, transparent);
+  --line: color-mix(in srgb, #201e1d 12%, transparent);
+  --a100: #fff2eb; --a200: #ffe1d0; --a300: #ffc6a5; --a500: #d67f48; --a700: #9a5022;
+  --g100: #f0fae1; --g200: #e1eecc; --g500: #8fa073; --g600: #728157; --g800: #3d472b;
+  --n100: #f9f4ed; --n200: #eee7db; --n300: #dcd3c4; --n400: #c0b6a5; --n800: #474238;
+  --sh-sm: 0 1px 2px color-mix(in srgb, #2e2b25 14%, transparent);
+  --sh-lg: 0 12px 32px color-mix(in srgb, #2e2b25 22%, transparent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Figtree, system-ui, sans-serif; background: #d9ccb6; color: var(--fg); padding: 32px 24px 64px; font-size: 13px; }
+.page-title { font-family: Caprasimo, serif; font-weight: 400; font-size: 28px; max-width: 1280px; margin: 0 auto 6px; }
+.page-sub { max-width: 1280px; margin: 0 auto 8px; color: var(--n800); font-size: 15px; line-height: 1.45; }
+.label { max-width: 1280px; margin: 44px auto 12px; display: flex; flex-direction: column; gap: 4px; }
+.label b { font-family: Caprasimo, serif; font-weight: 400; font-size: 20px; }
+.label span { color: var(--n800); font-size: 14px; max-width: 920px; line-height: 1.45; }
+.window { width: 1280px; margin: 0 auto; border-radius: 14px; overflow: hidden; background: var(--bg); box-shadow: var(--sh-lg); }
+.muted { color: var(--muted); } .faint { color: var(--faint); }
+.topbar { height: 52px; display: flex; align-items: center; gap: 22px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+.topbar .brand { display: flex; align-items: center; gap: 8px; font-family: Caprasimo, serif; font-size: 16px; }
+.topbar .brand i { width: 22px; height: 22px; border-radius: 50%; background: var(--primary); }
+.topbar .t { font-size: 13px; font-weight: 500; color: var(--muted); }
+.topbar .t.on { color: var(--fg); font-weight: 600; }
+.topbar .av { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; background: var(--primary); }
+.shell { padding: 22px 28px 30px; }
+.crumb { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+h1.h { font-family: Caprasimo, serif; font-weight: 400; font-size: 26px; }
+.sub { color: var(--muted); font-size: 14px; margin-top: 6px; line-height: 1.45; }
+.cap { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+.btn { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 0 18px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--primary); color: var(--on-primary); white-space: nowrap; }
+.btn.ghost { background: var(--card); color: var(--fg); }
+.btn.sm { height: 28px; padding: 0 12px; font-size: 12px; }
+.more { color: var(--primary); font-weight: 600; }
+
+/* new-track form */
+.form { width: 640px; margin: 10px auto 0; display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 12.5px; font-weight: 600; }
+.input { height: 40px; border-radius: 12px; background: var(--n100); box-shadow: inset 0 0 0 1px var(--line); padding: 0 14px; display: flex; align-items: center; color: var(--faint); font-size: 13.5px; }
+.inrow { display: flex; gap: 12px; } .inrow .field { flex: 1; }
+.or { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 12px; margin: 6px 0; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.drop { border: 1.5px dashed var(--n400); border-radius: 20px; padding: 20px 22px; display: flex; gap: 16px; align-items: center; background: color-mix(in srgb, var(--n100) 60%, transparent); }
+.drop .ic { width: 44px; height: 44px; border-radius: 12px; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 20px; flex: none; }
+.drop b { font-size: 14px; display: block; } .drop small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 3px; line-height: 1.4; }
+.drop .btn { margin-left: auto; }
+.drop.busy { border-style: solid; border-color: var(--a300); background: var(--a100); }
+.bar { height: 6px; border-radius: 999px; background: var(--a200); overflow: hidden; margin-top: 10px; width: 360px; }
+.bar i { display: block; height: 100%; width: 62%; background: var(--primary); border-radius: 999px; }
+.steps { display: flex; gap: 14px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.steps .d { color: var(--g600); font-weight: 600; } .steps .n { color: var(--fg); font-weight: 600; }
+.err { border-radius: 16px; background: #fbe7dc; box-shadow: inset 0 0 0 1px #efc3a8; padding: 14px 16px; display: flex; gap: 12px; }
+.err .ic { width: 26px; height: 26px; border-radius: 50%; background: var(--a700); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
+.err b { display: block; font-size: 13.5px; } .err p { color: var(--n800); font-size: 13px; margin-top: 4px; line-height: 1.45; }
+
+/* draft page */
+.work { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; margin-top: 18px; align-items: start; }
+.plancol { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.glance { display: flex; gap: 22px; padding: 12px 18px; border-radius: 18px; background: var(--n100); box-shadow: var(--sh-sm); align-items: center; font-size: 12.5px; }
+.glance b { font-family: Caprasimo, serif; font-weight: 400; font-size: 17px; display: block; }
+.glance small { color: var(--muted); font-size: 11px; }
+.glance .src { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--card); font-weight: 600; font-size: 12px; }
+.tabsx { display: flex; gap: 6px; } .tabsx span { height: 26px; padding: 0 11px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; background: var(--n200); color: var(--muted); } .tabsx span.on { background: var(--fg); color: var(--bg); }
+.wk { border-radius: 24px; background: color-mix(in srgb, var(--fg) 5%, transparent); padding: 0 22px; min-height: 58px; display: flex; align-items: center; gap: 14px; }
+.wk .lb { width: 56px; flex: none; font-family: Caprasimo, serif; font-size: 12px; color: var(--a700); }
+.wk .tt { flex: 1; font-weight: 600; font-size: 14px; }
+.wk .tt small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.wk .r { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.wk.open { background: var(--n100); box-shadow: var(--sh-sm); flex-direction: column; align-items: stretch; padding: 16px 22px 18px; gap: 12px; }
+.wk.open .hd { display: flex; align-items: center; gap: 14px; }
+.sec { display: flex; flex-direction: column; gap: 4px; }
+.sec .cap { margin-bottom: 2px; }
+.rw { display: grid; grid-template-columns: 118px minmax(0,1fr) 64px; gap: 10px; align-items: baseline; padding: 6px 10px; border-radius: 10px; font-size: 13px; }
+.rw:nth-child(even) { background: color-mix(in srgb, var(--fg) 3%, transparent); }
+.rw .k { font-size: 11px; font-weight: 600; color: var(--n800); display: inline-flex; gap: 6px; align-items: center; }
+.rw .k i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.rw .m { color: var(--muted); font-size: 12px; text-align: right; }
+.rw .x small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chips span { font-family: "Geist Mono", monospace; font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--n200); }
+.k-read i { background: #9a5022; } .k-prob i { background: #556140; } .k-design i { background: #8fa073; } .k-other i { background: var(--n400); } .k-mock i { background: #c0cf9f; }
+.other-tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--n200); color: var(--n800); letter-spacing: .03em; }
+.done { border-radius: 12px; background: var(--g100); box-shadow: inset 0 0 0 1px var(--g200); padding: 9px 12px; font-size: 12.5px; color: var(--g800); line-height: 1.45; }
+.done b { font-weight: 700; }
+.splitbar { display: flex; align-items: center; gap: 10px; padding-top: 4px; border-top: 1px solid var(--line); padding-top: 12px; font-size: 12.5px; color: var(--muted); }
+.stepper { display: inline-flex; align-items: center; gap: 0; border-radius: 999px; background: var(--card); height: 28px; font-weight: 600; color: var(--fg); }
+.stepper span { padding: 0 10px; }
+.confirm { display: flex; align-items: center; gap: 14px; padding-top: 6px; }
+
+/* rails */
+.rail { background: var(--n100); border-radius: 18px; box-shadow: var(--sh-sm); display: flex; flex-direction: column; overflow: hidden; }
+.rail .top { padding: 13px 16px 11px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.rail .top .hd { display: flex; align-items: baseline; gap: 8px; }
+.rail .top .hd b { font-family: Caprasimo, serif; font-weight: 400; font-size: 17px; }
+.rail .scroll { padding: 6px 8px 10px; display: flex; flex-direction: column; }
+.rail .gl { margin: 10px 8px 4px; }
+.mi { display: flex; gap: 10px; padding: 7px 8px; border-radius: 10px; align-items: flex-start; }
+.mi .ic { width: 26px; height: 26px; border-radius: 7px; background: var(--card); flex: none; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.mi .m { flex: 1; min-width: 0; }
+.mi .m b { display: block; font-size: 12.5px; font-weight: 600; }
+.mi .m small { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+.mi.on { background: var(--a100); box-shadow: inset 2px 0 0 var(--primary); }
+.mi.on small em { font-style: normal; color: var(--a700); font-weight: 600; }
+.mi.dim { opacity: .6; }
+.nolink { font-size: 10px; font-weight: 600; color: var(--n800); background: var(--n200); padding: 1px 6px; border-radius: 999px; margin-left: 4px; }
+.rail .foot { padding: 9px 16px 12px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
+.chat { background: var(--n100); border-radius: 18px; box-shadow: var(--sh-sm); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.chat .hd { font-family: Caprasimo, serif; font-size: 17px; }
+.sys { font-size: 12.5px; line-height: 1.5; color: var(--n800); padding: 10px 12px; border-radius: 12px; background: var(--n200); }
+.sys b { color: var(--fg); }
+.sys ul { margin: 6px 0 0 16px; } .sys li { margin: 3px 0; }
+.sys.warn { background: var(--a100); box-shadow: inset 0 0 0 1px var(--a200); }
+.ask { height: 38px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); display: flex; align-items: center; padding: 0 12px; color: var(--faint); font-size: 12.5px; background: var(--bg); }
+.side { display: flex; flex-direction: column; gap: 14px; }
+
+/* days */
+.day { display: grid; grid-template-columns: 60px minmax(0,1fr) 60px; gap: 12px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--fg) 4%, transparent); align-items: start; }
+.day .dl { font-family: Caprasimo, serif; font-size: 12px; color: var(--a700); padding-top: 1px; }
+.day ul { list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.day li { display: flex; gap: 7px; align-items: baseline; } .day li i { width: 7px; height: 7px; border-radius: 2px; flex: none; transform: translateY(-1px); }
+.day .m { font-size: 12px; color: var(--muted); text-align: right; }
+.cover { border-radius: 14px; background: var(--g100); box-shadow: inset 0 0 0 1px var(--g200); padding: 10px 14px; font-size: 12.5px; color: var(--g800); display: flex; gap: 10px; align-items: center; }
+.note { max-width: 1280px; margin: 12px auto 0; font-size: 13px; color: var(--n800); line-height: 1.5; }
+/* the real draft page (PlanWorkspace) */
+.window.narrow { width: 1080px; }
+.ws { width: 820px; margin: 0 auto; padding: 20px 0 34px; }
+.back { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+.wsh { font-family: Caprasimo, serif; font-weight: 400; font-size: 22px; }
+.wss { color: var(--muted); font-size: 13.5px; margin: 8px 0 18px; line-height: 1.45; }
+.wsgrid { display: grid; grid-template-columns: minmax(0,1fr) 262px; gap: 18px; align-items: start; }
+.wscol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cardx { background: var(--card); border-radius: 28px; padding: 15px 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+.capx { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.sumx { font-size: 12.5px; line-height: 1.5; }
+.splithd, .mathd { display: flex; align-items: center; gap: 8px; }
+.mathd b { font-family: Caprasimo, serif; font-weight: 400; font-size: 17px; }
+.chipn { font-size: 10.5px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: var(--n100); color: var(--n800); white-space: nowrap; }
+.chipa { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--a200); color: var(--a700); }
+.splitmeta { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.chg { font-size: 11.5px; font-weight: 500; padding: 4px 12px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); }
+.sbar { display: flex; height: 7px; border-radius: 999px; overflow: hidden; gap: 1px; }
+.slegend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; }
+.slegend span { display: inline-flex; align-items: center; gap: 5px; } .slegend i { width: 8px; height: 8px; border-radius: 2px; }
+.matsub { font-size: 12px; line-height: 1.45; }
+.grp { font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.mrow { display: flex; gap: 10px; align-items: flex-start; padding: 2px 0; }
+.mic { width: 14px; text-align: center; color: var(--n800); font-size: 12px; padding-top: 1px; }
+.mtx { flex: 1; min-width: 0; font-size: 12px; } .mtx b { font-weight: 600; } .mtx .by { color: var(--muted); }
+.mtx small { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }
+.ff { font-size: 10.5px; font-weight: 600; color: var(--n800); background: var(--n200); padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.xx { color: var(--muted); font-size: 13px; padding: 0 4px; }
+.wkc { background: var(--card); border-radius: 18px; padding: 11px 14px 12px; display: flex; flex-direction: column; gap: 4px; border: 1px solid transparent; }
+.wkc.cur { background: var(--a100); border-color: var(--a300); }
+.wkh { display: flex; align-items: baseline; } .wl { font-family: Caprasimo, serif; font-size: 10.5px; color: #8c491a; }
+.bud { margin-left: auto; font-size: 11px; color: var(--muted); }
+.wkt { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+.rr { display: grid; grid-template-columns: 62px minmax(0,1fr) 52px; gap: 8px; align-items: center; font-size: 11.5px; }
+.rr .rt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); } .rr .rt b { color: var(--fg); font-weight: 500; }
+.rr .mn { text-align: right; color: var(--n800); font-size: 11px; }
+.rr.more .rt { font-style: italic; }
+.tg { justify-self: start; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+.tg.must { background: #8c491a; color: var(--bg); }
+.tg.pr { background: var(--g200); color: var(--g800); }
+.tg.ot { background: var(--n300); color: var(--n800); }
+.bl { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+.blb { display: flex; width: 100px; height: 4px; border-radius: 999px; overflow: hidden; background: var(--n300); }
+.spl { font-size: 11px; color: var(--a700); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+.spl u { text-underline-offset: 2px; } .spn { background: var(--a200); border-radius: 999px; padding: 0 6px; font-weight: 600; font-size: 10.5px; }
+.spl .faint { color: var(--faint); font-style: italic; }
+.btnc { display: inline-flex; height: 26px; align-items: center; padding: 0 12px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: 12px; font-weight: 500; margin-top: 8px; }
+.conv { background: var(--card); border-radius: 18px; padding: 13px 13px 12px; display: flex; flex-direction: column; gap: 9px; min-height: 560px; position: sticky; top: 10px; }
+.convh { display: flex; align-items: center; } .convh b { font-family: Caprasimo, serif; font-weight: 400; font-size: 14.5px; } .convh span { margin-left: auto; }
+.lockn { font-size: 11px; line-height: 1.45; color: var(--n800); background: color-mix(in srgb, var(--n100) 70%, transparent); border-radius: 12px; padding: 8px 10px; }
+.pmsg { font-size: 11.5px; line-height: 1.5; } .pmsg .who { font-size: 10.5px; font-weight: 600; color: #8c491a; display: block; margin-bottom: 3px; }
+.pmsg.warn { background: var(--a100); box-shadow: inset 0 0 0 1px var(--a200); border-radius: 12px; padding: 8px 10px; }
+.pmsg.chg { background: var(--n100); border-radius: 12px; padding: 8px 10px; }
+.undo { display: inline-block; margin-top: 4px; font-size: 11px; font-weight: 600; color: var(--a700); text-decoration: underline; }
+.umsg { align-self: flex-end; max-width: 85%; font-size: 11.5px; background: var(--n100); border-radius: 12px 12px 4px 12px; padding: 7px 10px; }
+.convsp { flex: 1; }
+.sugg { display: flex; flex-wrap: wrap; gap: 5px; } .sugg span { font-size: 10.5px; padding: 3px 8px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); background: var(--bg); }
+.cin { height: 34px; border-radius: 999px; background: var(--bg); display: flex; align-items: center; padding: 0 12px; font-size: 11px; color: var(--faint); }
+.cfoot { font-size: 9.5px; color: var(--faint); text-align: center; }
+.wkh2 { background: var(--card); border-radius: 28px; padding: 15px 18px 18px; display: flex; flex-direction: column; gap: 5px; border: 1px solid #e5a07a; }
+.hrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.h3x { font-family: Caprasimo, serif; font-size: 14.5px; }
+.pill { font-size: 10.5px; padding: 1px 8px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--primary); color: var(--primary); }
+.prog { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.pb { width: 48px; height: 5px; border-radius: 999px; background: var(--n200); display: inline-block; }
+.chev { font-size: 11px; color: var(--muted); }
+.wsum { font-size: 12px; opacity: .7; line-height: 1.45; margin-bottom: 3px; }
+.days { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-top: 8px; }
+.dc { background: color-mix(in srgb, var(--fg) 5%, var(--card)); border-radius: 18px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+.dc .dl { font-family: Caprasimo, serif; font-size: 10.5px; color: #8c491a; display: flex; } .dc .dl span { margin-left: auto; font-family: Figtree; color: var(--muted); }
+.dc b { font-size: 12px; font-weight: 500; line-height: 1.3; margin-bottom: 2px; }
+.dc small { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .dc small em { font-style: normal; color: var(--n800); }
+.dc .dt { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+</style>
+</head>
+<body>
+<h1 class="page-title">Plan import: a plan file becomes a track</h1>
+<p class="page-sub">Five screens, using <code>weekly-plan.md</code> as the example. The file's plan is copied as written: 8 weeks, each with its own materials and practice. Nothing is researched or looked up. The model only decides what the file leaves open, such as which day gets what when you split a week.</p>
+
+<!-- ============ 1 ============ -->
+<div class="label"><b>1 · New track page: import next to the goal form</b><span>The goal form stays as it is. Under it, a second way in: drop a plan file. Version 1 takes .md and .txt. The copy says up front that nothing is researched.</span></div>
+<div class="window">
+  <div class="topbar"><span class="brand"><i></i>Pensieve</span><span class="t on">Tracks</span><span class="t">Explore</span><span class="t">Journey</span><span class="av"></span></div>
+  <div class="shell">
+    <div class="form">
+      <div><h1 class="h">What do you want to learn?</h1><p class="sub">Give it a topic and any reference material. It drafts a plan you can shape before committing.</p></div>
+      <div class="field"><label>Topic</label><div class="input">e.g. Distributed systems for interviews</div></div>
+      <div class="inrow"><div class="field"><label>Weeks</label><div class="input">4</div></div><div class="field"><label>Hours a week</label><div class="input">6</div></div><div class="field"><label>Days a week</label><div class="input">5</div></div></div>
+      <span class="btn" style="width:100%;opacity:.5">Generate outline</span>
+      <div class="or">or</div>
+      <div class="drop">
+        <span class="ic">⇪</span>
+        <div><b>Already have a plan? Import it.</b><small>Drop a .md or .txt file. Pensieve copies your plan as written, with no research and no links looked up, then you review it before saving.</small></div>
+        <span class="btn ghost">Choose file</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 2 ============ -->
+<div class="label"><b>2 · Reading the file</b><span>A single model call converts the file. It takes seconds, not the minutes research takes. The learner stays on the page while it runs.</span></div>
+<div class="window">
+  <div class="topbar"><span class="brand"><i></i>Pensieve</span><span class="t on">Tracks</span><span class="t">Explore</span><span class="t">Journey</span><span class="av"></span></div>
+  <div class="shell">
+    <div class="form">
+      <div class="or" style="margin-top:0">or</div>
+      <div class="drop busy">
+        <span class="ic">▤</span>
+        <div style="flex:1"><b>weekly-plan.md <span class="faint" style="font-weight:500;font-size:12px">· 10 KB</span></b>
+          <div class="bar"><i></i></div>
+          <div class="steps"><span class="d">✓ Read the file</span><span class="d">✓ Found 8 weeks</span><span class="n">Sorting each week's materials…</span></div>
+        </div>
+        <span class="btn ghost sm">Cancel</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 3 ============ -->
+<div class="label"><b>3 · The draft page, with the file's plan already in place</b><span>Today's draft page, unchanged in layout: Summary, how the time splits, Materials, the Plan, and the Conversation panel. What's new is only what the import puts in it. The split card says "From your file". Materials have no links and say "From file" where checked ones say "Verified". Week cards use the rows they have today, plus a new grey "Other" chip. Every week is filled in from the file. The exit line becomes the week's summary, so it shows wherever summaries show today, not on this card.</span></div>
+<div class="window narrow">
+  <div class="topbar"><span class="brand"><i></i>Pensieve</span><span class="t on">Tracks</span><span class="t">Explore</span><span class="t">Journey</span><span class="av"></span></div>
+  <div class="ws">
+    <div class="back">← Tracks</div>
+    <h1 class="wsh">Here's the plan for "Weekly Plan, Nov 10 → Jan 3"</h1>
+    <p class="wss">Imported from weekly-plan.md as written. Nothing was researched. Skim the plan, split a week into days, then confirm, or talk it over on the right.</p>
+    <div class="wsgrid">
+      <div class="wscol">
+        <div class="cardx">
+          <span class="capx">Summary</span>
+          <p class="sumx">8 weeks, imported from weekly-plan.md, usually 5 study days a week: freeze + calibrate + Heap + framework, the headline number + CI, publish + resume + narratives, Batch 1 out, Batch 2: top targets, Batch 3 + interview mode, a light holiday week, and the January plan.</p>
+        </div>
+        <div class="cardx">
+          <div class="splithd"><span class="capx">How this plan spends your 94 h</span><span class="chipn">From your file</span><span class="splitmeta">13 h a week · 5 days a week</span><span class="chg">Change</span></div>
+          <div class="sbar"><i style="width:3%;background:#8c491a"></i><i style="width:38%;background:#556140"></i><i style="width:16%;background:#8fa073"></i><i style="width:6%;background:#c0cf9f"></i><i style="width:2%;background:#e1eecc"></i><i style="width:35%;background:#c0b6a5"></i></div>
+          <div class="slegend"><span><i style="background:#8c491a"></i>Reading · 3%</span><span><i style="background:#556140"></i>Problem sets · 38%</span><span><i style="background:#8fa073"></i>Design exercises · 16%</span><span><i style="background:#c0cf9f"></i>Mocks · 6%</span><span><i style="background:#e1eecc"></i>Recall · 2%</span><span><i style="background:#c0b6a5"></i>Other · 35%</span></div>
+        </div>
+        <div class="cardx">
+          <div class="mathd"><b>Materials</b><span class="chipn">6 · from your file, not checked</span><span class="splitmeta">Each week assigns a slice.</span></div>
+          <p class="matsub">Copied from your file with no links. Nothing was looked up, so sizes come from the hours your file gives.</p>
+          <span class="grp">Books</span>
+          <div class="mrow"><span class="mic">▤</span><div class="mtx"><b>System Design Interview, vol. 1</b><span class="by"> · Alex Xu · book</span><small>ch. 1–6, 10–11 · Weeks 1–3</small></div><span class="ff">From file</span><span class="xx">×</span></div>
+          <div class="mrow"><span class="mic">▤</span><div class="mtx"><b>System Design Interview, vol. 2</b><span class="by"> · Alex Xu · book</span><small>message queue, ad-click aggregation · Weeks 4–5</small></div><span class="ff">From file</span><span class="xx">×</span></div>
+          <span class="grp">Practice</span>
+          <div class="mrow"><span class="mic">✎</span><div class="mtx"><b>LeetCode</b><span class="by"> · problem set</span><small>44 numbered problems across Weeks 1–6, plus redos</small></div><span class="ff">From file</span><span class="xx">×</span></div>
+          <div class="mrow"><span class="mic">✎</span><div class="mtx"><b>interviewing.io</b><span class="by"> · mocks</span><small>coding, system design, eval/AI and behavioral mocks · Weeks 4–6</small></div><span class="ff">From file</span><span class="xx">×</span></div>
+          <span class="grp">Tools</span>
+          <div class="mrow"><span class="mic">⌘</span><div class="mtx"><b>job_scan.py</b><span class="by"> · tool</span><small>weekly posting re-scan · Week 6</small></div><span class="ff">From file</span><span class="xx">×</span></div>
+          <span class="grp">Other</span>
+          <div class="mrow"><span class="mic">◇</span><div class="mtx"><b>position_analysis.md</b><span class="by"> · other</span><small>per-company fit notes · Week 5</small></div><span class="ff">From file</span><span class="xx">×</span></div>
+        </div>
+
+        <span class="capx" style="margin:6px 0 -2px">Plan</span>
+
+        <div class="wkc cur">
+          <div class="wkh"><span class="wl">Week 1</span><span class="bud">13 h budget</span></div>
+          <div class="wkt">Nov 10–15 · freeze + calibrate + Heap + framework</div>
+          <div class="rr"><span class="tg must">Must</span><span class="rt"><b>System Design Interview, vol. 1</b> · Ch. 1–3</span><span class="mn">60 min</span></div>
+          <div class="rr"><span class="tg must">Must</span><span class="rt"><b>System Design Interview, vol. 1</b> · Ch. 4 · after Drill 1, to compare</span><span class="mn">20 min</span></div>
+          <div class="rr"><span class="tg pr">Problems</span><span class="rt"><b>LeetCode · Heap</b> · 703, 1046, 973, 215, 621, 355, 295</span><span class="mn">5 h</span></div>
+          <div class="rr"><span class="tg pr">Design</span><span class="rt"><b>Drill 1: rate limiter</b> · 45 min cold on paper, then a one-page note</span><span class="mn">1 h 40</span></div>
+          <div class="rr"><span class="tg ot">Other</span><span class="rt"><b>Merge or close the open branches</b> · feature freeze from here</span><span class="mn">1 h 40</span></div>
+          <div class="rr"><span class="tg ot">Other</span><span class="rt"><b>Copy results and calibration out of the worktree</b></span><span class="mn">40 min</span></div>
+          <div class="rr"><span class="tg ot">Other</span><span class="rt"><b>Grade the calibration files</b> · until every judge criterion is "checked"</span><span class="mn">2 h 40</span></div>
+          <div class="bl"><span class="blb"><i style="width:10%;background:#8c491a"></i><i style="width:90%;background:#8fa073"></i></span>1 h 20 must-read · 11 h 40 practice · 13 h</div>
+          <div class="spl"><u>Split into</u> <span class="spn">5 ▾</span> <u>days</u></div>
+        </div>
+
+        <div class="wkc">
+          <div class="wkh"><span class="wl">Week 2</span><span class="bud">13 h budget</span></div>
+          <div class="wkt">Nov 16–22 · the headline number + CI</div>
+          <div class="rr"><span class="tg must">Must</span><span class="rt"><b>System Design Interview, vol. 1</b> · Ch. 5–6, 10</span><span class="mn">60 min</span></div>
+          <div class="rr"><span class="tg pr">Problems</span><span class="rt"><b>LeetCode · Backtracking + Tries</b> · 78, 39, 46, 90, 79, 131, 208, 211</span><span class="mn">5 h</span></div>
+          <div class="rr"><span class="tg pr">Design</span><span class="rt"><b>Drill 2: key-value store</b></span><span class="mn">1 h</span></div>
+          <div class="rr"><span class="tg pr">Design</span><span class="rt"><b>Drill 3: notification system</b></span><span class="mn">1 h</span></div>
+          <div class="rr"><span class="tg ot">Other</span><span class="rt"><b>Multi-fixture benchmark round</b> · 3–4 topics, top 3 contestants, cap ~$25</span><span class="mn">3 h</span></div>
+          <div class="rr"><span class="tg ot">Other</span><span class="rt"><b>CI tier on GitHub Actions</b> · vitest and code-only checks, no paid calls</span><span class="mn">2 h</span></div>
+          <div class="bl"><span class="blb"><i style="width:8%;background:#8c491a"></i><i style="width:92%;background:#8fa073"></i></span>1 h must-read · 12 h practice · 13 h</div>
+          <div class="spl"><u>Split into</u> <span class="spn">5 ▾</span> <u>days</u></div>
+        </div>
+
+        <div class="wkc">
+          <div class="wkh"><span class="wl">Week 3</span><span class="bud">15 h budget</span></div>
+          <div class="wkt">Nov 23–29 · publish + resume + narratives</div>
+          <div class="rr"><span class="tg must">Must</span><span class="rt"><b>System Design Interview, vol. 1</b> · Ch. 11</span><span class="mn">20 min</span></div>
+          <div class="rr"><span class="tg pr">Problems</span><span class="rt"><b>LeetCode · Graphs, timed redos</b> · 200, 133, 207, 210, 417, 994, 684</span><span class="mn">5 h</span></div>
+          <div class="rr"><span class="tg pr">Design</span><span class="rt"><b>Drill 4: news feed</b></span><span class="mn">1 h</span></div>
+          <div class="rr"><span class="tg pr">Design</span><span class="rt"><b>Drill 5: design an LLM eval platform</b></span><span class="mn">1 h 40</span></div>
+          <div class="rr"><span class="tg ot">Other</span><span class="rt"><b>Commit docs/evals/</b> · report, summary, methodology.md</span><span class="mn">1 h 30</span></div>
+          <div class="rr"><span class="tg ot">Other</span><span class="rt"><b>README checklist, deploy, README rewrite</b></span><span class="mn">1 h 50</span></div>
+          <div class="rr more"><span class="tg ot">Other</span><span class="rt">+ 3 more: Loom, resume and narratives, book mocks</span><span class="mn">3 h 40</span></div>
+          <div class="spl"><u>Split into</u> <span class="spn">5 ▾</span> <u>days</u></div>
+        </div>
+
+        <div class="wkc"><div class="wkh"><span class="wl">Week 4</span><span class="bud">13 h budget</span></div><div class="wkt">Nov 30 – Dec 6 · Batch 1 out</div>
+          <div class="rr"><span class="tg pr">Problems</span><span class="rt"><b>LeetCode · 1-D DP</b> · 70, 198, 213, 322, 300, 139, 91, 416</span><span class="mn">5 h</span></div>
+          <div class="rr"><span class="tg pr">Mock</span><span class="rt"><b>Coding mock</b></span><span class="mn">1 h</span></div>
+          <div class="rr more"><span class="tg ot">Other</span><span class="rt">+ 4 more: Applications Batch 1, Drills 6–7, maintenance</span><span class="mn">7 h</span></div>
+          <div class="spl"><u>Split into</u> <span class="spn">5 ▾</span> <u>days</u></div></div>
+        <div class="wkc"><div class="wkh"><span class="wl">Week 5</span><span class="bud">13 h budget</span></div><div class="wkt">Dec 7–13 · Batch 2: top targets</div><div class="spl"><u>Split into</u> <span class="spn">5 ▾</span> <u>days</u> <span class="faint">· 6 rows, collapsed in this mock</span></div></div>
+        <div class="wkc"><div class="wkh"><span class="wl">Week 6</span><span class="bud">13 h budget</span></div><div class="wkt">Dec 14–20 · Batch 3 + interview mode</div><div class="spl"><u>Split into</u> <span class="spn">5 ▾</span> <u>days</u> <span class="faint">· 6 rows, collapsed in this mock</span></div></div>
+        <div class="wkc"><div class="wkh"><span class="wl">Week 7</span><span class="bud">7 h budget</span></div><div class="wkt">Dec 21–27 · holiday, light</div>
+          <div class="rr"><span class="tg pr">Recall</span><span class="rt"><b>Redo the two weakest drills</b> · 45 min each</span><span class="mn">1 h 30</span></div>
+          <div class="rr"><span class="tg pr">Problems</span><span class="rt"><b>LeetCode · redos</b> · 1 a day</span><span class="mn">3 h</span></div>
+          <div class="rr"><span class="tg ot">Other</span><span class="rt"><b>Prep for booked screens</b> · company-tagged problems</span><span class="mn">2 h 30</span></div>
+          <div class="spl"><u>Split into</u> <span class="spn">5 ▾</span> <u>days</u></div></div>
+        <div class="wkc"><div class="wkh"><span class="wl">Week 8</span><span class="bud">7 h budget</span></div><div class="wkt">Dec 28 – Jan 3</div><div class="spl"><u>Split into</u> <span class="spn">5 ▾</span> <u>days</u> <span class="faint">· 4 rows, collapsed in this mock</span></div></div>
+
+        <div><span class="btnc">Confirm plan</span></div>
+      </div>
+
+      <aside class="conv">
+        <div class="convh"><b>Conversation</b><span>›</span></div>
+        <div class="lockn">▤ Imported from weekly-plan.md. No research ran, and nothing was looked up.</div>
+        <div class="pmsg"><span class="who">● Pensieve</span><p>Here's your plan as the file has it: 8 weeks, 6 materials, and every week's reading and practice. What the file doesn't say, like how a week splits into days, I'll decide when you ask.</p></div>
+        <div class="pmsg"><p><b>Kept as context, not as weeks:</b> Target, Shape of the next 8 weeks, Where you start, Rules. I read them when you ask for changes.</p></div>
+        <div class="pmsg warn"><p><b>Couldn't place 1 section:</b> Eval-interview prep (ongoing from Week 3). It isn't tied to one week. Tell me where it goes, or leave it as context.</p></div>
+        <div class="convsp"></div>
+        <div class="sugg"><span>Put eval-interview prep in Weeks 3–6</span><span>Split Week 1 into days</span></div>
+        <div class="cin">e.g. move Drill 5 to Week 4</div>
+        <small class="cfoot">Ask a question or describe a change. Answers leave the plan alone.</small>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 4 ============ -->
+<div class="label"><b>4 · Week 1 after "Split into 5 days"</b><span>Today's split view: the week becomes a heading with the "5 days" pill and "Split by hand". Its rows stay listed, and the day cards follow. The file gives Week 1 as a whole, so the model decides which day gets what. It may spread a row across days (7 Heap problems over 5), but every item the week names lands on some day. If the file had listed days, they would be kept as written.</span></div>
+<div class="window narrow">
+  <div class="topbar"><span class="brand"><i></i>Pensieve</span><span class="t on">Tracks</span><span class="t">Explore</span><span class="t">Journey</span><span class="av"></span></div>
+  <div class="ws">
+    <div class="wsgrid">
+      <div class="wscol">
+        <span class="capx" style="margin-bottom:-2px">Plan</span>
+        <div class="wkh2">
+          <div class="hrow"><span class="wl">Week 1</span><span class="h3x">Nov 10–15 · freeze + calibrate + Heap + framework</span><span class="pill">5 days</span><span class="chipn">Split by hand</span><span class="chipa">Changed</span><span class="prog"><span class="pb"></span>0 of 5 days</span><span class="chev">⌃</span></div>
+          <p class="wsum">Open branches closed; results saved; judge agreement measured per criterion; 7 heap problems.</p>
+          <div class="rr"><span class="tg must">Must</span><span class="rt"><b>System Design Interview, vol. 1</b> · Ch. 1–4</span><span class="mn">80 min</span></div>
+          <div class="rr"><span class="tg pr">Problems</span><span class="rt"><b>LeetCode · Heap</b> · 7 problems</span><span class="mn">5 h</span></div>
+          <div class="rr"><span class="tg pr">Design</span><span class="rt"><b>Drill 1: rate limiter</b></span><span class="mn">1 h 40</span></div>
+          <div class="rr"><span class="tg ot">Other</span><span class="rt"><b>3 Pensieve tasks</b> · branches, results, calibration</span><span class="mn">5 h</span></div>
+          <div class="bl"><span class="blb"><i style="width:10%;background:#8c491a"></i><i style="width:90%;background:#8fa073"></i></span>1 h 20 must-read · 11 h 40 practice · 13 h</div>
+          <div class="days">
+            <div class="dc"><span class="dl">Day 1 <span>⌄</span></span><b>Freeze and scaling basics</b><small><em>Other</em> · Merge or close the open branches</small><small><em>Ch. 1</em> · Scaling from zero</small><small><em>Problems</em> · 703, 1046</small><span class="dt">2 h 40</span></div>
+            <div class="dc"><span class="dl">Day 2 <span>⌄</span></span><b>Results safe, estimation and the framework</b><small><em>Other</em> · Copy results out of the worktree</small><small><em>Ch. 2–3</em> · Back-of-envelope, 4 steps</small><small><em>Problems</em> · 973</small><span class="dt">2 h 30</span></div>
+            <div class="dc"><span class="dl">Day 3 <span>⌄</span></span><b>Grading the outline judge</b><small><em>Other</em> · Grade the outline calibration files</small><small><em>Problems</em> · 215, 621</small><span class="dt">2 h 40</span></div>
+            <div class="dc"><span class="dl">Day 4 <span>⌄</span></span><b>Rate limiter drill</b><small><em>Design</em> · Drill 1, 45 min cold</small><small><em>Ch. 4</em> · Compare, one-page note</small><small><em>Problems</em> · 355</small><span class="dt">2 h 30</span></div>
+            <div class="dc"><span class="dl">Day 5 <span>⌄</span></span><b>Allocate calibration and the last heap</b><small><em>Other</em> · --calibrate, grade allocate</small><small><em>Problems</em> · 295</small><span class="dt">2 h 40</span></div>
+          </div>
+        </div>
+        <div class="wkc"><div class="wkh"><span class="wl">Week 2</span><span class="bud">13 h budget</span></div><div class="wkt">Nov 16–22 · the headline number + CI</div><div class="spl"><u>Split into</u> <span class="spn">5 ▾</span> <u>days</u> <span class="faint">· rows collapsed in this mock</span></div></div>
+      </div>
+      <aside class="conv">
+        <div class="convh"><b>Conversation</b><span>›</span></div>
+        <div class="lockn">▤ Imported from weekly-plan.md. No research ran, and nothing was looked up.</div>
+        <div class="umsg">Split Week 1 into 5 days</div>
+        <div class="pmsg chg"><span class="who">● Pensieve · changed Week 1</span><p>Your file plans Week 1 as a whole, so I spread it out: the Pensieve tasks early in the week, the drill after ch. 1–3, and the 7 heap problems at 1–2 a day. Every item the week names is on a day.</p><span class="undo">Undo</span></div>
+        <div class="convsp"></div>
+        <div class="cin">e.g. keep Friday light</div>
+        <small class="cfoot">Ask a question or describe a change. Answers leave the plan alone.</small>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 5 ============ -->
+<div class="label"><b>5 · No plan in the file</b><span>The model decides whether the file holds a plan. A reading list, a syllabus or notes with no timeline get a plain refusal. No track is created, and nothing is charged beyond the one call. The message points back to the normal flow, which can use the file as a source.</span></div>
+<div class="window">
+  <div class="topbar"><span class="brand"><i></i>Pensieve</span><span class="t on">Tracks</span><span class="t">Explore</span><span class="t">Journey</span><span class="av"></span></div>
+  <div class="shell">
+    <div class="form">
+      <div class="or" style="margin-top:0">or</div>
+      <div class="err"><span class="ic">!</span><div><b>Couldn't find a plan in reading-list.md</b>
+        <p>It lists 12 books and courses, but no weeks, days or order to follow. Import only copies plans that already exist. To have Pensieve build one from this list, use the form above and add the file as a source.</p></div></div>
+      <div class="drop">
+        <span class="ic">⇪</span>
+        <div><b>Try another file</b><small>.md or .txt with weeks, days or months in it.</small></div>
+        <span class="btn ghost">Choose file</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="note">Screens 3 and 4 follow today's draft page (<code>PlanWorkspace</code>, the same layout as "Adjust your plan"). The only new pieces are the grey "Other" chip, a "From file" badge in place of "Verified", "From your file" on the split card, and the import notes in Conversation. Numbers are illustrative.</p>
+</body>
+</html>
