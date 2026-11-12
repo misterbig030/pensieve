@@ -297,6 +297,30 @@ describe("applyRevision with practice", () => {
   const revise = (original: ReturnType<typeof withPractice>, units: Parameters<typeof applyRevision>[2]["units"]) =>
     applyRevision(original, assignRefs(original), { units }, 0, "day", aliases, undefined, 7, split);
 
+  it("keeps an imported sourceless row the model writes back, though its format is not a pick", () => {
+    const imported = { format: "problem-set" as const, id: null, task: "LeetCode 703", done: "Solved", minutes: 30, generated: true, imported: true };
+    const original = layout(makeRoot([makeNode({ id: "d1", level: "day", title: "A", summary: "a", len: 1, practice: [imported] }), makeNode({ id: "d2", level: "day", title: "B", summary: "b", len: 1 })]));
+    const onlyRecall = { ...split, formats: [split.formats[1]] };
+    const result = applyRevision(
+      original,
+      assignRefs(original),
+      {
+        units: [
+          { ref: "n1", title: "A", summary: "a", days: 1, practice: [{ format: "Problem-Set", task: " LeetCode 703 ", done: "Solved", minutes: 30 }, { format: "problem-set", task: "A new one", done: "x", minutes: 20 }] },
+          { ref: "n2", title: "B", summary: "b", days: 1 },
+        ],
+      },
+      0,
+      "day",
+      aliases,
+      undefined,
+      7,
+      onlyRecall,
+    );
+    // The kept row returns marked imported; a row the model adds is judged as usual and refused.
+    expect(result.children![0].practice).toEqual([imported]);
+  });
+
   it("keeps a leaf's practice when the model leaves it out", () => {
     const result = revise(withPractice(), [
       { ref: "n1", title: "A, renamed", summary: "a", days: 1 },

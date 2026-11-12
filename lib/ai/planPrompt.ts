@@ -2,6 +2,8 @@ import {
   aliasMaterials,
   draftedSplit,
   fitWeekToDays,
+  importedCovers,
+  importedFormats,
   formatAliases,
   itemAliases,
   isKeptUnit,
@@ -428,7 +430,7 @@ export function buildUnitsPrompt(input: UnitsPromptInput): string {
 
   // Days are the days of one week, so the week's day count is the number of units asked for.
   const daysInWeek = input.level === "day" ? n : input.daysPerWeek;
-  const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
+  const picks = pickSources(input.split, input.materials, importedCovers(parentNodeOf(input))).filter((p) => p.assignable);
   // Each line gives the unit's hours only: how it spends them is the unit's own, out of the totals the time rules state.
   // After fixed units, the lines are numbered on from them. Blocks of weeks after fixed weeks are named by their weeks.
   const offset = kept ? input.keep!.length : 0;
@@ -521,7 +523,7 @@ function readingTotal(input: UnitsPromptInput): number {
  * to share.
  */
 function totalsSentence(input: UnitsPromptInput, aliases: MaterialAliases | undefined, withoutBlocks = false): string | null {
-  const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
+  const picks = pickSources(input.split, input.materials, importedCovers(parentNodeOf(input))).filter((p) => p.assignable);
   if (input.materials.length === 0 && picks.length === 0) return null;
   const budgets = parentBudgetsOf(input);
   const shown = picks.filter((p) => !(withoutBlocks && isBlockFormat(p.pick.format)));
@@ -547,7 +549,7 @@ function totalsSentence(input: UnitsPromptInput, aliases: MaterialAliases | unde
 
 /** "Design and Mock come in whole blocks: …", for the picks that do; empty when none does. */
 function wholeBlocksSentence(input: UnitsPromptInput): string {
-  const blocks = pickSources(input.split, input.materials)
+  const blocks = pickSources(input.split, input.materials, importedCovers(parentNodeOf(input)))
     .filter((p) => p.assignable && isBlockFormat(p.pick.format))
     .map((p) => PRACTICE_REGISTRY[p.pick.format].label);
   if (blocks.length === 0) return "";
@@ -756,11 +758,13 @@ function cutSourceRule(picks: PickSources[], materials: Material[]): string | nu
  * one per line, and each is one row.
  */
 function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): string | null {
-  const picks = pickSources(input.split, input.materials).filter((p) => p.assignable);
+  const picks = pickSources(input.split, input.materials, importedCovers(parentNodeOf(input))).filter((p) => p.assignable);
   if (picks.length === 0) return null;
   const days = input.level === "day";
   const noun = UNIT_NOUN[input.level];
   const parent = parentNodeOf(input);
+  // The learner's own rows from an imported plan: fixed minutes that no rule rounds, tops up or cuts.
+  const imported = importedFormats(importedCovers(parent));
   // Days inside a week that reserves listed runs do exactly those items: what a run frees or takes is block time,
   // for blocks the days write themselves when the week reserves none (`weekPracticeTime`, as the checks hold it).
   const runs = days ? reservedRuns(parent, input.materials, input.tree, (id) => takenPositions(input, id)) : {};
@@ -771,7 +775,7 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   // hold; blocks the days write are a most, not a target (`fitWeekToDays`).
   const shared = parentBudgetsOf(input);
   const budgets = days
-    ? fitWeekToDays(held ? weekPracticeTime(shared, runs) : shared, runs, day, daysInWeek, held)
+    ? fitWeekToDays(held ? weekPracticeTime(shared, runs, imported) : shared, runs, day, daysInWeek, held, imported)
     : { ...shared, blocks: {} as Partial<Record<PracticeFormat, number>> };
   const span = parent && input.tree ? weeksOf(input.tree, parent, input.daysPerWeek) : input.weeks - keptWeeks(input);
   const total = days ? day * daysInWeek : budgetFor(span, input.hoursPerWeek) * 60;
@@ -784,6 +788,10 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
   for (const p of picks) {
     const spec = PRACTICE_REGISTRY[p.pick.format];
     const size = days ? blockMinutes(p.pick.format, day) : spec.fixedMinutes;
+    if (imported.includes(p.pick.format)) {
+      lines.push(`- ${pickName(p.pick.format)}: about ${formatTime(budgets.practice[p.pick.format] ?? 0)} ${scope}, the learner's own tasks from their plan file. The app places them as written: write no ${spec.label} rows.`);
+      continue;
+    }
     const count = budgets.blocks[p.pick.format];
     // A parent that states its own time gives a format it left out none.
     const minutes = budgets.practice[p.pick.format] ?? 0;

@@ -125,7 +125,7 @@ export function applyRevision(
         : kept?.practiceCovers;
     const practice =
       aliases && unit.practice !== undefined
-        ? keptItemless(resolvePracticeRefs(unit.practice, aliases, split, (materials ?? []).map((r) => r.id), SAVED).refs, kept?.practice, aliases)
+        ? keptItemless(resolvePracticeRefs(markImported(unit.practice, kept?.practice), aliases, split, (materials ?? []).map((r) => r.id), SAVED).refs, kept?.practice, aliases)
         : kept?.practice;
     let time = leaf ? undefined : kept?.time;
     if (unit.time && !leaf) {
@@ -159,6 +159,19 @@ export function applyRevision(
     if (isLocked(node, lockBefore) && !findNode(root, node.id)) throw new LockedNodeError(describe(original, node));
   });
   return layout(root);
+}
+
+/**
+ * The model's rewritten rows never say which came from the learner's plan file. A row of the same format and task as an
+ * imported row the leaf already had is that row, kept: it is marked `imported` so the rules that refuse a row of an
+ * unpicked or never-written format let it through. A row the model dropped stays dropped, and a new one is judged as usual.
+ */
+export function markImported(drafts: PracticeRefDraft[], before: PracticeRef[] | undefined): PracticeRefDraft[] {
+  const imported = (before ?? []).filter((r) => r.imported === true);
+  if (imported.length === 0) return drafts;
+  const key = (format: string, task: string) => `${format.trim().toLowerCase()}\u0000${task.trim()}`;
+  const known = new Set(imported.map((r) => key(r.format, r.task)));
+  return drafts.map((d) => (known.has(key(d.format, d.task)) ? { ...d, imported: true } : d));
 }
 
 /**

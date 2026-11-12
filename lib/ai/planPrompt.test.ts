@@ -201,6 +201,28 @@ describe("materials in prompts", () => {
     expect(prompt).toContain("{covers M1 (ch. 1–4)}");
   });
 
+  it("lists an imported week's unpicked rows with their minutes when planning its days", () => {
+    const week = makeNode({
+      id: "w1",
+      level: "week",
+      title: "Imported",
+      summary: "s",
+      len: 5,
+      manualSplit: true,
+      practiceCovers: [
+        { format: "other", id: null, note: null, task: "Merge the branches", minutes: 100, imported: true },
+        { format: "problem-set", id: null, note: null, task: "LeetCode 703", minutes: 30, imported: true },
+      ],
+    });
+    const root = layout(makeRoot([week]));
+    const split = { readingShare: 50, practice: "recall", reason: "", formats: [{ format: "recall" as const, share: 100, focus: "terms", reason: "" }] };
+    const prompt = buildUnitsPrompt({ topic: "X", materials: MATERIALS, granularity: "day", level: "day", spans: [1, 1, 1, 1, 1], weeks: 1, daysPerWeek: 5, hoursPerWeek: 6, tree: root, parentId: "w1", unitsAreLeaves: true, split });
+    expect(prompt).toContain("- Other (format \"other\"): about 1 h 40 min this week, the learner's own tasks from their plan file.");
+    expect(prompt).toContain("- Problems (format \"problem-set\"): about 30 min this week, the learner's own tasks from their plan file.");
+    // The week's imported minutes are held whole, so the other formats and reading fit what the days have left.
+    expect(prompt).toContain("write no Other rows");
+  });
+
   it("leaves materials out when the plan has none", () => {
     const prompt = buildUnitsPrompt({ topic: "X", materials: [], granularity: "day", level: "day", spans: [1], weeks: 1, daysPerWeek: 7, unitsAreLeaves: true });
     expect(prompt).not.toMatch(/materials|"covers"|must/i);

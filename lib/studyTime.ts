@@ -99,6 +99,7 @@ export function hoursInText(text: string): number | null {
 export const planSplitSchema = z.object({
   readingShare: z.number().int().min(0).max(100),
   practice: z.string().trim().min(1).max(40),
+  // Capped at every format so an imported split may carry one pick per format; drafted splits stay capped at MAX_PRACTICE_PICKS (`normalizePicks`).
   formats: z.array(practicePickSchema).max(PRACTICE_FORMATS.length).optional(),
   reason: z.string().trim().max(300),
 });

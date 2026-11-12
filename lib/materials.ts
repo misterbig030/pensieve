@@ -576,13 +576,38 @@ export function pickSources(
 ): PickSources[] {
   // A source that also serves as practice is still reading, so recall can be written from it.
   const hasReading = materials.some((m) => !isPracticeOnly(m));
-  return activePicks(split).map((pick) => {
+  const picks = activePicks(split).map((pick) => {
     const sources = materials.filter((m) => m.practice?.format === pick.format).map((m) => m.id);
     const rule = PRACTICE_REGISTRY[pick.format].generated;
     const writable = rule !== "never" && (rule !== "from-reading" || hasReading);
     const imported = covers.some((c) => c.format === pick.format && c.imported === true);
     return { pick, sources, assignable: sources.length > 0 || writable || imported };
   });
+  // A format the plan holds imported rows of is assignable though the split never picked it ("other", an unpicked problem-set).
+  const picked = new Set(picks.map((p) => p.pick.format));
+  const extra = PRACTICE_FORMATS.filter((f) => !picked.has(f) && covers.some((c) => c.format === f && c.imported === true)).map((format) => ({
+    pick: { format, share: 0, focus: "the tasks in the learner's plan file", reason: "" },
+    sources: [],
+    assignable: true,
+  }));
+  return [...picks, ...extra];
+}
+
+/** The imported reservations a unit holds: the learner's own rows, kept whole through every rule that shares its time. */
+export function importedCovers(node: PlanNode | null | undefined): PracticeCover[] {
+  return (node?.practiceCovers ?? []).filter((c) => c.imported === true);
+}
+
+/** The formats `covers` hold imported rows of. */
+export function importedFormats(covers: readonly Pick<PracticeCover, "format" | "imported">[]): PracticeFormat[] {
+  return PRACTICE_FORMATS.filter((f) => covers.some((c) => c.format === f && c.imported === true));
+}
+
+/** The minutes of the imported reservations in `covers`, by format. */
+export function importedMinutes(covers: readonly Pick<PracticeCover, "format" | "imported" | "minutes">[]): Partial<Record<PracticeFormat, number>> {
+  const out: Partial<Record<PracticeFormat, number>> = {};
+  for (const c of covers) if (c.imported === true) out[c.format] = (out[c.format] ?? 0) + (c.minutes ?? 0);
+  return out;
 }
 
 /**
@@ -616,6 +641,7 @@ export function practiceBudgets(
   split: PlanSplit | null | undefined,
   weekMinutes: number,
   materials: Pick<Material, "id" | "practice" | "minutes">[],
+  covers: readonly Pick<PracticeCover, "format" | "imported">[] = [],
 ): ReturnType<typeof weekBudgets> {
   if (activePicks(split).length === 0) {
     // All reading is all of the week, whatever share an all-reading pick shows.
@@ -623,7 +649,7 @@ export function practiceBudgets(
     return { reading: Math.round(weekMinutes * share), practice: {} };
   }
   const budgets = weekBudgets(split, weekMinutes);
-  for (const { pick, assignable } of pickSources(split, materials)) {
+  for (const { pick, assignable } of pickSources(split, materials, covers)) {
     if (assignable) continue;
     budgets.reading += budgets.practice[pick.format] ?? 0;
     delete budgets.practice[pick.format];
@@ -651,9 +677,13 @@ export interface UnitBudgets {
  * outline decided them), the plan-wide split of its share of the weeks (`practiceBudgets`).
  */
 export function unitBudgets(root: PlanNode, node: PlanNode, ctx: BudgetContext): UnitBudgets {
-  if (node.time) return { reading: node.time.reading, practice: { ...node.time.practice }, stated: true };
+  // The learner's imported rows are fixed time: a format holding them has exactly their minutes, picked or not.
+  const covers = importedCovers(node);
+  const imported = importedMinutes(covers);
+  const withImported = (b: UnitBudgets): UnitBudgets => (covers.length === 0 ? b : { ...b, practice: { ...b.practice, ...imported } });
+  if (node.time) return withImported({ reading: node.time.reading, practice: { ...node.time.practice }, stated: true });
   const minutes = budgetFor(weeksOf(root, node, ctx.daysPerWeek), ctx.hoursPerWeek) * 60;
-  return { ...practiceBudgets(ctx.split, minutes, ctx.materials), stated: false };
+  return withImported({ ...practiceBudgets(ctx.split, minutes, ctx.materials, covers), stated: false });
 }
 
 /**

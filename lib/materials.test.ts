@@ -1531,6 +1531,17 @@ describe("imported practice in the checks and the week's time", () => {
     expect(pickSources(picks, [{ id: "R", minutes: 10 }], [{ format: "problem-set" }])[0].assignable).toBe(false);
     expect(pickSources(picks, [{ id: "R", minutes: 10 }], [{ format: "mock", imported: true }])[0].assignable).toBe(false);
   });
+  it("pickSources lists an unpicked format an imported cover holds as an assignable pick; unitBudgets gives it the cover's minutes", () => {
+    const covers: PracticeCover[] = [
+      { format: "other", id: null, note: null, task: "Merge", minutes: 60, imported: true },
+      { format: "other", id: null, note: null, task: "Tag", minutes: 40, imported: true },
+    ];
+    const picks = pickSources(split, [{ id: "R", minutes: 10 }], covers);
+    expect(picks.map((p) => [p.pick.format, p.assignable])).toEqual([["recall", true], ["other", true]]);
+    const week = makeNode({ id: "w1", level: "week", title: "W", summary: "s", len: 5, practiceCovers: covers });
+    const root = layout(makeRoot([week]));
+    expect(unitBudgets(root, root.children![0], { split, hoursPerWeek: 6, daysPerWeek: 5, materials: [{ id: "R", minutes: 10 }] }).practice.other).toBe(100);
+  });
   it("weekPracticeTime and fitWeekToDays keep an imported format's minutes whole", () => {
     const budgets = { reading: 60, practice: { mock: 90, "design-exercise": 60 } as Partial<Record<PracticeFormat, number>> };
     // Without the flag mock is cut to whole blocks of its fixed size; imported, it stays at its 90.
