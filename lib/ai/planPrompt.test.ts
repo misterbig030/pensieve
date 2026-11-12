@@ -220,7 +220,9 @@ describe("materials in prompts", () => {
     expect(prompt).toContain("- Other (format \"other\"): about 1 h 40 min this week, the learner's own tasks from their plan file.");
     expect(prompt).toContain("- Problems (format \"problem-set\"): about 30 min this week, the learner's own tasks from their plan file.");
     // The week's imported minutes are held whole, so the other formats and reading fit what the days have left.
-    expect(prompt).toContain("write no Other rows");
+    expect(prompt).toContain('"Merge the branches"');
+    expect(prompt).toContain('"LeetCode 703"');
+    expect(prompt).toContain("copying its task text exactly, and write no other Other rows");
   });
 
   it("leaves materials out when the plan has none", () => {

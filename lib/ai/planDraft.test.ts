@@ -11,7 +11,7 @@ import type { ModelCall } from "./logged";
 import type { ServiceEvent } from "./serviceEvents";
 import { STRUCTURE_ALLOCATE_MIN_MS, STRUCTURE_RESERVE_MS, type StructureFinder } from "./research/structureFinder";
 import { SourceFetcher } from "./research/tools";
-import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, timeOverLimit, toUnitTime, draftLevel, streamPlanDraft, streamResearchedPlanDraft, weekLeafBlocks } from "./planDraft";
+import { DRAFT_BUDGET_MS, OUTLINE_RESERVE_MS, STEP_MIN_MS, nodeFor, streamExpandNode, timeOverLimit, toUnitTime, draftLevel, applyUnitRefs, streamPlanDraft, streamResearchedPlanDraft, weekLeafBlocks } from "./planDraft";
 import { MAX_UNIT_MINUTES, unitTimeSchema } from "@/lib/schemas/plan";
 import type { ResolvedModel } from "./resolve";
 import type { PlanDraftEvent, PlanExpandEvent } from "@/lib/planChat";
@@ -1176,5 +1176,29 @@ describe("draftLevel's outline call", () => {
     const { done } = await run({ ...base, materials: [] }, [{ title: "D1", summary: "s" } as UnitDraft]);
     expect(done.breaches).toEqual([]);
     expect(done.units).toHaveLength(1);
+  });
+});
+
+describe("a day draft against its parent's imported rows", () => {
+  const aliases = aliasMaterials([{ id: "book" }]);
+  const split = { readingShare: 50, practice: "recall", reason: "", formats: [{ format: "recall" as const, share: 100, focus: "terms", reason: "" }] };
+  const parent = [{ format: "other" as const, id: null, note: null, task: "Merge or close the open branches in the repository", minutes: 100, imported: true }];
+  const day = (task: string) => ({ title: "Day", summary: "s", practice: [{ format: "other", task, done: "Done", minutes: 100 }] }) as unknown as UnitDraft;
+  const apply = (task: string) => {
+    const node = makeNode({ level: "day", title: "Day", summary: "s", len: 1 });
+    const out = applyUnitRefs(node, day(task), true, aliases, split, undefined, parent);
+    return { node, out };
+  };
+  it("keeps a copy of a parent's imported other task as imported, exactly or by its first 24 characters", () => {
+    for (const task of ["Merge or close the open branches in the repository", "Merge or close the open branches (day 1)"]) {
+      const { node, out } = apply(task);
+      expect(out.refused).toEqual([]);
+      expect(node.practice).toMatchObject([{ format: "other", id: null, imported: true }]);
+    }
+  });
+  it("still refuses a new other task that matches nothing", () => {
+    const { node, out } = apply("Learn the guitar");
+    expect(out.refused).toHaveLength(1);
+    expect(node.practice).toBeUndefined();
   });
 });

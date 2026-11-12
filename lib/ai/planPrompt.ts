@@ -789,7 +789,11 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     const spec = PRACTICE_REGISTRY[p.pick.format];
     const size = days ? blockMinutes(p.pick.format, day) : spec.fixedMinutes;
     if (imported.includes(p.pick.format)) {
-      lines.push(`- ${pickName(p.pick.format)}: about ${formatTime(budgets.practice[p.pick.format] ?? 0)} ${scope}, the learner's own tasks from their plan file. The app places them as written: write no ${spec.label} rows.`);
+      const theirs = importedCovers(parent).filter((c) => c.format === p.pick.format);
+      lines.push(
+        `- ${pickName(p.pick.format)}: about ${formatTime(budgets.practice[p.pick.format] ?? 0)} ${scope}, the learner's own tasks from their plan file. Place each of these on exactly one ${noun}, copying its task text exactly, and write no other ${spec.label} rows:`,
+        ...theirs.map((c) => `  - "${c.task}" — ${formatMinutes(c.minutes ?? 0)}`),
+      );
       continue;
     }
     const count = budgets.blocks[p.pick.format];

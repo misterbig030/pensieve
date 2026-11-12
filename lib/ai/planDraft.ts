@@ -9,6 +9,8 @@ import {
   resolveCoverRefs,
   resolveMaterialRefs,
   resolvePracticeCovers,
+  importedCovers,
+  markImported,
   resolvePracticeRefs,
   sizeChapterRows,
   sizeItemRuns,
@@ -34,7 +36,7 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import type { PracticeFormat } from "@/lib/practice";
-import type { Material } from "@/lib/schemas/material";
+import type { Material, PracticeCover } from "@/lib/schemas/material";
 import { capProblems, MAX_UNIT_MINUTES, unitListSchema, type UnitDraft, type UnitTime, type unitTimeDraftSchema } from "@/lib/schemas/plan";
 import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortSettings, emitGenerationLog, type GenerationLogContext } from "./logged";
@@ -143,6 +145,7 @@ export function nodeFor(
   hoursPerWeek?: number,
   split?: PlanSplit | null,
   picked?: readonly PracticeFormat[],
+  parentCovers?: readonly PracticeCover[],
 ): PlanNode {
   const leaf = unitsAreLeaves(level, granularity);
   const node = makeNode({
@@ -153,7 +156,7 @@ export function nodeFor(
     budgetHours: leaf && level !== "day" ? budgetFor(1, hoursPerWeek) : null,
     children: null,
   });
-  if (aliases) applyUnitRefs(node, unit, leaf, aliases, split, picked);
+  if (aliases) applyUnitRefs(node, unit, leaf, aliases, split, picked, parentCovers);
   return node;
 }
 
@@ -172,6 +175,7 @@ export function applyUnitRefs(
   aliases: MaterialAliases,
   split?: PlanSplit | null,
   picked: readonly PracticeFormat[] = pickedFormats(split),
+  parentCovers?: readonly PracticeCover[],
 ): { unknown: string[]; refused: string[]; unpicked: PracticeFormat[] } {
   delete node.covers;
   delete node.materials;
@@ -181,7 +185,7 @@ export function applyUnitRefs(
   if (leaf) {
     const reading = resolveMaterialRefs(unit.materials, aliases);
     if (reading.refs.length > 0) node.materials = reading.refs;
-    const practice = resolvePracticeRefs(unit.practice, aliases, split, reading.refs.map((r) => r.id));
+    const practice = resolvePracticeRefs(markImported(unit.practice, parentCovers), aliases, split, reading.refs.map((r) => r.id));
     if (practice.refs.length > 0) node.practice = practice.refs;
     return { unknown: [...reading.unknown, ...practice.unknown], refused: practice.refused, unpicked: [] };
   }
@@ -377,6 +381,8 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
   const n = input.spans.length;
   const label = input.label ?? `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
   const picked = pickedFormats(ctx.split, ctx.materials);
+  // The parent's imported rows: a day draft copying one is that row, kept whatever its format.
+  const parentImported = importedCovers(parentNode);
   const nodes: PlanNode[] = [];
   let final: PlanNode[] = [];
   let problems: string[] = [];
@@ -398,7 +404,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
       node.end = node.start + node.len - 1;
       if (node.budgetHours !== null) node.budgetHours = budgetFor(1, ctx.hoursPerWeek);
       if (aliases) {
-        const out = applyUnitRefs(node, unit, leaf, aliases, ctx.split, picked);
+        const out = applyUnitRefs(node, unit, leaf, aliases, ctx.split, picked, parentImported);
         unknown.push(...out.unknown);
         refused.push(...out.refused);
         for (const f of out.unpicked) unpicked.add(f);
@@ -461,7 +467,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
   for await (const event of streamUnits({ prompt, label, expected: n, check, model: ctx.outlineModel, effort: ctx.effort, log: input.log, signal })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
-      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split, picked);
+      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split, picked, parentImported);
       if (aliases) plainUnitText(node, ctx.materials, aliases);
       nodes.push(node);
       yield { type: "node", node };
