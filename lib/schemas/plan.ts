@@ -9,7 +9,7 @@ import {
   practiceRefDraftSchema,
   practiceRefSchema,
 } from "./material";
-import { PRACTICE_FORMATS, type PracticeFormat } from "@/lib/practice";
+import { DRAFTABLE_FORMATS, PRACTICE_FORMATS, type PracticeFormat } from "@/lib/practice";
 
 export const PLAN_LEVELS = ["month", "week", "day"] as const;
 export const planLevelSchema = z.enum(PLAN_LEVELS);
@@ -24,10 +24,15 @@ export const unitTimeSchema = z.object({
   practice: z.partialRecord(z.enum(PRACTICE_FORMATS), z.number().int().min(0).max(MAX_UNIT_MINUTES)),
 });
 export type UnitTime = { reading: number; practice: Partial<Record<PracticeFormat, number>> };
-/** The same as the model writes it: practice as an array, for a plainer JSON schema. */
+/**
+ * The same as the model writes it: practice as an array, for a plainer JSON schema. The model is offered only the
+ * formats it may draft (`DRAFTABLE_FORMATS`), named in the description as a row's format is, so the schema it is sent
+ * never lists "other"; the format is read as any name, so a heading of an imported plan that the prompt asks for its
+ * Other minutes still parses. `toUnitTime` keeps the split's picks and leaves out any other name.
+ */
 export const unitTimeDraftSchema = z.object({
   reading: z.number().int().min(0),
-  practice: z.array(z.object({ format: z.enum(PRACTICE_FORMATS), minutes: z.number().int().min(0) })),
+  practice: z.array(z.object({ format: z.string().describe(`One of the plan's picked formats: ${DRAFTABLE_FORMATS.join(", ")}`), minutes: z.number().int().min(0) })),
 });
 /** The most problem lines a node or track keeps, and the most characters in one. */
 export const MAX_PROBLEMS = 40;

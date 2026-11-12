@@ -824,6 +824,11 @@ describe("toUnitTime", () => {
     expect(toUnitTime(draft, ["problem-set", "recall"])).toEqual({ time: { reading: 60, practice: { "problem-set": 60 } }, unpicked: ["mock"] });
   });
 
+  it("reads a format as written in another case, and leaves out a name that is no format", () => {
+    const draft = { reading: 30, practice: [{ format: " Problem-Set ", minutes: 40 }, { format: "other", minutes: 60 }, { format: "katas", minutes: 20 }] };
+    expect(toUnitTime(draft, ["problem-set", "other"])).toEqual({ time: { reading: 30, practice: { "problem-set": 40, other: 60 } }, unpicked: [] });
+  });
+
   it("holds each activity's minutes to what a saved unit may keep, so a slip does not fail the plan's save", () => {
     const draft = { reading: 45000, practice: [{ format: "problem-set" as const, minutes: 20000 }, { format: "problem-set" as const, minutes: 20000 }, { format: "recall" as const, minutes: 90 }] };
     const { time } = toUnitTime(draft, ["problem-set", "recall"]);
