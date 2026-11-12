@@ -155,7 +155,7 @@ export function NewTrackForm() {
         </p>
       </div>
       <TrackFormFields value={form} onChange={setForm} />
-      <Button className="mt-2 w-full" onClick={() => setBrief(form)} disabled={!form.topic.trim() || !form.weeks || !form.hoursPerWeek}>
+      <Button className="mt-2 w-full" onClick={() => setBrief(form)} disabled={!!reading || !form.topic.trim() || !form.weeks || !form.hoursPerWeek}>
         Generate outline
       </Button>
       <div className="flex items-center gap-3 pt-1 text-[13px] text-muted-foreground">

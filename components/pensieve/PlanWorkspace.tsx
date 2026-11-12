@@ -736,7 +736,8 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
 
   const tops = tree.children ?? [];
   const topLevel = tops[0]?.level ?? topLevelFor(weeks);
-  const suggestions = props.imported
+  // The import's suggestions are for its draft; a saved imported track being adjusted gets the adjust ones.
+  const suggestions = props.imported && !isAdjust
     ? ["Split the first week into days", "Why is this row under Other?"]
     : isAdjust
       ? ["Add two more days on caching", "Why is the next week next?", "Swap the last two weeks"]
