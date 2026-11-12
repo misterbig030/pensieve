@@ -51,7 +51,8 @@ function checkWeeklyPlan(result: ConvertResult): ImportCheck {
 
   const week = tree[0];
   const byId = new Map(materials.map((m) => [m.id, m]));
-  const reads = (week?.materials ?? []).map((ref) => byId.get(ref.id)).filter((m) => m && /system design interview/i.test(m.title));
+  const reads = (week?.materials ?? []).map((ref) => byId.get(ref.id)).filter((m) => m && /system design interview|alex xu/i.test(m.title));
+  // The file names the book "Alex Xu vol. 1"; the model may keep that or use the full title.
   verdicts.push(verdict("vol. 1 reading", reads.some((m) => /vol\.? ?1/i.test(m!.title)), `Week 1 reads: ${reads.map((m) => m!.title).join("; ") || "none"}`));
 
   const practice = week?.practice ?? [];

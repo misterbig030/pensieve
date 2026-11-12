@@ -46,6 +46,7 @@ export function buildImportPrompt(input: { fileName: string; text: string }): st
     "",
     "## Materials",
     `List every book, course, site or other source the plan names in "materials", once each, with ids "M1", "M2"… in the order the file first names them. A source several units use (the same book in three weeks) is one entry that each unit points at. Make each title specific enough to tell entries apart ("System Design Interview, vol. 1" and "vol. 2" are two entries).`,
+    `The exception is a source the file names only as background: one the learner has already finished, or one named only in a progress note ("where you start", "50/150 done"). It is not a material unless a unit's row uses it.`,
     `Never invent a URL, an author or a title the file does not give. Materials carry no links.`,
     `Each material's kind is one of:\n${kinds}`,
     `A source the learner practises from (a problem site, a question bank) also gets a practiceFormat. Its numbered items (problem numbers) go on the rows that name them, not on the material.`,

@@ -55,6 +55,8 @@ describe("convertDraft on weekly-plan.md", () => {
     const items = leetcode.practice!.list!.items;
     expect(problems.map((p) => items[p.itemFrom! - 1].title)).toEqual(["703", "1046", "973", "215", "621", "355", "295"]);
     expect(problems.every((p) => p.itemFrom === p.itemTo)).toBe(true);
+    // The file's done line covers the seven; each problem gets its format's own instead of repeating it.
+    expect(problems.every((p) => p.done === "Solved and checked against the solution.")).toBe(true);
     // The row's 300 minutes divided evenly over its seven items.
     expect(problems.reduce((sum, p) => sum + p.minutes, 0)).toBe(300);
     expect(Math.max(...problems.map((p) => p.minutes)) - Math.min(...problems.map((p) => p.minutes))).toBeLessThanOrEqual(1);
@@ -110,6 +112,16 @@ describe("convertDraft on weekly-plan.md", () => {
     );
     expect(materials[0].practice!.list!.items.map((i) => i.minutes)).toEqual([null, null, null]);
     expect(materials[0].practice!.minutes).toBe(30);
+  });
+
+  it("keeps the file's done line on a row that names one item", () => {
+    const { tree } = convert(
+      plan({
+        materials: [{ id: "M1", title: "Kata site", author: null, kind: "tool", practiceFormat: "problem-set", items: ["1"] }],
+        units: [unit("W", { practice: [{ format: "problem-set", id: "M1", items: ["1"], task: "Kata", done: "Passes every test", minutes: 20 }] })],
+      }),
+    );
+    expect(tree[0].practice![0].done).toBe("Passes every test");
   });
 
   it("budget comes from the file", () => {

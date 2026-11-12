@@ -325,7 +325,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   // While the draft streams in, the plan is the length the learner set; units still planning count as they were.
   const planWeeks = drafting || !tree.children || tree.children.length === 0 ? weeks : settledWeeks(tree, Object.keys(pending), daysPerWeek);
   const note = [lockNote, summaryNote].filter(Boolean).join(" ");
-  const summary = drafting ? "" : summarizePlan(tree, topic, daysPerWeek, note || undefined);
+  const summary = drafting ? "" : summarizePlan(tree, props.imported ? null : topic, daysPerWeek, note || undefined);
 
   // A re-draft is built when it fires, from the workspace as it is then (a days change may have come since).
   const redraftFrom = useRef<() => { tree: PlanNode; summaryNote: string; time: typeof draftedTime.current; body: PlanRedraftRequest }>(null);

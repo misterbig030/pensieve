@@ -34,6 +34,7 @@ describe("buildImportPrompt", () => {
     expect(prompt).toContain("skipped");
     expect(prompt).toMatch(/never invent (a )?url/i);
     expect(prompt).toMatch(/hours only from the file/i);
+    expect(prompt).toMatch(/names only as background/i);
   });
 
   it("fences the file as data, so its text cannot close the fence", () => {

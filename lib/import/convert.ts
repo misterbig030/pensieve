@@ -506,7 +506,8 @@ function practiceRefs(draft: ImportPracticeDraft, ctx: Ctx): PracticeRef[] {
         format: row.format,
         id: row.material!.id,
         task: clip(`${row.task} · ${row.list[p - 1]}`, 300)!,
-        done: row.done,
+        // The file's done line is for the whole set ("7 heap problems solved"); one item gets its format's own.
+        done: row.positions.length > 1 ? sentence(PRACTICE_REGISTRY[row.format].doneWhen) : row.done,
         minutes: m,
         generated: false,
         itemFrom: p,
@@ -591,4 +592,9 @@ function sharesOf(minutes: number[]): number[] {
     shares[i] = 1;
   }
   return shares;
+}
+
+/** A registry phrase as a sentence: "solved and checked" → "Solved and checked." */
+function sentence(phrase: string): string {
+  return `${phrase.charAt(0).toUpperCase()}${phrase.slice(1)}.`;
 }

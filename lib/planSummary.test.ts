@@ -37,6 +37,12 @@ describe("summarizePlan", () => {
       '4 weeks on AI infra, usually 7 study days a week: Inference fundamentals, GPUs and memory, Serving systems, Mock rounds. Opens with "Topic 1" and closes on "Mock rounds".',
     );
   });
+  it("names an imported plan by its file, not by its heading", () => {
+    expect(summarizePlan(weekPlan(), null, 5)).toBe(
+      '4 weeks from your plan file, usually 5 study days a week: Inference fundamentals, GPUs and memory, Serving systems, Mock rounds. Opens with "Topic 1" and closes on "Mock rounds".',
+    );
+    expect(summarizePlan(dayPlan(), null, 5)).toMatch(/^3 days from your plan file, one day at a time/);
+  });
   it("appends a note", () => {
     expect(summarizePlan(dayPlan(), "Regex", 5, "Latest change: x.")).toMatch(/\. Latest change: x\.$/);
     expect(latestChangeNote("Swapped weeks 3 and 4.")).toBe("Latest change: swapped weeks 3 and 4.");
