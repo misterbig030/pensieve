@@ -604,7 +604,7 @@ export function importedCovers(node: PlanNode | null | undefined): PracticeCover
  * so the rules that refuse an unpicked or never-written format let it through. Any other draft is judged as usual.
  */
 export function markImported<T extends { format: string; task: string }>(drafts: T[] | undefined, known: readonly { format: string; task?: string; imported?: boolean }[] | undefined): (T & { imported?: boolean })[] | undefined {
-  const imported = (known ?? []).filter((r) => r.imported === true && r.task);
+  const imported = (known ?? []).filter((r) => r.imported === true && r.task?.trim());
   if (!drafts || imported.length === 0) return drafts;
   const norm = (s: string) => s.trim().toLowerCase();
   const same = (d: T, r: { format: string; task?: string }) => norm(d.format) === r.format && norm(d.task).startsWith(norm(r.task!).slice(0, 24));
