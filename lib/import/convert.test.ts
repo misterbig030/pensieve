@@ -202,6 +202,26 @@ describe("convertDraft rules", () => {
     expect(tree[0].practice).toEqual([{ format: "problem-set", id: "M1", task: "Katas 1 and 2", done: "Both pass", minutes: 40, generated: false, imported: true }]);
   });
 
+  it("takes a list's format from the rows that name its items when the material has none", () => {
+    const row = (format: string, items: string[]) => ({ format, id: "M1", items, task: `Problems ${items.join(", ")}`, done: "Solved", minutes: null });
+    const { tree, materials } = convert(
+      plan({
+        materials: [{ id: "M1", title: "Kata site", author: null, kind: "tool", practiceFormat: null, items: null }],
+        units: [
+          unit("W1", { practice: [row("problem-set", ["1", "2"]), row("lab", ["3"])] }),
+          unit("W2", { practice: [row("problem-set", ["4"]), row("not-a-format", ["5"]), row("not-a-format", ["6"])] }),
+        ],
+      }),
+    );
+    expect(materials[0].practice).toMatchObject({ format: "problem-set", items: 6 });
+    expect(materials[0].practice!.list!.items.map((i) => i.number)).toEqual(["1", "2", "3", "4", "5", "6"]);
+    expect(tree[0].practice!.map((p) => [p.format, p.itemFrom])).toEqual([
+      ["problem-set", 1],
+      ["problem-set", 2],
+      ["lab", 3],
+    ]);
+  });
+
   it("lists a reading of a material the list does not have as skipped", () => {
     const { tree, skipped } = convert(plan({ units: [unit("W", { reading: [{ id: "M9", part: "Ch. 2", minutes: 30 }] })] }));
     expect(tree[0].materials).toBeUndefined();

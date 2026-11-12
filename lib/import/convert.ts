@@ -215,12 +215,21 @@ function buildMaterials(draft: Extract<ImportDraft, { kind: "plan" }>, skipped: 
     addLabels(labels, material.id, m.items);
   }
 
-  // Rows may name items the material's own list left out: they are the file's items all the same.
+  // Rows may name items the material's own list left out: they are the file's items all the same. A row that names
+  // items also says, by its format, what the source is practice for, when the material itself does not.
+  const rowFormats = new Map<string, Map<PracticeFormat, number>>();
   const walk = (units: ImportUnitDraft[]) => {
     for (const unit of units) {
       for (const row of unit.practice) {
         const material = row.id ? byDraftId.get(row.id.trim()) : undefined;
-        if (material) addLabels(labels, material.id, row.items);
+        if (!material) continue;
+        addLabels(labels, material.id, row.items);
+        const format = knownFormat(row.format);
+        if (format && row.items?.some((l) => l.trim())) {
+          const counts = rowFormats.get(material.id) ?? new Map<PracticeFormat, number>();
+          counts.set(format, (counts.get(format) ?? 0) + 1);
+          rowFormats.set(material.id, counts);
+        }
       }
       if (unit.children) walk(unit.children);
     }
@@ -229,7 +238,7 @@ function buildMaterials(draft: Extract<ImportDraft, { kind: "plan" }>, skipped: 
 
   const lists = new Map<string, string[]>();
   for (const material of materials) {
-    const format = formatOf.get(material.id);
+    const format = formatOf.get(material.id) ?? mostCommon(rowFormats.get(material.id));
     const items = (labels.get(material.id) ?? []).slice(0, MAX_PRACTICE_ITEMS);
     if (!format || items.length < MIN_PRACTICE_ITEMS) continue;
     const perItemMinutes = PRACTICE_REGISTRY[format].perItemMinutes ?? 10;
@@ -273,8 +282,20 @@ function toKind(kind: string): MaterialKind {
 }
 
 function toFormat(format: string): PracticeFormat {
+  return knownFormat(format) ?? "other";
+}
+
+/** The format the text names, or null when it names none of the registry's. */
+function knownFormat(format: string): PracticeFormat | null {
   const f = format.trim().toLowerCase().replace(/[\s_]+/g, "-");
-  return (PRACTICE_FORMATS as readonly string[]).includes(f) ? (f as PracticeFormat) : "other";
+  return (PRACTICE_FORMATS as readonly string[]).includes(f) ? (f as PracticeFormat) : null;
+}
+
+/** The format counted most often; on a tie, the one seen first. */
+function mostCommon(counts: Map<PracticeFormat, number> | undefined): PracticeFormat | undefined {
+  let best: PracticeFormat | undefined;
+  for (const [format, n] of counts ?? []) if (best === undefined || n > counts!.get(best)!) best = format;
+  return best;
 }
 
 /** `import:<slug>`, unique within the list. A title with no ASCII letters or digits slugs to a hash of itself. */
