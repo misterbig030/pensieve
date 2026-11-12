@@ -18,6 +18,7 @@ import {
   practiceBudgets,
   reservedRuns,
   unitBudgets,
+  isSplitFromFile,
   weekPracticeTime,
   type MaterialAliases,
   type PickSources,
@@ -751,6 +752,10 @@ function leafPickSources(input: UnitsPromptInput, aliases: MaterialAliases, p: P
   if (offered.length === 0 && sources.length > 0) {
     const none = write === null ? `write no ${spec.label} rows.` : `take none of them; ${write}`;
     return { text: `This unit reserves no ${spec.label} source, and every one is reserved by other units: ${none}`, items: [] };
+  }
+  // An imported plan's format no source backs and no model writes is the learner's own tasks: they come from the file.
+  if (offered.length === 0 && write === null && isSplitFromFile(input.split)) {
+    return { text: `These are the learner's own tasks from their plan file: copy each from the file onto the unit it belongs to, its task text as the file words it, and write no other ${spec.label} rows.`, items: [] };
   }
   if (offered.length === 0) return { text: `No source in the list: ${write}`, items: [] };
   const listedIds = offered.filter((id) => listOf(input, id));

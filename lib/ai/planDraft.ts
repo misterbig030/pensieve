@@ -37,7 +37,7 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import type { PracticeFormat } from "@/lib/practice";
-import type { Material, PracticeCover } from "@/lib/schemas/material";
+import type { Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
 import { capProblems, MAX_UNIT_MINUTES, unitListSchema, type UnitDraft, type UnitTime, type unitTimeDraftSchema } from "@/lib/schemas/plan";
 import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortSettings, emitGenerationLog, type GenerationLogContext } from "./logged";
@@ -146,7 +146,7 @@ export function nodeFor(
   hoursPerWeek?: number,
   split?: PlanSplit | null,
   picked?: readonly PracticeFormat[],
-  parentCovers?: readonly PracticeCover[],
+  parentCovers?: readonly (PracticeRef | PracticeCover)[],
 ): PlanNode {
   const leaf = unitsAreLeaves(level, granularity);
   const node = makeNode({
@@ -176,7 +176,7 @@ export function applyUnitRefs(
   aliases: MaterialAliases,
   split?: PlanSplit | null,
   picked: readonly PracticeFormat[] = pickedFormats(split),
-  parentCovers?: readonly PracticeCover[],
+  parentCovers?: readonly (PracticeRef | PracticeCover)[],
 ): { unknown: string[]; refused: string[]; unpicked: PracticeFormat[] } {
   delete node.covers;
   delete node.materials;
@@ -308,6 +308,11 @@ export interface DraftLevelInput {
     split?: PlanSplit | null;
     /** The learner's imported plan file, shown to the call as the plan's intent. */
     importText?: string;
+    /**
+     * A re-draft of an imported plan: the learner's rows in the plan as it was (`importedRowsOf`), which the units being
+     * re-drafted no longer hold. A draft copying one is that row, as a day copying its week's is.
+     */
+    importedRows?: readonly (PracticeRef | PracticeCover)[];
     outlineModel: ResolvedModel;
     /** The outline call's reasoning effort; `OUTLINE_EFFORT` when absent. */
     effort?: ReasoningEffort;
@@ -385,8 +390,8 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
   const n = input.spans.length;
   const label = input.label ?? `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
   const picked = pickedFormats(ctx.split, ctx.materials);
-  // The parent's imported rows: a day draft copying one is that row, kept whatever its format.
-  const parentImported = importedCovers(parentNode);
+  // The parent's imported rows, and on a re-draft the plan's as it was: a draft copying one is that row, kept whatever its format.
+  const parentImported = [...importedCovers(parentNode), ...(ctx.importedRows ?? [])];
   const nodes: PlanNode[] = [];
   let final: PlanNode[] = [];
   let problems: string[] = [];

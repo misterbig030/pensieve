@@ -55,7 +55,7 @@ describe("splitting an imported week into days", () => {
     expect(prompt).toContain("the week has about 2 h of reading");
     expect(prompt).toContain('Mock (format "mock"): none this week; write no Mock rows.');
     expect(prompt).not.toContain("write each yourself");
-    expect(prompt).toContain("the rest of its time is for problems and design.");
+    expect(prompt).toContain("the rest of its time is for other, problems and design.");
     expect(prompt).toContain("Design's time is at most its blocks");
   });
 

@@ -309,7 +309,8 @@ export function resolvePracticeRefs(
   const refs: PracticeRef[] = [];
   const unknown: string[] = [];
   const refused: string[] = [];
-  for (const draft of drafts ?? []) {
+  for (const raw of drafts ?? []) {
+    const draft = fileRow(raw, split);
     const name = rowName(draft.format, draft.task);
     // An imported row is the learner's own: any format the registry knows, picked or not.
     const format = draft.imported ? knownFormat(draft.format) : pickedFormat(draft.format, split);
@@ -366,6 +367,17 @@ export function resolvePracticeRefs(
     refs.push({ format, id: resolved?.id ?? null, task, done: clip(draft.done, 300) ?? spec.doneWhen, minutes, generated, ...position, ...(draft.imported ? { imported: true } : {}) });
   }
   return { refs, unknown, refused };
+}
+
+/**
+ * On a split made from the learner's plan file, a row with no source of a pick that is never written can only be one of
+ * the file's tasks (the prompt has the model copy them), so it is marked `imported`. "other" exists only on such plans.
+ * Any other draft, and every draft on a plan not imported, is returned as it is.
+ */
+function fileRow(draft: PracticeRefDraft, split: PlanSplit | null | undefined): PracticeRefDraft {
+  if (draft.imported || draft.id?.trim() || !isSplitFromFile(split)) return draft;
+  const format = pickedFormat(draft.format, split);
+  return format && PRACTICE_REGISTRY[format].generated === "never" ? { ...draft, imported: true } : draft;
 }
 
 /**
@@ -565,9 +577,15 @@ export function isPracticeOnly(m: Pick<Material, "minutes" | "practice">): boole
   return !m.minutes && !!m.practice;
 }
 
+/** Whether the split was made from the learner's plan file (an imported plan): its picks are the file's own formats. */
+export function isSplitFromFile(split: PlanSplit | null | undefined): boolean {
+  return split?.reason === SPLIT_FROM_FILE;
+}
+
 /**
  * The split's picks with their sources. Empty when the plan is all reading. A pick the plan reserves an imported row of
- * (`covers`) is assignable though it has no source and is never written: the rows are the learner's own.
+ * (`covers`) is assignable though it has no source and is never written: the rows are the learner's own. So is every
+ * pick of a split made from the learner's plan file (`isSplitFromFile`): its rows are the file's tasks.
  */
 export function pickSources(
   split: PlanSplit | null | undefined,
@@ -576,11 +594,12 @@ export function pickSources(
 ): PickSources[] {
   // A source that also serves as practice is still reading, so recall can be written from it.
   const hasReading = materials.some((m) => !isPracticeOnly(m));
+  const fromFile = isSplitFromFile(split);
   const picks = activePicks(split).map((pick) => {
     const sources = materials.filter((m) => m.practice?.format === pick.format).map((m) => m.id);
     const rule = PRACTICE_REGISTRY[pick.format].generated;
     const writable = rule !== "never" && (rule !== "from-reading" || hasReading);
-    const imported = covers.some((c) => c.format === pick.format && c.imported === true);
+    const imported = fromFile || covers.some((c) => c.format === pick.format && c.imported === true);
     return { pick, sources, assignable: sources.length > 0 || writable || imported };
   });
   // A format the plan holds imported rows of is assignable though the split never picked it ("other", an unpicked problem-set).
@@ -619,6 +638,13 @@ export function markImported<T extends { format: string; task: string }>(drafts:
   const imported = (known ?? []).filter((r) => r.imported === true && r.task?.trim());
   if (!drafts || imported.length === 0) return drafts;
   return drafts.map((d) => (imported.some((r) => isImportedRow(d, r)) ? { ...d, imported: true } : d));
+}
+
+/** Every imported row in `root`: leaves' practice rows and headings' reservations from the learner's plan file. */
+export function importedRowsOf(root: PlanNode | null | undefined): (PracticeRef | PracticeCover)[] {
+  const out: (PracticeRef | PracticeCover)[] = [];
+  if (root) walk(root, (n) => void out.push(...(n.practice ?? []).filter((r) => r.imported === true), ...importedCovers(n)));
+  return out;
 }
 
 /** The formats `covers` hold imported rows of. */

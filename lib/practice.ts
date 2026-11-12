@@ -121,8 +121,8 @@ export const PRACTICE_REGISTRY: Record<PracticeFormat, PracticeFormatSpec> = {
   other: {
     id: "other",
     label: "Other",
-    prompt: "A task from the learner's own plan file.",
-    doneWhen: "Done as the plan file describes it.",
+    prompt: "does a task from their own plan file",
+    doneWhen: "done as the plan file describes it",
     perItemMinutes: null,
     fixedMinutes: null,
     research: "",

@@ -15,6 +15,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
+import { importedRowsOf } from "@/lib/materials";
 import type { Material } from "@/lib/schemas/material";
 import { capProblems } from "@/lib/schemas/plan";
 import type { PlanSplit } from "@/lib/studyTime";
@@ -132,6 +133,8 @@ export async function redraftPlan(input: RedraftInput): Promise<RedraftResult> {
     hoursPerWeek: input.hoursPerWeek,
     split: input.split,
     importText: input.importText,
+    // The learner's rows as the plan held them: the units re-drafted lose theirs before the call.
+    ...(input.importText ? { importedRows: importedRowsOf(root) } : {}),
     outlineModel,
     signal: input.signal,
     deadline: input.deadline,

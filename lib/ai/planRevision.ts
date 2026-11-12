@@ -27,6 +27,7 @@ import {
   resolveCoverRefs,
   resolveMaterialRefs,
   resolvePracticeCovers,
+  importedRowsOf,
   markImported,
   resolvePracticeRefs,
   treeChecks,
@@ -107,6 +108,8 @@ export function applyRevision(
   }
   const topLevel: PlanLevel = original.children?.[0]?.level ?? topLevelFor(weeksOf(original, original, daysPerWeek));
   const seen = new Set<string>();
+  // The learner's rows anywhere in the plan: a row the model moves to another unit, or rewrites, is still theirs.
+  const imported = importedRowsOf(original);
 
   const convert = (unit: RevisedUnit, level: PlanLevel): PlanNode => {
     const kept = unit.ref ? byRef.get(unit.ref) : undefined;
@@ -126,7 +129,7 @@ export function applyRevision(
         : kept?.practiceCovers;
     const practice =
       aliases && unit.practice !== undefined
-        ? keptItemless(resolvePracticeRefs(markImported(unit.practice, kept?.practice), aliases, split, (materials ?? []).map((r) => r.id), SAVED).refs, kept?.practice, aliases)
+        ? keptItemless(resolvePracticeRefs(markImported(unit.practice, imported), aliases, split, (materials ?? []).map((r) => r.id), SAVED).refs, kept?.practice, aliases)
         : kept?.practice;
     let time = leaf ? undefined : kept?.time;
     if (unit.time && !leaf) {
