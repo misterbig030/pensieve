@@ -1083,3 +1083,34 @@ describe("the plan file in prompts", () => {
     expect(prompt).not.toContain("a".repeat(24001));
   });
 });
+
+describe("an imported plan's materials and rows", () => {
+  const book: Material = { id: "M1", origin: "import", type: "note", kind: "book", url: "import:sdi", title: "System Design Interview, vol. 1", author: "Alex Xu", year: null, why: null, backbone: false, verifiedAt: null, fetchedTitle: null, recommendedBy: [], sig: null };
+  const researched: Material = { ...book, id: "M2", origin: "research", type: "link", kind: "docs", url: "https://example.com/guide", title: "A guide", author: null };
+
+  it("tags a material from the plan file as the learner's own, never as found by research", () => {
+    expect(renderMaterials([book])).toBe(`M1 [book · the learner's own, from their plan file] "System Design Interview, vol. 1" — Alex Xu`);
+    const only = buildUnitsPrompt({ topic: "T", materials: [book], granularity: "week", hoursPerWeek: 10, daysPerWeek: 5, level: "week", spans: [5], weeks: 1, unitsAreLeaves: true });
+    expect(only).toContain("The plan's materials. The learner's own, and those from their plan file, are always part of it. Refer to them by id:");
+    expect(only).not.toContain("checked by research");
+    const mixed = buildUnitsPrompt({ topic: "T", materials: [book, researched], granularity: "week", hoursPerWeek: 10, daysPerWeek: 5, level: "week", spans: [5], weeks: 1, unitsAreLeaves: true });
+    expect(mixed).toContain("The plan's materials. The learner's own, and those from their plan file, are always part of it; the rest were found and checked by research. Refer to them by id:");
+  });
+
+  it("keeps the materials line of a plan with nothing imported", () => {
+    const prompt = buildUnitsPrompt({ topic: "T", materials: [researched], granularity: "week", hoursPerWeek: 10, daysPerWeek: 5, level: "week", spans: [5], weeks: 1, unitsAreLeaves: true });
+    expect(prompt).toContain("The plan's materials. The learner's own are always part of it; the rest were found and checked by research. Refer to them by id:");
+  });
+
+  it("names an imported row the learner's own, not generated", () => {
+    const aliases = aliasMaterials([book]);
+    const practice: PracticeRef[] = [
+      { format: "other", id: null, task: "Merge the branches", done: "Merged", minutes: 100, generated: false, imported: true },
+      { format: "design-exercise", id: null, task: "Drill 2", done: "Note", minutes: 60, generated: true, imported: true },
+      { format: "design-exercise", id: null, task: "A drill the model wrote", done: "Note", minutes: 50, generated: true },
+    ];
+    expect(renderRefs({ practice }, aliases)).toBe("practises Other (the learner's own) 100 min: Merge the branches; Design (the learner's own) 60 min: Drill 2; Design generated 50 min: A drill the model wrote");
+    const covers: PracticeCover[] = [{ format: "other", id: null, note: null, task: "Merge the branches", minutes: 100, imported: true }];
+    expect(renderRefs({ practiceCovers: covers }, aliases)).toBe("practice covers Other (the learner's own) 100 min: Merge the branches");
+  });
+});

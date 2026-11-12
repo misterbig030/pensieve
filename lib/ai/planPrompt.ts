@@ -103,7 +103,7 @@ export function describeRefs(refs: RefLike[], aliases: MaterialAliases): string 
   return out.join(", ");
 }
 
-type PracticeLike = { id: string | null; task?: string; minutes?: number; note?: string | null; generated?: boolean; itemFrom?: number | null; itemTo?: number | null };
+type PracticeLike = { id: string | null; task?: string; minutes?: number; note?: string | null; generated?: boolean; itemFrom?: number | null; itemTo?: number | null; imported?: boolean };
 
 /**
  * One practice row or reservation without its format: "M2 40 min: Arrays 1–6", "generated 15 min: Six questions",
@@ -114,8 +114,9 @@ function practiceItem(r: PracticeLike, aliases: MaterialAliases): string | null 
   const base = r.id === null ? null : aliases.alias(r.id);
   if (base === undefined) return null;
   const alias = base !== null && r.id !== null && r.itemFrom && r.itemTo ? itemRun(aliases, r.id, r.itemFrom, r.itemTo) : base;
-  const generated = r.id === null || r.generated;
-  const who = [alias, generated ? "generated" : null].filter(Boolean).join(" ");
+  // A row from the learner's plan file is theirs, whatever wrote it into this unit.
+  const generated = !r.imported && (r.id === null || r.generated);
+  const who = [alias, r.imported ? "(the learner's own)" : generated ? "generated" : null].filter(Boolean).join(" ");
   return `${who}${r.minutes ? ` ${r.minutes} min` : ""}${r.task ? `: ${r.task}` : ""}${refNote(r.note ?? null)}`;
 }
 
@@ -272,7 +273,8 @@ export function renderMaterials(materials: Material[], aliases: MaterialAliases 
     .flatMap((m) => {
       // A listed source is timed item by item, so its tag gives no single per-item time.
       const practice = m.practice ? practiceTag(m.practice.list ? { ...m.practice, perItemMinutes: null } : m.practice) : null;
-      const tags = [m.kind, m.backbone ? "backbone" : null, practice, m.origin === "learner" ? "the learner's own" : null].filter(Boolean).join(" · ");
+      const own = m.origin === "learner" ? "the learner's own" : m.origin === "import" ? "the learner's own, from their plan file" : null;
+      const tags = [m.kind, m.backbone ? "backbone" : null, practice, own].filter(Boolean).join(" · ");
       const byline = [m.author, m.year].filter(Boolean).join(", ");
       const where = m.type === "note" || m.type === "file" ? "" : ` <${m.url}>`;
       const alias = aliases.alias(m.id);
@@ -322,13 +324,23 @@ function planFileLines(ctx: Pick<PlanPromptContext, "importText">): string[] {
   ];
 }
 
+/**
+ * Where the plan's materials came from, in one sentence. Materials from the learner's plan file are the learner's own,
+ * never ones research checked; without research materials, nothing is said to be.
+ */
+function materialsOrigin(materials: Pick<Material, "origin">[]): string {
+  if (!materials.some((m) => m.origin === "import")) return "The learner's own are always part of it; the rest were found and checked by research.";
+  const researched = materials.some((m) => m.origin === "research");
+  return `The learner's own, and those from their plan file, are always part of it${researched ? "; the rest were found and checked by research" : ""}.`;
+}
+
 function contextLines(ctx: PlanPromptContext, options: RenderMaterialsOptions = {}): string[] {
   const parts: string[] = [];
   parts.push(`Topic: ${ctx.topic}`);
   if (ctx.instructions?.trim()) parts.push(`The learner's focus & instructions: "${ctx.instructions.trim()}"`);
   parts.push(...timeLines(ctx));
   if (ctx.materials.length > 0) {
-    parts.push(`The plan's materials. The learner's own are always part of it; the rest were found and checked by research. Refer to them by id:`);
+    parts.push(`The plan's materials. ${materialsOrigin(ctx.materials)} Refer to them by id:`);
     parts.push(renderMaterials(ctx.materials, undefined, options));
   }
   parts.push(...planFileLines(ctx));
