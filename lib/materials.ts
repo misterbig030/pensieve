@@ -599,16 +599,26 @@ export function importedCovers(node: PlanNode | null | undefined): PracticeCover
 }
 
 /**
+ * Whether `row` is the learner's imported `row`: the same format, and a task that is the imported row's or starts with
+ * its first 24 characters (case and outer spaces aside). A blank imported task matches nothing.
+ */
+export function isImportedRow(row: { format: string; task?: string | null }, imported: { format: string; task?: string | null }): boolean {
+  const task = imported.task?.trim();
+  if (!task) return false;
+  const norm = (s: string) => s.trim().toLowerCase();
+  return norm(row.format) === imported.format && norm(row.task ?? "").startsWith(norm(task).slice(0, 24));
+}
+
+/**
  * The model's drafted rows never say which came from the learner's plan file. A draft of the same format as an imported
- * row in `known` whose task is that row's, or starts with its first 24 characters, is that row: it is marked `imported`
- * so the rules that refuse an unpicked or never-written format let it through. Any other draft is judged as usual.
+ * row in `known` whose task is that row's, or starts with its first 24 characters (`isImportedRow`), is that row: it is
+ * marked `imported` so the rules that refuse an unpicked or never-written format let it through. Any other draft is
+ * judged as usual.
  */
 export function markImported<T extends { format: string; task: string }>(drafts: T[] | undefined, known: readonly { format: string; task?: string; imported?: boolean }[] | undefined): (T & { imported?: boolean })[] | undefined {
   const imported = (known ?? []).filter((r) => r.imported === true && r.task?.trim());
   if (!drafts || imported.length === 0) return drafts;
-  const norm = (s: string) => s.trim().toLowerCase();
-  const same = (d: T, r: { format: string; task?: string }) => norm(d.format) === r.format && norm(d.task).startsWith(norm(r.task!).slice(0, 24));
-  return drafts.map((d) => (imported.some((r) => same(d, r)) ? { ...d, imported: true } : d));
+  return drafts.map((d) => (imported.some((r) => isImportedRow(d, r)) ? { ...d, imported: true } : d));
 }
 
 /** The formats `covers` hold imported rows of. */

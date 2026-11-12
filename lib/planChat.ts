@@ -49,6 +49,8 @@ interface PlanContext {
   hoursPerWeek?: number;
   /** How the plan divides that time. Null or absent on a new draft: the drafter decides it with the top level. */
   split?: PlanSplit | null;
+  /** The text of the plan file the learner imported, when the plan came from one. */
+  importText?: string;
   /** Ask for a `call` event per model call. Honoured only for admins; ignored for everyone else. */
   debug?: boolean;
 }

@@ -37,6 +37,8 @@ export interface RedraftInput {
   daysPerWeek: number;
   hoursPerWeek?: number;
   split?: PlanSplit | null;
+  /** The learner's imported plan file, shown to the outline calls as the plan's intent. */
+  importText?: string;
   tree: PlanNode;
   /** Days on or before this are behind the learner and locked. */
   lockBefore: number;
@@ -129,6 +131,7 @@ export async function redraftPlan(input: RedraftInput): Promise<RedraftResult> {
     daysPerWeek: input.daysPerWeek,
     hoursPerWeek: input.hoursPerWeek,
     split: input.split,
+    importText: input.importText,
     outlineModel,
     signal: input.signal,
     deadline: input.deadline,

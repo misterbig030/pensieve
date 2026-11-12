@@ -1,5 +1,6 @@
 import { streamObject } from "ai";
 import type { z } from "zod";
+import { coverImportedRows } from "@/lib/import/cover";
 import {
   aliasMaterials,
   levelChecks,
@@ -305,6 +306,8 @@ export interface DraftLevelInput {
     daysPerWeek: number;
     hoursPerWeek?: number;
     split?: PlanSplit | null;
+    /** The learner's imported plan file, shown to the call as the plan's intent. */
+    importText?: string;
     outlineModel: ResolvedModel;
     /** The outline call's reasoning effort; `OUTLINE_EFFORT` when absent. */
     effort?: ReasoningEffort;
@@ -368,6 +371,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
     hoursPerWeek: ctx.hoursPerWeek,
     daysPerWeek: ctx.daysPerWeek,
     split: ctx.split,
+    importText: ctx.importText,
     level,
     spans: input.spans,
     weeks: ctx.weeks,
@@ -766,7 +770,9 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
       kids.push(event.node);
       yield { type: "child", node: event.node };
     } else {
-      yield { type: "finish", children: event.nodes, problems: event.problems, costUsd: event.costUsd };
+      // A split week's reservations (practiceCovers, covers) are the learner's rows: any the days left out go on a day.
+      const children = input.reason === "split" ? coverImportedRows(node, event.nodes).days : event.nodes;
+      yield { type: "finish", children, problems: event.problems, costUsd: event.costUsd };
     }
   }
 }

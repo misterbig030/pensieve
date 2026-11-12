@@ -34,6 +34,7 @@ const bodySchema = z.object({
   hoursPerWeek: hoursPerWeekSchema.optional(),
   daysPerWeek: daysPerWeekSchema.optional(),
   split: planSplitSchema.nullable().optional(),
+  importText: z.string().max(65536).optional(),
   tree: planTreeInputSchema,
   lockBefore: z.number().int().min(0).optional(),
   trackId: z.string().uuid().optional(),
@@ -93,6 +94,7 @@ export async function POST(request: Request) {
           daysPerWeek,
           hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
           split: body.split ?? null,
+          importText: body.importText,
           tree,
           // Only an adjusted plan has days behind the learner.
           lockBefore: body.mode === "adjust" ? (body.lockBefore ?? 0) : 0,

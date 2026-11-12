@@ -112,6 +112,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
         materials: detail.materials,
         hoursPerWeek: detail.track.hoursPerWeek,
         split: detail.track.split,
+        importText: detail.track.importText ?? undefined,
         tree: detail.root,
         nodeId: input.nodeId,
         reason: input.reason,
