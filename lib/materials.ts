@@ -577,9 +577,13 @@ export function isPracticeOnly(m: Pick<Material, "minutes" | "practice">): boole
   return !m.minutes && !!m.practice;
 }
 
-/** Whether the split was made from the learner's plan file (an imported plan): its picks are the file's own formats. */
+/**
+ * Whether the split was made from the learner's plan file (an imported plan): its picks are the file's own formats. The
+ * picks say so too, and keep saying it once the learner moves the share (which makes the split's reason theirs), as
+ * `splitPercents` reads them.
+ */
 export function isSplitFromFile(split: PlanSplit | null | undefined): boolean {
-  return split?.reason === SPLIT_FROM_FILE;
+  return split?.reason === SPLIT_FROM_FILE || (split?.formats ?? []).some((p) => p.reason === SPLIT_FROM_FILE);
 }
 
 /**

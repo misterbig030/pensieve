@@ -98,6 +98,42 @@ describe("an imported plan's own formats", () => {
   });
 });
 
+describe("an imported plan whose share the learner moved", () => {
+  // The slider sets the split's reason to the learner's; the picks still come from the file.
+  const moved = (plan: ImportedPlan) => ({ ...plan.split, readingShare: 30, reason: "Set by you." });
+
+  it("keeps Other assignable and a sourceless Other draft the learner's own", () => {
+    const plan = converted();
+    const split = moved(plan);
+    expect(split.formats!.every((p) => p.reason === "From your file.")).toBe(true);
+    expect(pickSources(split, plan.materials).find((p) => p.pick.format === "other")).toMatchObject({ assignable: true });
+    const { refs, refused } = resolvePracticeRefs([{ format: "other", task: "Pensieve: one benchmark round", done: "Verdict written", minutes: 90 }], aliasMaterials(plan.materials), split);
+    expect(refused).toEqual([]);
+    expect(refs[0]).toMatchObject({ format: "other", imported: true });
+  });
+
+  it("keeps the Other line in the re-draft prompt", () => {
+    const plan = converted();
+    const root = tree(plan);
+    const prompt = buildUnitsPrompt({
+      topic: plan.title,
+      materials: plan.materials,
+      granularity: plan.granularity,
+      hoursPerWeek: plan.hoursPerWeek,
+      daysPerWeek: plan.daysPerWeek,
+      split: moved(plan),
+      importText: "# Weekly plan",
+      level: "week",
+      spans: Array(7).fill(plan.daysPerWeek),
+      weeks: 8,
+      keep: [root.children![0]],
+      unitsAreLeaves: true,
+    });
+    expect(prompt).toMatch(/- Other \(format "other"\): about \d+(\.\d+)? h(?: \d+ min)? across the weeks/);
+    expect(prompt).toContain("These are the learner's own tasks from their plan file");
+  });
+});
+
 describe("re-drafting an imported plan", () => {
   beforeEach(() => {
     mockedStreamObject.mockReset();
