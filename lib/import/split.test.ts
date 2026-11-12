@@ -118,6 +118,19 @@ describe("splitWeekTime", () => {
     expect(splitWeekTime(w)).toEqual({ reading: 90, practice: { other: 150, "problem-set": 43 } });
   });
 
+  it("gives each untimed must reading at least 30 min, though practice fills the week", () => {
+    const w = week({
+      budgetHours: 5,
+      covers: [
+        { id: "M1", note: "Ch. 1–3", tier: "must", minutes: null },
+        { id: "M1", note: "Ch. 4", tier: "must", minutes: null },
+        { id: "M1", note: "Ch. 5", tier: "must", minutes: 20 },
+      ],
+      practiceCovers: [{ format: "other", id: null, note: null, task: "a", minutes: 300, imported: true }],
+    });
+    expect(splitWeekTime(w)).toEqual({ reading: 80, practice: { other: 300 } });
+  });
+
   it("gives must reading the file left untimed what is left of the week's budget", () => {
     const w = week({ budgetHours: 5, covers: [{ id: "M1", note: "Ch. 1–3", tier: "must", minutes: null }], practiceCovers: [{ format: "other", id: null, note: null, task: "a", minutes: 200, imported: true }] });
     expect(splitWeekTime(w)).toEqual({ reading: 100, practice: { other: 200 } });

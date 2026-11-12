@@ -89,22 +89,27 @@ export function coverImportedRows(parent: PlanNode, days: PlanNode[]): { days: P
   return { days: out, appended };
 }
 
+/** The least reading time an untimed must reading takes in a split week's stated time. */
+const UNTIMED_READING_MINUTES = 30;
+
 /**
  * The time of an imported week split into days, from its own reservations: its must reading's minutes and each format's
  * rows' minutes. Stated on the week, it is what its days share, so the plan-wide split never re-budgets the learner's
  * week: a format the week holds no rows of gets none. Must reading the file gave no minutes takes what is left of the
- * week's budget (`budgetHours`, else the plan's weekly hours) after the rest. Call it once `covers` and `practiceCovers`
- * hold the week's rows.
+ * week's budget (`budgetHours`, else the plan's weekly hours) after the rest, and at least 30 min each. Call it once
+ * `covers` and `practiceCovers` hold the week's rows.
  */
 export function splitWeekTime(week: PlanNode, hoursPerWeek?: number): UnitTime {
   const practice: Partial<Record<PracticeFormat, number>> = {};
   for (const c of week.practiceCovers ?? []) practice[c.format] = Math.min(MAX_UNIT_MINUTES, (practice[c.format] ?? 0) + (c.minutes ?? 0));
   const must = (week.covers ?? []).filter((c) => c.tier === "must");
   let reading = must.reduce((sum, c) => sum + (c.minutes ?? 0), 0);
-  if (must.some((c) => c.minutes === null || c.minutes === undefined)) {
+  const untimed = must.filter((c) => c.minutes === null || c.minutes === undefined).length;
+  if (untimed > 0) {
     const budget = (week.budgetHours ?? budgetFor(1, hoursPerWeek)) * 60;
     const taken = reading + Object.values(practice).reduce((sum, m) => sum + (m ?? 0), 0);
-    reading += Math.max(0, budget - taken);
+    // Each untimed must reading keeps a floor, so a week its practice fills still gives its days that reading to do.
+    reading += Math.max(untimed * UNTIMED_READING_MINUTES, budget - taken);
   }
   return { reading: Math.min(MAX_UNIT_MINUTES, reading), practice };
 }
