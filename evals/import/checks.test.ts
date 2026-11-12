@@ -31,8 +31,8 @@ function mat(id: string, title: string, kind: Material["kind"], titles: string[]
 
 const LEET = ["703", "1046", "973", "215", "621", "355", "295"];
 
-function weeklyPlan(over: { problems?: string[]; weeks?: number; imported?: boolean; design?: boolean; book?: boolean } = {}): ConvertResult {
-  const { problems = LEET, weeks = 8, imported = true, design = true, book = true } = over;
+function weeklyPlan(over: { problems?: string[]; weeks?: number; imported?: boolean; design?: boolean; book?: boolean; empty?: number[] } = {}): ConvertResult {
+  const { problems = LEET, weeks = 8, imported = true, design = true, book = true, empty = [] } = over;
   const leet = mat("M2", "LeetCode", "tool", ["703", "1046", "973", "215", "621", "355", "295", "999"]);
   const practice = [
     ...problems.map((p) => ({ format: "problem-set", id: "M2", task: `LeetCode ${p}`, done: "d", minutes: 40, generated: false, itemFrom: leet.practice!.list!.items.findIndex((i) => i.title === p) + 1, itemTo: leet.practice!.list!.items.findIndex((i) => i.title === p) + 1, imported })),
@@ -40,7 +40,11 @@ function weeklyPlan(over: { problems?: string[]; weeks?: number; imported?: bool
     { format: "project", id: null, task: "Pensieve: close branches", done: "d", minutes: 100, generated: false, imported },
   ];
   const first = node("Nov 10–15", { practice, materials: book ? [{ id: "M1", tier: "must", activity: "read", note: "Ch. 1–3", minutes: 90 }] : [] } as Partial<Node>);
-  const tree = [first, ...Array.from({ length: weeks - 1 }, (_, i) => node(`Week ${i + 2}`))];
+  // Weeks 2 on hold a row each, as the file fills every week; those in `empty` (by week number) hold none.
+  const rest = Array.from({ length: weeks - 1 }, (_, i) =>
+    node(`Week ${i + 2}`, empty.includes(i + 2) ? {} : ({ practice: [{ format: "other", id: null, task: `Task ${i + 2}`, done: "d", minutes: 60, generated: false, imported }] } as Partial<Node>)),
+  );
+  const tree = [first, ...rest];
   return plan(tree, { materials: [mat("M1", "System Design Interview, vol. 1", "book"), leet] });
 }
 
@@ -65,10 +69,19 @@ describe("weekly-plan", () => {
     expect(names(checkImport("weekly-plan", weeklyPlan({ problems: [...LEET].reverse() })))).toContain("7 heap problem rows in order");
     expect(names(checkImport("weekly-plan", weeklyPlan({ problems: LEET.slice(0, 6) })))).toContain("7 heap problem rows in order");
   });
-  it("fails without the rate limiter, the book, or imported flags", () => {
+  it("fails without the rate limiter or the book", () => {
     expect(names(checkImport("weekly-plan", weeklyPlan({ design: false })))).toContain("rate limiter design-exercise row");
     expect(names(checkImport("weekly-plan", weeklyPlan({ book: false })))).toContain("vol. 1 reading");
-    expect(names(checkImport("weekly-plan", weeklyPlan({ imported: false })))).toContain("every practice row imported");
+  });
+  it("fails when a week the file fills holds no rows", () => {
+    const r = checkImport("weekly-plan", weeklyPlan({ empty: [7] }));
+    expect(names(r)).toEqual(["every week has rows"]);
+    expect(r.verdicts.find((v) => v.name === "every week has rows")!.detail).toContain("Week 7");
+  });
+  it("no longer judges the imported flag, which the converter sets on every row", () => {
+    const r = checkImport("weekly-plan", weeklyPlan({ imported: false }));
+    expect(r.passed).toBe(true);
+    expect(r.verdicts.map((v) => v.name)).not.toContain("every practice row imported");
   });
   it("fails on a no_plan answer", () => {
     expect(checkImport("weekly-plan", noPlan).passed).toBe(false);

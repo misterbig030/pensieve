@@ -65,8 +65,9 @@ function checkWeeklyPlan(result: ConvertResult): ImportCheck {
   const design = practice.filter((p) => p.format === "design-exercise" && /rate limiter/i.test(p.task));
   verdicts.push(verdict("rate limiter design-exercise row", design.length >= 1, `${design.length} matching row(s)`));
 
-  const notImported = practice.filter((p) => p.imported !== true);
-  verdicts.push(verdict("every practice row imported", practice.length > 0 && notImported.length === 0, `${notImported.length} of ${practice.length} rows lack imported: true`));
+  // weekly-plan.md fills all 8 weeks: each must keep a row (a reading or a practice row), Week 7's light one included.
+  const empty = tree.flatMap((n, i) => ((n.materials?.length ?? 0) + (n.practice?.length ?? 0) > 0 ? [] : [`Week ${i + 1}`]));
+  verdicts.push(verdict("every week has rows", tree.length > 0 && empty.length === 0, empty.length > 0 ? `no rows in ${empty.join(", ")}` : `${tree.length} weeks, each with rows`));
 
   const counts: Record<string, number> = {};
   for (const p of practice.filter((row) => row.format !== "problem-set")) counts[p.format] = (counts[p.format] ?? 0) + 1;
