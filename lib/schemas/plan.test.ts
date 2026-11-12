@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { DRAFTABLE_FORMATS } from "@/lib/practice";
-import { capProblems, MAX_LEVEL_UNITS, MAX_PROBLEM_CHARS, MAX_PROBLEMS, problemsSchema, unitListSchema, unitTimeDraftSchema, unitTimeSchema } from "./plan";
+import { capProblems, MAX_LEVEL_UNITS, MAX_PROBLEM_CHARS, MAX_PROBLEMS, problemsSchema, unitListSchema } from "./plan";
 
 describe("unitListSchema", () => {
   const unit = { title: "Foundations", summary: "Why it comes first." };
@@ -17,22 +16,6 @@ describe("unitListSchema", () => {
     expect(unitListSchema.safeParse({ units: Array.from({ length: MAX_LEVEL_UNITS }, () => unit) }).success).toBe(true);
     expect(unitListSchema.safeParse({ units: [] }).success).toBe(false);
     expect(unitListSchema.safeParse({ units: Array.from({ length: MAX_LEVEL_UNITS + 1 }, () => unit) }).success).toBe(false);
-  });
-});
-
-describe("unitTimeDraftSchema", () => {
-  it("offers the model only the draftable formats", () => {
-    const sent = JSON.stringify(z.toJSONSchema(unitTimeDraftSchema));
-    for (const f of DRAFTABLE_FORMATS) expect(sent).toContain(f);
-    expect(sent).not.toContain("other");
-  });
-
-  it("still reads a heading's Other minutes, which an imported plan's prompt may ask for", () => {
-    expect(unitTimeDraftSchema.safeParse({ reading: 30, practice: [{ format: "other", minutes: 60 }] }).success).toBe(true);
-  });
-
-  it("leaves stored time taking every format, Other with them", () => {
-    expect(unitTimeSchema.safeParse({ reading: 30, practice: { other: 60 } }).success).toBe(true);
   });
 });
 

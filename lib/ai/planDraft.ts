@@ -36,7 +36,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
-import { PRACTICE_FORMATS, type PracticeFormat } from "@/lib/practice";
+import type { PracticeFormat } from "@/lib/practice";
 import type { Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
 import { capProblems, MAX_UNIT_MINUTES, unitListSchema, type UnitDraft, type UnitTime, type unitTimeDraftSchema } from "@/lib/schemas/plan";
 import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
@@ -113,10 +113,7 @@ export function toUnitTime(draft: z.infer<typeof unitTimeDraftSchema>, picked: r
   const practice: UnitTime["practice"] = {};
   const unpicked: PracticeFormat[] = [];
   // A streamed unit is not validated yet: its practice may be missing until the level is in.
-  for (const { format: written, minutes } of draft.practice ?? []) {
-    // The format is written as a name: one that is no format is left out.
-    const format = formatNamed(written);
-    if (!format) continue;
+  for (const { format, minutes } of draft.practice ?? []) {
     if (!picked.includes(format)) {
       if (!unpicked.includes(format)) unpicked.push(format);
       continue;
@@ -126,16 +123,10 @@ export function toUnitTime(draft: z.infer<typeof unitTimeDraftSchema>, picked: r
   return { time: { reading: Math.min(MAX_UNIT_MINUTES, draft.reading), practice }, unpicked };
 }
 
-/** The registry format a written name is (case and outer spaces aside), or null. */
-function formatNamed(name: string | undefined): PracticeFormat | null {
-  const f = name?.trim().toLowerCase();
-  return f && (PRACTICE_FORMATS as readonly string[]).includes(f) ? (f as PracticeFormat) : null;
-}
-
 /** Whether the model wrote more minutes for one of a heading's activities than a saved unit may keep (`toUnitTime` clamps them). */
 export function timeOverLimit(draft: z.infer<typeof unitTimeDraftSchema>): boolean {
-  const byFormat = new Map<string, number>();
-  for (const { format, minutes } of draft.practice ?? []) byFormat.set(formatNamed(format) ?? format, (byFormat.get(formatNamed(format) ?? format) ?? 0) + minutes);
+  const byFormat = new Map<PracticeFormat, number>();
+  for (const { format, minutes } of draft.practice ?? []) byFormat.set(format, (byFormat.get(format) ?? 0) + minutes);
   return draft.reading > MAX_UNIT_MINUTES || [...byFormat.values()].some((m) => m > MAX_UNIT_MINUTES);
 }
 
