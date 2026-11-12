@@ -96,3 +96,18 @@ describe("imported practice rows and the import text", () => {
     expect(detail.root.children![0].practice![0].imported).toBeUndefined();
   });
 });
+
+describe("imported covers", () => {
+  it("keeps imported on a heading's reservation", async () => {
+    const week = makeNode({
+      level: "week",
+      title: "A",
+      summary: "s",
+      len: 2,
+      practiceCovers: [{ format: "other", id: null, note: null, task: "Merge branches", minutes: 100, imported: true }],
+    });
+    const { trackId } = await createTrackWithPlan({ userId: "u1", title: "T", granularity: "day", root: makeRoot([week]), materials: [] });
+    const loaded = (await getTrackDetail(trackId, "u1"))!.root.children![0];
+    expect(loaded.practiceCovers![0].imported).toBe(true);
+  });
+});

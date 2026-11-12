@@ -50,8 +50,9 @@ describe("normalizePicks", () => {
 
 describe("PRACTICE_REGISTRY", () => {
   it("lists every format in the registry with a label, a research line and a generation rule", () => {
-    expect(DRAFTABLE_FORMATS).toHaveLength(7);
-    expect(DRAFTABLE_FORMATS.every((f) => PRACTICE_REGISTRY[f].id === f && PRACTICE_REGISTRY[f].label && PRACTICE_REGISTRY[f].research && PRACTICE_REGISTRY[f].generated)).toBe(true);
+    expect(PRACTICE_FORMATS).toHaveLength(8);
+    expect(PRACTICE_FORMATS.every((f) => PRACTICE_REGISTRY[f].id === f && PRACTICE_REGISTRY[f].label && PRACTICE_REGISTRY[f].generated)).toBe(true);
+    expect(DRAFTABLE_FORMATS.every((f) => PRACTICE_REGISTRY[f].research)).toBe(true);
   });
 
   it("sizes each format as the spec says", () => {

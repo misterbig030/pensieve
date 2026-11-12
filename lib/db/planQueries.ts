@@ -39,12 +39,12 @@ function itemPositions(row: { itemFrom: number | null; itemTo: number | null }):
 }
 
 /** Groups a track's `node_practice` rows into each node's reservations and practice rows, in row order. */
-export function practiceByNode(rows: (Pick<NodePracticeRow, "nodeId" | "sourceId" | "role" | "position" | "format" | "task" | "done" | "note" | "minutes" | "generated" | "itemFrom" | "itemTo"> & { imported?: boolean })[]) {
+export function practiceByNode(rows: Pick<NodePracticeRow, "nodeId" | "sourceId" | "role" | "position" | "format" | "task" | "done" | "note" | "minutes" | "generated" | "itemFrom" | "itemTo" | "imported">[]) {
   const out = new Map<string, { covers: PracticeCover[]; practice: PracticeRef[] }>();
   for (const row of [...rows].sort((a, b) => a.position - b.position)) {
     const entry = out.get(row.nodeId) ?? { covers: [], practice: [] };
     if (row.role === "covers") {
-      entry.covers.push({ format: row.format, id: row.sourceId, note: row.note, ...(row.task ? { task: row.task } : {}), ...(row.minutes ? { minutes: row.minutes } : {}), ...itemPositions(row) });
+      entry.covers.push({ format: row.format, id: row.sourceId, note: row.note, ...(row.task ? { task: row.task } : {}), ...(row.minutes ? { minutes: row.minutes } : {}), ...(row.imported ? { imported: true } : {}), ...itemPositions(row) });
     } else {
       // An assigned row is always written with its done condition and minutes.
       entry.practice.push({ format: row.format, id: row.sourceId, task: row.task, done: row.done ?? "", minutes: row.minutes ?? 1, generated: row.generated, ...(row.imported ? { imported: true } : {}), ...itemPositions(row) });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PRACTICE_FORMATS } from "@/lib/practice";
+import { DRAFTABLE_FORMATS, PRACTICE_FORMATS } from "@/lib/practice";
 import { SOURCE_TYPES } from "./source";
 
 export const MATERIAL_ORIGINS = ["learner", "research", "import"] as const;
@@ -275,7 +275,7 @@ export type CoverRefDraft = z.infer<typeof coverRefDraftSchema>;
 
 /** What the model writes for a leaf's practice row. Code decides `generated`: a row with no source is one the model wrote. */
 export const practiceRefDraftSchema = z.object({
-  format: z.string().describe(`One of the plan's picked formats: ${PRACTICE_FORMATS.join(", ")}`),
+  format: z.string().describe(`One of the plan's picked formats: ${DRAFTABLE_FORMATS.join(", ")}`),
   id: z.string().nullable().optional().describe("The practice source's id (or one of its items, e.g. M4.12), or the unit's reading for recall written from it; left out for a row you write"),
   task: z.string().describe('Exactly what to do and which part ("NeetCode 150 · Arrays & Hashing, problems 1–6")'),
   done: z.string().describe("How the learner knows it is finished"),

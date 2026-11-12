@@ -250,7 +250,7 @@ describe("persistence of materials", () => {
     expect(after.root.children![0].children![0].materials).toBeUndefined();
   });
   describe("item positions on practice rows (pure mapping)", () => {
-    const base = { nodeId: "n1", sourceId: "s1", format: "problem-set" as const, note: null, done: null, minutes: null, generated: false };
+    const base = { nodeId: "n1", sourceId: "s1", format: "problem-set" as const, note: null, done: null, minutes: null, generated: false, imported: false };
     it("loads a reservation's run and a row's item, and leaves both off a row without positions", () => {
       const out = practiceByNode([
         { ...base, role: "covers", position: 0, task: "", note: "Arrays", itemFrom: 1, itemTo: 9 },
