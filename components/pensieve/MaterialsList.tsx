@@ -14,6 +14,7 @@ import {
   GraduationCap,
   RotateCw,
   ShieldCheck,
+  Shapes,
   StickyNote,
   Wrench,
   X,
@@ -36,6 +37,7 @@ export const KIND_ICON: Record<MaterialKind, ComponentType<{ className?: string;
   repo: GitBranch,
   tool: Wrench,
   note: StickyNote,
+  other: Shapes,
 };
 
 export interface MaterialUse {

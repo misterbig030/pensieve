@@ -2,7 +2,7 @@ import { z } from "zod";
 import { budgetMissSlack, isPracticeOnly, keptPositions, pickSources } from "@/lib/materials";
 import {
   MAX_PRACTICE_PICKS,
-  PRACTICE_FORMATS,
+  DRAFTABLE_FORMATS,
   PRACTICE_REGISTRY,
   itemMinutes,
   normalizePicks,
@@ -254,7 +254,7 @@ export function buildAllocationPrompt(input: AllocationInput): string {
       : ["There are no materials: research found none and the learner supplied none."]),
     "",
     "The practice formats:",
-    ...PRACTICE_FORMATS.map((f) => {
+    ...DRAFTABLE_FORMATS.map((f) => {
       const spec = PRACTICE_REGISTRY[f];
       const sizing = sizingSentence(f) ?? `${spec.label} is sized by the time given to it.`;
       return `- ${f} (${spec.label}): the learner ${spec.prompt}. ${sizing} ${WRITABLE[spec.generated]}`;

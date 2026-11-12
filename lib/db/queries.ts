@@ -149,6 +149,8 @@ export async function createTrackWithPlan(input: {
   split?: PlanSplit | null;
   /** Learner lines for the top level's code-checked problems. */
   problems?: string[];
+  /** The plan file an import came from, kept as given. */
+  importText?: string;
   /** Already vetted (signatures checked). Node references use these materials' ids. */
   materials: Material[];
   root: PlanNode;
@@ -168,6 +170,7 @@ export async function createTrackWithPlan(input: {
         daysPerWeek: input.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK,
         split: input.split ?? null,
         problems: input.problems?.length ? input.problems : null,
+        importText: input.importText ?? null,
         status: "active",
       })
       .returning({ id: tracks.id });

@@ -59,6 +59,8 @@ export const tracks = pgTable("tracks", {
   split: jsonb("split").$type<PlanSplit>(),
   /** Learner lines for the code-checked problems of the plan's top level. Null when there are none. */
   problems: jsonb("problems").$type<string[]>(),
+  /** The plan file the learner imported, as they gave it, kept so the draft can be redone from it. Null on tracks not imported. */
+  importText: text("import_text"),
   status: text("status", { enum: ["active", "completed", "archived"] })
     .notNull()
     .default("active"),
@@ -203,6 +205,8 @@ export const nodePractice = pgTable(
     /** 1-based positions in the source's item list, inclusive: a reservation's run, or a row's one item (equal). Null without a list. */
     itemFrom: integer("item_from"),
     itemTo: integer("item_to"),
+    /** True on a row written from the learner's imported plan file. */
+    imported: boolean("imported").notNull().default(false),
   },
   (t) => [index("node_practice_node_idx").on(t.nodeId)],
 );

@@ -1,6 +1,6 @@
 import { ToolLoopAgent, isStepCount, type LanguageModel } from "ai";
 import type { SourceInput } from "@/lib/schemas/source";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
+import { DRAFTABLE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { DEFAULT_HOURS_PER_WEEK, totalHours, weeksLabel } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortSettings, emitGenerationLog, loggedGenerateObject, type GenerationLogContext } from "../logged";
 import { reportServiceFailure } from "../serviceEvents";
@@ -129,7 +129,7 @@ export function todayLine(today: Date = new Date()): string {
 
 /** What research can look for, one line per practice format: the researcher chooses the kinds the topic calls for. */
 export function practiceLines(): string[] {
-  return PRACTICE_FORMATS.map((f) => `- ${PRACTICE_REGISTRY[f].label} (${f}): ${PRACTICE_REGISTRY[f].research}`);
+  return DRAFTABLE_FORMATS.map((f) => `- ${PRACTICE_REGISTRY[f].label} (${f}): ${PRACTICE_REGISTRY[f].research}`);
 }
 
 export function buildResearchInstructions(
@@ -161,7 +161,7 @@ export function buildResearchInstructions(
 
 /** The `practice` field's guidance for candidates and the learner's notes: which formats, and how to fill it. */
 function practiceFieldLines(): { learner: string; candidate: string; coverage: string } {
-  const formats = PRACTICE_FORMATS.map((f) => `${f} (${PRACTICE_REGISTRY[f].label})`).join(", ");
+  const formats = DRAFTABLE_FORMATS.map((f) => `${f} (${PRACTICE_REGISTRY[f].label})`).join(", ");
   const fill = `format: the id of the kind it serves (${formats}). items: the problems, questions, labs or steps the page says it holds, null when it does not say. perItemMinutes: only when the page states a time per item, else null. answers: true when the notes show the source has solutions, an answer key, worked solutions or a rubric, on its own page or on one they name for it (a walkthrough of every problem, a solutions repository). A page that could not be read, or read as empty, is no evidence that it has none: judge it from what else the notes say about it.`;
   return {
     candidate: `- practice: set when the source is practice to do, alone or besides reading; leave it out for reading only. ${fill} A practice source's minutes are null unless the plan would also read it. A source that is only practice, for a format that needs answers, is thrown away unless answers is true. A book of problems with their solutions (an interview-problems book, for one) is practice besides reading: give it practice too, with the number of problems when the notes give one, and keep its minutes.`,

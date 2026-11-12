@@ -63,3 +63,36 @@ describe("unit time and problems on nodes", () => {
     expect(a2.children![0].time).toEqual(TIME);
   });
 });
+
+describe("imported practice rows and the import text", () => {
+  it("keeps an imported other row's flag and the track's import text", async () => {
+    const leaf = makeNode({
+      level: "day",
+      title: "A",
+      summary: "s",
+      len: 1,
+      practice: [{ format: "other", id: null, task: "Merge or close the open branches", done: "Done as the plan file describes it.", minutes: 100, generated: false, imported: true }],
+    });
+    const root = makeRoot([leaf]);
+    const { trackId } = await createTrackWithPlan({ userId: "u1", title: "T", granularity: "day", root, materials: [], importText: "# Plan" });
+    const detail = (await getTrackDetail(trackId, "u1"))!;
+    expect(detail.track.importText).toBe("# Plan");
+    const loaded = detail.root.children![0];
+    expect(loaded.practice![0].format).toBe("other");
+    expect(loaded.practice![0].imported).toBe(true);
+  });
+
+  it("leaves imported unset on ordinary rows and the import text null", async () => {
+    const leaf = makeNode({
+      level: "day",
+      title: "A",
+      summary: "s",
+      len: 1,
+      practice: [{ format: "recall", id: null, task: "Recall", done: "Checked", minutes: 10, generated: true }],
+    });
+    const { trackId } = await createTrackWithPlan({ userId: "u1", title: "T", granularity: "day", root: makeRoot([leaf]), materials: [] });
+    const detail = (await getTrackDetail(trackId, "u1"))!;
+    expect(detail.track.importText).toBeNull();
+    expect(detail.root.children![0].practice![0].imported).toBeUndefined();
+  });
+});
