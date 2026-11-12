@@ -72,6 +72,14 @@ describe("an imported plan's own formats", () => {
     expect(refs).toEqual([{ format: "other", id: null, task: "Pensieve: one benchmark round", done: "Verdict written", minutes: 90, generated: true, imported: true }]);
   });
 
+  it("refuses a reworded sourceless row of a format the plan has a source for: the item is the source's own", () => {
+    const plan = converted();
+    // "703" is LeetCode's first item; a reworded row of it with no id is no copy of the learner's task, so it is no row of theirs.
+    const { refs, refused } = resolvePracticeRefs([{ format: "problem-set", task: "Heap 703: Kth largest", done: "Solved", minutes: 43 }], aliasMaterials(plan.materials), plan.split);
+    expect(refs).toEqual([]);
+    expect(refused).toEqual(['Problems "Heap 703: Kth largest": no source, and this format is never written']);
+  });
+
   it("a plan not imported still refuses a sourceless row of a never-written format", () => {
     const split = { readingShare: 50, practice: "problems", reason: "A coding topic.", formats: [{ format: "problem-set" as const, share: 100, focus: "arrays", reason: "Practice." }] };
     const { refs, refused } = resolvePracticeRefs([{ format: "problem-set", task: "Ten array problems", done: "Solved", minutes: 60 }], aliasMaterials([]), split);

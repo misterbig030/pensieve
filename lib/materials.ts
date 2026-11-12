@@ -66,6 +66,8 @@ export interface MaterialAliases {
   practice(id: string): PracticeFormat | null;
   /** The item at a 1-based position of a practice source's list. */
   item(id: string, position: number): PracticeItem | undefined;
+  /** Whether some material on the list is a practice source of `format`. */
+  hasSource(format: PracticeFormat): boolean;
 }
 
 const ALIAS_RE = /^\[?\s*(m\d+)(?:\.(i)?(\d+))?\s*\]?$/i;
@@ -114,6 +116,7 @@ export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practic
     items: (id) => itemCounts.get(id) ?? 0,
     practice: (id) => formats.get(id) ?? null,
     item: (id, position) => lists.get(id)?.[position - 1],
+    hasSource: (format) => [...formats.values()].includes(format),
   };
 }
 
@@ -310,7 +313,7 @@ export function resolvePracticeRefs(
   const unknown: string[] = [];
   const refused: string[] = [];
   for (const raw of drafts ?? []) {
-    const draft = fileRow(raw, split);
+    const draft = fileRow(raw, split, aliases);
     const name = rowName(draft.format, draft.task);
     // An imported row is the learner's own: any format the registry knows, picked or not.
     const format = draft.imported ? knownFormat(draft.format) : pickedFormat(draft.format, split);
@@ -370,14 +373,16 @@ export function resolvePracticeRefs(
 }
 
 /**
- * On a split made from the learner's plan file, a row with no source of a pick that is never written can only be one of
- * the file's tasks (the prompt has the model copy them), so it is marked `imported`. "other" exists only on such plans.
- * Any other draft, and every draft on a plan not imported, is returned as it is.
+ * On a split made from the learner's plan file, a row with no source of a pick that is never written and that no
+ * material on the list serves can only be one of the file's tasks (the prompt has the model copy them), so it is marked
+ * `imported`; in practice that is "other", which exists only on such plans. A pick a source serves keeps its rows to
+ * that source: a sourceless one is a reworded copy of an item the source holds, and is judged as usual. Any other
+ * draft, and every draft on a plan not imported, is returned as it is.
  */
-function fileRow(draft: PracticeRefDraft, split: PlanSplit | null | undefined): PracticeRefDraft {
+function fileRow(draft: PracticeRefDraft, split: PlanSplit | null | undefined, aliases: MaterialAliases): PracticeRefDraft {
   if (draft.imported || draft.id?.trim() || !isSplitFromFile(split)) return draft;
   const format = pickedFormat(draft.format, split);
-  return format && PRACTICE_REGISTRY[format].generated === "never" ? { ...draft, imported: true } : draft;
+  return format && PRACTICE_REGISTRY[format].generated === "never" && !aliases.hasSource(format) ? { ...draft, imported: true } : draft;
 }
 
 /**
