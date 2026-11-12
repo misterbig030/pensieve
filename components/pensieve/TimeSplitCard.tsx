@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DaysPerWeekPicker } from "@/components/pensieve/DaysPerWeekPicker";
 import type { Material } from "@/lib/schemas/material";
-import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, SPLIT_SET_BY_LEARNER, clampHours, presetFor, shareAdjustable, totalHours, type PlanSplit } from "@/lib/studyTime";
+import { HOURS_PRESETS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK, SPLIT_FROM_FILE, SPLIT_SET_BY_LEARNER, clampHours, presetFor, shareAdjustable, totalHours, type PlanSplit } from "@/lib/studyTime";
 import { splitBar } from "@/lib/splitBar";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +47,7 @@ export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, materia
         </h2>
         {split && (
           <span className="inline-flex rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-semibold">
-            {split.reason === SPLIT_SET_BY_LEARNER ? "Your call" : "The plan\u2019s call"}
+            {split.reason === SPLIT_SET_BY_LEARNER ? "Your call" : split.reason === SPLIT_FROM_FILE ? "From your file" : "The plan\u2019s call"}
           </span>
         )}
         <span className="ml-auto text-[12.5px] text-muted-foreground max-[640px]:ml-0">
@@ -89,7 +89,7 @@ export function TimeSplitCard({ weeks, hoursPerWeek, daysPerWeek, split, materia
               </span>
             ))}
           </div>
-          {split.reason && split.reason !== SPLIT_SET_BY_LEARNER && <p className="m-0 text-[12.5px] leading-normal text-neutral-800">Why: {split.reason}</p>}
+          {split.reason && split.reason !== SPLIT_SET_BY_LEARNER && split.reason !== SPLIT_FROM_FILE && <p className="m-0 text-[12.5px] leading-normal text-neutral-800">Why: {split.reason}</p>}
         </>
       ) : (
         <p className="m-0 text-[13px] leading-normal text-neutral-800">

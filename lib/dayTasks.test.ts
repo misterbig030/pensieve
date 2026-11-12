@@ -103,7 +103,7 @@ describe("lessonInputs", () => {
       },
     ]);
     expect(practice).toEqual([
-      { format: "problem-set", label: "Problems", task: "NeetCode 150 · problem", done: "solved without hints", minutes: 25, source: { title: "NeetCode 150", url: bank.url }, generated: false, step: { token: "T2", id: "practice:problem-set#nc#4" } },
+      { format: "problem-set", label: "Problems", task: "NeetCode 150 · problem", done: "solved without hints", minutes: 25, source: { title: "NeetCode 150", url: bank.url, type: bank.type }, generated: false, step: { token: "T2", id: "practice:problem-set#nc#4" } },
       { format: "recall", label: "Recall", task: "Write a summary of chapter 3", done: "a page of notes", minutes: 15, source: null, generated: true, step: { token: "T3", id: "practice:recall#generated#write-a-summary-of-chapter-3" } },
     ]);
   });

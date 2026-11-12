@@ -83,7 +83,7 @@ export function lessonInputs(tasks: DayTask[]): { materials: LessonMaterial[]; p
       materials.push({ title: material.title, url: material.url, type: material.type, kind: material.kind, tier, minutes, note, chapter, activity, step });
     } else {
       const { format, label, task: text, done, minutes, material, generated } = task.row;
-      practice.push({ format, label, task: text, done, minutes, source: material ? { title: material.title, url: material.url } : null, generated, step });
+      practice.push({ format, label, task: text, done, minutes, source: material ? { title: material.title, url: material.url, type: material.type } : null, generated, step });
     }
   }
   return { materials, practice };

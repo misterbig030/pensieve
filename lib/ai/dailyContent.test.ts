@@ -32,6 +32,18 @@ describe("buildDailyContentPrompt", () => {
     expect(prompt).not.toMatch(/transcript/i);
   });
 
+  it("omits the url of an imported note material", () => {
+    const prompt = buildDailyContentPrompt({
+      title: "Caching",
+      summary: "Cache strategies",
+      materials: [{ url: "import:week-1-notes", type: "note", title: "Week 1 notes" }],
+      practice: [{ format: "problem-set", label: "Problems", task: "Do 1-5", done: "done", minutes: 30, source: { title: "Week 1 notes", url: "import:week-1-notes", type: "note" }, generated: false }],
+    });
+    expect(prompt).toContain("Week 1 notes");
+    expect(prompt).not.toContain("import:");
+    expect(prompt).not.toContain("()");
+  });
+
   it("mentions file/note materials as context without treating them as citable", () => {
     const prompt = buildDailyContentPrompt({
       title: "Caching",
