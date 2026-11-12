@@ -770,8 +770,8 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
       kids.push(event.node);
       yield { type: "child", node: event.node };
     } else {
-      // A split week's reservations (practiceCovers, covers) are the learner's rows: any the days left out go on a day.
-      const children = input.reason === "split" ? coverImportedRows(node, event.nodes).days : event.nodes;
+      // An imported track's split week: its reservations (practiceCovers, covers) are the learner's rows, so any the days left out go on a day. Other tracks' splits stay as drafted.
+      const children = input.reason === "split" && input.importText ? coverImportedRows(node, event.nodes).days : event.nodes;
       yield { type: "finish", children, problems: event.problems, costUsd: event.costUsd };
     }
   }

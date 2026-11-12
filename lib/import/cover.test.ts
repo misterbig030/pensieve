@@ -51,6 +51,11 @@ describe("coverImportedRows", () => {
     expect(out.days[1].practice![0]).toMatchObject({ id: "m1", itemFrom: 9, itemTo: 9, imported: true, generated: false });
   });
 
+  it("treats a day row with no item run as holding the whole source", () => {
+    const covers: PracticeCover[] = [{ format: "problem-set", id: "m1", note: null, task: "Item 9", minutes: 25, itemFrom: 9, itemTo: 9, imported: true }];
+    expect(coverImportedRows(week(covers), [day("d1", [row("any", 25, { format: "problem-set", id: "m1" })])]).appended).toBe(0);
+  });
+
   it("splits an empty imported week without error", () => {
     const out = coverImportedRows(week([]), [day("d1"), day("d2")]);
     expect(out.appended).toBe(0);

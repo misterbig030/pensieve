@@ -12,7 +12,7 @@ function runOf(r: { itemFrom?: number | null; itemTo?: number | null }): [number
 
 /**
  * Whether some day holds the imported reservation `row`. A sourced row is held by a day row of its format and source
- * whose items overlap its own (any such row, when it names no items); a sourceless row by a day row of its format with
+ * whose items overlap its own (any such row, when either names no items); a sourceless row by a day row of its format with
  * its task, or one that starts with the first 24 characters of it (`isImportedRow`, as the drafts are marked).
  */
 function holds(days: PlanNode[], row: PracticeCover): boolean {
@@ -22,7 +22,8 @@ function holds(days: PlanNode[], row: PracticeCover): boolean {
   return rows.some((r) => {
     if (r.id !== row.id) return false;
     const got = runOf(r);
-    return !want || (got !== null && got[0] <= want[1] && want[0] <= got[1]);
+    // A day row with no item run takes the whole source.
+    return !want || got === null || (got[0] <= want[1] && want[0] <= got[1]);
   });
 }
 

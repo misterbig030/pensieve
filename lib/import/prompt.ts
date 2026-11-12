@@ -1,3 +1,4 @@
+import { fenceText } from "./fence";
 import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { KIND_LABEL, MATERIAL_KINDS } from "@/lib/schemas/material";
 
@@ -66,5 +67,5 @@ export function buildImportPrompt(input: { fileName: string; text: string }): st
 
 /** The file's text with any closing tag broken, so nothing in it can end the fence early. */
 function fenced(text: string): string {
-  return text.replace(/<\/\s*file\s*>/gi, "</ file>");
+  return fenceText(text, "file");
 }

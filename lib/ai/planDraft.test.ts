@@ -591,6 +591,21 @@ describe("breaches while drafting", () => {
     expect(calls[0].facts).toContain("breach: Week 1 · Day 2 reads M1.3, which Week 1 did not reserve");
     expect(mockedStreamObject).toHaveBeenCalledTimes(1);
   });
+  it("completes a split with the learner's reading the days skipped only on an imported track", async () => {
+    const withMust = () => {
+      const r = tree();
+      for (const c of r.children![0].children![0].covers!) c.tier = "must";
+      return r;
+    };
+    const run = async (importText?: string) => {
+      mockedStreamObject.mockReturnValueOnce(fakeStream(dayUnits([1, 1])));
+      let children: PlanNode[] = [];
+      for await (const e of streamExpandNode({ ...ctx, importText, tree: withMust(), nodeId: "w1", reason: "split" })) if (e.type === "finish") children = e.children;
+      return children.flatMap((d) => d.materials ?? []).map((m) => m.chapter);
+    };
+    expect(await run()).toEqual([1, 1]);
+    expect(await run("Week 1 · Heap")).toEqual([1, 1, 2]);
+  });
   it("sizes chapter rows from the list before judging the budget", async () => {
     const week = (title: string, ids: string[], minutes: number[]) => ({ title, summary: "s", materials: ids.map((id, i) => ({ id, tier: "must" as const, minutes: minutes[i] })) });
     // The model wrote flat 60-minute rows, 240 min in week 1; its chapters are 107, 140, 93 and 126 minutes.
