@@ -109,6 +109,17 @@ describe("lessonInputs", () => {
   });
 });
 
+describe("lessonInputs on an imported plan", () => {
+  it("passes an imported material's origin and an imported row's flag", () => {
+    const imported: Material = { ...book, id: "sdi", origin: "import", type: "note", title: "System Design Interview, vol. 1", url: "import:sdi" };
+    const read: ReadRow = { ...noteRow, material: imported, tier: "must", minutes: 90, note: "Ch. 1–3", key: "sdi#0" };
+    const own: PracticeRef = { format: "other", id: null, task: "Merge the branches", done: "Merged", minutes: 100, generated: false, imported: true };
+    const { materials, practice } = lessonInputs(dayTasks([read], practiceRowsFor([own], byId)));
+    expect(materials[0]).toMatchObject({ origin: "import", note: "Ch. 1–3", tier: "must", minutes: 90 });
+    expect(practice[0]).toMatchObject({ format: "other", source: null, imported: true });
+  });
+});
+
 describe("lessonMinutes", () => {
   const words = (n: number) => Array.from({ length: n }, () => "word").join(" ");
 
