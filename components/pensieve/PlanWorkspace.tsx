@@ -956,7 +956,7 @@ function splitWeek(week: PlanNode): void {
     delete week.materials;
   }
   if (week.practice) {
-    week.practiceCovers = week.practice.map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes, ...(r.itemFrom && r.itemTo ? { itemFrom: r.itemFrom, itemTo: r.itemTo } : {}) }));
+    week.practiceCovers = week.practice.map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes, ...(r.itemFrom && r.itemTo ? { itemFrom: r.itemFrom, itemTo: r.itemTo } : {}), ...(r.imported ? { imported: true } : {}) }));
     delete week.practice;
   }
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_PRACTICE_PICKS, PRACTICE_FORMATS, PRACTICE_REGISTRY, normalizePicks, practicePickDraftSchema, practicePickSchema } from "@/lib/practice";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY, normalizePicks, practicePickDraftSchema, practicePickSchema } from "@/lib/practice";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, MAX_DAYS_PER_WEEK } from "@/lib/planTree";
 import type { UnitTime } from "@/lib/schemas/plan";
 
@@ -99,7 +99,7 @@ export function hoursInText(text: string): number | null {
 export const planSplitSchema = z.object({
   readingShare: z.number().int().min(0).max(100),
   practice: z.string().trim().min(1).max(40),
-  formats: z.array(practicePickSchema).max(MAX_PRACTICE_PICKS).optional(),
+  formats: z.array(practicePickSchema).max(PRACTICE_FORMATS.length).optional(),
   reason: z.string().trim().max(300),
 });
 export type PlanSplit = z.infer<typeof planSplitSchema>;

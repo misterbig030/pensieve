@@ -742,7 +742,7 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
     node.manualSplit = true;
   }
   if (input.reason === "split" && node.practice) {
-    node.practiceCovers = node.practice.map(({ format, id, task, minutes, itemFrom, itemTo }) => ({ format, id, note: null, task, minutes, ...(itemFrom && itemTo ? { itemFrom, itemTo } : {}) }));
+    node.practiceCovers = node.practice.map(({ format, id, task, minutes, itemFrom, itemTo, imported }) => ({ format, id, note: null, task, minutes, ...(itemFrom && itemTo ? { itemFrom, itemTo } : {}), ...(imported ? { imported: true } : {}) }));
     delete node.practice;
     node.manualSplit = true;
   }

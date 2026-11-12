@@ -289,7 +289,11 @@ export const practiceCoverDraftSchema = z.object({
   from: z.number().optional().describe("For a source with an item list, only where the rules ask for a run: the first item this unit takes, by position"),
   to: z.number().optional().describe("For a source with an item list, only where the rules ask for a run: the last item this unit takes, by position"),
 });
-export type PracticeRefDraft = z.infer<typeof practiceRefDraftSchema>;
+/**
+ * `imported` is set in code on a row read from the learner's plan file, never written by the model (it is not in the
+ * schema it is given): it keeps the row past the picks and the never-written rule.
+ */
+export type PracticeRefDraft = z.infer<typeof practiceRefDraftSchema> & { imported?: boolean };
 export type PracticeCoverDraft = z.infer<typeof practiceCoverDraftSchema>;
 
 export function clip(text: string | null | undefined, max: number): string | null {

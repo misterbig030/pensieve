@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
 import type { Material, PracticeItem } from "@/lib/schemas/material";
 import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
-import { budgetLine, byTier, chapterLabel, coverPracticeRows, DoRows, itemLabel, minutesOver, partLabel, practiceRowsFor, readRowsFor, ReadTable, rowBrief, rowHref } from "./ReadTable";
+import { budgetLine, byTier, chapterLabel, coverPracticeRows, DoRows, itemLabel, minutesOver, partLabel, practiceRowsFor, practiceSourceLabel, readRowsFor, ReadTable, rowBrief, rowHref } from "./ReadTable";
 
 describe("readRowsFor", () => {
   it("fills chapter, activity and a key per row", () => {
@@ -224,5 +224,25 @@ describe("a listed item row", () => {
     const table = renderToStaticMarkup(createElement(ReadTable, { rows: [], practice: rows, budgetMinutes: 60 })).replace(/<!-- -->/g, "");
     expect(table).toMatch(/>49\. Group Anagrams<\/a>/);
     expect(table).toContain(">solution</a>");
+  });
+});
+
+describe("imported practice rows", () => {
+  it("name their source From file instead of Generated", () => {
+    const byId = new Map<string, Material>();
+    const [imported, plain] = practiceRowsFor(
+      [
+        { format: "other", id: null, task: "Merge the branches", done: "Done", minutes: 20, generated: true, imported: true },
+        { format: "mock", id: null, task: "A mock", done: "Scored", minutes: 45, generated: true },
+      ],
+      byId,
+    );
+    expect(imported.imported).toBe(true);
+    expect(practiceSourceLabel(imported)).toBe("From file");
+    expect(practiceSourceLabel(plain)).toBe("Generated");
+  });
+  it("keeps imported on a split week's covers", () => {
+    const [row] = coverPracticeRows([{ format: "other", id: null, note: null, task: "Merge the branches", minutes: 20, imported: true }], new Map());
+    expect(practiceSourceLabel(row)).toBe("From file");
   });
 });
