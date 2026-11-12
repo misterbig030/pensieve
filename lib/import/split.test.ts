@@ -90,3 +90,70 @@ describe("splitWeekTime", () => {
     expect(splitWeekTime(w)).toEqual({ reading: 100, practice: { other: 200 } });
   });
 });
+
+describe("expanding an imported month into weeks", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+  });
+
+  const month = (): ImportedPlan => {
+    const result = convertDraft(
+      {
+        kind: "plan",
+        title: "Q1",
+        hoursPerWeek: 10,
+        daysPerWeek: 5,
+        level: "month",
+        materials: [{ id: "M1", title: "SICP", author: null, kind: "book", practiceFormat: null, items: null }],
+        units: [
+          {
+            title: "January",
+            summary: "Start.",
+            budgetHours: null,
+            reading: [{ id: "M1", part: "Ch. 1", minutes: 120 }],
+            practice: [
+              { format: "other", id: null, items: null, task: "Set up the editor and the REPL", done: "Set up", minutes: 60 },
+              { format: "other", id: null, items: null, task: "Write the study log template", done: "Written", minutes: 30 },
+            ],
+            children: null,
+          },
+        ],
+        kept: [],
+        skipped: [],
+      },
+      "q1.md",
+    );
+    if (!result.ok) throw new Error("fixture");
+    return result.plan;
+  };
+
+  async function expand(importText: string | undefined): Promise<PlanNode[]> {
+    const plan = month();
+    const tree = fromTreeInput(plan.tree);
+    // The weeks place the first task and read the chapter, and leave the second task out.
+    const weeks: UnitDraft[] = [
+      { title: "W1", summary: "s", materials: [{ id: "M1", tier: "must", minutes: 120, note: "Ch. 1" }], practice: [{ format: "other", task: "Set up the editor and the REPL", done: "Set up", minutes: 60 }] },
+      { title: "W2", summary: "s" },
+      { title: "W3", summary: "s" },
+      { title: "W4", summary: "s" },
+    ];
+    mockedStreamObject.mockReturnValueOnce(fakeStream(weeks));
+    let children: PlanNode[] = [];
+    const ctx = { topic: plan.title, weeks: 4, daysPerWeek: plan.daysPerWeek, granularity: plan.granularity, materials: plan.materials, hoursPerWeek: plan.hoursPerWeek, split: plan.split };
+    for await (const e of streamExpandNode({ ...ctx, importText, tree, nodeId: tree.children![0].id, reason: "expand" })) if (e.type === "finish") children = e.children;
+    return children;
+  }
+
+  it("puts a learner's task the weeks left out on the lightest week", async () => {
+    const weeks = await expand("# Q1");
+    expect(weeks.map((w) => (w.practice ?? []).map((r) => r.task))).toEqual([["Set up the editor and the REPL"], ["Write the study log template"], [], []]);
+    expect(weeks[1].practice![0]).toMatchObject({ format: "other", minutes: 30, imported: true });
+    // The chapter the weeks read is not added again.
+    expect(weeks.flatMap((w) => w.materials ?? [])).toHaveLength(1);
+  });
+
+  it("leaves the weeks as drafted on a track with no plan file", async () => {
+    const weeks = await expand(undefined);
+    expect(weeks.flatMap((w) => w.practice ?? []).map((r) => r.task)).toEqual(["Set up the editor and the REPL"]);
+  });
+});

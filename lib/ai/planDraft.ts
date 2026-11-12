@@ -774,13 +774,17 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
   const ctx = { ...input, granularity, outlineModel: input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL) };
   const spans = childSpans(node, input.daysPerWeek);
   const kids: PlanNode[] = [];
+  // An imported track's heading (a split week, a month of the file) holds the learner's rows as reservations
+  // (practiceCovers, covers), so any its units left out go on the lightest unit. That needs units that hold rows: days,
+  // or weeks on a week plan; headings below a heading carry reservations, which the net does not place. Other tracks'
+  // units stay as drafted.
+  const net = !!input.importText && unitsAreLeaves(level, granularity);
   for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: node.id, log: input.log })) {
     if (event.type === "node") {
       kids.push(event.node);
       yield { type: "child", node: event.node };
     } else {
-      // An imported track's split week: its reservations (practiceCovers, covers) are the learner's rows, so any the days left out go on a day. Other tracks' splits stay as drafted.
-      const children = input.reason === "split" && input.importText ? coverImportedRows(node, event.nodes).days : event.nodes;
+      const children = net ? coverImportedRows(node, event.nodes).days : event.nodes;
       yield { type: "finish", children, problems: event.problems, costUsd: event.costUsd };
     }
   }

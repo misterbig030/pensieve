@@ -50,11 +50,12 @@ function lightest(days: PlanNode[], minutes: (day: PlanNode) => number): PlanNod
 }
 
 /**
- * The safety net for a week split into days: the learner's own rows are in the plan, so none may be lost when the model
- * skips one. `parent` holds them as reservations: its imported practice rows (`practiceCovers`) and its must reading
- * (`covers`). Each one no day holds is appended, as it was, to the day with the least practice (or reading) time; the
- * day is chosen again after each row, so several spread out. Returns the days (copies; the input is untouched) and how
- * many rows were appended. A parent with no such rows, or no days, changes nothing.
+ * The safety net for an imported heading planned into units that hold rows (a week split into days, a month into week
+ * leaves): the learner's own rows are in the plan, so none may be lost when the model skips one. `parent` holds them as
+ * reservations: its imported practice rows (`practiceCovers`) and its must reading (`covers`). Each one no unit holds
+ * is appended, as it was, to the unit (`days`) with the least practice (or reading) time; the unit is chosen again after
+ * each row, so several spread out. Returns the units (copies; the input is untouched) and how many rows were appended.
+ * A parent with no such rows, or no units, changes nothing.
  */
 export function coverImportedRows(parent: PlanNode, days: PlanNode[]): { days: PlanNode[]; appended: number } {
   const out = days.map((d) => ({ ...d, ...(d.practice ? { practice: [...d.practice] } : {}), ...(d.materials ? { materials: [...d.materials] } : {}) }));
