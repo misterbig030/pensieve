@@ -49,12 +49,16 @@ export function byTier(a: { tier: MaterialTier }, b: { tier: MaterialTier }): nu
 
 /** A node's Read table rows, must first, skipping references to materials that are not in the list. */
 export function readRowsFor(refs: MaterialRef[] | undefined, byId: ReadonlyMap<string, Material>): ReadRow[] {
+  const seen = new Map<string, number>();
   return (refs ?? [])
     .flatMap((r) => {
       const material = byId.get(r.id);
-      return material
-        ? [{ material, tier: r.tier, minutes: r.minutes, note: r.note, chapter: chapterAt(material.toc, r.chapter), activity: r.activity ?? "read", key: `${r.id}#${r.chapter ?? 0}` }]
-        : [];
+      if (!material) return [];
+      // One material read twice (an imported plan's note per row) would share a key: later ones count up.
+      const base = `${r.id}#${r.chapter ?? 0}`;
+      const n = (seen.get(base) ?? 0) + 1;
+      seen.set(base, n);
+      return [{ material, tier: r.tier, minutes: r.minutes, note: r.note, chapter: chapterAt(material.toc, r.chapter), activity: r.activity ?? "read", key: n === 1 ? base : `${base}#${n}` }];
     })
     .sort(byTier);
 }

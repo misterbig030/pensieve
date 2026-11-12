@@ -38,6 +38,11 @@ describe("importMessages", () => {
     expect((ms[2] as { text: string }).text).toContain("Couldn't place 2 sections: A (x); B (y).");
   });
 
+  it("drops a reason's trailing period so the parenthesis closes cleanly", () => {
+    const ms = importMessages({ ...base, skipped: [{ heading: "Eval prep", reason: "Runs across Weeks 3-8. " }, { heading: "B", reason: "Odd!?" }] });
+    expect((ms[2] as { text: string }).text).toBe("Couldn't place 2 sections: Eval prep (Runs across Weeks 3-8); B (Odd). Tell me where it goes, or leave it as context.");
+  });
+
   it("has no brief message", () => {
     expect(importMessages({ ...base, kept: ["K"], skipped: [{ heading: "S", reason: "r" }] }).some((m) => m.kind === "brief")).toBe(false);
   });

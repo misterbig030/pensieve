@@ -53,7 +53,7 @@ describe("convertDraft on weekly-plan.md", () => {
     expect(problems).toHaveLength(7);
     expect(problems.every((p) => p.id === leetcode.id)).toBe(true);
     const items = leetcode.practice!.list!.items;
-    expect(problems.map((p) => items[p.itemFrom! - 1].number)).toEqual(["703", "1046", "973", "215", "621", "355", "295"]);
+    expect(problems.map((p) => items[p.itemFrom! - 1].title)).toEqual(["703", "1046", "973", "215", "621", "355", "295"]);
     expect(problems.every((p) => p.itemFrom === p.itemTo)).toBe(true);
     // The row's 300 minutes divided evenly over its seven items.
     expect(problems.reduce((sum, p) => sum + p.minutes, 0)).toBe(300);
@@ -90,7 +90,7 @@ describe("convertDraft on weekly-plan.md", () => {
     const leetcode = convert().materials.find((m) => m.title === "LeetCode")!;
     expect(leetcode.practice).toMatchObject({ format: "problem-set", items: 41, perItemMinutes: 10, minutes: 410, answers: false });
     expect(leetcode.practice!.list).toMatchObject({ source: "file", url: leetcode.url });
-    expect(leetcode.practice!.list!.items[0]).toEqual({ title: "703", number: "703", group: null, difficulty: null, url: null, solutionUrl: null, minutes: null });
+    expect(leetcode.practice!.list!.items[0]).toEqual({ title: "703", number: null, group: null, difficulty: null, url: null, solutionUrl: null, minutes: null });
   });
 
   it("budget comes from the file", () => {
@@ -213,7 +213,7 @@ describe("convertDraft rules", () => {
       }),
     );
     expect(materials[0].practice).toMatchObject({ format: "problem-set", items: 6 });
-    expect(materials[0].practice!.list!.items.map((i) => i.number)).toEqual(["1", "2", "3", "4", "5", "6"]);
+    expect(materials[0].practice!.list!.items.map((i) => i.title)).toEqual(["1", "2", "3", "4", "5", "6"]);
     expect(tree[0].practice!.map((p) => [p.format, p.itemFrom])).toEqual([
       ["problem-set", 1],
       ["problem-set", 2],

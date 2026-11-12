@@ -25,6 +25,19 @@ describe("readRowsFor", () => {
     expect(chapterLabel(rows[0].chapter!)).toBe("Ch. 2 Understanding Foundation Models");
     expect(chapterLabel({ ...rows[0].chapter!, n: null })).toBe("Understanding Foundation Models");
   });
+  it("keys two rows of one material uniquely, leaving the first key as it was", () => {
+    const byId = new Map(AIE_MATERIALS.map((m) => [m.id, m]));
+    const rows = readRowsFor(
+      [
+        { id: "evals", tier: "must", minutes: 30, note: "first pass" },
+        { id: "evals", tier: "must", minutes: 30, note: "second pass" },
+        { id: "aie", tier: "should", minutes: 20, note: null, chapter: 1 },
+      ],
+      byId,
+    );
+    expect(rows.map((r) => r.key)).toEqual(["evals#0", "evals#0#2", "aie#1"]);
+    expect(new Set(rows.map((r) => r.key)).size).toBe(rows.length);
+  });
   it("names the part as a phrase: the chapter, or a review of it", () => {
     const byId = new Map(AIE_MATERIALS.map((m) => [m.id, m]));
     const [read, review, whole, wholeReview] = readRowsFor(

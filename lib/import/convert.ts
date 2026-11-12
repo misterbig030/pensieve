@@ -267,7 +267,8 @@ function addLabels(labels: Map<string, string[]>, id: string, items: string[] | 
 function toItem(label: string): PracticeItem {
   return {
     title: clip(label, 300)!,
-    number: label.length <= 20 ? label : null,
+    // The file gives a label, not a number and a title: the label is the title, so a row never reads "703. 703".
+    number: null,
     group: null,
     difficulty: null,
     url: null,

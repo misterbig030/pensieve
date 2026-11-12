@@ -38,4 +38,11 @@ describe("splitBar", () => {
     const { parts } = splitBar({ readingShare: 100, practice: "reading", reason: "r", formats: [] }, []);
     expect(parts.map((p) => p.key)).toEqual(["reading"]);
   });
+
+  it("counts a pick from an imported file as practice, even with no source", () => {
+    const fromFile = { format: "other" as const, share: 100, focus: "Other tasks from your file", reason: "From your file." };
+    const { parts, toReading } = splitBar({ readingShare: 60, practice: "From your plan", reason: "From your file.", formats: [fromFile] }, [{ id: "M1", minutes: 600 }] as unknown as Parameters<typeof splitBar>[1]);
+    expect(toReading).toEqual([]);
+    expect(parts.map((p) => [p.key, p.percent])).toEqual([["reading", 60], ["other", 40]]);
+  });
 });

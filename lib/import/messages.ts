@@ -20,7 +20,7 @@ export function importMessages(imported: ImportedFile): ChatMessage[] {
   if (imported.kept.length > 0) messages.push(answer(`Kept as context, not as units: ${imported.kept.join(", ")}.`));
   const n = imported.skipped.length;
   if (n > 0) {
-    const list = imported.skipped.map((s) => `${s.heading} (${s.reason})`).join("; ");
+    const list = imported.skipped.map((s) => `${s.heading} (${s.reason.trim().replace(/[.!?;:,\s]+$/, "")})`).join("; ");
     messages.push(answer(`Couldn't place ${n} section${n > 1 ? "s" : ""}: ${list}. Tell me where it goes, or leave it as context.`));
   }
   return messages;

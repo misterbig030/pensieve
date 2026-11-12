@@ -14,7 +14,7 @@ import {
   type PracticeFormat,
   type PracticePick,
 } from "@/lib/practice";
-import { activePicks, dayMinutes, formatDayTime, isAllReading, readingShareOf, type PlanSplit } from "@/lib/studyTime";
+import { SPLIT_FROM_FILE, activePicks, dayMinutes, formatDayTime, isAllReading, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
   normalizeMaterialRef,
@@ -886,7 +886,9 @@ export interface PickPercent {
  * as reading and it has none of its own. Rounded from the exact shares by largest remainder, ties to reading first.
  */
 export function splitPercents(split: PlanSplit, materials: Pick<Material, "id" | "practice" | "minutes">[]): { reading: number; practice: number; picks: PickPercent[] } {
-  const assignable = new Map(pickSources(split, materials).map((p) => [p.pick.format, p.assignable]));
+  // A pick the file itself made is the learner's own tasks: counted as practice though no source or writer backs it.
+  const fromFile = (split.formats ?? []).filter((p) => p.reason === SPLIT_FROM_FILE).map((p) => ({ format: p.format, imported: true as const }));
+  const assignable = new Map(pickSources(split, materials, fromFile).map((p) => [p.pick.format, p.assignable]));
   const formats = split.formats ?? [];
   const toReading = formats.map((p) => assignable.get(p.format) === false);
   // Whole-number weights over 100 × the picks' shares, so `shareOut` rounds exactly: a pick's is its part of the practice.
