@@ -35,6 +35,22 @@ describe("runImport", () => {
     expect(rows[0].caller).toBe("import");
   });
 
+  it("refuses a converted plan the app could not save, and logs why", async () => {
+    // A week of 70 days: the converter copies it, but a saved week holds at most 60 units below it.
+    const days = Array.from({ length: 70 }, (_, i) => ({ title: `Day ${i + 1}`, summary: "s", budgetHours: null, reading: [], practice: [], children: null }));
+    const draft = { ...WEEKLY_PLAN_DRAFT, units: [{ title: "Week 1", summary: "s", budgetHours: null, reading: [], practice: [], children: days }] };
+    mockedGenerateObject.mockResolvedValueOnce({
+      object: draft,
+      usage: { inputTokens: 10, outputTokens: 5, inputTokenDetails: {}, outputTokenDetails: {}, totalTokens: 15 },
+      finishReason: "stop",
+    } as unknown as Awaited<ReturnType<typeof generateObject>>);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = await runImport({ fileName: "weekly-plan.md", text: "# Plan", model });
+    expect(result).toEqual({ ok: false, reason: "no_plan", message: "Its units don't fit the shape Pensieve saves a plan in." });
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("[import]"), expect.anything());
+    error.mockRestore();
+  });
+
   it("passes the user's model instance", async () => {
     await runImport({ fileName: "weekly-plan.md", text: "# Plan", model });
     expect(mockedGenerateObject.mock.calls[0][0].model).toBe(instance);

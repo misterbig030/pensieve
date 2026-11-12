@@ -30,6 +30,7 @@ const topicSchema = z.string().trim().min(1).max(200);
 const MAX_IMPORT_CHARS = 65536;
 const BAD_FILE_MESSAGE = "Pensieve imports .md or .txt files up to 64 KB.";
 const OUT_OF_CREDITS_MESSAGE = "You're out of free credits for now.";
+const importInputSchema = z.object({ fileName: z.string().max(255), text: z.string() });
 
 /** `calls` is present only when the server confirmed the caller is an admin: the model call behind this import, for the dock. */
 export type ImportPlanResult =
@@ -51,8 +52,11 @@ export async function importPlanAction(input: { fileName: string; text: string }
   const { userId } = await auth();
   if (!userId) throw new Error("Not authenticated");
 
-  const { fileName, text } = input;
-  if (!/\.(md|txt)$/i.test(fileName) || text.length < 1 || text.length > MAX_IMPORT_CHARS) {
+  // A server action takes whatever the browser sends: a malformed call is a bad file, as a wrong one is.
+  const parsed = importInputSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, reason: "bad_file", message: BAD_FILE_MESSAGE };
+  const { fileName, text } = parsed.data;
+  if (!/\.(md|txt)$/i.test(fileName) || text.trim().length < 1 || text.length > MAX_IMPORT_CHARS) {
     return { ok: false, reason: "bad_file", message: BAD_FILE_MESSAGE };
   }
 

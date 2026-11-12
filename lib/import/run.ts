@@ -4,6 +4,9 @@ import type { ResolvedModel } from "@/lib/ai/resolve";
 import { convertDraft, type ConvertResult } from "./convert";
 import { buildImportPrompt } from "./prompt";
 import { importDraftSchema } from "./schema";
+import { materialListSchema } from "@/lib/schemas/material";
+import { planTreeInputSchema } from "@/lib/schemas/plan";
+import { planSplitSchema } from "@/lib/studyTime";
 
 /**
  * Reads a plan file with one model call and converts the answer into the app's plan shapes. No research and no
@@ -29,5 +32,28 @@ export async function runImport(input: {
     },
     { ...input.log, caller: "import" },
   );
-  return { result: convertDraft(object, fileName), costUsd };
+  return { result: checkedPlan(convertDraft(object, fileName)), costUsd };
+}
+
+/** What the learner reads when the converted plan is not one the app can save. */
+export const UNSAVABLE_PLAN_MESSAGE = "Its units don't fit the shape Pensieve saves a plan in.";
+
+/**
+ * The converted plan as the draft page and the confirm step take it, checked against the same schemas a save is: the
+ * tree, the materials list and the split. One that fails is refused as no plan, with the reason logged here, so a bad
+ * conversion stops before the learner shapes a plan that cannot be saved.
+ */
+export function checkedPlan(result: ConvertResult): ConvertResult {
+  if (!result.ok) return result;
+  const { tree, materials, split } = result.plan;
+  for (const [name, check] of [
+    ["tree", planTreeInputSchema.safeParse(tree)],
+    ["materials", materialListSchema.safeParse(materials)],
+    ["split", planSplitSchema.safeParse(split)],
+  ] as const) {
+    if (check.success) continue;
+    console.error(`[import] the converted plan's ${name} failed validation`, check.error);
+    return { ok: false, reason: "no_plan", message: UNSAVABLE_PLAN_MESSAGE };
+  }
+  return result;
 }

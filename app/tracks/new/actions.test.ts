@@ -46,6 +46,14 @@ describe("importPlanAction", () => {
     expect(await importPlanAction({ fileName: "PLAN.TXT", text: "x" })).toMatchObject({ ok: true });
   });
 
+  it("rejects whitespace-only text and malformed input as a bad file, before any model call", async () => {
+    expect(await importPlanAction({ fileName: "a.md", text: "  \n\t " })).toMatchObject({ ok: false, reason: "bad_file", message: "Pensieve imports .md or .txt files up to 64 KB." });
+    expect(await importPlanAction({ fileName: `${"a".repeat(253)}.md`, text: "x" })).toMatchObject({ ok: false, reason: "bad_file" });
+    expect(await importPlanAction({ fileName: 7, text: "x" } as unknown as { fileName: string; text: string })).toMatchObject({ ok: false, reason: "bad_file" });
+    expect(await importPlanAction(null as unknown as { fileName: string; text: string })).toMatchObject({ ok: false, reason: "bad_file" });
+    expect(runImport).not.toHaveBeenCalled();
+  });
+
   it("returns out_of_credits before any model call", async () => {
     vi.mocked(creditRefusal).mockResolvedValue(Response.json({ code: "out_of_credits", resetsAt: "2026-12-01T00:00:00.000Z" }, { status: 402 }));
     const result = await importPlanAction(file);
