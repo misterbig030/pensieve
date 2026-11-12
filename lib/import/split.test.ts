@@ -65,6 +65,39 @@ describe("splitting an imported week into days", () => {
   });
 });
 
+describe("days that copy an imported item task without its id", () => {
+  beforeEach(() => {
+    mockedStreamObject.mockReset();
+  });
+
+  it("names each item by its id in the prompt, and keeps a copied task the item's own row, with nothing appended", async () => {
+    const plan = converted();
+    const tree = fromTreeInput(plan.tree);
+    const week = tree.children![0];
+    // Every Week 1 row copied by its task text alone, as a model following the old prompt line would.
+    const rows = week.practice!.map((p) => ({ format: p.format, task: p.task, done: p.done, minutes: p.minutes }));
+    const reads = week.materials!.map((m) => ({ id: m.id, tier: m.tier, minutes: m.minutes ?? 0, note: m.note ?? undefined }));
+    const days: UnitDraft[] = [
+      { title: "D1", summary: "s", materials: reads, practice: rows.slice(0, 3) },
+      { title: "D2", summary: "s", practice: rows.slice(3, 6) },
+      { title: "D3", summary: "s", practice: rows.slice(6, 8) },
+      { title: "D4", summary: "s", practice: rows.slice(8, 10) },
+      { title: "D5", summary: "s", practice: rows.slice(10) },
+    ];
+    mockedStreamObject.mockReturnValueOnce(fakeStream(days));
+    const ctx = { topic: plan.title, weeks: 8, daysPerWeek: plan.daysPerWeek, granularity: plan.granularity, materials: plan.materials, hoursPerWeek: plan.hoursPerWeek, split: plan.split };
+    let children: PlanNode[] = [];
+    for await (const e of streamExpandNode({ ...ctx, importText: "# Weekly plan", tree, nodeId: week.id, reason: "split" })) if (e.type === "finish") children = e.children;
+    const prompt = (mockedStreamObject.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain('  - M2.1 "LeetCode, Heap (7) · 703" — 43 min');
+
+    const out = children.flatMap((d) => d.practice ?? []);
+    expect(out).toHaveLength(week.practice!.length);
+    const problems = out.filter((p) => p.format === "problem-set");
+    expect(problems.map((p) => [p.id, p.itemFrom, p.itemTo, p.imported])).toEqual([1, 2, 3, 4, 5, 6, 7].map((n) => ["M2", n, n, true]));
+  });
+});
+
 describe("splitWeekTime", () => {
   const week = (over: Partial<PlanNode>): PlanNode => ({ ...fromTreeInput(converted().tree).children![0], ...over });
 

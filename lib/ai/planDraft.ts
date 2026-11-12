@@ -186,7 +186,7 @@ export function applyUnitRefs(
   if (leaf) {
     const reading = resolveMaterialRefs(unit.materials, aliases);
     if (reading.refs.length > 0) node.materials = reading.refs;
-    const practice = resolvePracticeRefs(markImported(unit.practice, parentCovers), aliases, split, reading.refs.map((r) => r.id));
+    const practice = resolvePracticeRefs(markImported(unit.practice, parentCovers, aliases), aliases, split, reading.refs.map((r) => r.id));
     if (practice.refs.length > 0) node.practice = practice.refs;
     return { unknown: [...reading.unknown, ...practice.unknown], refused: practice.refused, unpicked: [] };
   }

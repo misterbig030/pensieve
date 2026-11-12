@@ -825,9 +825,12 @@ function leafPracticeRules(input: UnitsPromptInput, aliases: MaterialAliases): s
     const size = days ? blockMinutes(p.pick.format, day) : spec.fixedMinutes;
     if (imported.includes(p.pick.format)) {
       const theirs = importedCovers(parent).filter((c) => c.format === p.pick.format);
+      // A task from a listed source carries the item's id, so the row the unit writes is that item's own.
+      const idOf = (c: PracticeCover) => (c.id === null ? undefined : c.itemFrom && c.itemFrom === c.itemTo ? aliases.alias(c.id, { item: c.itemFrom }) : aliases.alias(c.id));
+      const withIds = theirs.some((c) => idOf(c));
       lines.push(
-        `- ${pickName(p.pick.format)}: about ${formatTime(budgets.practice[p.pick.format] ?? 0)} ${scope}, the learner's own tasks from their plan file. Place each of these on exactly one ${noun}, copying its task text exactly, and write no other ${spec.label} rows:`,
-        ...theirs.map((c) => `  - "${c.task}" — ${formatMinutes(c.minutes ?? 0)}`),
+        `- ${pickName(p.pick.format)}: about ${formatTime(budgets.practice[p.pick.format] ?? 0)} ${scope}, the learner's own tasks from their plan file. Place each of these on exactly one ${noun}, copying its task text exactly${withIds ? " and, where the line starts with one, its id" : ""}, and write no other ${spec.label} rows:`,
+        ...theirs.map((c) => `  - ${idOf(c) ? `${idOf(c)} ` : ""}"${c.task}" — ${formatMinutes(c.minutes ?? 0)}`),
       );
       continue;
     }

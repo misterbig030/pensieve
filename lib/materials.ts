@@ -635,13 +635,26 @@ export function isImportedRow(row: { format: string; task?: string | null }, imp
 /**
  * The model's drafted rows never say which came from the learner's plan file. A draft of the same format as an imported
  * row in `known` whose task is that row's, or starts with its first 24 characters (`isImportedRow`), is that row: it is
- * marked `imported` so the rules that refuse an unpicked or never-written format let it through. Any other draft is
- * judged as usual.
+ * marked `imported` so the rules that refuse an unpicked or never-written format let it through. The row its task is
+ * word for word wins over one it only starts like. A draft written without an id that copies a sourced row takes the
+ * row's id from `aliases` (the item's own, for a row of one listed item), so it is that row and not a sourceless copy
+ * beside it. Any other draft is judged as usual.
  */
-export function markImported<T extends { format: string; task: string }>(drafts: T[] | undefined, known: readonly { format: string; task?: string; imported?: boolean }[] | undefined): (T & { imported?: boolean })[] | undefined {
+export function markImported<T extends { format: string; task: string; id?: string | null }>(
+  drafts: T[] | undefined,
+  known: readonly { format: string; task?: string; imported?: boolean; id?: string | null; itemFrom?: number | null; itemTo?: number | null }[] | undefined,
+  aliases?: MaterialAliases,
+): (T & { imported?: boolean })[] | undefined {
   const imported = (known ?? []).filter((r) => r.imported === true && r.task?.trim());
   if (!drafts || imported.length === 0) return drafts;
-  return drafts.map((d) => (imported.some((r) => isImportedRow(d, r)) ? { ...d, imported: true } : d));
+  const norm = (s: string | undefined) => (s ?? "").trim().toLowerCase();
+  return drafts.map((d) => {
+    const matches = imported.filter((r) => isImportedRow(d, r));
+    if (matches.length === 0) return d;
+    const row = matches.find((r) => norm(r.task) === norm(d.task)) ?? matches[0];
+    const alias = !d.id?.trim() && row.id && aliases ? (row.itemFrom && row.itemFrom === row.itemTo ? aliases.alias(row.id, { item: row.itemFrom }) : row.itemFrom ? undefined : aliases.alias(row.id)) : undefined;
+    return { ...d, ...(alias ? { id: alias } : {}), imported: true };
+  });
 }
 
 /** Every imported row in `root`: leaves' practice rows and headings' reservations from the learner's plan file. */

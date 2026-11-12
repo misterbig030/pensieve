@@ -129,7 +129,7 @@ export function applyRevision(
         : kept?.practiceCovers;
     const practice =
       aliases && unit.practice !== undefined
-        ? keptItemless(resolvePracticeRefs(markImported(unit.practice, imported), aliases, split, (materials ?? []).map((r) => r.id), SAVED).refs, kept?.practice, aliases)
+        ? keptItemless(resolvePracticeRefs(markImported(unit.practice, imported, aliases), aliases, split, (materials ?? []).map((r) => r.id), SAVED).refs, kept?.practice, aliases)
         : kept?.practice;
     let time = leaf ? undefined : kept?.time;
     if (unit.time && !leaf) {
