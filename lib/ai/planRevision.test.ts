@@ -10,7 +10,8 @@ import type { Material, PracticeCover, PracticeRef } from "@/lib/schemas/materia
 import type { PlanNode } from "@/lib/planTree";
 import type { ModelCall } from "./logged";
 import { assignRefs } from "./planPrompt";
-import { applyRevision, LockedNodeError, revisePlanTree, spanFor } from "./planRevision";
+import { revisedTreeSchema } from "@/lib/schemas/plan";
+import { applyRevision, LockedNodeError, movedProblems, revisePlanTree, spanFor } from "./planRevision";
 import { reconcileSpans } from "./planDraft";
 
 const mockedGenerateObject = vi.mocked(generateObject);
@@ -80,6 +81,29 @@ describe("applyRevision", () => {
       "day",
     );
     expect(result.children![0].children![0].title).toBe("Intro");
+  });
+
+  it("reads the model's flat outline as the nested tree it describes", () => {
+    const original = tree();
+    const refs = assignRefs(original); // w1=n1 d1=n2 d2=n3 w2=n4 w3=n5
+    const flat = revisedTreeSchema.parse({
+      units: [
+        { depth: 1, ref: "n1", title: "Fundamentals", summary: "s1", days: 2 },
+        { depth: 2, ref: "n2", title: "Intro", summary: "a", days: 1 },
+        { depth: 2, ref: "n3", title: "Metrics", summary: "b", days: 1 },
+        { depth: 1, ref: "n4", title: "GPUs", summary: "s2", days: 7 },
+        { depth: 1, title: "Serving, split", summary: "s3", days: 2 },
+        { depth: 2, title: "Batching", summary: "c", days: 1 },
+        { depth: 2, title: "Caching", summary: "d", days: 1 },
+      ],
+    });
+    const result = applyRevision(original, refs, flat, 0, "day");
+    expect(result.children!.map((w) => [w.level, w.title, w.children?.map((d) => [d.level, d.title]) ?? null])).toEqual([
+      ["week", "Fundamentals", [["day", "Intro"], ["day", "Metrics"]]],
+      ["week", "GPUs", null],
+      ["week", "Serving, split", [["day", "Batching"], ["day", "Caching"]]],
+    ]);
+    expect(result.children![0].id).toBe("w1");
   });
 
   it("rejects a revision that drops a locked node", () => {
@@ -524,6 +548,14 @@ describe("revisions see and edit unit time", () => {
     );
     expect(result.children![0].children![0].time).toBeUndefined();
     expect(result.children![0].time).toEqual({ reading: 150, practice: { "problem-set": 180 } });
+  });
+
+  it("tells the learner about units placed one level up because their depth skipped a level", async () => {
+    respond({ units: [echo("n1", "W1"), echo("n2", "W2"), echo("n3", "W3")], moved: ["Day 1"] });
+    const result = await revise(weeks(true));
+    expect(result.problems).toContain('"Day 1" came back without the unit it belongs in, so it was placed one level up. Check where it sits.');
+    expect(movedProblems(["A", "B", "C"])).toEqual(['"A", "B" and "C" came back without the unit they belong in, so they were placed one level up. Check where they sit.']);
+    expect(movedProblems([])).toEqual([]);
   });
 
   it("keeps both rows when Week 2 now reads a chapter Week 1 reads, and reports the overlap", async () => {

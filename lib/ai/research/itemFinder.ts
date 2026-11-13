@@ -116,7 +116,8 @@ export const itemDraftSchema = z.object({
 });
 export type ItemDraft = z.infer<typeof itemDraftSchema>;
 
-const itemsAnswerSchema = z.object({
+/** The item list the model returns for one source. Exported for the strict-output limit test. */
+export const itemsAnswerSchema = z.object({
   found: z.boolean().describe("True only when a page above lists this source's items"),
   url: z.string().nullable().describe("The one page the list came from"),
   items: z.array(itemDraftSchema).describe("The items in the source's own order; empty when not found"),

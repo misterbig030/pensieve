@@ -1139,13 +1139,13 @@ export function buildRevisionPrompt(input: RevisionPromptInput): string {
   parts.push(`The learner asks: "${input.changeRequest}"`);
   parts.push(
     [
-      `Return the complete revised plan as nested units.`,
+      `Return the complete revised plan as one flat list of units in outline order: each unit, then the units inside it, then the next unit. "depth" places each one: 1 for a top-level unit, 2 for a unit inside the nearest depth-1 unit above it, 3 for a unit inside the nearest depth-2 unit above it.`,
       `Rules:`,
       `- Keep the ref of every unit you keep, even if you move it or edit its title. Leave the ref out for brand-new units.`,
       `- Units marked done or locked must come back unchanged, with the same ref, in the same place. Never drop or edit them.`,
       `- "days" is a unit's span in study days. A day unit has days = 1. A week has as many days as the learner studies that week: ${input.daysPerWeek} for a new week, and a week already split keeps its number of days. A month's days is the sum of its weeks' days. The days of a unit's children must add up to that unit's days.`,
       `- Change only what the request asks for. Do not plan headings in detail unless asked; do not fold planned units back into headings unless asked.`,
-      `- Keep the same depth: a unit's children stay at the level below it (month → week → day).`,
+      `- Keep the same nesting: a unit's children stay at the level below it (month → week → day), so a top-level week's days are depth 2.`,
       `- Keep the total length unless the request changes it.`,
       ...(hasMaterials
         ? [

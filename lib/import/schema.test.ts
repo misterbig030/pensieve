@@ -1,25 +1,8 @@
-import { asSchema } from "ai";
 import { describe, expect, it } from "vitest";
 import { importDraftSchema, type ImportDraft, type ImportUnitDraft } from "@/lib/import/schema";
 import { WEEKLY_PLAN_DRAFT } from "@/lib/import/__fixtures__/weekly-plan.draft";
 import { revisedTreeSchema, unitListSchema } from "@/lib/schemas/plan";
-
-/** The JSON schema `generateObject` sends: the AI SDK's own conversion (`asSchema`, zod 4 at `io: "input"`). */
-function sent(schema: Parameters<typeof asSchema>[0]): unknown {
-  return asSchema(schema).jsonSchema;
-}
-
-/**
- * Every place in a JSON schema whose type is a union: `anyOf`, `oneOf` or a `type` array. Anthropic refuses more than
- * 16, counting each nested copy.
- */
-function unionCount(node: unknown): number {
-  if (Array.isArray(node)) return node.reduce((sum: number, n) => sum + unionCount(n), 0);
-  if (!node || typeof node !== "object") return 0;
-  const o = node as Record<string, unknown>;
-  const own = "anyOf" in o || "oneOf" in o || Array.isArray(o.type) ? 1 : 0;
-  return own + Object.values(o).reduce((sum: number, v) => sum + unionCount(v), 0);
-}
+import { sentSchema as sent, unionCount } from "@/lib/ai/strictOutput";
 
 /** How many object levels deep a JSON schema nests: the root object is 1. */
 function objectDepth(node: unknown): number {
