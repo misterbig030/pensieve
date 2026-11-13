@@ -17,7 +17,7 @@ import type { Coverage, DroppedMaterial, ResearchNotice } from "@/lib/ai/researc
 import { assignmentsOf, draftedSplit, removeMaterialRefs } from "@/lib/materials";
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
 import type { PendingSlots } from "@/components/pensieve/PlanTree";
-import { adjustOpening, lengthLabel, lockLine, openRows } from "@/lib/draftPage";
+import { adjustAnswer, adjustOpening, lengthLabel, lockLine, openRows } from "@/lib/draftPage";
 import { splitWeekTime } from "@/lib/import/cover";
 import { importMessages, type ImportedFile } from "@/lib/import/messages";
 import { pushModelCalls } from "@/lib/modelCalls";
@@ -748,8 +748,9 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const researching = drafting && !!research?.running;
   const canConfirm = !streaming && !revising && !busy && !redrafting && !confirming && tops.length > 0;
   const current = isAdjust ? currentLeaf(tree) : null;
+  // While research runs the card says what is happening; the status line starts with the draft.
   const draftingText = researching
-    ? "Finding materials…"
+    ? ""
     : drafting
     ? `Drafting ${countArrived(tree)} of ${countExpected(tree, pending)} units…`
     : expanding
@@ -1060,14 +1061,11 @@ function getNarrowServerSnapshot(): boolean {
 function initialMessages(props: PlanWorkspaceProps): ChatMessage[] {
   if (props.mode === "adjust" && props.initialTree) {
     const root = layout(cloneTree(props.initialTree));
+    const lockBefore = props.lockBefore ?? 0;
+    const answer = adjustAnswer(root, lockBefore);
     return [
-      { id: nextMessageId(), kind: "sys", text: adjustOpening(root, props.lockBefore ?? 0) },
-      {
-        id: nextMessageId(),
-        kind: "answer",
-        text: "Here is the rest of your plan as it stands. Reorder or rework the open units, add or drop days inside the current one, or ask why something is where it is.",
-        streaming: false,
-      },
+      { id: nextMessageId(), kind: "sys", text: adjustOpening(root, lockBefore) },
+      ...(answer ? [{ id: nextMessageId(), kind: "answer" as const, text: answer, streaming: false }] : []),
     ];
   }
   if (props.imported) return importMessages(props.imported);

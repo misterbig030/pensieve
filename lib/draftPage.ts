@@ -104,6 +104,12 @@ export function adjustOpening(root: PlanNode, lockBefore: number): string {
   return `You're on ${nextLeafLabel(root, lockBefore)}. Tell me what to change from here on. ${doneSentence(root, lockBefore, next)}`;
 }
 
+/** Adjust's opening answer after `adjustOpening`; null when every day is done, since there is no rest to work on. */
+export function adjustAnswer(root: PlanNode, lockBefore: number): string | null {
+  if (lockBefore > 0 && !nextLeaf(root, lockBefore)) return null;
+  return "Here is the rest of your plan as it stands. Reorder or rework the open units, add or drop days inside the current one, or ask why something is where it is.";
+}
+
 /** Whether the node, or anything under it, is one of `ids`. */
 export function touches(node: PlanNode, ids: ReadonlySet<string>): boolean {
   return ids.has(node.id) || (node.children?.some((c) => touches(c, ids)) ?? false);

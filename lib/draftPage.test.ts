@@ -4,7 +4,7 @@ import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
 import { practiceRowsFor, readRowsFor, rowBrief } from "@/components/pensieve/ReadTable";
 import { findNode, makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { Material, MaterialRef, PracticeRef } from "@/lib/schemas/material";
-import { adjustOpening, defaultOpen, lengthLabel, lockLine, nextLeafLabel, openRows, rowLine, touches, unitHours } from "./draftPage";
+import { adjustAnswer, adjustOpening, defaultOpen, lengthLabel, lockLine, nextLeafLabel, openRows, rowLine, touches, unitHours } from "./draftPage";
 
 const bank: Material = { ...AIE_MATERIALS.find((m) => m.id === "evals")!, id: "nc", title: "NeetCode 150", backbone: false, practice: LISTED_PROBLEMS };
 const byId = new Map<string, Material>([...AIE_MATERIALS, bank].map((m) => [m.id, m]));
@@ -111,6 +111,11 @@ describe("adjustOpening", () => {
     expect(adjustOpening(plan3, 12)).toBe("You're on Day 3 of Week 3. Tell me what to change from here on. Weeks 1–2 and the first 2 days of Week 3 are done and stay as they are.");
     expect(adjustOpening(plan3, 0)).toBe("Nothing is checked off yet, so the whole plan is open to change.");
     expect(adjustOpening(plan3, 15)).toBe("Every day of this plan is done, so there is nothing left to change.");
+  });
+  it("offers to work on the rest only while some of the plan is left", () => {
+    expect(adjustAnswer(plan3, 12)).toMatch(/^Here is the rest of your plan as it stands\./);
+    expect(adjustAnswer(plan3, 0)).toMatch(/^Here is the rest of your plan as it stands\./);
+    expect(adjustAnswer(plan3, 15)).toBeNull();
   });
 });
 
