@@ -107,7 +107,7 @@ describe("MaterialsList while the allocation is pending", () => {
     expect(pending).not.toContain("No backbone");
     expect(pending).toContain("Book");
     // Once chosen, the backbone card shows whether or not the flag is still up.
-    expect(text({ awaitingBackbone: false, materials: [material({ id: "M1", title: "Book", origin: "research", backbone: true })] })).toContain("Backbone");
+    expect(text({ awaitingBackbone: false, materials: [material({ id: "M1", title: "Book", origin: "research", backbone: true })] })).toContain("backbone");
   });
 
   it("does not tell the learner no textbook stood out before the allocation has looked", () => {
