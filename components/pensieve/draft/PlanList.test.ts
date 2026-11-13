@@ -94,3 +94,14 @@ describe("PlanList", () => {
     expect(list({ root: oneWeekArrived, pending: { root: { count: 7, groups: false } } }).match(/data-slot/g)).toHaveLength(7);
   });
 });
+
+describe("PlanList header and arrival", () => {
+  it("puts the Week / Days toggle in the header row beside the open button, moved under the title when narrow", () => {
+    const out = list({ root: plan3, open: new Set(["w1"]) });
+    expect(out).toMatch(/<\/button><div role="group"[^>]*max-\[900px\]:basis-full/);
+    expect(out).not.toMatch(/<button[^>]*aria-expanded[^>]*>(?:(?!<\/button>).)*role="group"/);
+  });
+  it("gives every row the arrival outline class", () => {
+    expect(list({ root: plan3 }).match(/unit-arrive/g)).toHaveLength(3);
+  });
+});
