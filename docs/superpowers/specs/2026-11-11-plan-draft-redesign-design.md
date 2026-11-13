@@ -1,6 +1,6 @@
 # Plan draft page redesign
 
-**Status:** approved by the owner on 2026-11-12. The owner is on a feature freeze until January and decides when the build runs.
+**Status:** approved by the owner on 2026-11-12. The owner started the build the same day.
 
 **Mockup:** [`docs/mockups/plan-draft-redesign.html`](../../mockups/plan-draft-redesign.html). The "Decided" box at the top lists what was chosen. The screens to build from are **B1, B2, E1, E1b, F1, F2, G1, H1–H3 and I1–I3**. A shows today's page, C shows today's plan page for reference, and D, E2 and E3 were not chosen. Most of the mock's example plan is an import (`weekly-plan.md`). The import-only touches ("From your file", "no link", the import notes in the chat) belong to the import design, not this one.
 
@@ -22,7 +22,7 @@ The owner picked layout B because **it fits the plan page's style**. It uses the
 - No change to drafting, research, allocation, the chat's abilities or what Confirm saves (apart from the summary note below).
 - The plan page itself doesn't change.
 - **No check line and no "Undo split" after a split** (owner's decision). B2 in the mock shows a green line, "Every item Week 1 names is in a day…", with an Undo split button. Neither exists today, and both would be new logic, so they aren't part of this. Undoing a split stays a chat request, as today. They could come later as a follow-up.
-- Plan import isn't part of this. When it's built, it uses this layout.
+- Plan import's logic isn't part of this. Import landed on main before the build (PR #58), so imported plans, new and in Adjust, use this layout with today's import touches kept.
 
 ## Anti-goals
 

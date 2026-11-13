@@ -12,7 +12,7 @@
 
 **Tech Stack:** Next.js 16.3 (App Router, client components), React 19.2, Tailwind 4, `@base-ui/react` 1.7 (Popover, Menu), lucide-react, Vitest 4. Tests run in the `node` environment and render with `renderToStaticMarkup` from `.test.ts` files using `createElement`, with no JSX in tests, as in the existing tests.
 
-**Execution:** subagent-driven (the owner's choice, 2026-11-12). The build waits until the owner starts it after the feature freeze, in January.
+**Execution:** subagent-driven (the owner's choice, 2026-11-12). The owner started the build on 2026-11-12, after plan import (PR #58) had landed on main. The import notes below are in each task they touch.
 
 **Spec:** `docs/superpowers/specs/2026-11-11-plan-draft-redesign-design.md`. The mockup is `docs/mockups/plan-draft-redesign.html`; build from screens B1, B2, E1, E1b, F1, F2, G1, H1–H3 and I1–I3. Read both before starting.
 
@@ -28,7 +28,8 @@
 - **Opening a heading never plans it.** Only its button does.
 - **No "Done when" box, no check line after a split, no "Undo split".**
 - **Must / Should tags and the budget bar stay** in an open week's Read section.
-- The summary shown and saved leaves out "Latest change: …" and the lock sentence: call `summarizePlan(tree, topic, daysPerWeek)` with no note.
+- The summary shown and saved leaves out "Latest change: …" and the lock sentence: call `summarizePlan(tree, props.imported ? null : topic, daysPerWeek)` with no note (`null` topic reads "from your plan file" for an imported plan).
+- **Imported plans use this layout too.** `PlanWorkspace` takes `imported?: ImportedFile` (`lib/import/messages.ts`) for a new import and for Adjust on an imported track. Keep every import branch that exists today: `importText` on requests, `splitWeek(parent, importedHours)`, the import suggestions, `importMessages`, no Try again / no retry on the draft's out-of-credits alert, "From your file" for `SPLIT_FROM_FILE` with no Why, the "From file" badge on imported materials and the "From file" tag on imported practice rows.
 - Commit message style: `feat(draft-page): …` / `refactor(draft-page): …`, ending with the repo's co-author line.
 - Run tests with `npx vitest run <path>`. Typecheck with `npx tsc --noEmit`. Lint with `npm run lint`.
 
@@ -279,7 +280,7 @@ git commit -m "feat(draft-page): time panels for the strip; share the split brea
     deciding: boolean;             // drafting && !split
     totalHours: number;
     materials: Material[];
-    sourceLabel: string | null;    // "researched" when any material has origin "research"; null otherwise
+    sourceLabel: string | null;    // the file name for an import (imported.fileName); else "researched" when any material has origin "research"; else null
     disabled: boolean;             // streaming || busy || confirming
     onChangeHours: (hours: number) => void;
     onChangeDays?: (days: number) => void;  // omitted for topLevel "day"
@@ -399,6 +400,8 @@ Expected: FAIL, because the module isn't found.
 - [ ] **Step 3: Implement `UnitRows.tsx`**
 
 Use the mock's `.rw` row grid (kind 118 px · text · time 64 px) and its `.day` cards. At `max-[900px]:`, the kind sits above the text.
+
+Import note: a practice row from an imported file (`row.imported`) with no material names its source with `practiceSourceLabel(row)` ("From file"), as `PracticeSource` in `ReadTable.tsx` does. Key Read rows by `row.key` from `readRowsFor`, which counts up when one material is read twice.
 
 - [ ] **Step 4: Run the tests and confirm they pass.**
 
@@ -636,7 +639,7 @@ git commit -m "feat(draft-page): the chat as a box under the materials; drop the
 
 **Files:**
 - Modify: `components/pensieve/PlanWorkspace.tsx`
-- Modify: `app/tracks/new/NewTrackForm.tsx` and `app/tracks/[id]/adjust/AdjustPlan.tsx` (drop the `subtext` prop)
+- Modify: `app/tracks/new/NewTrackForm.tsx` and `app/tracks/[id]/adjust/AdjustPlan.tsx` (drop the `subtext` prop from every `PlanWorkspace` they render, the import branch in `NewTrackForm` included)
 - Test: `lib/draftPage.test.ts` (one case for `adjustOpening`, below)
 
 **Interfaces:**
@@ -645,7 +648,7 @@ git commit -m "feat(draft-page): the chat as a box under the materials; drop the
 
 **Changes, in `PlanWorkspace.tsx` order:**
 
-1. **Summary.** `const summary = drafting ? "" : summarizePlan(tree, topic, daysPerWeek);`. Drop `lockNote` and `note`. `summaryNote` stays, because the re-draft and undo logic still carry it, but it's no longer shown.
+1. **Summary.** `const summary = drafting ? "" : summarizePlan(tree, props.imported ? null : topic, daysPerWeek);`. Drop `lockNote` and `note`. `summaryNote` stays, because the re-draft and undo logic still carry it, but it's no longer shown.
 2. **Open state.**
    - Replace `collapsed` with `toggles: Map<string, boolean>`, and compute `open = openRows(tree, mode, current?.id ?? null, toggles)` on each render. That way the first unit opens itself the moment it lands (F2).
    - Add `weekView: Map<string, WeekView>`.
@@ -662,14 +665,14 @@ git commit -m "feat(draft-page): the chat as a box under the materials; drop the
       - `deciding={drafting && !split}`
       - `disabled={streaming || busy || confirming || researching}`
       - `onChangeDays={topLevel === "day" ? undefined : changeDays}`
-      - `sourceLabel` set to "researched" when any material has `origin === "research"`, else null
+      - `sourceLabel` set to `props.imported.fileName` for an import, else "researched" when any material has `origin === "research"`, else null
    2. In Adjust, when `lockLine(tree, lockBefore)` isn't null, the lock line (a `Lock` icon plus the text).
    3. The status line: today's `draftingText`, with "<first unit label> is ready to read" next to it while `drafting && tops.length > 0`.
    4. The plan area, which is one of:
       - the out-of-credits alert with grey slots (as today)
       - while `researching`, the `ResearchProgress` card with three grey slots, the first reading "<Level>s start drafting as soon as the materials list is set."
       - otherwise, `PlanList`
-   5. Confirm and the error lines, as today.
+   5. Confirm and the error lines, as today. Keep today's import conditions: no Try again when `props.imported`, and no `onRetry` on the draft's out-of-credits alert.
 7. **Right column.** `min-[901px]:sticky min-[901px]:top-5 min-[901px]:h-[calc(100vh-40px)] flex flex-col gap-4`:
    - `MaterialsList` in `min-h-0 shrink overflow-y-auto` (cap it at about 55% of the column), with `found={researching ? research.found : undefined}` and `fold={isNarrow}`
    - then `ConversationRail`
