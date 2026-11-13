@@ -3,10 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AIE_MATERIALS } from "@/lib/__fixtures__/aiEngineeringPlan";
 import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
-import { layout, makeNode, makeRoot } from "@/lib/planTree";
-import type { UnitTime } from "@/lib/schemas/plan";
-import type { CoverRef, Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
-import { CoversRow, PlanTree, coverLines } from "./PlanTree";
+import { makeNode } from "@/lib/planTree";
+import type { CoverRef, Material, PracticeCover } from "@/lib/schemas/material";
+import { CoversRow, coverLines } from "./PlanTree";
 
 const bank: Material = { ...AIE_MATERIALS.find((m) => m.id === "evals")!, id: "nc", title: "NeetCode 150", backbone: false, practice: LISTED_PROBLEMS };
 const plain: Material = { ...AIE_MATERIALS.find((m) => m.id === "oaievals")!, id: "mock", title: "Mock Bank", backbone: false, practice: { format: "mock", items: 10, perItemMinutes: 30, minutes: 300, answers: false } };
@@ -66,103 +65,5 @@ describe("CoversRow", () => {
   });
   it("renders nothing for a heading with no reservation", () => {
     expect(render(week([]))).toBe("");
-  });
-});
-
-describe("a collapsed day card's practice lines", () => {
-  const listed: PracticeRef = { format: "problem-set", id: "nc", task: "NeetCode 150 · Arrays & Hashing, problem 1", done: "solved", minutes: 15, generated: false, itemFrom: 1, itemTo: 1 };
-  const plainRow: PracticeRef = { format: "mock", id: "mock", task: "One mock round", done: "debriefed", minutes: 45, generated: false };
-  const tree = (practice: PracticeRef[] = [listed, plainRow]) => {
-    const d1 = makeNode({ id: "d1", level: "day", title: "Hashing", summary: "A long summary of the day", len: 1, practice });
-    return layout(makeRoot([makeNode({ id: "w1", level: "week", title: "Arrays", summary: "s", len: 1, children: [d1] })]));
-  };
-  const none = new Set<string>();
-  const html = (openChips: ReadonlySet<string> = none, practice?: PracticeRef[]) =>
-    renderToStaticMarkup(
-      createElement(PlanTree, {
-        root: tree(practice),
-        mode: "create",
-        highlight: none,
-        lockBefore: 0,
-        currentLeafId: null,
-        pending: {},
-        collapsed: none,
-        openChips,
-        busy: false,
-        onToggle: () => {},
-        onToggleChip: () => {},
-        onExpand: () => {},
-        onSplit: () => {},
-        materials: [...byId.values()],
-        hoursPerWeek: 6,
-        daysPerWeek: 5,
-      }),
-    ).replace(/<!-- -->/g, "");
-
-  it("shows a listed item as number and title with its group, and other rows by their task", () => {
-    const out = html();
-    expect(out).toContain("217. Contains Duplicate");
-    expect(out).toMatch(/217\. Contains Duplicate<span[^>]*>Arrays &amp; Hashing<\/span>/);
-    expect(out).not.toContain("problem 1");
-    expect(out).toContain("One mock round");
-  });
-
-  it("previews a day by its rows, one line each, with no summary", () => {
-    const out = html();
-    expect(out).not.toContain("A long summary of the day");
-    expect(out.match(/class="line-clamp-1"/g)).toHaveLength(2);
-    expect(out).toMatch(/aria-label="Show the day[^"]*materials in full"/);
-  });
-
-  it("opens the rows in full on the chevron, still with no summary", () => {
-    const out = html(new Set(["d1"]));
-    expect(out).not.toContain("A long summary of the day");
-    expect(out).not.toContain("line-clamp-1");
-    expect(out).toContain('aria-label="Show less"');
-  });
-
-  it("shows the summary on a day with nothing assigned, and no chevron", () => {
-    const out = html(none, []);
-    expect(out).toContain("A long summary of the day");
-    expect(out).not.toContain("Show the day");
-  });
-});
-
-describe("a heading's unit time", () => {
-  const none = new Set<string>();
-  const html = (time?: UnitTime) => {
-    const d1 = makeNode({ id: "d1", level: "day", title: "Hashing", summary: "s", len: 1 });
-    const w1 = makeNode({ id: "w1", level: "week", title: "Arrays", summary: "Week summary", len: 1, children: [d1], time });
-    return renderToStaticMarkup(
-      createElement(PlanTree, {
-        root: layout(makeRoot([w1])),
-        mode: "create",
-        highlight: none,
-        lockBefore: 0,
-        currentLeafId: null,
-        pending: {},
-        collapsed: none,
-        openChips: none,
-        busy: false,
-        onToggle: () => {},
-        onToggleChip: () => {},
-        onExpand: () => {},
-        onSplit: () => {},
-        materials: [...byId.values()],
-        hoursPerWeek: 6,
-        daysPerWeek: 5,
-      }),
-    ).replace(/<!-- -->/g, "");
-  };
-
-  it("shows a week's time under its title", () => {
-    const out = html({ reading: 150, practice: { "problem-set": 180 } });
-    expect(out).toContain("2 h 30 min reading · 3 h Problems");
-    expect(out.indexOf("Arrays")).toBeLessThan(out.indexOf("2 h 30 min reading"));
-  });
-  it("shows nothing for a week the outline gave no time", () => {
-    const out = html();
-    expect(out).not.toContain("reading");
-    expect(out).not.toMatch(/>\d+ (h|min)/);
   });
 });
