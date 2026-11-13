@@ -12,6 +12,8 @@
 
 **Tech Stack:** Next.js 16.3 (App Router, client components), React 19.2, Tailwind 4, `@base-ui/react` 1.7 (Popover, Menu), lucide-react, Vitest 4. Tests run in the `node` environment and render with `renderToStaticMarkup` from `.test.ts` files using `createElement`, with no JSX in tests, as in the existing tests.
 
+**Execution:** subagent-driven (the owner's choice, 2026-11-12). The build waits until the owner starts it after the feature freeze, in January.
+
 **Spec:** `docs/superpowers/specs/2026-11-11-plan-draft-redesign-design.md`. The mockup is `docs/mockups/plan-draft-redesign.html`; build from screens B1, B2, E1, E1b, F1, F2, G1, H1–H3 and I1–I3. Read both before starting.
 
 ## Global Constraints
