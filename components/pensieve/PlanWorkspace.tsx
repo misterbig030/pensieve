@@ -786,19 +786,22 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   );
 
   return (
-    <div className="space-y-6">
+    // Full width up to the page's own cap: the page's main shrinks to its content otherwise, and the columns with it.
+    // On wide screens the page's bottom padding (PageShell's pb-24) moves inside the plan column, so the grid row runs to
+    // the page's end and the sticky right column is never pushed up past the top of the screen at the end of a scroll.
+    <div className="w-full space-y-6 min-[901px]:-mb-24">
       <div className="space-y-3 pb-1">
         <div className="text-[13px] text-foreground/60">
           <Link href={props.backHref} className="hover:text-primary">
             ← {props.backLabel}
           </Link>
         </div>
-        <h1>{props.heading}</h1>
+        <h1 className="font-heading text-[28px] leading-[1.1]">{props.heading}</h1>
         <Subtitle text={summary} loading={drafting} />
       </div>
 
       <div className="grid items-start gap-7 min-[901px]:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="flex min-w-0 flex-col gap-4 max-[900px]:pb-[72px]">
+        <div className="flex min-w-0 flex-col gap-4 max-[900px]:pb-[72px] min-[901px]:pb-24">
           <StatStrip
             lengthLabel={lengthLabel(planWeeks, daysPerWeek, tops)}
             topLevel={topLevel}
@@ -892,9 +895,10 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           )}
         </div>
 
-        {/* The materials and the chat stay in view while the plan scrolls; the chat takes what the materials leave. */}
-        <div className="flex min-w-0 flex-col gap-4 min-[901px]:sticky min-[901px]:top-5 min-[901px]:h-[calc(100vh-40px)]">
-          {!isNarrow && <div className="min-h-0 max-h-[55%] shrink overflow-y-auto">{materialsList}</div>}
+        {/* The materials and the chat stay in view while the plan scrolls: the column is the screen's height less 20px above
+            and below. The materials scroll inside at most 55% of it, and never into the chat's 320px (plus the 16px gap). */}
+        <div className="flex min-w-0 flex-col gap-4 min-[901px]:sticky min-[901px]:top-5 min-[901px]:h-[calc(100dvh-40px)]">
+          {!isNarrow && <div className="min-h-0 max-h-[min(55%,calc(100%-336px))] shrink overflow-y-auto">{materialsList}</div>}
           <ConversationRail
             mode={mode}
             messages={messages}
