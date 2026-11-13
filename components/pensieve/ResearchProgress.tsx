@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Check, LoaderCircle, Search, X } from "lucide-react";
-import { KIND_LABEL } from "@/lib/schemas/material";
 import type { ResearchLogEntry, ResearchProgressState } from "@/lib/researchProgress";
 import { cn } from "@/lib/utils";
 
 const SHOWN_LOG = 8;
 
-/** The card shown while research runs: counters against the caps, a live log, and what has been found so far. */
+/** The card shown while research runs: counters against the caps and a live log. What is found shows in the materials column. */
 export function ResearchProgress({ state, totalHours }: { state: ResearchProgressState; totalHours?: number }) {
   const elapsed = useElapsed(state.startedAt, state.running);
   const log = state.log.slice(-SHOWN_LOG);
@@ -57,25 +56,6 @@ export function ResearchProgress({ state, totalHours }: { state: ResearchProgres
         )}
       </section>
 
-      {state.found.length > 0 && (
-        <div className="flex flex-col gap-2.5">
-          <span className="text-[11px] tracking-wide text-muted-foreground uppercase">Found so far</span>
-          <div className="flex flex-wrap gap-2 text-xs">
-            {state.found.map((f) => (
-              <span
-                key={f.id}
-                className={cn(
-                  "rounded-full px-[11px] py-[5px] animate-in fade-in",
-                  f.backbone ? "bg-accent-2-800 font-semibold text-accent-2-100" : "bg-secondary",
-                )}
-              >
-                {KIND_LABEL[f.kind].replace(/s$/, "")} · {f.title}
-                {f.yours ? " · yours" : ""}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -234,3 +234,21 @@
 body {
   padding-right: var(--admin-dock, 0px);
 }
+
+/* A newly arrived plan row: a light accent ring that fades out (the plan draft's F2 outline). */
+@keyframes unit-arrive {
+  from {
+    box-shadow: inset 0 0 0 1.5px var(--accent-200);
+  }
+  to {
+    box-shadow: inset 0 0 0 1.5px transparent;
+  }
+}
+.unit-arrive {
+  animation: unit-arrive 1.8s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .unit-arrive {
+    animation: none;
+  }
+}

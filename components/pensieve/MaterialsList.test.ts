@@ -107,7 +107,7 @@ describe("MaterialsList while the allocation is pending", () => {
     expect(pending).not.toContain("No backbone");
     expect(pending).toContain("Book");
     // Once chosen, the backbone card shows whether or not the flag is still up.
-    expect(text({ awaitingBackbone: false, materials: [material({ id: "M1", title: "Book", origin: "research", backbone: true })] })).toContain("Backbone");
+    expect(text({ awaitingBackbone: false, materials: [material({ id: "M1", title: "Book", origin: "research", backbone: true })] })).toContain("backbone");
   });
 
   it("does not tell the learner no textbook stood out before the allocation has looked", () => {
@@ -142,5 +142,40 @@ describe("badgeFor", () => {
   it("reads Verified for a verified material and nothing for an unverified one", () => {
     expect(badgeFor(material({ origin: "research", verifiedAt: "2026-09-28T10:00:00.000Z" }))).toBe("Verified");
     expect(badgeFor(material({ origin: "research", verifiedAt: null }))).toBeNull();
+  });
+});
+
+describe("MaterialsList as the draft page's column", () => {
+  it("lists what research has found so far, with a still-looking line", () => {
+    const html = render({ materials: [], found: [{ id: "a", title: "Genki I", kind: "book", backbone: false, yours: false }] });
+    expect(html).toContain("Genki I");
+    expect(html).toContain("Books");
+    expect(html).toContain("Still looking…");
+  });
+  it("starts folded on a narrow screen", () => {
+    const html = render({ fold: true });
+    expect(html).toMatch(/<details(?![^>]*\bopen\b)/);
+    expect(html.replace(/<!-- -->/g, "")).toContain("Materials · 1");
+  });
+  it("says so in one line when the plan has no materials", () => {
+    expect(render({ materials: [] })).toContain("No materials yet.");
+  });
+  it("neither lights nor dims any material", () => {
+    const html = render({ materials: [material({ id: "B", title: "Backbone book", origin: "research", backbone: true }), material({ id: "N", title: "Other", kind: "docs", origin: "research" })] });
+    expect(html).not.toMatch(/opacity-60|bg-accent-100 shadow-\[inset_2px/);
+  });
+  it("puts the backbone first in its kind group, marked in its small line", () => {
+    const text = render({ materials: [material({ id: "N", title: "Plain book", author: "Ann", origin: "research" }), material({ id: "B", title: "Backbone book", author: "Alex", origin: "research", backbone: true })] }).replace(/<!-- -->/g, "");
+    expect(text).not.toContain(">Backbone<");
+    expect(text.indexOf("Books")).toBeLessThan(text.indexOf("Backbone book"));
+    expect(text.indexOf("Backbone book")).toBeLessThan(text.indexOf("Plain book"));
+    expect(text).toContain("Alex · backbone");
+    expect(text.split("Books").length).toBe(2);
+  });
+  it("puts a found backbone first in its group, marked", () => {
+    const f = (id: string, title: string, backbone: boolean) => ({ id, title, kind: "book" as const, backbone, yours: false });
+    const text = render({ materials: [], found: [f("a", "Plain", false), f("b", "Spine", true)] });
+    expect(text.indexOf("Spine")).toBeLessThan(text.indexOf("Plain"));
+    expect(text).toContain("backbone");
   });
 });
