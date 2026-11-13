@@ -1,5 +1,6 @@
 import { streamObject } from "ai";
 import type { z } from "zod";
+import { coverImportedRows, splitWeekTime } from "@/lib/import/cover";
 import {
   aliasMaterials,
   levelChecks,
@@ -9,6 +10,8 @@ import {
   resolveCoverRefs,
   resolveMaterialRefs,
   resolvePracticeCovers,
+  importedCovers,
+  markImported,
   resolvePracticeRefs,
   sizeChapterRows,
   sizeItemRuns,
@@ -34,7 +37,7 @@ import {
   type PlanNode,
 } from "@/lib/planTree";
 import type { PracticeFormat } from "@/lib/practice";
-import type { Material } from "@/lib/schemas/material";
+import type { Material, PracticeCover, PracticeRef } from "@/lib/schemas/material";
 import { capProblems, MAX_UNIT_MINUTES, unitListSchema, type UnitDraft, type UnitTime, type unitTimeDraftSchema } from "@/lib/schemas/plan";
 import { DEFAULT_HOURS_PER_WEEK, type PlanSplit } from "@/lib/studyTime";
 import { buildGenerationLogRow, effortSettings, emitGenerationLog, type GenerationLogContext } from "./logged";
@@ -143,6 +146,7 @@ export function nodeFor(
   hoursPerWeek?: number,
   split?: PlanSplit | null,
   picked?: readonly PracticeFormat[],
+  parentCovers?: readonly (PracticeRef | PracticeCover)[],
 ): PlanNode {
   const leaf = unitsAreLeaves(level, granularity);
   const node = makeNode({
@@ -153,7 +157,7 @@ export function nodeFor(
     budgetHours: leaf && level !== "day" ? budgetFor(1, hoursPerWeek) : null,
     children: null,
   });
-  if (aliases) applyUnitRefs(node, unit, leaf, aliases, split, picked);
+  if (aliases) applyUnitRefs(node, unit, leaf, aliases, split, picked, parentCovers);
   return node;
 }
 
@@ -172,6 +176,7 @@ export function applyUnitRefs(
   aliases: MaterialAliases,
   split?: PlanSplit | null,
   picked: readonly PracticeFormat[] = pickedFormats(split),
+  parentCovers?: readonly (PracticeRef | PracticeCover)[],
 ): { unknown: string[]; refused: string[]; unpicked: PracticeFormat[] } {
   delete node.covers;
   delete node.materials;
@@ -181,7 +186,7 @@ export function applyUnitRefs(
   if (leaf) {
     const reading = resolveMaterialRefs(unit.materials, aliases);
     if (reading.refs.length > 0) node.materials = reading.refs;
-    const practice = resolvePracticeRefs(unit.practice, aliases, split, reading.refs.map((r) => r.id));
+    const practice = resolvePracticeRefs(markImported(unit.practice, parentCovers, aliases), aliases, split, reading.refs.map((r) => r.id));
     if (practice.refs.length > 0) node.practice = practice.refs;
     return { unknown: [...reading.unknown, ...practice.unknown], refused: practice.refused, unpicked: [] };
   }
@@ -301,6 +306,13 @@ export interface DraftLevelInput {
     daysPerWeek: number;
     hoursPerWeek?: number;
     split?: PlanSplit | null;
+    /** The learner's imported plan file, shown to the call as the plan's intent. */
+    importText?: string;
+    /**
+     * A re-draft of an imported plan: the learner's rows in the plan as it was (`importedRowsOf`), which the units being
+     * re-drafted no longer hold. A draft copying one is that row, as a day copying its week's is.
+     */
+    importedRows?: readonly (PracticeRef | PracticeCover)[];
     outlineModel: ResolvedModel;
     /** The outline call's reasoning effort; `OUTLINE_EFFORT` when absent. */
     effort?: ReasoningEffort;
@@ -364,6 +376,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
     hoursPerWeek: ctx.hoursPerWeek,
     daysPerWeek: ctx.daysPerWeek,
     split: ctx.split,
+    importText: ctx.importText,
     level,
     spans: input.spans,
     weeks: ctx.weeks,
@@ -377,6 +390,8 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
   const n = input.spans.length;
   const label = input.label ?? `${where} · ${n} ${level}${n === 1 ? "" : "s"}`;
   const picked = pickedFormats(ctx.split, ctx.materials);
+  // The parent's imported rows, and on a re-draft the plan's as it was: a draft copying one is that row, kept whatever its format.
+  const parentImported = [...importedCovers(parentNode), ...(ctx.importedRows ?? [])];
   const nodes: PlanNode[] = [];
   let final: PlanNode[] = [];
   let problems: string[] = [];
@@ -398,7 +413,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
       node.end = node.start + node.len - 1;
       if (node.budgetHours !== null) node.budgetHours = budgetFor(1, ctx.hoursPerWeek);
       if (aliases) {
-        const out = applyUnitRefs(node, unit, leaf, aliases, ctx.split, picked);
+        const out = applyUnitRefs(node, unit, leaf, aliases, ctx.split, picked, parentImported);
         unknown.push(...out.unknown);
         refused.push(...out.refused);
         for (const f of out.unpicked) unpicked.add(f);
@@ -461,7 +476,7 @@ export async function* draftLevel(input: DraftLevelInput): AsyncGenerator<{ type
   for await (const event of streamUnits({ prompt, label, expected: n, check, model: ctx.outlineModel, effort: ctx.effort, log: input.log, signal })) {
     if (event.type === "unit") {
       const len = input.spans[nodes.length] ?? (level === "day" ? 1 : input.spans[input.spans.length - 1]);
-      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split, picked);
+      const node = nodeFor(event.unit, level, len, ctx.granularity, aliases, ctx.hoursPerWeek, ctx.split, picked, parentImported);
       if (aliases) plainUnitText(node, ctx.materials, aliases);
       nodes.push(node);
       yield { type: "node", node };
@@ -742,10 +757,14 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
     node.manualSplit = true;
   }
   if (input.reason === "split" && node.practice) {
-    node.practiceCovers = node.practice.map(({ format, id, task, minutes, itemFrom, itemTo }) => ({ format, id, note: null, task, minutes, ...(itemFrom && itemTo ? { itemFrom, itemTo } : {}) }));
+    node.practiceCovers = node.practice.map(({ format, id, task, minutes, itemFrom, itemTo, imported }) => ({ format, id, note: null, task, minutes, ...(itemFrom && itemTo ? { itemFrom, itemTo } : {}), ...(imported ? { imported: true } : {}) }));
     delete node.practice;
     node.manualSplit = true;
   }
+  // An imported track's split week states its own time, from the rows it holds: its days share the learner's minutes,
+  // not the plan-wide split, so no format the week holds no rows of is offered. Other tracks' splits stay as they were.
+  // A week the file left empty is open, so its days are planned as a drafted week's are.
+  if (input.reason === "split" && input.importText && ((node.covers?.length ?? 0) > 0 || (node.practiceCovers?.length ?? 0) > 0)) node.time = splitWeekTime(node, input.hoursPerWeek);
   // A week split into a number of days other than its own takes that length before its days are planned.
   if (input.reason === "split" && input.splitDays && input.splitDays !== node.len) {
     node.len = input.splitDays;
@@ -755,12 +774,18 @@ export async function* streamExpandNode(input: StreamExpandNodeInput): AsyncGene
   const ctx = { ...input, granularity, outlineModel: input.outlineModel ?? appModel(DEFAULT_OUTLINE_MODEL) };
   const spans = childSpans(node, input.daysPerWeek);
   const kids: PlanNode[] = [];
+  // An imported track's heading (a split week, a month of the file) holds the learner's rows as reservations
+  // (practiceCovers, covers), so any its units left out go on the lightest unit. That needs units that hold rows: days,
+  // or weeks on a week plan; headings below a heading carry reservations, which the net does not place. Other tracks'
+  // units stay as drafted.
+  const net = !!input.importText && unitsAreLeaves(level, granularity);
   for await (const event of draftLevel({ ctx, level, spans, tree: root, parentId: node.id, log: input.log })) {
     if (event.type === "node") {
       kids.push(event.node);
       yield { type: "child", node: event.node };
     } else {
-      yield { type: "finish", children: event.nodes, problems: event.problems, costUsd: event.costUsd };
+      const children = net ? coverImportedRows(node, event.nodes).days : event.nodes;
+      yield { type: "finish", children, problems: event.problems, costUsd: event.costUsd };
     }
   }
 }

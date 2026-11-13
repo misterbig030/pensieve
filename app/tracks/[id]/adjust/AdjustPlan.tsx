@@ -18,9 +18,11 @@ interface AdjustPlanProps {
   materials: Material[];
   root: PlanNode;
   lockBefore: number;
+  /** The plan file this track was imported from, when it was: chat, redraft and expand send it along. */
+  importText?: string;
 }
 
-export function AdjustPlan({ trackId, trackTitle, granularity, hoursPerWeek, daysPerWeek, split, instructions, materials, root, lockBefore }: AdjustPlanProps) {
+export function AdjustPlan({ trackId, trackTitle, granularity, hoursPerWeek, daysPerWeek, split, instructions, materials, root, lockBefore, importText }: AdjustPlanProps) {
   return (
     <PlanWorkspace
       mode="adjust"
@@ -36,6 +38,7 @@ export function AdjustPlan({ trackId, trackTitle, granularity, hoursPerWeek, day
       initialTree={root}
       lockBefore={lockBefore}
       trackId={trackId}
+      imported={importText ? { fileName: "your plan file", text: importText, kept: [], skipped: [] } : undefined}
       backHref={`/tracks/${trackId}`}
       backLabel={trackTitle}
       heading="Adjust your plan"

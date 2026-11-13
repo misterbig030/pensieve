@@ -24,7 +24,7 @@ export interface VetOptions {
 /**
  * Runs on confirm, before a plan is saved. A researched material with a bad or missing signature, or a title that
  * no longer matches the page title it was signed with, goes back through the gate and is dropped if it fails. A
- * learner's own material is always kept, but a "verified" claim it cannot back with a signature is cleared. At most
+ * learner's own material, or one imported from their file, is always kept, but a "verified" claim it cannot back with a signature is cleared. At most
  * one backbone, and only a book, survives.
  */
 export async function vetMaterials(materials: Material[], options: VetOptions = {}): Promise<VetResult> {
@@ -36,7 +36,7 @@ export async function vetMaterials(materials: Material[], options: VetOptions = 
 
   const checked = await Promise.all(
     materials.map(async (m): Promise<Material | null> => {
-      if (m.origin === "learner") {
+      if (m.origin === "learner" || m.origin === "import") {
         if (m.verifiedAt && !verifyMaterialSig(m, m.sig, secret)) return { ...m, verifiedAt: null, fetchedTitle: null, sig: null };
         return m;
       }

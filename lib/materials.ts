@@ -14,7 +14,7 @@ import {
   type PracticeFormat,
   type PracticePick,
 } from "@/lib/practice";
-import { activePicks, dayMinutes, formatDayTime, isAllReading, readingShareOf, type PlanSplit } from "@/lib/studyTime";
+import { SPLIT_FROM_FILE, activePicks, dayMinutes, formatDayTime, isAllReading, readingShareOf, type PlanSplit } from "@/lib/studyTime";
 import {
   normalizeCoverRef,
   normalizeMaterialRef,
@@ -66,6 +66,8 @@ export interface MaterialAliases {
   practice(id: string): PracticeFormat | null;
   /** The item at a 1-based position of a practice source's list. */
   item(id: string, position: number): PracticeItem | undefined;
+  /** Whether some material on the list is a practice source of `format`. */
+  hasSource(format: PracticeFormat): boolean;
 }
 
 const ALIAS_RE = /^\[?\s*(m\d+)(?:\.(i)?(\d+))?\s*\]?$/i;
@@ -114,6 +116,7 @@ export function aliasMaterials(materials: Pick<Material, "id" | "toc" | "practic
     items: (id) => itemCounts.get(id) ?? 0,
     practice: (id) => formats.get(id) ?? null,
     item: (id, position) => lists.get(id)?.[position - 1],
+    hasSource: (format) => [...formats.values()].includes(format),
   };
 }
 
@@ -236,10 +239,16 @@ export function resolveCoverRefs(refs: CoverRefDraft[] | undefined, aliases: Mat
   return { refs: out, unknown };
 }
 
+/** The registry format a written name is, picked or not. */
+function knownFormat(format: string): PracticeFormat | null {
+  const f = format.trim().toLowerCase();
+  return (PRACTICE_FORMATS as readonly string[]).includes(f) ? (f as PracticeFormat) : null;
+}
+
 /** The format the model wrote, if it is one the split picked. */
 function pickedFormat(format: string, split: PlanSplit | null | undefined): PracticeFormat | null {
-  const f = format.trim().toLowerCase();
-  if (!(PRACTICE_FORMATS as readonly string[]).includes(f)) return null;
+  const f = knownFormat(format);
+  if (!f) return null;
   return activePicks(split).some((p) => p.format === f) ? (f as PracticeFormat) : null;
 }
 
@@ -290,7 +299,10 @@ export interface ResolvePracticeOptions {
  * row with no id, or citing other reading, is refused. An id not in the list is unknown; a reading id on any other
  * format is refused, since it is no practice source. A row of a source with an item list names one item (`M4.12`): it
  * keeps that position and takes the item's minutes; one naming the source without an item is unknown, as an item past
- * the list is.
+ * the list is. A draft marked `imported` (set in code from the learner's plan file) skips the picks and the
+ * never-written rule: any registry format, with or without a source, is kept and carries `imported`. On a split made
+ * from the file, a sourceless row of a never-written pick no source serves ("other") is kept too (`writtenOnFilePlan`),
+ * but as one the model wrote: only `markImported` says a row is the learner's.
  */
 export function resolvePracticeRefs(
   drafts: PracticeRefDraft[] | undefined,
@@ -304,7 +316,8 @@ export function resolvePracticeRefs(
   const refused: string[] = [];
   for (const draft of drafts ?? []) {
     const name = rowName(draft.format, draft.task);
-    const format = pickedFormat(draft.format, split);
+    // An imported row is the learner's own: any format the registry knows, picked or not.
+    const format = draft.imported ? knownFormat(draft.format) : pickedFormat(draft.format, split);
     if (!format) {
       refused.push(`${name}: not one of the plan's picks`);
       continue;
@@ -331,7 +344,8 @@ export function resolvePracticeRefs(
       continue;
     }
     const generated = serves !== format;
-    if (generated) {
+    // An imported row is never refused as written or unsourced: its task is the learner's.
+    if (generated && !draft.imported && !writtenOnFilePlan(format, split, aliases)) {
       const why =
         format === "recall"
           ? resolved && reads.includes(resolved.id)
@@ -354,9 +368,19 @@ export function resolvePracticeRefs(
     }
     const minutes = item ? itemMinutes(format, item) : Number.isFinite(draft.minutes) ? Math.max(1, Math.min(600, Math.round(draft.minutes))) : 1;
     const position = item ? { itemFrom: resolved!.item!, itemTo: resolved!.item! } : {};
-    refs.push({ format, id: resolved?.id ?? null, task, done: clip(draft.done, 300) ?? spec.doneWhen, minutes, generated, ...position });
+    refs.push({ format, id: resolved?.id ?? null, task, done: clip(draft.done, 300) ?? spec.doneWhen, minutes, generated, ...position, ...(draft.imported ? { imported: true } : {}) });
   }
   return { refs, unknown, refused };
+}
+
+/**
+ * Whether a model may write a sourceless row of `format` on this plan though the registry says the format is never
+ * written: on a split made from the learner's plan file, a pick no material serves ("other", or a file's unsourced
+ * problems) has only the file's tasks, so a row the model adds or rewords there is kept, as one it wrote. A pick a
+ * source serves keeps its rows to that source; every plan not imported keeps the registry's rule.
+ */
+export function writtenOnFilePlan(format: PracticeFormat, split: PlanSplit | null | undefined, aliases: Pick<MaterialAliases, "hasSource">): boolean {
+  return isSplitFromFile(split) && PRACTICE_REGISTRY[format].generated === "never" && !aliases.hasSource(format);
 }
 
 /**
@@ -556,16 +580,116 @@ export function isPracticeOnly(m: Pick<Material, "minutes" | "practice">): boole
   return !m.minutes && !!m.practice;
 }
 
-/** The split's picks with their sources. Empty when the plan is all reading. */
-export function pickSources(split: PlanSplit | null | undefined, materials: Pick<Material, "id" | "practice" | "minutes">[]): PickSources[] {
+/**
+ * Whether the split was made from the learner's plan file (an imported plan): its picks are the file's own formats. The
+ * picks say so too, and keep saying it once the learner moves the share (which makes the split's reason theirs), as
+ * `splitPercents` reads them.
+ */
+export function isSplitFromFile(split: PlanSplit | null | undefined): boolean {
+  return split?.reason === SPLIT_FROM_FILE || (split?.formats ?? []).some((p) => p.reason === SPLIT_FROM_FILE);
+}
+
+/**
+ * The split's picks with their sources. Empty when the plan is all reading. A pick the plan reserves an imported row of
+ * (`covers`) is assignable though it has no source and is never written: the rows are the learner's own. So is every
+ * pick of a split made from the learner's plan file (`isSplitFromFile`): its rows are the file's tasks.
+ */
+export function pickSources(
+  split: PlanSplit | null | undefined,
+  materials: Pick<Material, "id" | "practice" | "minutes">[],
+  covers: readonly Pick<PracticeCover, "format" | "imported">[] = [],
+): PickSources[] {
   // A source that also serves as practice is still reading, so recall can be written from it.
   const hasReading = materials.some((m) => !isPracticeOnly(m));
-  return activePicks(split).map((pick) => {
+  const fromFile = isSplitFromFile(split);
+  const picks = activePicks(split).map((pick) => {
     const sources = materials.filter((m) => m.practice?.format === pick.format).map((m) => m.id);
     const rule = PRACTICE_REGISTRY[pick.format].generated;
     const writable = rule !== "never" && (rule !== "from-reading" || hasReading);
-    return { pick, sources, assignable: sources.length > 0 || writable };
+    const imported = fromFile || covers.some((c) => c.format === pick.format && c.imported === true);
+    return { pick, sources, assignable: sources.length > 0 || writable || imported };
   });
+  // A format the plan holds imported rows of is assignable though the split never picked it ("other", an unpicked problem-set).
+  const picked = new Set(picks.map((p) => p.pick.format));
+  const extra = PRACTICE_FORMATS.filter((f) => !picked.has(f) && covers.some((c) => c.format === f && c.imported === true)).map((format) => ({
+    pick: { format, share: 0, focus: "the tasks in the learner's plan file", reason: "" },
+    sources: [],
+    assignable: true,
+  }));
+  return [...picks, ...extra];
+}
+
+/** The imported reservations a unit holds: the learner's own rows, kept whole through every rule that shares its time. */
+export function importedCovers(node: PlanNode | null | undefined): PracticeCover[] {
+  return (node?.practiceCovers ?? []).filter((c) => c.imported === true);
+}
+
+/** How many leading characters of an imported task a reworded copy must keep to still be that row. */
+const IMPORTED_PREFIX = 24;
+
+type ImportedLike = { format: string; task?: string | null; id?: string | null; itemFrom?: number | null; itemTo?: number | null };
+
+/**
+ * The one imported row in `imported` that `row` is, or undefined. Same format, and a task (case and outer spaces aside)
+ * that is the imported row's word for word; else, of the rows whose first 24 characters it starts with, the only one, or
+ * the only one whose whole task it starts with. Rows the file wrote alike ("LeetCode, Backtracking + Tries (8) · …")
+ * share their first 24 characters, so a prefix alone names none of them. Copies of one row in `imported` count once. A
+ * blank task matches nothing.
+ */
+export function importedMatch<R extends ImportedLike>(row: { format: string; task?: string | null }, imported: readonly R[]): R | undefined {
+  const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+  const task = norm(row.task);
+  if (!task) return undefined;
+  const same = imported.filter((r) => r.format === norm(row.format) && norm(r.task));
+  const only = (rows: R[]): R | undefined => {
+    const key = (r: R) => [norm(r.task), r.id ?? "", r.itemFrom ?? "", r.itemTo ?? ""].join("\u0000");
+    return rows.length > 0 && rows.every((r) => key(r) === key(rows[0])) ? rows[0] : undefined;
+  };
+  const exact = same.filter((r) => norm(r.task) === task);
+  if (exact.length > 0) return only(exact);
+  const prefixed = same.filter((r) => task.startsWith(norm(r.task).slice(0, IMPORTED_PREFIX)));
+  return only(prefixed) ?? only(prefixed.filter((r) => task.startsWith(norm(r.task))));
+}
+
+/**
+ * The model's drafted rows never say which came from the learner's plan file. A draft that is one imported row in
+ * `known` (`importedMatch`) is that row: it is marked `imported` so the rules that refuse an unpicked or never-written
+ * format let it through. A draft written without an id that copies a sourced row takes the row's id from `aliases` (the
+ * item's own, for a row of one listed item), so it is that row and not a sourceless copy beside it. Any other draft,
+ * one that could be several of the learner's rows included, is judged as usual.
+ */
+export function markImported<T extends { format: string; task: string; id?: string | null }>(
+  drafts: T[] | undefined,
+  known: readonly { format: string; task?: string; imported?: boolean; id?: string | null; itemFrom?: number | null; itemTo?: number | null }[] | undefined,
+  aliases?: MaterialAliases,
+): (T & { imported?: boolean })[] | undefined {
+  const imported = (known ?? []).filter((r) => r.imported === true && r.task?.trim());
+  if (!drafts || imported.length === 0) return drafts;
+  return drafts.map((d) => {
+    const row = importedMatch(d, imported);
+    if (!row) return d;
+    const alias = !d.id?.trim() && row.id && aliases ? (row.itemFrom && row.itemFrom === row.itemTo ? aliases.alias(row.id, { item: row.itemFrom }) : row.itemFrom ? undefined : aliases.alias(row.id)) : undefined;
+    return { ...d, ...(alias ? { id: alias } : {}), imported: true };
+  });
+}
+
+/** Every imported row in `root`: leaves' practice rows and headings' reservations from the learner's plan file. */
+export function importedRowsOf(root: PlanNode | null | undefined): (PracticeRef | PracticeCover)[] {
+  const out: (PracticeRef | PracticeCover)[] = [];
+  if (root) walk(root, (n) => void out.push(...(n.practice ?? []).filter((r) => r.imported === true), ...importedCovers(n)));
+  return out;
+}
+
+/** The formats `covers` hold imported rows of. */
+export function importedFormats(covers: readonly Pick<PracticeCover, "format" | "imported">[]): PracticeFormat[] {
+  return PRACTICE_FORMATS.filter((f) => covers.some((c) => c.format === f && c.imported === true));
+}
+
+/** The minutes of the imported reservations in `covers`, by format. */
+export function importedMinutes(covers: readonly Pick<PracticeCover, "format" | "imported" | "minutes">[]): Partial<Record<PracticeFormat, number>> {
+  const out: Partial<Record<PracticeFormat, number>> = {};
+  for (const c of covers) if (c.imported === true) out[c.format] = (out[c.format] ?? 0) + (c.minutes ?? 0);
+  return out;
 }
 
 /**
@@ -599,6 +723,7 @@ export function practiceBudgets(
   split: PlanSplit | null | undefined,
   weekMinutes: number,
   materials: Pick<Material, "id" | "practice" | "minutes">[],
+  covers: readonly Pick<PracticeCover, "format" | "imported">[] = [],
 ): ReturnType<typeof weekBudgets> {
   if (activePicks(split).length === 0) {
     // All reading is all of the week, whatever share an all-reading pick shows.
@@ -606,7 +731,7 @@ export function practiceBudgets(
     return { reading: Math.round(weekMinutes * share), practice: {} };
   }
   const budgets = weekBudgets(split, weekMinutes);
-  for (const { pick, assignable } of pickSources(split, materials)) {
+  for (const { pick, assignable } of pickSources(split, materials, covers)) {
     if (assignable) continue;
     budgets.reading += budgets.practice[pick.format] ?? 0;
     delete budgets.practice[pick.format];
@@ -634,9 +759,13 @@ export interface UnitBudgets {
  * outline decided them), the plan-wide split of its share of the weeks (`practiceBudgets`).
  */
 export function unitBudgets(root: PlanNode, node: PlanNode, ctx: BudgetContext): UnitBudgets {
-  if (node.time) return { reading: node.time.reading, practice: { ...node.time.practice }, stated: true };
+  // The learner's imported rows are fixed time: a format holding them has exactly their minutes, picked or not.
+  const covers = importedCovers(node);
+  const imported = importedMinutes(covers);
+  const withImported = (b: UnitBudgets): UnitBudgets => (covers.length === 0 ? b : { ...b, practice: { ...b.practice, ...imported } });
+  if (node.time) return withImported({ reading: node.time.reading, practice: { ...node.time.practice }, stated: true });
   const minutes = budgetFor(weeksOf(root, node, ctx.daysPerWeek), ctx.hoursPerWeek) * 60;
-  return { ...practiceBudgets(ctx.split, minutes, ctx.materials), stated: false };
+  return withImported({ ...practiceBudgets(ctx.split, minutes, ctx.materials, covers), stated: false });
 }
 
 /**
@@ -719,11 +848,13 @@ export function reservedRuns(
  * exactly, a block format too: its units can take no other items. What that frees against the formats' shares goes to
  * the block formats without a run that the units can write themselves (a design prompt with a rubric, a mock), by
  * their shares, and to reading when there are none; a run past its share takes the excess from those blocks, none
- * below 0. Where they all have no time yet, they share it equally.
+ * below 0. Where they all have no time yet, they share it equally. A format in `imported` holds rows the learner's
+ * file gave it: its minutes stand as they are, neither taking a share of the freed time nor giving any up.
  */
 export function weekPracticeTime(
   budgets: { reading: number; practice: Partial<Record<PracticeFormat, number>> },
   runs: Partial<Record<PracticeFormat, number>>,
+  imported: readonly PracticeFormat[] = [],
 ): { reading: number; practice: Partial<Record<PracticeFormat, number>> } {
   const practice = { ...budgets.practice };
   let spare = 0;
@@ -734,7 +865,7 @@ export function weekPracticeTime(
     practice[f] = run;
   }
   if (spare === 0) return { reading: budgets.reading, practice };
-  const free = PRACTICE_FORMATS.filter((f) => practice[f] !== undefined && runs[f] === undefined && isBlockFormat(f));
+  const free = PRACTICE_FORMATS.filter((f) => practice[f] !== undefined && runs[f] === undefined && isBlockFormat(f) && !imported.includes(f));
   const weights = (fs: PracticeFormat[]) => (fs.some((f) => practice[f]! > 0) ? fs.map((f) => practice[f]!) : fs.map(() => 1));
   if (spare > 0) {
     const written = free.filter((f) => PRACTICE_REGISTRY[f].generated !== "never");
@@ -757,7 +888,8 @@ export function weekPracticeTime(
  * reading and the other formats (the format furthest past its minutes gives one up first); `blocks` counts them. What
  * the days still have goes to the formats they write themselves without a run, by their minutes, else to reading, so
  * the days are filled. Past the days' total, reading and the per-item formats without a run give way by their minutes;
- * the formats with a run are the items the week reserved, so they stay whole.
+ * the formats with a run are the items the week reserved, so they stay whole. So do the formats in `imported`, which
+ * hold rows the learner's file gave them: they count against the days' room but are never rounded, topped up or cut.
  */
 export function fitWeekToDays(
   budgets: { reading: number; practice: Partial<Record<PracticeFormat, number>> },
@@ -765,11 +897,12 @@ export function fitWeekToDays(
   dayBudget: number,
   days: number,
   wholeBlocks: boolean,
+  imported: readonly PracticeFormat[] = [],
 ): { reading: number; practice: Partial<Record<PracticeFormat, number>>; blocks: Partial<Record<PracticeFormat, number>> } {
   const practice = { ...budgets.practice };
   const formats = PRACTICE_FORMATS.filter((f) => practice[f] !== undefined);
   const sum = (fs: PracticeFormat[]) => fs.reduce((total, f) => total + practice[f]!, 0);
-  const free = wholeBlocks ? formats.filter((f) => runs[f] === undefined && isBlockFormat(f)) : [];
+  const free = wholeBlocks ? formats.filter((f) => runs[f] === undefined && isBlockFormat(f) && !imported.includes(f)) : [];
   const blocks: Partial<Record<PracticeFormat, number>> = {};
   const size = (f: PracticeFormat) => blockMinutes(f, dayBudget);
   const room = dayBudget * days - budgets.reading - sum(formats.filter((f) => !free.includes(f)));
@@ -782,7 +915,7 @@ export function fitWeekToDays(
   }
   for (const f of free) practice[f] = blocks[f]! * size(f);
   const left = room - placed();
-  const loose = formats.filter((f) => runs[f] === undefined && !isBlockFormat(f));
+  const loose = formats.filter((f) => runs[f] === undefined && !isBlockFormat(f) && !imported.includes(f));
   let reading = budgets.reading;
   if (left > 0 && wholeBlocks) {
     const written = loose.filter((f) => PRACTICE_REGISTRY[f].generated !== "never");
@@ -812,7 +945,9 @@ export interface PickPercent {
  * as reading and it has none of its own. Rounded from the exact shares by largest remainder, ties to reading first.
  */
 export function splitPercents(split: PlanSplit, materials: Pick<Material, "id" | "practice" | "minutes">[]): { reading: number; practice: number; picks: PickPercent[] } {
-  const assignable = new Map(pickSources(split, materials).map((p) => [p.pick.format, p.assignable]));
+  // A pick the file itself made is the learner's own tasks: counted as practice though no source or writer backs it.
+  const fromFile = (split.formats ?? []).filter((p) => p.reason === SPLIT_FROM_FILE).map((p) => ({ format: p.format, imported: true as const }));
+  const assignable = new Map(pickSources(split, materials, fromFile).map((p) => [p.pick.format, p.assignable]));
   const formats = split.formats ?? [];
   const toReading = formats.map((p) => assignable.get(p.format) === false);
   // Whole-number weights over 100 × the picks' shares, so `shareOut` rounds exactly: a pick's is its part of the practice.
@@ -990,7 +1125,7 @@ function formatChapters(chapters: number[]): string {
  * a source some heading reserves when its parent reserved none of it; an item outside the parent's run of that source;
  * and a heading's run outside its parent's.
  * `practice-overlap`: an item another unit already did, or one two units of a level take; a run two headings reserve.
- * `practice-generated`: a row the model wrote where the registry forbids it (a format never written, or recall not from
+ * `practice-generated`: a row the model wrote (never an imported one) where the registry forbids it (a format never written, or recall not from
  * the unit's own reading).
  * `budget-miss`: at the top level, a unit the allocation kept (`ChapterList.kept`) that no unit reserves, or a unit of
  * that list it did not keep that one reads; on a list without kept units, a material whose units all have minutes and whose reserved units add up to more or less than its
@@ -1452,13 +1587,13 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
       }
       // The drafter's resolver refuses these; a revision may still bring them.
       const ownReading = new Set((node.materials ?? []).filter(isRead).map((r) => r.id));
-      for (const r of rows.filter((r) => r.generated)) {
+      for (const r of rows.filter((r) => r.generated && !r.imported)) {
         const why =
           r.format === "recall"
             ? r.id !== null && ownReading.has(r.id)
               ? null
               : "not from its own reading"
-            : PRACTICE_REGISTRY[r.format].generated === "never"
+            : PRACTICE_REGISTRY[r.format].generated === "never" && !writtenOnFilePlan(r.format, input.split, aliases)
               ? "which is never written"
               : null;
         if (why) practiceBreach("practice-generated", index, unit, r, `${unit} writes ${rowName(r.format, r.task)} itself, ${why}`);
@@ -1865,6 +2000,7 @@ export function keepPracticeCovers(next: PracticeCover[], before: PracticeCover[
     ...(r.task === undefined && o.task !== undefined ? { task: o.task } : {}),
     ...(r.minutes === undefined && o.minutes !== undefined ? { minutes: o.minutes } : {}),
     ...(!r.itemFrom && o.itemFrom && o.itemTo ? { itemFrom: o.itemFrom, itemTo: o.itemTo } : {}),
+    ...(r.imported === undefined && o.imported ? { imported: true } : {}),
   });
   // A listed source is written once however many runs the unit holds of it ("named alone"), so one written back
   // without a run takes back every run of it not already claimed; a run is claimed once.

@@ -32,6 +32,47 @@ describe("buildDailyContentPrompt", () => {
     expect(prompt).not.toMatch(/transcript/i);
   });
 
+  it("omits the url of an imported note material", () => {
+    const prompt = buildDailyContentPrompt({
+      title: "Caching",
+      summary: "Cache strategies",
+      materials: [{ url: "import:week-1-notes", type: "note", title: "Week 1 notes" }],
+      practice: [{ format: "problem-set", label: "Problems", task: "Do 1-5", done: "done", minutes: 30, source: { title: "Week 1 notes", url: "import:week-1-notes", type: "note" }, generated: false }],
+    });
+    expect(prompt).toContain("Week 1 notes");
+    expect(prompt).not.toContain("import:");
+    expect(prompt).not.toContain("()");
+  });
+
+  it("shows an imported book's part, tier and minutes, as from the learner's plan file", () => {
+    const prompt = buildDailyContentPrompt({
+      title: "Framework",
+      summary: "The system-design framework",
+      materials: [{ url: "import:system-design-interview-vol-1", type: "note", origin: "import", kind: "book", title: "System Design Interview, vol. 1", tier: "must", minutes: 90, note: "Ch. 1–3" }],
+    });
+    expect(prompt).toContain("- System Design Interview, vol. 1 — must, 90 min, Ch. 1–3 — from the learner's plan file");
+    expect(prompt).toMatch(/cannot access their contents/i);
+    expect(prompt).not.toContain("free-text note");
+    expect(prompt).not.toContain("import:");
+  });
+
+  it("names an imported task without a source as from the learner's plan, not generated", () => {
+    const prompt = buildDailyContentPrompt({
+      title: "Freeze",
+      summary: "s",
+      materials: [],
+      practice: [{ format: "other", label: "Other", task: "Merge or close the open branches", done: "Branches closed", minutes: 100, source: null, generated: true, imported: true }],
+    });
+    expect(prompt).toContain("- Other: Merge or close the open branches (100 min) — done when: Branches closed — from the learner's plan file");
+    expect(prompt).not.toContain("— generated");
+  });
+
+  it("lists a note's tier, minutes and part beside its title", () => {
+    const prompt = buildDailyContentPrompt({ title: "A", summary: "B", materials: [{ url: "note:mine", type: "note", title: "My notes", tier: "should", minutes: 10, note: "the cache part" }] });
+    expect(prompt).toContain("- My notes — should, 10 min, the cache part");
+    expect(prompt).toMatch(/a local file or a free-text note/);
+  });
+
   it("mentions file/note materials as context without treating them as citable", () => {
     const prompt = buildDailyContentPrompt({
       title: "Caching",

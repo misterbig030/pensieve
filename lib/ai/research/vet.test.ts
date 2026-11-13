@@ -28,6 +28,18 @@ function researched(id: string, url: string, title: string, extra: Partial<Mater
 }
 
 describe("vetMaterials", () => {
+  it("keeps an import-origin note material without fetching", async () => {
+    const fetchPage = vi.fn<PageFetcher>(async () => {
+      throw new Error("must not fetch");
+    });
+    const imported = { ...researched("M1", "import:week-1-notes", "Week 1 notes"), origin: "import", type: "note", verifiedAt: null, fetchedTitle: null, sig: null } as Material;
+    const result = await vetMaterials([imported], { fetcher: new SourceFetcher(fetchPage), books: { find: async () => null }, secret: SECRET });
+    expect(fetchPage).not.toHaveBeenCalled();
+    expect(result.materials.map((m) => m.id)).toEqual(["M1"]);
+    expect(result.dropped).toEqual([]);
+    expect(result.reverified).toBe(0);
+  });
+
   it("keeps signed materials without fetching, re-verifies forged ones, and drops those that fail", async () => {
     const fetchPage = vi.fn<PageFetcher>(async (url) => {
       if (url === "https://example.com/real") return { finalUrl: url, title: "Real guide", ogTitle: null, h1: null, author: null, published: null, text: "" };

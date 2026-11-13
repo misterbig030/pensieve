@@ -129,6 +129,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
         hoursPerWeek: req.hoursPerWeek,
         daysPerWeek: req.daysPerWeek,
         split: req.split,
+        importText: req.importText,
         tree,
         lockBefore,
         changeRequest,
@@ -169,6 +170,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
           daysPerWeek: req.daysPerWeek,
           hoursPerWeek: req.hoursPerWeek,
           split: req.split,
+          importText: req.importText,
           tree,
           lockBefore,
           scope: target,
@@ -198,6 +200,7 @@ export async function* runPlanChat(req: PlanChatInput, options: RunPlanChatOptio
     hoursPerWeek: req.hoursPerWeek,
     daysPerWeek: req.daysPerWeek,
     split: req.split,
+    importText: req.importText,
     tree,
     lockBefore,
   });

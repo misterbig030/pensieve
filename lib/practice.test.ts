@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PracticeItem } from "@/lib/schemas/material";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, isBlockFormat, itemMinutes, normalizePicks, shareOut, weekBudgets, type PracticePickDraft } from "@/lib/practice";
+import { DRAFTABLE_FORMATS, PRACTICE_FORMATS, PRACTICE_REGISTRY, formatHours, isBlockFormat, itemMinutes, normalizePicks, shareOut, weekBudgets, type PracticePickDraft } from "@/lib/practice";
 
 const draft = (format: string, share = 25, focus = "Arrays", reason = "Because."): PracticePickDraft => ({ format, share, focus, reason });
 
@@ -50,12 +50,13 @@ describe("normalizePicks", () => {
 
 describe("PRACTICE_REGISTRY", () => {
   it("lists every format in the registry with a label, a research line and a generation rule", () => {
-    expect(PRACTICE_FORMATS).toHaveLength(7);
-    expect(PRACTICE_FORMATS.every((f) => PRACTICE_REGISTRY[f].id === f && PRACTICE_REGISTRY[f].label && PRACTICE_REGISTRY[f].research && PRACTICE_REGISTRY[f].generated)).toBe(true);
+    expect(PRACTICE_FORMATS).toHaveLength(8);
+    expect(PRACTICE_FORMATS.every((f) => PRACTICE_REGISTRY[f].id === f && PRACTICE_REGISTRY[f].label && PRACTICE_REGISTRY[f].generated)).toBe(true);
+    expect(DRAFTABLE_FORMATS.every((f) => PRACTICE_REGISTRY[f].research)).toBe(true);
   });
 
   it("sizes each format as the spec says", () => {
-    const sizes = Object.fromEntries(PRACTICE_FORMATS.map((f) => [f, [PRACTICE_REGISTRY[f].perItemMinutes, PRACTICE_REGISTRY[f].fixedMinutes]]));
+    const sizes = Object.fromEntries(DRAFTABLE_FORMATS.map((f) => [f, [PRACTICE_REGISTRY[f].perItemMinutes, PRACTICE_REGISTRY[f].fixedMinutes]]));
     expect(sizes).toEqual({
       "problem-set": [10, null],
       recall: [3, null],
@@ -176,5 +177,17 @@ describe("itemMinutes", () => {
   it("applies the difficulty table to problem lists only", () => {
     expect(itemMinutes("recall", item({ difficulty: "hard" }))).toBe(3);
     expect(itemMinutes("lab", item({ difficulty: "medium" }))).toBe(5);
+  });
+});
+
+describe("the other format", () => {
+  it("is an import-only format the model is never offered", () => {
+    expect(PRACTICE_REGISTRY.other.label).toBe("Other");
+    expect(DRAFTABLE_FORMATS).not.toContain("other");
+    expect(DRAFTABLE_FORMATS).toHaveLength(PRACTICE_FORMATS.length - 1);
+  });
+
+  it("is not accepted as a pick the model wrote", () => {
+    expect(normalizePicks([draft("other")])).toEqual([]);
   });
 });

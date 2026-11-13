@@ -30,6 +30,7 @@ const bodySchema = z.object({
   hoursPerWeek: hoursPerWeekSchema.optional(),
   daysPerWeek: daysPerWeekSchema.optional(),
   split: planSplitSchema.nullable().optional(),
+  importText: z.string().max(65536).optional(),
   tree: planTreeInputSchema,
   lockBefore: z.number().int().min(0).optional(),
   trackId: z.string().uuid().optional(),

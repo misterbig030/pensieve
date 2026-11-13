@@ -49,7 +49,7 @@ export default async function TrackDetailPage({
 
   const current = currentLeaf(root);
   const selected = resolveSelected(root, day);
-  const summary = track.summary ?? summarizePlan(root, track.title, track.daysPerWeek);
+  const summary = track.summary ?? summarizePlan(root, track.importText === null ? track.title : null, track.daysPerWeek);
   const studied = studyEvents(root, checkInRows, track.hoursPerWeek, track.daysPerWeek).reduce((sum, e) => sum + e.hours, 0);
   const today = new Date();
   const finish = finishDate(root, track.daysPerWeek, today);

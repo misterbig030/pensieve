@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { PRACTICE_FORMATS } from "@/lib/practice";
+import { DRAFTABLE_FORMATS, PRACTICE_FORMATS } from "@/lib/practice";
 import { SOURCE_TYPES } from "./source";
 
-export const MATERIAL_ORIGINS = ["learner", "research"] as const;
+export const MATERIAL_ORIGINS = ["learner", "research", "import"] as const;
 export type MaterialOrigin = (typeof MATERIAL_ORIGINS)[number];
 
-export const MATERIAL_KINDS = ["book", "course", "video", "docs", "essay", "paper", "repo", "tool", "note"] as const;
+export const MATERIAL_KINDS = ["book", "course", "video", "docs", "essay", "paper", "repo", "tool", "note", "other"] as const;
 export type MaterialKind = (typeof MATERIAL_KINDS)[number];
 
 export const MATERIAL_TIERS = ["must", "should"] as const;
@@ -74,7 +74,7 @@ export const chapterListSchema = z.object({
 export type ChapterList = z.infer<typeof chapterListSchema>;
 
 /** How materials are grouped in the list, backbone aside. */
-export const KIND_ORDER: MaterialKind[] = ["book", "course", "video", "docs", "essay", "paper", "repo", "tool", "note"];
+export const KIND_ORDER: MaterialKind[] = ["book", "course", "video", "docs", "essay", "paper", "repo", "tool", "note", "other"];
 
 export const KIND_LABEL: Record<MaterialKind, string> = {
   book: "Books",
@@ -86,6 +86,7 @@ export const KIND_LABEL: Record<MaterialKind, string> = {
   repo: "Repos",
   tool: "Tooling",
   note: "Notes",
+  other: "Other",
 };
 
 /** Caps on a practice source's item list: fewer than MIN_PRACTICE_ITEMS is unusable; the rest bound what the prompts carry. */
@@ -231,6 +232,8 @@ export const practiceRefSchema = z.object({
   /** 1-based position in the source's item list; a row holds one item, so the two are equal. Null or absent without a list. */
   itemFrom: z.number().int().min(1).max(MAX_PRACTICE_ITEMS).nullable().optional(),
   itemTo: z.number().int().min(1).max(MAX_PRACTICE_ITEMS).nullable().optional(),
+  /** True on a row that came from the learner's imported plan file: its task is theirs, so the draft keeps it as written. */
+  imported: z.boolean().optional(),
 });
 export type PracticeRef = z.infer<typeof practiceRefSchema>;
 
@@ -247,6 +250,8 @@ export const practiceCoverSchema = z.object({
   /** The run of items (inclusive, 1-based) the units inside take from the source's list. Null or absent without a list. */
   itemFrom: z.number().int().min(1).max(MAX_PRACTICE_ITEMS).nullable().optional(),
   itemTo: z.number().int().min(1).max(MAX_PRACTICE_ITEMS).nullable().optional(),
+  /** True on a row that came from the learner's imported plan file: its task is theirs, so the draft keeps it as written. */
+  imported: z.boolean().optional(),
 });
 export type PracticeCover = z.infer<typeof practiceCoverSchema>;
 
@@ -270,7 +275,7 @@ export type CoverRefDraft = z.infer<typeof coverRefDraftSchema>;
 
 /** What the model writes for a leaf's practice row. Code decides `generated`: a row with no source is one the model wrote. */
 export const practiceRefDraftSchema = z.object({
-  format: z.string().describe(`One of the plan's picked formats: ${PRACTICE_FORMATS.join(", ")}`),
+  format: z.string().describe(`One of the plan's picked formats: ${DRAFTABLE_FORMATS.join(", ")}`),
   id: z.string().nullable().optional().describe("The practice source's id (or one of its items, e.g. M4.12), or the unit's reading for recall written from it; left out for a row you write"),
   task: z.string().describe('Exactly what to do and which part ("NeetCode 150 · Arrays & Hashing, problems 1–6")'),
   done: z.string().describe("How the learner knows it is finished"),
@@ -284,7 +289,11 @@ export const practiceCoverDraftSchema = z.object({
   from: z.number().optional().describe("For a source with an item list, only where the rules ask for a run: the first item this unit takes, by position"),
   to: z.number().optional().describe("For a source with an item list, only where the rules ask for a run: the last item this unit takes, by position"),
 });
-export type PracticeRefDraft = z.infer<typeof practiceRefDraftSchema>;
+/**
+ * `imported` is set in code on a row read from the learner's plan file, never written by the model (it is not in the
+ * schema it is given): it keeps the row past the picks and the never-written rule.
+ */
+export type PracticeRefDraft = z.infer<typeof practiceRefDraftSchema> & { imported?: boolean };
 export type PracticeCoverDraft = z.infer<typeof practiceCoverDraftSchema>;
 
 export function clip(text: string | null | undefined, max: number): string | null {

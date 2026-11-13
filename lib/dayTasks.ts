@@ -80,10 +80,12 @@ export function lessonInputs(tasks: DayTask[]): { materials: LessonMaterial[]; p
     const step = { token: task.token, id: task.id };
     if (task.kind === "read") {
       const { material, tier, minutes, note, chapter, activity } = task.row;
-      materials.push({ title: material.title, url: material.url, type: material.type, kind: material.kind, tier, minutes, note, chapter, activity, step });
+      const origin = material.origin === "import" ? { origin: material.origin } : {};
+      materials.push({ title: material.title, url: material.url, type: material.type, kind: material.kind, ...origin, tier, minutes, note, chapter, activity, step });
     } else {
-      const { format, label, task: text, done, minutes, material, generated } = task.row;
-      practice.push({ format, label, task: text, done, minutes, source: material ? { title: material.title, url: material.url } : null, generated, step });
+      const { format, label, task: text, done, minutes, material, generated, imported } = task.row;
+      const own = imported ? { imported: true } : {};
+      practice.push({ format, label, task: text, done, minutes, source: material ? { title: material.title, url: material.url, type: material.type } : null, generated, ...own, step });
     }
   }
   return { materials, practice };

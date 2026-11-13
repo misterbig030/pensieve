@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Material, MaterialPractice } from "@/lib/schemas/material";
 import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
-import { listSummary, MaterialsList, materialTotals, practiceTag, shownRows, splitCoverage, type MaterialsListProps } from "./MaterialsList";
+import { badgeFor, listSummary, MaterialsList, materialTotals, practiceTag, shownRows, splitCoverage, type MaterialsListProps } from "./MaterialsList";
 
 const practice = (over: Partial<MaterialPractice> = {}): MaterialPractice => ({ format: "problem-set", items: 150, perItemMinutes: 10, minutes: 1500, answers: true, ...over });
 const material = (over: Partial<Material>): Material => ({ id: "M1", title: "T", kind: "book", minutes: null, practice: null, ...over }) as Material;
@@ -131,5 +131,16 @@ describe("a listed practice source in the materials list", () => {
   it("shows the summary under the source's practice line", () => {
     const html = render({ materials: [material({ id: "M1", title: "NeetCode 150", origin: "research", practice: { ...LISTED_PROBLEMS, items: 21, totalItems: 150 } })] }).replace(/<!-- -->/g, "");
     expect(html).toContain("3 groups · 21 of 150");
+  });
+});
+
+describe("badgeFor", () => {
+  it("reads From file for an imported material, whatever its verification", () => {
+    expect(badgeFor(material({ origin: "import", verifiedAt: null }))).toBe("From file");
+    expect(badgeFor(material({ origin: "import", verifiedAt: "2026-09-28T10:00:00.000Z" }))).toBe("From file");
+  });
+  it("reads Verified for a verified material and nothing for an unverified one", () => {
+    expect(badgeFor(material({ origin: "research", verifiedAt: "2026-09-28T10:00:00.000Z" }))).toBe("Verified");
+    expect(badgeFor(material({ origin: "research", verifiedAt: null }))).toBeNull();
   });
 });

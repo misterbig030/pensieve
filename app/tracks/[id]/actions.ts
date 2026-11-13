@@ -64,7 +64,7 @@ export async function confirmRevisionAction(input: {
   if (problems !== undefined) await updateTrackProblems(input.trackId, userId, problems);
   if (studyTime) await updateTrackStudyTime(input.trackId, userId, studyTime);
   const fresh = await getTrackDetail(input.trackId, userId);
-  await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title, fresh!.track.daysPerWeek));
+  await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.importText === null ? detail.track.title : null, fresh!.track.daysPerWeek));
   revalidatePath(`/tracks/${input.trackId}`);
   revalidatePath("/");
   redirect(`/tracks/${input.trackId}`);
@@ -112,6 +112,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
         materials: detail.materials,
         hoursPerWeek: detail.track.hoursPerWeek,
         split: detail.track.split,
+        importText: detail.track.importText ?? undefined,
         tree: detail.root,
         nodeId: input.nodeId,
         reason: input.reason,
@@ -137,7 +138,7 @@ export async function expandNodeAction(input: { trackId: string; nodeId: string;
 
   await insertChildren(input.trackId, userId, input.nodeId, children, input.reason === "split", problems);
   const fresh = await getTrackDetail(input.trackId, userId);
-  await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.title, fresh!.track.daysPerWeek));
+  await updateTrackSummary(input.trackId, userId, summarizePlan(fresh!.root, detail.track.importText === null ? detail.track.title : null, fresh!.track.daysPerWeek));
   revalidatePath(`/tracks/${input.trackId}`);
   return { ok: true, ...extra };
 }

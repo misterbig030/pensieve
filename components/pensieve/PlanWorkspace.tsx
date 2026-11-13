@@ -16,6 +16,8 @@ import { assignmentsOf, draftedSplit, removeMaterialRefs } from "@/lib/materials
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
 import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
 import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
+import { splitWeekTime } from "@/lib/import/cover";
+import { importMessages, type ImportedFile } from "@/lib/import/messages";
 import { pushModelCalls } from "@/lib/modelCalls";
 import { readNdjson } from "@/lib/ndjson";
 import {
@@ -87,6 +89,8 @@ export interface PlanWorkspaceProps {
   initialTree?: PlanNode;
   lockBefore?: number;
   trackId?: string;
+  /** The learner's plan file, when the plan came from one (or the saved track did): its text rides every request, and its notes open the conversation. */
+  imported?: ImportedFile;
   backHref: string;
   backLabel: string;
   heading: string;
@@ -321,7 +325,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   // While the draft streams in, the plan is the length the learner set; units still planning count as they were.
   const planWeeks = drafting || !tree.children || tree.children.length === 0 ? weeks : settledWeeks(tree, Object.keys(pending), daysPerWeek);
   const note = [lockNote, summaryNote].filter(Boolean).join(" ");
-  const summary = drafting ? "" : summarizePlan(tree, topic, daysPerWeek, note || undefined);
+  const summary = drafting ? "" : summarizePlan(tree, props.imported ? null : topic, daysPerWeek, note || undefined);
 
   // A re-draft is built when it fires, from the workspace as it is then (a days change may have come since).
   const redraftFrom = useRef<() => { tree: PlanNode; summaryNote: string; time: typeof draftedTime.current; body: PlanRedraftRequest }>(null);
@@ -344,6 +348,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         lockBefore: isAdjust ? lockBefore : undefined,
         trackId,
         scope: { kind: "plan" },
+        importText: props.imported?.text,
         debug: true,
       },
     });
@@ -433,6 +438,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       nodeId,
       reason,
       splitDays: days,
+      importText: props.imported?.text,
       debug: true,
     };
     const label = fullLabelOf(tree, node);
@@ -452,7 +458,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             const parent = findNode(next, nodeId);
             if (!parent) return t;
             parent.children = [...(parent.children ?? []), event.node];
-            if (reason === "split") splitWeek(parent);
+            if (reason === "split") splitWeek(parent, props.imported ? hoursPerWeek : null);
             return layout(next, 1, new Set([nodeId]));
           });
           setPending((p) => {
@@ -474,7 +480,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
             // The level planned inside this node: its problems are replaced with the ones just found.
             if (event.problems.length > 0) parent.problems = event.problems;
             else delete parent.problems;
-            if (reason === "split") splitWeek(parent);
+            if (reason === "split") splitWeek(parent, props.imported ? hoursPerWeek : null);
             return layout(next);
           });
           setPending((p) => {
@@ -536,6 +542,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
       lockBefore: isAdjust ? lockBefore : undefined,
       trackId,
       transcript: toTranscript(history),
+      importText: props.imported?.text,
       debug: true,
     };
 
@@ -729,13 +736,16 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
 
   const tops = tree.children ?? [];
   const topLevel = tops[0]?.level ?? topLevelFor(weeks);
-  const suggestions = isAdjust
-    ? ["Add two more days on caching", "Why is the next week next?", "Swap the last two weeks"]
-    : topLevel === "day"
-      ? ["Why is this first?", "Add a day on the hardest part", "Make it one day shorter"]
-      : topLevel === "month"
-        ? ["Why is month 2 before month 3?", "Last month should be 2 weeks", "Swap months 3 and 4"]
-        : ["Why is week 2 before week 3?", "Expand week 2", "Swap weeks 3 and 4"];
+  // The import's suggestions are for its draft; a saved imported track being adjusted gets the adjust ones.
+  const suggestions = props.imported && !isAdjust
+    ? ["Split the first week into days", "Why is this row under Other?"]
+    : isAdjust
+      ? ["Add two more days on caching", "Why is the next week next?", "Swap the last two weeks"]
+      : topLevel === "day"
+        ? ["Why is this first?", "Add a day on the hardest part", "Make it one day shorter"]
+        : topLevel === "month"
+          ? ["Why is month 2 before month 3?", "Last month should be 2 weeks", "Swap months 3 and 4"]
+          : ["Why is week 2 before week 3?", "Expand week 2", "Swap weeks 3 and 4"];
   const streaming = drafting || expanding;
   const chatLock = chatLockHint({ drafting, draftRefused: outOfCredits?.from === "draft" });
   const researching = drafting && !!research?.running;
@@ -776,7 +786,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         <div className="flex min-w-0 flex-col gap-5 max-[900px]:pb-[72px]">
           {outOfCredits?.from === "draft" ? (
             <>
-              <OutOfCreditsAlert resetsAt={outOfCredits.resetsAt} onRetry={() => void streamDraft()} />
+              <OutOfCreditsAlert resetsAt={outOfCredits.resetsAt} onRetry={props.imported ? undefined : () => void streamDraft()} />
               <div className="flex flex-col gap-2.5">
                 <TreeLabel>Plan</TreeLabel>
                 <div className="h-16 rounded-[28px] bg-foreground/4" />
@@ -870,7 +880,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
                 {draftingText}
               </span>
             )}
-            {error && !drafting && tops.length === 0 && (
+            {error && !drafting && tops.length === 0 && !props.imported && (
               <Button variant="secondary" onClick={() => void streamDraft()}>
                 Try again
               </Button>
@@ -947,18 +957,25 @@ function countExpected(root: PlanNode, pending: Record<string, PendingSlots>): n
   return countArrived(root) + Object.values(pending).reduce((sum, s) => sum + s.count, 0);
 }
 
-/** A week split into days by hand: its Read table and practice rows become the reservation its days were planned from, an item row a one-item reservation. */
-function splitWeek(week: PlanNode): void {
+/**
+ * A week split into days by hand: its Read table and practice rows become the reservation its days were planned from, an
+ * item row a one-item reservation. On an imported plan (`importedHours`, the plan's weekly hours) a week that held rows
+ * also states its time from them, as the server planned its days (`splitWeekTime`).
+ */
+function splitWeek(week: PlanNode, importedHours: number | null): void {
+  const held = (week.materials?.length ?? 0) > 0 || (week.practice?.length ?? 0) > 0;
   week.manualSplit = true;
-  week.budgetHours = null;
   if (week.materials) {
     week.covers = week.materials.map((r) => ({ id: r.id, note: r.note, chapter: r.chapter, activity: r.activity, tier: r.tier, minutes: r.minutes }));
     delete week.materials;
   }
   if (week.practice) {
-    week.practiceCovers = week.practice.map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes, ...(r.itemFrom && r.itemTo ? { itemFrom: r.itemFrom, itemTo: r.itemTo } : {}) }));
+    week.practiceCovers = week.practice.map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes, ...(r.itemFrom && r.itemTo ? { itemFrom: r.itemFrom, itemTo: r.itemTo } : {}), ...(r.imported ? { imported: true } : {}) }));
     delete week.practice;
   }
+  // Its budget is read before it goes: untimed must reading takes what is left of it.
+  if (importedHours !== null && held) week.time = splitWeekTime(week, importedHours);
+  week.budgetHours = null;
 }
 
 function materialsText(materials: Material[]): string {
@@ -1035,6 +1052,7 @@ function initialMessages(props: PlanWorkspaceProps): ChatMessage[] {
       },
     ];
   }
+  if (props.imported) return importMessages(props.imported);
   return [
     {
       id: nextMessageId(),

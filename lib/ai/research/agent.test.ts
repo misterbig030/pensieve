@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
+import { DRAFTABLE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ServiceEvent } from "../serviceEvents";
 import type { ModelCall } from "../logged";
@@ -383,8 +383,8 @@ describe("practice in the research prompts", () => {
 
   it("lists one line per registry format, with its label, format id and research line", () => {
     const lines = practiceLines();
-    expect(lines).toHaveLength(PRACTICE_FORMATS.length);
-    for (const f of PRACTICE_FORMATS) expect(lines).toContain(`- ${PRACTICE_REGISTRY[f].label} (${f}): ${PRACTICE_REGISTRY[f].research}`);
+    expect(lines).toHaveLength(DRAFTABLE_FORMATS.length);
+    for (const f of DRAFTABLE_FORMATS) expect(lines).toContain(`- ${PRACTICE_REGISTRY[f].label} (${f}): ${PRACTICE_REGISTRY[f].research}`);
   });
 
   it("always asks arm A for practice, of the kinds the topic calls for", () => {
@@ -404,7 +404,7 @@ describe("practice in the research prompts", () => {
   it("asks for a practice draft on candidates and the learner's sources, naming every registry format", () => {
     const prompt = buildFinalPrompt({ topic: "T", weeks: 4, sources: [] }, "notes");
     expect(prompt).toContain("- practice:");
-    for (const f of PRACTICE_FORMATS) expect(prompt).toContain(`${f} (${PRACTICE_REGISTRY[f].label})`);
+    for (const f of DRAFTABLE_FORMATS) expect(prompt).toContain(`${f} (${PRACTICE_REGISTRY[f].label})`);
     expect(prompt).toContain("items: the problems, questions, labs or steps");
     expect(prompt).toContain("perItemMinutes: only when the page states a time per item");
     expect(prompt).toContain("answers: true when the notes show the source has solutions, an answer key, worked solutions or a rubric, on its own page or on one they name for it (a walkthrough of every problem, a solutions repository).");

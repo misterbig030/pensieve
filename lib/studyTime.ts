@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_PRACTICE_PICKS, PRACTICE_FORMATS, PRACTICE_REGISTRY, normalizePicks, practicePickDraftSchema, practicePickSchema } from "@/lib/practice";
+import { PRACTICE_FORMATS, PRACTICE_REGISTRY, normalizePicks, practicePickDraftSchema, practicePickSchema } from "@/lib/practice";
 import { DEFAULT_DAYS_PER_WEEK, DEFAULT_HOURS_PER_WEEK, MAX_DAYS_PER_WEEK } from "@/lib/planTree";
 import type { UnitTime } from "@/lib/schemas/plan";
 
@@ -99,13 +99,17 @@ export function hoursInText(text: string): number | null {
 export const planSplitSchema = z.object({
   readingShare: z.number().int().min(0).max(100),
   practice: z.string().trim().min(1).max(40),
-  formats: z.array(practicePickSchema).max(MAX_PRACTICE_PICKS).optional(),
+  // Capped at every format so an imported split may carry one pick per format; drafted splits stay capped at MAX_PRACTICE_PICKS (`normalizePicks`).
+  formats: z.array(practicePickSchema).max(PRACTICE_FORMATS.length).optional(),
   reason: z.string().trim().max(300),
 });
 export type PlanSplit = z.infer<typeof planSplitSchema>;
 
 /** The reason recorded when the learner sets the split by hand, which is how the card tells whose call it was. */
 export const SPLIT_SET_BY_LEARNER = "Set by you.";
+
+/** The reason recorded when the split comes from an imported file, so the card shows no model reasoning for it. */
+export const SPLIT_FROM_FILE = "From your file.";
 
 /** What the model writes: looser, so a share of 62.5 or a long reason never fails the whole level. */
 export const planSplitDraftSchema = z.object({

@@ -3,8 +3,8 @@ import { capitalize } from "@/lib/planTree";
 import type { Material } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
 
-/** Shades of the practice colour, one per picked format, darkest first. */
-export const PICK_SHADES = ["bg-accent-2-700", "bg-accent-2-500", "bg-accent-2-300", "bg-accent-2-200"];
+/** Shades of the practice colour, one per picked format: the first four darkest to lightest, then four more for a plan that carries more. */
+export const PICK_SHADES = ["bg-accent-2-700", "bg-accent-2-500", "bg-accent-2-300", "bg-accent-2-200", "bg-accent-2-800", "bg-accent-2-600", "bg-accent-2-400", "bg-accent-2-100"];
 
 /** One share of the plan's time, as the split bar and its legend show it. */
 export interface SplitPart {

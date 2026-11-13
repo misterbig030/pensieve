@@ -1,6 +1,6 @@
 import { ANSWERS_FENCE, STEP_FENCE, dailyContentSchema, type DailyContentDraft } from "@/lib/schemas/dailyContent";
 import { resolveStepTokens } from "@/lib/lessonSteps";
-import type { Chapter, MaterialKind, MaterialTier, RefActivity } from "@/lib/schemas/material";
+import type { Chapter, MaterialKind, MaterialOrigin, MaterialTier, RefActivity } from "@/lib/schemas/material";
 import type { PracticeFormat } from "@/lib/practice";
 import type { SourceType } from "@/lib/schemas/source";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
@@ -14,6 +14,8 @@ export interface LessonMaterial {
   url: string;
   type: SourceType;
   kind?: MaterialKind;
+  /** "import" for a material from the learner's plan file, which names it with no link. */
+  origin?: MaterialOrigin;
   tier?: MaterialTier | null;
   minutes?: number | null;
   /** The part: a chapter's sections, or the part of a resource without chapters. */
@@ -42,8 +44,10 @@ export interface LessonPractice {
   done: string;
   minutes: number;
   /** The material the row is from; for a generated recall row, the reading it is made from; null for any other generated row. */
-  source: { title: string; url: string } | null;
+  source: { title: string; url: string; type?: SourceType } | null;
   generated: boolean;
+  /** True on a row from the learner's imported plan file: the task is theirs, not one a model wrote. */
+  imported?: boolean;
   step?: LessonStep;
 }
 
@@ -60,6 +64,11 @@ interface BuildDailyContentPromptInput {
   spanDays?: number;
 }
 
+/** A note or file has no page to open (an imported one carries a placeholder), so the prompt names it without a url. */
+function link(title: string, url: string, type?: SourceType): string {
+  return type === "note" || type === "file" ? title : `${title} (${url})`;
+}
+
 /**
  * `- AI Engineering (url) — ch. 2 "Understanding Foundation Models" · sections: Post-Training; Sampling — must, 35 min`.
  * The sections are the row's note when it has one, else the chapter's listed sections; a review says so.
@@ -72,12 +81,24 @@ function row(m: LessonMaterial): string {
     part = `${review ? "review of " : ""}${m.chapter.n !== null ? `ch. ${m.chapter.n} ` : ""}"${m.chapter.title}"${sections ? ` · sections: ${sections}` : ""}`;
   } else if (review) part = "review";
   const meta = [m.tier, m.minutes ? `${m.minutes} min` : null, m.chapter ? null : m.note].filter(Boolean).join(", ");
-  return `- ${label(m)}${m.title} (${m.url})${part ? ` — ${part}` : ""}${meta ? ` — ${meta}` : ""}`;
+  return `- ${label(m)}${link(m.title, m.url, m.type)}${part ? ` — ${part}` : ""}${meta ? ` — ${meta}` : ""}`;
 }
 
-/** `- Problems: Do problems 1-10 (60 min) — done when: … — source: Problem list (url)`, or `— generated` when no source stands behind it. */
+/** What the lesson prompt calls a task from the learner's own plan file, or a material it names. */
+const FROM_PLAN_FILE = "from the learner's plan file";
+
+/**
+ * `- Problems: Do problems 1-10 (60 min) — done when: … — source: Problem list (url)`, or `— generated` when no source
+ * stands behind it, `— from the learner's plan file` when the task is the learner's own.
+ */
 function practiceRow(p: LessonPractice): string {
-  const origin = p.source ? (p.generated ? `generated from the reading: ${p.source.title} (${p.source.url})` : `source: ${p.source.title} (${p.source.url})`) : "generated";
+  const origin = p.source
+    ? p.generated && !p.imported
+      ? `generated from the reading: ${link(p.source.title, p.source.url, p.source.type)}`
+      : `source: ${link(p.source.title, p.source.url, p.source.type)}`
+    : p.imported
+      ? FROM_PLAN_FILE
+      : "generated";
   return `- ${label(p)}${p.label}: ${p.task} (${p.minutes} min) — done when: ${p.done} — ${origin}`;
 }
 
@@ -94,13 +115,16 @@ function practiceSection(practice: LessonPractice[], steps: boolean): string[] {
       : `This unit's practice. End the lesson with a section on how to do and check each task: how to set it up, how to work through it, and how the learner knows it is done, by its "done when" line. Explain the tasks; do not just repeat the list. Link a task's source where it helps, but cite none of these sources in "citations":`,
     ...practice.map(practiceRow),
   ];
-  if (practice.some((p) => p.generated && p.format === "recall")) {
+  if (practice.some((p) => p.generated && !p.imported && p.format === "recall")) {
     parts.push(
       `For each generated Recall task, write its questions, then their answers in a fenced code block with the info string "${ANSWERS_FENCE}" (\`\`\`${ANSWERS_FENCE}), written as markdown inside the fence; the lesson shows that block collapsed, so the learner answers first. Draw the questions and answers only from this unit's reading above.`,
     );
   }
-  if (practice.some((p) => p.generated && p.format !== "recall")) {
+  if (practice.some((p) => p.generated && !p.imported && p.format !== "recall")) {
     parts.push(`Generated tasks of any other format get how-to guidance only: do not write exercises, problems or other content for them.`);
+  }
+  if (practice.some((p) => p.imported && !p.source)) {
+    parts.push(`Tasks ${FROM_PLAN_FILE} are the learner's own: explain how to go about each as written; do not change it or write content for it.`);
   }
   return parts;
 }
@@ -138,10 +162,16 @@ export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): st
     for (const s of videos) parts.push(row(s));
   }
   if (other.length > 0) {
-    parts.push(
-      `The learner also referenced these materials (a local file or a free-text note) — you cannot access their contents, so use them only as context for what to emphasize, not as a citable source:`,
-    );
-    for (const s of other) parts.push(`- ${label(s)}${s.title ?? s.url}`);
+    const fromFile = other.filter((s) => s.origin === "import");
+    // A material the learner's plan file names has no link; its row still says which part this unit takes.
+    const what =
+      fromFile.length === other.length
+        ? "These materials are named in the learner's own plan file, without a link"
+        : fromFile.length > 0
+          ? "The learner also referenced these materials (a local file, a free-text note, or one named in their plan file)"
+          : "The learner also referenced these materials (a local file or a free-text note)";
+    parts.push(`${what} — you cannot access their contents, so point the learner to the part each row names and use them only as context for what to emphasize, not as a citable source:`);
+    for (const s of other) parts.push(`${row(s)}${s.origin === "import" ? ` — ${FROM_PLAN_FILE}` : ""}`);
   }
 
   const steps = [...input.materials, ...(input.practice ?? [])].some((row) => row.step);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clampHours, dayMinutes, formatDayTime, formatUnitTime, hoursInText, isAllReading, normalizeSplit, planSplitSchema, practiceLabelOf, presetFor, readingShareOf, shareAdjustable, totalHours, weeksLabel } from "./studyTime";
+import { PRACTICE_FORMATS } from "./practice";
 
 describe("hours", () => {
   it("totals the plan's hours over its weeks", () => {
@@ -87,6 +88,13 @@ describe("split", () => {
     ]);
     expect(split?.readingShare).toBe(60);
     expect(planSplitSchema.safeParse(split).success).toBe(true);
+  });
+
+  it("planSplitSchema accepts 6 picks and rejects 9", () => {
+    const picks = (n: number) => Array.from({ length: n }, (_, i) => ({ format: PRACTICE_FORMATS[i % PRACTICE_FORMATS.length], share: 10, focus: "f", reason: "" }));
+    const split = (n: number) => ({ readingShare: 50, practice: "practice", reason: "", formats: picks(n) });
+    expect(planSplitSchema.safeParse(split(6)).success).toBe(true);
+    expect(planSplitSchema.safeParse(split(9)).success).toBe(false);
   });
 
   it("drops picks at 100% reading and reads 100% when no pick survives", () => {

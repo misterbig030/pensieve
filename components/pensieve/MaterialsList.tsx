@@ -14,6 +14,7 @@ import {
   GraduationCap,
   RotateCw,
   ShieldCheck,
+  Shapes,
   StickyNote,
   Wrench,
   X,
@@ -36,6 +37,7 @@ export const KIND_ICON: Record<MaterialKind, ComponentType<{ className?: string;
   repo: GitBranch,
   tool: Wrench,
   note: StickyNote,
+  other: Shapes,
 };
 
 export interface MaterialUse {
@@ -446,6 +448,12 @@ function RemoveButton({ title, onClick }: { title: string; onClick: () => void }
   );
 }
 
+/** The badge text where "Verified" shows: imported materials were never fetched, so they say where they came from. */
+export function badgeFor(m: Material): string | null {
+  if (m.origin === "import") return "From file";
+  return m.verifiedAt ? "Verified" : null;
+}
+
 /** "✓ Verified" and its popover: when the page was opened, what it was titled, where it lives, who recommended it. */
 export function VerifiedButton({ material: m, prominent = false }: { material: Material; prominent?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -465,6 +473,9 @@ export function VerifiedButton({ material: m, prominent = false }: { material: M
     };
   }, [open]);
 
+  if (badgeFor(m) === "From file") {
+    return <span className="inline-flex rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap">From file</span>;
+  }
   if (!m.verifiedAt) {
     return m.origin === "learner" && m.type !== "note" && m.type !== "file" ? (
       <span className="text-xs whitespace-nowrap text-muted-foreground">Not opened</span>

@@ -39,15 +39,15 @@ function itemPositions(row: { itemFrom: number | null; itemTo: number | null }):
 }
 
 /** Groups a track's `node_practice` rows into each node's reservations and practice rows, in row order. */
-export function practiceByNode(rows: Pick<NodePracticeRow, "nodeId" | "sourceId" | "role" | "position" | "format" | "task" | "done" | "note" | "minutes" | "generated" | "itemFrom" | "itemTo">[]) {
+export function practiceByNode(rows: Pick<NodePracticeRow, "nodeId" | "sourceId" | "role" | "position" | "format" | "task" | "done" | "note" | "minutes" | "generated" | "itemFrom" | "itemTo" | "imported">[]) {
   const out = new Map<string, { covers: PracticeCover[]; practice: PracticeRef[] }>();
   for (const row of [...rows].sort((a, b) => a.position - b.position)) {
     const entry = out.get(row.nodeId) ?? { covers: [], practice: [] };
     if (row.role === "covers") {
-      entry.covers.push({ format: row.format, id: row.sourceId, note: row.note, ...(row.task ? { task: row.task } : {}), ...(row.minutes ? { minutes: row.minutes } : {}), ...itemPositions(row) });
+      entry.covers.push({ format: row.format, id: row.sourceId, note: row.note, ...(row.task ? { task: row.task } : {}), ...(row.minutes ? { minutes: row.minutes } : {}), ...(row.imported ? { imported: true } : {}), ...itemPositions(row) });
     } else {
       // An assigned row is always written with its done condition and minutes.
-      entry.practice.push({ format: row.format, id: row.sourceId, task: row.task, done: row.done ?? "", minutes: row.minutes ?? 1, generated: row.generated, ...itemPositions(row) });
+      entry.practice.push({ format: row.format, id: row.sourceId, task: row.task, done: row.done ?? "", minutes: row.minutes ?? 1, generated: row.generated, ...(row.imported ? { imported: true } : {}), ...itemPositions(row) });
     }
     out.set(row.nodeId, entry);
   }
@@ -126,6 +126,7 @@ export async function getTrackNodePractice(trackId: string, database: Pick<typeo
       generated: nodePractice.generated,
       itemFrom: nodePractice.itemFrom,
       itemTo: nodePractice.itemTo,
+      imported: nodePractice.imported,
     })
     .from(nodePractice)
     .innerJoin(planNodes, eq(nodePractice.nodeId, planNodes.id))
@@ -175,13 +176,13 @@ export function practiceRows(nodeId: string, node: Pick<PlanNode, "practice" | "
   const known = (ref: { id: string | null }) => ref.id === null || sourceIds.has(ref.id);
   const assigned = node.children === null ? (node.practice ?? []) : [];
   for (const [i, ref] of assigned.filter(known).entries()) {
-    rows.push({ nodeId, role: "assigned", position: i, format: ref.format, sourceId: ref.id, task: ref.task, done: ref.done, note: null, minutes: ref.minutes, generated: ref.generated, itemFrom: ref.itemFrom ?? null, itemTo: ref.itemTo ?? null });
+    rows.push({ nodeId, role: "assigned", position: i, format: ref.format, sourceId: ref.id, task: ref.task, done: ref.done, note: null, minutes: ref.minutes, generated: ref.generated, itemFrom: ref.itemFrom ?? null, itemTo: ref.itemTo ?? null, imported: ref.imported ?? false });
   }
   // A hand-split week's item row becomes a one-item reservation.
-  const kept: PracticeCover[] = (node.children !== null ? (node.practice ?? []) : []).map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes, itemFrom: r.itemFrom, itemTo: r.itemTo }));
+  const kept: PracticeCover[] = (node.children !== null ? (node.practice ?? []) : []).map((r) => ({ format: r.format, id: r.id, note: null, task: r.task, minutes: r.minutes, itemFrom: r.itemFrom, itemTo: r.itemTo, imported: r.imported }));
   const covers = [...(node.practiceCovers ?? []), ...kept];
   for (const [i, ref] of covers.filter(known).entries()) {
-    rows.push({ nodeId, role: "covers", position: i, format: ref.format, sourceId: ref.id, task: ref.task ?? "", done: null, note: ref.note, minutes: ref.minutes ?? null, generated: ref.id === null, itemFrom: ref.itemFrom ?? null, itemTo: ref.itemTo ?? null });
+    rows.push({ nodeId, role: "covers", position: i, format: ref.format, sourceId: ref.id, task: ref.task ?? "", done: null, note: ref.note, minutes: ref.minutes ?? null, generated: ref.id === null, itemFrom: ref.itemFrom ?? null, itemTo: ref.itemTo ?? null, imported: ref.imported ?? false });
   }
   return rows;
 }

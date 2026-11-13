@@ -5,6 +5,8 @@ import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
 import { AIE_HOURS, AIE_MATERIALS, AIE_SHARE, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 import {
   aliasMaterials,
+  importedMatch,
+  markImported,
   assignmentsOf,
   chapterGaps,
   chapterRegressions,
@@ -45,7 +47,7 @@ import {
   plainAliases,
   plainUnitText,
 } from "./materials";
-import { itemMinutes, itemPositions } from "./practice";
+import { itemMinutes, itemPositions, type PracticeFormat } from "./practice";
 
 describe("numberedToc", () => {
   const unnumbered = { ...AIE_TOC, chapters: AIE_TOC.chapters.slice(0, 5).map((c) => ({ ...c, n: null })) };
@@ -681,6 +683,54 @@ describe("practice rows and reservations", () => {
     expect(refs).toEqual([]);
     expect(refused).toEqual(['Problems "Five array problems": no source, and this format is never written']);
   });
+  describe("importedMatch", () => {
+    const known = (task: string, extra: Partial<PracticeCover> = {}): PracticeCover => ({ format: "problem-set", id: "m1", note: null, task, minutes: 25, imported: true, ...extra });
+    const heap = known("LeetCode, Backtracking + Tries (8) · Subsets", { itemFrom: 1, itemTo: 1 });
+    const queens = known("LeetCode, Backtracking + Tries (8) · N-Queens", { itemFrom: 2, itemTo: 2 });
+    it("finds the row a task copies word for word, case aside", () => {
+      expect(importedMatch({ format: "problem-set", task: "leetcode, backtracking + tries (8) · n-queens" }, [heap, queens])).toBe(queens);
+    });
+    it("names none of several rows that only share their first 24 characters", () => {
+      expect(importedMatch({ format: "problem-set", task: "LeetCode, Backtracking + Tries: one more" }, [heap, queens])).toBeUndefined();
+    });
+    it("finds the one row whose whole task a longer draft starts with", () => {
+      expect(importedMatch({ format: "problem-set", task: "LeetCode, Backtracking + Tries (8) · N-Queens, timed" }, [heap, queens])).toBe(queens);
+    });
+    it("takes a reworded copy by its prefix when one row has it, and counts copies of a row once", () => {
+      const mock = known("Mock interview on interviewing.io, coding round", { format: "mock", id: null });
+      expect(importedMatch({ format: "mock", task: "Mock interview on interviewing.io: coding" }, [mock, { ...mock }])).toBe(mock);
+    });
+    it("markImported leaves a draft that could be several rows unmarked, and gives it no item", () => {
+      const aliases = aliasMaterials([]);
+      const [d] = markImported([{ format: "problem-set", task: "LeetCode, Backtracking + Tries: one more", done: "", minutes: 25 }], [heap, queens], aliases)!;
+      expect(d).not.toHaveProperty("imported");
+      expect(d).not.toHaveProperty("id");
+    });
+  });
+
+  describe("imported rows", () => {
+    const row = { format: "problem-set", id: null, task: "LeetCode 703", done: "Solved", minutes: 30 };
+    // The split's picks lack problem-set and other.
+    const recallOnly = { ...split, formats: [split.formats[1]] };
+    it("keeps an imported sourceless problem-set row", () => {
+      const { refs, refused } = resolvePracticeRefs([{ ...row, imported: true }], aliases, recallOnly);
+      expect(refused).toEqual([]);
+      expect(refs).toEqual([{ format: "problem-set", id: null, task: "LeetCode 703", done: "Solved", minutes: 30, generated: true, imported: true }]);
+    });
+    it("keeps an imported other row", () => {
+      const { refs, refused } = resolvePracticeRefs([{ ...row, format: "other", imported: true }], aliases, recallOnly);
+      expect(refused).toEqual([]);
+      expect(refs).toHaveLength(1);
+      expect(refs[0]).toMatchObject({ format: "other", id: null, imported: true });
+    });
+    it("still refuses a drafted sourceless problem-set row, and an imported row of no format", () => {
+      const { refs, refused } = resolvePracticeRefs([row], aliases, split);
+      expect(refs).toEqual([]);
+      expect(refused).toHaveLength(1);
+      expect(refused[0]).toContain("never written");
+      expect(resolvePracticeRefs([{ ...row, format: "karaoke", imported: true }], aliases, split).refused).toHaveLength(1);
+    });
+  });
   it("accepts a generated recall row whose id is the unit's reading, and refuses one citing other reading", () => {
     const drafts = [
       { format: "recall", id: "M1.2", task: "Six questions on sampling", done: "checked against ch. 2", minutes: 18 },
@@ -970,6 +1020,13 @@ describe("keepPracticeCovers", () => {
   // "neet" is a problem list; "book" is reading.
   const practiceOf = aliasMaterials([{ id: "book" }, { id: "neet", practice: { format: "problem-set", items: 150, perItemMinutes: 10, minutes: null, answers: true } }]).practice;
 
+  it("carries imported through a restored reservation and a sourceless one", () => {
+    const before = [
+      { format: "problem-set" as const, id: "neet", note: null, task: "Arrays 1–6", minutes: 40, imported: true },
+      { format: "other" as const, id: null, note: null, task: "Merge the branches", minutes: 20, imported: true },
+    ];
+    expect(keepPracticeCovers([{ format: "problem-set", id: "neet", note: null }], before, practiceOf)).toEqual(before);
+  });
   it("restores task and minutes on a reservation written back with an id only", () => {
     expect(keepPracticeCovers([{ format: "problem-set", id: "neet", note: "harder" }], kept, practiceOf)).toEqual([
       { format: "problem-set", id: "neet", note: "harder", task: "Arrays 1–6", minutes: 40 },
@@ -1471,6 +1528,56 @@ describe("plainAliases", () => {
     expect(node.materials[0].note).toBe("parts ch. 3–5");
     expect(node.practice[0]).toMatchObject({ task: "items 1–3, timed", done: "Two Sum passes" });
     expect(plainUnitText(node, materials, aliases)).toBe(0);
+  });
+});
+
+describe("imported practice in the checks and the week's time", () => {
+  const split = {
+    readingShare: 50,
+    practice: "problems",
+    reason: "",
+    formats: [{ format: "recall" as const, share: 100, focus: "terms", reason: "" }],
+  };
+  it("levelChecks raises no practice-generated breach for imported rows", () => {
+    const rows: PracticeRef[] = [
+      { format: "problem-set", id: null, task: "LeetCode 703", done: "Solved", minutes: 30, generated: true, imported: true },
+      { format: "other", id: null, task: "Merge the branches", done: "Done", minutes: 20, generated: true, imported: true },
+    ];
+    const day = makeNode({ id: "d1", level: "day", title: "D1", summary: "s", len: 1, practice: rows });
+    const root = layout(makeRoot([makeNode({ id: "w1", level: "week", title: "W", summary: "s", len: 5, children: [day] })]));
+    const out = levelChecks({ root, nodes: root.children![0].children!, leaves: true, top: false, materials: [], unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split });
+    expect(out.breaches.map((b) => b.kind)).not.toContain("practice-generated");
+    const plain = { ...day, practice: rows.map(({ imported: _i, ...r }) => r) };
+    root.children![0].children = [plain];
+    expect(levelChecks({ root, nodes: [plain], leaves: true, top: false, materials: [], unknownIds: [], hoursPerWeek: 6, daysPerWeek: 5, split }).breaches.filter((b) => b.kind === "practice-generated")).toHaveLength(2);
+  });
+  it("pickSources treats a pick with an imported cover as assignable", () => {
+    const picks = { ...split, formats: [{ format: "problem-set" as const, share: 100, focus: "x", reason: "" }] };
+    expect(pickSources(picks, [{ id: "R", minutes: 10 }])[0].assignable).toBe(false);
+    expect(pickSources(picks, [{ id: "R", minutes: 10 }], [{ format: "problem-set", imported: true }])[0].assignable).toBe(true);
+    expect(pickSources(picks, [{ id: "R", minutes: 10 }], [{ format: "problem-set" }])[0].assignable).toBe(false);
+    expect(pickSources(picks, [{ id: "R", minutes: 10 }], [{ format: "mock", imported: true }])[0].assignable).toBe(false);
+  });
+  it("pickSources lists an unpicked format an imported cover holds as an assignable pick; unitBudgets gives it the cover's minutes", () => {
+    const covers: PracticeCover[] = [
+      { format: "other", id: null, note: null, task: "Merge", minutes: 60, imported: true },
+      { format: "other", id: null, note: null, task: "Tag", minutes: 40, imported: true },
+    ];
+    const picks = pickSources(split, [{ id: "R", minutes: 10 }], covers);
+    expect(picks.map((p) => [p.pick.format, p.assignable])).toEqual([["recall", true], ["other", true]]);
+    const week = makeNode({ id: "w1", level: "week", title: "W", summary: "s", len: 5, practiceCovers: covers });
+    const root = layout(makeRoot([week]));
+    expect(unitBudgets(root, root.children![0], { split, hoursPerWeek: 6, daysPerWeek: 5, materials: [{ id: "R", minutes: 10 }] }).practice.other).toBe(100);
+  });
+  it("weekPracticeTime and fitWeekToDays keep an imported format's minutes whole", () => {
+    const budgets = { reading: 60, practice: { mock: 90, "design-exercise": 60 } as Partial<Record<PracticeFormat, number>> };
+    // Without the flag mock is cut to whole blocks of its fixed size; imported, it stays at its 90.
+    expect(fitWeekToDays(budgets, {}, 70, 5, true).practice.mock).not.toBe(90);
+    const kept = fitWeekToDays(budgets, {}, 70, 5, true, ["mock"]);
+    expect(kept.practice.mock).toBe(90);
+    expect(kept.blocks.mock).toBeUndefined();
+    const week = weekPracticeTime({ reading: 100, practice: { "problem-set": 100, mock: 80 } }, { "problem-set": 150 }, ["mock"]);
+    expect(week.practice).toEqual({ "problem-set": 150, mock: 80 });
   });
 });
 

@@ -8,7 +8,7 @@ import type { PlanSplit } from "@/lib/studyTime";
  * from here, so this file must not import it at runtime.
  */
 
-export const PRACTICE_FORMATS = ["problem-set", "recall", "design-exercise", "lab", "project", "mock", "session"] as const;
+export const PRACTICE_FORMATS = ["problem-set", "recall", "design-exercise", "lab", "project", "mock", "session", "other"] as const;
 export type PracticeFormat = (typeof PRACTICE_FORMATS)[number];
 
 /** Most formats a split can pick. */
@@ -34,6 +34,8 @@ export interface PracticeFormatSpec {
   generated: PracticeGenerated;
   /** Whether a row needs an answer key, worked solution or rubric to check against. */
   needsAnswers: boolean;
+  /** True for a format only an imported plan file carries: no model is offered it, and no split picks it. */
+  importOnly?: boolean;
 }
 
 export const PRACTICE_REGISTRY: Record<PracticeFormat, PracticeFormatSpec> = {
@@ -116,7 +118,22 @@ export const PRACTICE_REGISTRY: Record<PracticeFormat, PracticeFormatSpec> = {
     generated: "from-programme",
     needsAnswers: false,
   },
+  other: {
+    id: "other",
+    label: "Other",
+    prompt: "does a task from their own plan file",
+    doneWhen: "done as the plan file describes it",
+    perItemMinutes: null,
+    fixedMinutes: null,
+    research: "",
+    generated: "never",
+    needsAnswers: false,
+    importOnly: true,
+  },
 };
+
+/** The formats a model may be offered or pick: every one but those an imported plan alone carries. */
+export const DRAFTABLE_FORMATS: PracticeFormat[] = PRACTICE_FORMATS.filter((f) => !PRACTICE_REGISTRY[f].importOnly);
 
 /** Minutes for a problem by its difficulty label. Problem lists only: other formats' items are not sized by difficulty. */
 const DIFFICULTY_MINUTES = { easy: 15, medium: 25, hard: 35 } as const;
@@ -193,7 +210,7 @@ export type PracticePick = z.infer<typeof practicePickSchema>;
 
 /** What the model writes: looser, so an odd share or a long line never fails the whole level. */
 export const practicePickDraftSchema = z.object({
-  format: z.string().describe(`One of: ${PRACTICE_FORMATS.join(", ")}`),
+  format: z.string().describe(`One of: ${DRAFTABLE_FORMATS.join(", ")}`),
   share: z.number().describe("Percent of the practice time this format gets"),
   focus: z.string().describe("What this practice is aimed at, in a few words"),
   reason: z.string().describe("One sentence: why this format suits this topic"),
@@ -213,7 +230,7 @@ export function normalizePicks(drafts: PracticePickDraft[] | null | undefined): 
   const kept: { format: PracticeFormat; share: number; focus: string; reason: string }[] = [];
   for (const d of drafts ?? []) {
     const format = typeof d?.format === "string" ? d.format.trim().toLowerCase() : "";
-    if (!(PRACTICE_FORMATS as readonly string[]).includes(format) || seen.has(format)) continue;
+    if (!(DRAFTABLE_FORMATS as readonly string[]).includes(format) || seen.has(format)) continue;
     if (typeof d.share !== "number" || !Number.isFinite(d.share) || d.share <= 0) continue;
     const focus = (d.focus ?? "").trim();
     if (!focus) continue;

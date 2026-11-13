@@ -15,6 +15,7 @@ import {
   type PlanLevel,
   type PlanNode,
 } from "@/lib/planTree";
+import { importedRowsOf } from "@/lib/materials";
 import type { Material } from "@/lib/schemas/material";
 import { capProblems } from "@/lib/schemas/plan";
 import type { PlanSplit } from "@/lib/studyTime";
@@ -37,6 +38,8 @@ export interface RedraftInput {
   daysPerWeek: number;
   hoursPerWeek?: number;
   split?: PlanSplit | null;
+  /** The learner's imported plan file, shown to the outline calls as the plan's intent. */
+  importText?: string;
   tree: PlanNode;
   /** Days on or before this are behind the learner and locked. */
   lockBefore: number;
@@ -129,6 +132,9 @@ export async function redraftPlan(input: RedraftInput): Promise<RedraftResult> {
     daysPerWeek: input.daysPerWeek,
     hoursPerWeek: input.hoursPerWeek,
     split: input.split,
+    importText: input.importText,
+    // The learner's rows as the plan held them: the units re-drafted lose theirs before the call.
+    ...(input.importText ? { importedRows: importedRowsOf(root) } : {}),
     outlineModel,
     signal: input.signal,
     deadline: input.deadline,

@@ -26,6 +26,7 @@ export default async function AdjustTrackPage({ params }: { params: Promise<{ id
         materials={detail.materials}
         root={detail.root}
         lockBefore={lockBoundary(detail.root)}
+        importText={detail.track.importText ?? undefined}
       />
     </PageShell>
   );

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult } from "@ai-sdk/provider";
-import { PRACTICE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
+import { DRAFTABLE_FORMATS, PRACTICE_REGISTRY } from "@/lib/practice";
 import { providerError } from "../providerError";
 import type { ModelCall } from "../logged";
 import { initialResearch, reduceResearch } from "@/lib/researchProgress";
@@ -243,7 +243,7 @@ describe("buildWorkerInstructions", () => {
     const practice = splitCaps(capsFor(48), PRACTICE_RESEARCH_KINDS).find((p) => p.direction === "practice")!;
     const text = buildWorkerInstructions(practice);
     expect(text.startsWith("Direction: practice.\n")).toBe(true);
-    for (const f of PRACTICE_FORMATS) expect(text).toContain(`- ${PRACTICE_REGISTRY[f].label} (${f}): ${PRACTICE_REGISTRY[f].research}`);
+    for (const f of DRAFTABLE_FORMATS) expect(text).toContain(`- ${PRACTICE_REGISTRY[f].label} (${f}): ${PRACTICE_REGISTRY[f].research}`);
     expect(text).toContain("the kinds of practice this topic calls for, skipping kinds it doesn't need");
     expect(text).not.toContain("for: ");
     expect(text).toContain("Boundaries: practice sources only");
@@ -331,7 +331,7 @@ describe("arm W through the pipeline", () => {
     expect(outcome.arm?.workers?.map((w) => w.direction)).toEqual(["backbone", "canonical", "current", "practice"]);
     expect(events.filter((e) => e.type === "research.search" && e.worker === "practice")).toHaveLength(1);
     const system = (direction: string) => String(calls.find((c) => directionOf(c) === direction)!.prompt.find((m) => m.role === "system")?.content);
-    for (const f of PRACTICE_FORMATS) expect(system("practice")).toContain(`(${f}):`);
+    for (const f of DRAFTABLE_FORMATS) expect(system("practice")).toContain(`(${f}):`);
     expect(system("canonical")).not.toContain("kinds of practice");
     // The allowance does not depend on a decision not yet made: the 72-hour band gives the practice worker as if four kinds.
     expect(system("practice")).toContain("Budget: 4 searches, 5 page reads and 3 steps in all");

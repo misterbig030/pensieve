@@ -30,6 +30,8 @@ export interface PracticeRow {
   /** The source the row is from, or the reading a generated recall row was made from; null for a generated row. */
   material: Material | null;
   generated: boolean;
+  /** True on a row from the learner's imported plan file, which names that file as its source. */
+  imported: boolean;
   /** The item of the source's list this row is, when it names one; null for any other practice row. */
   item: PracticeItem | null;
   /** 1-based position of the row's item in its source's list; null without one. */
@@ -47,12 +49,16 @@ export function byTier(a: { tier: MaterialTier }, b: { tier: MaterialTier }): nu
 
 /** A node's Read table rows, must first, skipping references to materials that are not in the list. */
 export function readRowsFor(refs: MaterialRef[] | undefined, byId: ReadonlyMap<string, Material>): ReadRow[] {
+  const seen = new Map<string, number>();
   return (refs ?? [])
     .flatMap((r) => {
       const material = byId.get(r.id);
-      return material
-        ? [{ material, tier: r.tier, minutes: r.minutes, note: r.note, chapter: chapterAt(material.toc, r.chapter), activity: r.activity ?? "read", key: `${r.id}#${r.chapter ?? 0}` }]
-        : [];
+      if (!material) return [];
+      // One material read twice (an imported plan's note per row) would share a key: later ones count up.
+      const base = `${r.id}#${r.chapter ?? 0}`;
+      const n = (seen.get(base) ?? 0) + 1;
+      seen.set(base, n);
+      return [{ material, tier: r.tier, minutes: r.minutes, note: r.note, chapter: chapterAt(material.toc, r.chapter), activity: r.activity ?? "read", key: n === 1 ? base : `${base}#${n}` }];
     })
     .sort(byTier);
 }
@@ -62,7 +68,7 @@ export function practiceRowsFor(refs: PracticeRef[] | undefined, byId: ReadonlyM
   return (refs ?? []).flatMap((r, i) => {
     const material = r.id === null ? null : (byId.get(r.id) ?? null);
     if (r.id !== null && !material) return [];
-    return [{ format: r.format, label: PRACTICE_REGISTRY[r.format].label, task: r.task, done: r.done, minutes: r.minutes, material, generated: r.generated, item: itemOf(r, material), itemFrom: r.itemFrom ?? null, key: `${r.format}#${r.id ?? "generated"}#${i}` }];
+    return [{ format: r.format, label: PRACTICE_REGISTRY[r.format].label, task: r.task, done: r.done, minutes: r.minutes, material, generated: r.generated, imported: r.imported === true, item: itemOf(r, material), itemFrom: r.itemFrom ?? null, key: `${r.format}#${r.id ?? "generated"}#${i}` }];
   });
 }
 
@@ -83,7 +89,7 @@ export function coverPracticeRows(covers: PracticeCover[] | undefined, byId: Rea
     (covers ?? []).flatMap((c) =>
       // A cover keeps its row's id, so a generated recall row carries its reading's id: only a practice source of the
       // cover's own format is not generated, since a book can be reading and serve another format too.
-      c.task && c.minutes ? [{ format: c.format, id: c.id, task: c.task, done: "", minutes: c.minutes, generated: c.id === null || byId.get(c.id)?.practice?.format !== c.format }] : [],
+      c.task && c.minutes ? [{ format: c.format, id: c.id, task: c.task, done: "", minutes: c.minutes, generated: c.id === null || byId.get(c.id)?.practice?.format !== c.format, ...(c.imported ? { imported: true } : {}) }] : [],
     ),
     byId,
   );
@@ -170,9 +176,14 @@ export function PracticeTask({ row, link = true }: { row: PracticeRow; link?: bo
   );
 }
 
-/** Where a Do row comes from: its source, the reading a generated recall row was made from, or a Generated tag. */
+/** The tag of a Do row with no source: From file for one the learner's plan file gave, else Generated. */
+export function practiceSourceLabel(row: Pick<PracticeRow, "imported">): string {
+  return row.imported ? "From file" : "Generated";
+}
+
+/** Where a Do row comes from: its source, the reading a generated recall row was made from, or a From file or Generated tag. */
 export function PracticeSource({ row, link = true }: { row: PracticeRow; link?: boolean }) {
-  if (!row.material) return <span>Generated</span>;
+  if (!row.material) return <span>{practiceSourceLabel(row)}</span>;
   return (
     <span>
       <ItemLink material={row.material} href={row.material.url} link={link} />

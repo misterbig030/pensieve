@@ -11,8 +11,11 @@ import {
 } from "./planTree";
 import { weeksLabel } from "./studyTime";
 
-/** The plan summary card text. Deterministic so it costs nothing and never drifts from the tree. */
-export function summarizePlan(root: PlanNode, topic: string, daysPerWeek: number, note?: string): string {
+/**
+ * The plan summary card text. Deterministic so it costs nothing and never drifts from the tree. `topic` is null for a
+ * plan imported from a file: its title is the file's heading (often dates and a length), which reads badly after "on".
+ */
+export function summarizePlan(root: PlanNode, topic: string | null, daysPerWeek: number, note?: string): string {
   const tops = root.children ?? [];
   if (tops.length === 0) return "";
   const n = root.len;
@@ -23,13 +26,14 @@ export function summarizePlan(root: PlanNode, topic: string, daysPerWeek: number
   const last = leaves[leaves.length - 1];
   const lastTitle = last && last.end === n ? last.title : tops[tops.length - 1].title;
   const titles = tops.map((t) => t.title).join(", ");
+  const about = topic === null ? "from your plan file" : `on ${topic}`;
   const opens = `Opens with "${first ? first.title : tops[0].title}" and closes on "${lastTitle}".`;
   const base =
     level === "day"
-      ? `${tops.length} days on ${topic}, one day at a time: ${titles}. ${opens}`
+      ? `${tops.length} days ${about}, one day at a time: ${titles}. ${opens}`
       : level === "week"
-        ? `${capitalize(weeks)} on ${topic}, usually ${daysPerWeek} study day${daysPerWeek === 1 ? "" : "s"} a week: ${titles}. ${opens}`
-        : `${capitalize(weeks)} on ${topic}, in ${tops.length} ${level}s: ${titles}. ${opens}`;
+        ? `${capitalize(weeks)} ${about}, usually ${daysPerWeek} study day${daysPerWeek === 1 ? "" : "s"} a week: ${titles}. ${opens}`
+        : `${capitalize(weeks)} ${about}, in ${tops.length} ${level}s: ${titles}. ${opens}`;
   return note ? `${base} ${note}` : base;
 }
 
