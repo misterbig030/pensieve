@@ -76,20 +76,16 @@ export const unitListSchema = z.object({
 });
 export type UnitDraft = z.infer<typeof unitDraftSchema>;
 
-/** The deepest a revised tree nests: month → week → day. */
-const MAX_REVISED_DEPTH = 3;
-
 /**
  * One unit of a revised tree as the model writes it: the tree is one flat list in outline order, each unit followed by
- * the units inside it, and `depth` places it. `ref` echoes the node's ref from the prompt when a node is kept; `time` is
+ * the units inside it, and `depth` places it. `depth` is an enum rather than a bounded number because strict output
+ * enforces an enum but `@ai-sdk/anthropic` strips `minimum`/`maximum` before sending, so the model isn't held to a
+ * range the answer is still checked against. `ref` echoes the node's ref from the prompt when a node is kept; `time` is
  * a heading's minutes per activity, written when the model changes them or adds the heading.
  */
 const revisedUnitSchema = z.object({
   depth: z
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_REVISED_DEPTH)
+    .literal([1, 2, 3])
     .describe("1 for a top-level unit; 2 for a unit inside the nearest depth-1 unit above it; 3 for a unit inside the nearest depth-2 unit above it"),
   ref: z.string().optional(),
   title: z.string().min(1),
@@ -109,27 +105,36 @@ export interface RevisedNode extends Omit<RevisedUnitDraft, "depth"> {
 }
 export interface RevisedTree {
   units: RevisedNode[];
+  /**
+   * The titles of units whose depth skipped a level below the unit they went inside (a day straight under a month). Each
+   * was put one level below that unit, so it may sit at the wrong level; the revision reports them.
+   */
+  moved?: string[];
 }
 
 /**
- * The outline's units under their parents. A unit deeper than one level below the unit before it (a skipped level, or
- * a first unit below the top) goes just inside that unit, or at the top.
+ * The outline's units under their parents. A unit that skips a level goes just inside the unit before it, or at the top.
+ * An outline shifted as a whole (top-level weeks written at depth 2) nests the same and names nothing; only a unit
+ * written more than one level below the unit it goes inside is named in `moved`.
  */
-function nestRevisedUnits(flat: RevisedUnitDraft[]): { tops: RevisedNode[]; widest: number } {
+function nestRevisedUnits(flat: RevisedUnitDraft[]): { tops: RevisedNode[]; widest: number; moved: string[] } {
   const tops: RevisedNode[] = [];
-  /** The open unit at each depth: `open[0]` the latest top-level unit. */
-  const open: RevisedNode[] = [];
+  /** The open unit at each depth, with the depth the model wrote for it: `open[0]` the latest top-level unit. */
+  const open: { node: RevisedNode; written: number }[] = [];
+  const moved: string[] = [];
   let widest = 0;
   for (const { depth, ...fields } of flat) {
     const node: RevisedNode = fields;
-    const d = Math.min(Math.max(1, depth), open.length + 1, MAX_REVISED_DEPTH);
+    const d = Math.min(depth, open.length + 1);
     open.length = d - 1;
-    const siblings = d === 1 ? tops : (open[d - 2].children ??= []);
+    const parent = d === 1 ? null : open[d - 2];
+    if (parent && depth > parent.written + 1) moved.push(node.title);
+    const siblings = parent ? (parent.node.children ??= []) : tops;
     siblings.push(node);
     widest = Math.max(widest, siblings.length);
-    open.push(node);
+    open.push({ node, written: depth });
   }
-  return { tops, widest };
+  return { tops, widest, moved };
 }
 
 /**
@@ -141,12 +146,12 @@ function nestRevisedUnits(flat: RevisedUnitDraft[]): { tops: RevisedNode[]; wide
 export const revisedTreeSchema = z
   .object({ units: z.array(revisedUnitSchema).min(1) })
   .transform(({ units }, ctx): RevisedTree => {
-    const { tops, widest } = nestRevisedUnits(units);
+    const { tops, widest, moved } = nestRevisedUnits(units);
     if (widest > MAX_LEVEL_UNITS) {
       ctx.addIssue({ code: "custom", message: `At most ${MAX_LEVEL_UNITS} units at one level` });
       return z.NEVER;
     }
-    return { units: tops };
+    return moved.length > 0 ? { units: tops, moved } : { units: tops };
   });
 
 /** A node as the browser sends it back on confirm. Ids are temporary (`tmp-…`) or real uuids in adjust mode. */

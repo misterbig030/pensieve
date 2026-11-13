@@ -1,34 +1,7 @@
-import { asSchema } from "ai";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { ANTHROPIC_MAX_OPTIONAL, optionalCount, sentSchema as sent } from "@/lib/ai/strictOutput";
 import { capProblems, MAX_LEVEL_UNITS, MAX_PROBLEM_CHARS, MAX_PROBLEMS, problemsSchema, revisedTreeSchema, unitListSchema } from "./plan";
-
-/** The JSON schema `generateObject` sends: the AI SDK's own conversion (`asSchema`, zod 4 at `io: "input"`). */
-function sent(schema: Parameters<typeof asSchema>[0]): unknown {
-  return asSchema(schema).jsonSchema;
-}
-
-/**
- * Every property a JSON schema leaves out of its object's `required`, counting each nested copy. Anthropic's strict
- * output (`output_format`, which `@ai-sdk/anthropic` sends on a user's own key) refuses a schema with more than 24.
- */
-function optionalCount(node: unknown): number {
-  if (Array.isArray(node)) return node.reduce((sum: number, n) => sum + optionalCount(n), 0);
-  if (!node || typeof node !== "object") return 0;
-  const o = node as Record<string, unknown>;
-  const required = new Set(Array.isArray(o.required) ? o.required : []);
-  const own = o.properties && typeof o.properties === "object" ? Object.keys(o.properties).filter((k) => !required.has(k)).length : 0;
-  return own + Object.values(o).reduce((sum: number, v) => sum + optionalCount(v), 0);
-}
-
-/** Anthropic's limit on optional parameters across one request's strict schemas. */
-const ANTHROPIC_MAX_OPTIONAL = 24;
-
-describe("optionalCount", () => {
-  it("counts every property left out of required, nested ones too", () => {
-    expect(optionalCount({ type: "object", properties: { a: {}, b: { type: "object", properties: { c: {}, d: {} }, required: ["c"] } }, required: ["a"] })).toBe(2);
-  });
-});
 
 describe("revisedTreeSchema", () => {
   const unit = (depth: number, title: string, extra: Record<string, unknown> = {}) => ({ depth, title, summary: "s", days: 1, ...extra });
@@ -37,7 +10,6 @@ describe("revisedTreeSchema", () => {
     // A nested month → week → day schema repeated every optional field three times: 38, refused on a user's key.
     expect(optionalCount(sent(revisedTreeSchema))).toBe(12);
     expect(optionalCount(sent(revisedTreeSchema))).toBeLessThanOrEqual(ANTHROPIC_MAX_OPTIONAL);
-    expect(optionalCount(sent(unitListSchema))).toBeLessThanOrEqual(ANTHROPIC_MAX_OPTIONAL);
   });
 
   it("sends one flat unit, not a nested tree", () => {
@@ -73,12 +45,23 @@ describe("revisedTreeSchema", () => {
     expect(tree.units[0]).not.toHaveProperty("children");
   });
 
-  it("puts a unit that skips a level just inside the unit above it", () => {
+  it("puts a unit that skips a level just inside the unit above it, and names it", () => {
     const tree = revisedTreeSchema.parse({ units: [unit(2, "W1"), unit(3, "D1"), unit(1, "W2"), unit(3, "D2")] });
     expect(tree.units.map((u) => [u.title, u.children?.map((c) => c.title)])).toEqual([
       ["W1", ["D1"]],
       ["W2", ["D2"]],
     ]);
+    expect(tree.moved).toEqual(["D2"]);
+    // A whole outline written a level deep nests the same and names nothing.
+    expect(revisedTreeSchema.parse({ units: [unit(2, "W1"), unit(3, "D1")] })).not.toHaveProperty("moved");
+    expect(revisedTreeSchema.parse({ units: [unit(1, "W1"), unit(2, "D1")] })).not.toHaveProperty("moved");
+  });
+
+  it("sends depth as an enum, which strict output holds the model to, and refuses any other depth", () => {
+    // A bounded number would be sent without its bounds (the Anthropic provider strips minimum and maximum).
+    expect(JSON.stringify(sent(revisedTreeSchema))).toContain('"enum":[1,2,3]');
+    expect(revisedTreeSchema.safeParse({ units: [unit(0, "W1")] }).success).toBe(false);
+    expect(revisedTreeSchema.safeParse({ units: [unit(1, "M1"), unit(2, "W1"), unit(3, "D1"), unit(4, "X")] }).success).toBe(false);
   });
 
   it("takes up to 40 units at a level and refuses none or more", () => {

@@ -34,10 +34,9 @@ import {
   type MaterialAliases,
 } from "@/lib/materials";
 import type { PracticeFormat } from "@/lib/practice";
-import type { CoverRefDraft, MaterialRefDraft, PracticeCover, PracticeCoverDraft, PracticeRef, PracticeRefDraft } from "@/lib/schemas/material";
+import type { PracticeCover, PracticeRef } from "@/lib/schemas/material";
 import type { PlanSplit } from "@/lib/studyTime";
-import { capProblems, revisedTreeSchema, type RevisedTree, type unitTimeDraftSchema } from "@/lib/schemas/plan";
-import type { z } from "zod";
+import { capProblems, revisedTreeSchema, type RevisedNode, type RevisedTree } from "@/lib/schemas/plan";
 import { loggedGenerateObject, type GenerationLogContext } from "./logged";
 import { DEFAULT_OUTLINE_MODEL, OUTLINE_EFFORT } from "./models";
 import { appModel, type ResolvedModel } from "./resolve";
@@ -62,19 +61,6 @@ export class LockedNodeError extends Error {
     super(`The change would touch ${label}, which is already completed. Pick something later in the plan.`);
     this.name = "LockedNodeError";
   }
-}
-
-interface RevisedUnit {
-  ref?: string;
-  title: string;
-  summary: string;
-  days: number;
-  covers?: CoverRefDraft[];
-  materials?: MaterialRefDraft[];
-  practiceCovers?: PracticeCoverDraft[];
-  practice?: PracticeRefDraft[];
-  time?: z.infer<typeof unitTimeDraftSchema>;
-  children?: RevisedUnit[];
 }
 
 /**
@@ -111,7 +97,7 @@ export function applyRevision(
   // The learner's rows anywhere in the plan: a row the model moves to another unit, or rewrites, is still theirs.
   const imported = importedRowsOf(original);
 
-  const convert = (unit: RevisedUnit, level: PlanLevel): PlanNode => {
+  const convert = (unit: RevisedNode, level: PlanLevel): PlanNode => {
     const kept = unit.ref ? byRef.get(unit.ref) : undefined;
     if (kept) seen.add(kept.id);
     if (kept && isLocked(kept, lockBefore)) return cloneTree(kept);
@@ -217,6 +203,18 @@ export function reshapedUnits(original: PlanNode, revised: PlanNode): (node: Pla
 }
 
 /**
+ * What the learner is told about units the revision put one level up because their depth skipped a level: they came
+ * back without the unit they belong in, so they may sit at the wrong level.
+ */
+export function movedProblems(titles: string[]): string[] {
+  if (titles.length === 0) return [];
+  const names = titles.map((t) => `"${t}"`);
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const they = titles.length === 1 ? "it was" : "they were";
+  return [`${list} came back without the unit ${titles.length === 1 ? "it belongs" : "they belong"} in, so ${they} placed one level up. Check where ${titles.length === 1 ? "it sits" : "they sit"}.`];
+}
+
+/**
  * Runs one revision: the model returns the whole tree with refs, and `applyRevision` reconciles it. The checks run
  * tree-wide inside the call's `check` hook, so their facts land on the call's log row; what breaks a rule is kept as
  * written and comes back as `problems`. A revision is one large call, so there is no retry.
@@ -240,15 +238,21 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       return [];
     }
     const dropped = unpicked.size > 0 ? [`dropped time for unpicked ${[...unpicked].join(", ")}`] : [];
+    // Units whose depth skipped a level were put one level up: the learner checks where they landed.
+    const moved = movedProblems(object.moved ?? []);
+    dropped.push(...(object.moved ?? []).map((title) => `moved up a level: "${title}"`));
     // Every unit the model gave minutes past what a saved unit keeps (`toUnitTime` clamps a heading's; a leaf's goes).
-    const times: RevisedUnit["time"][] = [];
-    const collect = (u: RevisedUnit) => {
+    const times: RevisedNode["time"][] = [];
+    const collect = (u: RevisedNode) => {
       times.push(u.time);
       for (const c of u.children ?? []) collect(c);
     };
     for (const u of object.units) collect(u);
     dropped.push(...clampedTimeFacts(times));
-    if (!aliases) return dropped;
+    if (!aliases) {
+      problems = capProblems(moved);
+      return dropped;
+    }
     // Practice rows unchanged from the saved tree keep the item and reserved-source rules as facts; new or changed ones
     // breach. Only the units the revision added or reshaped are reported for lacking time.
     const checks = treeChecks(revised, input.materials, {
@@ -265,7 +269,7 @@ export async function revisePlanTree(input: RevisePlanInput): Promise<RevisePlan
       const owner = checks.owners[i];
       return owner !== null && (owner.status === "completed" || isLocked(owner, input.lockBefore));
     };
-    problems = capProblems(checks.problems.filter((_, i) => !fixed(i)));
+    problems = capProblems([...moved, ...checks.problems.filter((_, i) => !fixed(i))]);
     let plain = 0;
     walk(revised, (node) => void (plain += plainUnitText(node, input.materials, aliases)));
     const words = plain > 0 ? [`ids put in words in ${plain} field${plain === 1 ? "" : "s"}`] : [];
