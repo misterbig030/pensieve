@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   BookOpen,
-  Check,
   ChevronDown,
   CircleAlert,
   CirclePlay,
@@ -23,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { PRACTICE_OPEN_PREFIX, isPracticeOpen, type Coverage, type DroppedMaterial, type ResearchNotice } from "@/lib/ai/research/events";
 import { isPracticeOnly, keptPositions } from "@/lib/materials";
 import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
-import { approxDuration } from "@/lib/researchProgress";
+import { approxDuration, type FoundMaterial } from "@/lib/researchProgress";
 import { KIND_LABEL, KIND_ORDER, hostOf, type Material, type MaterialKind, type MaterialPractice } from "@/lib/schemas/material";
 import { cn } from "@/lib/utils";
 
@@ -68,11 +67,10 @@ export interface MaterialsListProps {
   awaitingBackbone?: boolean;
   /** Rows shown before "Show all", of the reading groups and of the Practice group each. */
   initialShown?: number;
-  /**
-   * Folds the list into its heading, open on the first visit only, so a returning learner sees the plan first. The
-   * browser storage key that remembers the visit; omit for a list that is always open.
-   */
-  foldKey?: string;
+  /** Set while research runs: the column lists these as they come, grouped by kind, and shows nothing else. */
+  found?: FoundMaterial[];
+  /** Wraps the column in a "Materials · N" disclosure that starts closed (narrow screens). */
+  fold?: boolean;
 }
 
 /** The plan-level materials list: the backbone pinned first, the rest grouped by kind. */
@@ -90,101 +88,93 @@ export function MaterialsList(props: MaterialsListProps) {
   const researched = materials.filter((m) => m.origin === "research").length;
   const { readingMinutes: sized, practiceMinutes } = materialTotals(materials);
   const unsized = materials.filter((m) => !m.minutes && !m.practice?.minutes).length;
-  const fold = useRef<HTMLDetailsElement>(null);
-
-  // The fold is closed when rendered; the first visit opens it. Set on the element, so React leaves it to the learner.
-  useEffect(() => {
-    if (!props.foldKey || !fold.current) return;
-    try {
-      if (window.localStorage.getItem(props.foldKey)) return;
-      window.localStorage.setItem(props.foldKey, "seen");
-    } catch {
-      return;
-    }
-    fold.current.open = true;
-  }, [props.foldKey]);
+  const count = props.found ? props.found.length : materials.length;
 
   const heading = (
-    <div className="flex flex-wrap items-center gap-2.5">
-      <h2 id="materials-h" className="m-0 font-heading text-lg font-normal">
-        Materials
-      </h2>
-      <span className="inline-flex items-center gap-[5px] rounded-full bg-accent-2-200 px-[9px] py-[3px] text-[11px] font-semibold text-accent-2-800">
-        <Check className="size-3" strokeWidth={3} />
-        {checkedLine(materials)}
-      </span>
-      {props.foldKey && <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-open/fold:rotate-180" />}
-      <span className="ml-auto text-[12.5px] text-muted-foreground max-[640px]:ml-0 max-[640px]:basis-full">Gather these up front. Each week assigns a slice.</span>
-    </div>
+    <h2 id="materials-h" className="m-0 flex items-baseline gap-2">
+      <span className="font-heading text-[17px] font-normal">Materials</span>
+      <span className="text-[12px] text-muted-foreground">{count}</span>
+    </h2>
   );
 
-  const body = (
+  const intro = (
     <>
+      <p className="m-0 text-[12px] text-muted-foreground">{checkedLine(materials)}</p>
       {sized + practiceMinutes > 0 && (
-        <p className="m-0 text-[13px] leading-normal text-neutral-800">
+        <p className="m-0 text-[12px] leading-normal text-muted-foreground">
           <strong className="font-semibold">{totalsLine(sized, practiceMinutes)}</strong>
           {props.totalHours ? ` for a plan of about ${props.totalHours} hours` : ""}
-          {unsized > 0 ? `, not counting ${unsized} with no size` : ""}. Sizes are for the part the plan uses. How much of it is required is the plan&apos;s call, week by week.
+          {unsized > 0 ? `, not counting ${unsized} with no size` : ""}. Sizes are for the part the plan uses.
         </p>
       )}
       {coverage && (coverage.covered.length > 0 || coverage.open.length > 0) && <CoverageChips coverage={coverage} source={coverageSource} />}
+    </>
+  );
 
-      {backbone ? (
+  const list = (
+    <div className="flex flex-col px-2 pb-2.5">
+      {backbone && (
         <div id={BACKBONE_ANCHOR} className="scroll-mt-4">
-          <BackboneCard material={backbone} onRemove={props.onRemove ? () => setRemoving(backbone) : undefined} />
+          <span className={CAPTION}>Backbone</span>
+          <MaterialRow material={backbone} onRemove={props.onRemove ? () => setRemoving(backbone) : undefined} />
         </div>
-      ) : props.awaitingBackbone ? null : (
-        <span className="text-[13px] text-muted-foreground">No backbone: units draw on the materials below directly.</span>
       )}
-
-      <div className="flex flex-col gap-0.5">
-        {shown.map((m, i) => (
-          <div key={m.id} className="contents">
-            {(i === 0 || groupLabel(shown[i - 1]) !== groupLabel(m)) && (
-              <span id={groupAnchor(groupLabel(m))} className="block scroll-mt-4 break-after-avoid px-1 pt-1.5 pb-1 text-[11px] tracking-wide text-muted-foreground uppercase">
-                {groupLabel(m)}
-              </span>
-            )}
-            <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
-          </div>
-        ))}
-      </div>
-
+      {!backbone && !props.awaitingBackbone && <span className="px-2 pt-2 text-[12px] text-muted-foreground">No backbone: units draw on the materials below directly.</span>}
+      {shown.map((m, i) => (
+        <div key={m.id} className="contents">
+          {(i === 0 || groupLabel(shown[i - 1]) !== groupLabel(m)) && (
+            <span id={groupAnchor(groupLabel(m))} className={cn(CAPTION, "scroll-mt-4 break-after-avoid")}>
+              {groupLabel(m)}
+            </span>
+          )}
+          <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
+        </div>
+      ))}
       {shownRows(ordered, initialShown).length < ordered.length && (
-        <Button variant="secondary" size="sm" className="min-h-10 self-start border border-border bg-transparent px-4 text-[12.5px]" onClick={() => setShowAll((v) => !v)}>
+        <Button variant="secondary" size="sm" className="mx-2 mt-2 min-h-10 self-start border border-border bg-transparent px-4 text-[12.5px]" onClick={() => setShowAll((v) => !v)}>
           {showAll ? "Show fewer" : `Show all ${materials.length}`}
         </Button>
       )}
+      <div className="flex flex-col gap-2 px-2 pt-2">
+        <DroppedGroup heading="Rejected by checks" items={checked} />
+        <DroppedGroup heading="Found but not used" items={unused} />
+      </div>
+    </div>
+  );
 
-      <DroppedGroup heading="Rejected by checks" items={checked} />
-      <DroppedGroup heading="Found but not used" items={unused} />
+  const body = props.found ? (
+    <FoundList found={props.found} />
+  ) : materials.length === 0 ? (
+    <p className="m-0 px-4 pb-3.5 text-[13px] text-muted-foreground">No materials yet.</p>
+  ) : (
+    <>
+      <div className="flex flex-col gap-1.5 px-4 pb-3">{intro}</div>
+      {list}
     </>
   );
 
   return (
     <div className="flex flex-col gap-3">
-      {notice && (
+      {notice && !props.found && (
         <ResearchNoticeBanner notice={notice} topic={props.topic} researched={researched} sizedMinutes={sized} coverage={props.researchCoverage ?? coverage} hasBackbone={!!backbone} backboneKnown={!props.awaitingBackbone} onResearchAgain={props.onResearchAgain} />
       )}
 
-      {materials.length > 0 && (
-        <section
-          aria-labelledby="materials-h"
-          className="flex flex-col gap-3.5 rounded-[28px] bg-secondary px-[22px] pt-5 pb-[18px]"
-        >
-          {props.foldKey ? (
-            <details ref={fold} className="group/fold">
-              <summary className="cursor-pointer list-none rounded-xl select-none [&::-webkit-details-marker]:hidden">{heading}</summary>
-              <div className="mt-3.5 flex flex-col gap-3.5">{body}</div>
-            </details>
-          ) : (
-            <>
-              {heading}
-              {body}
-            </>
-          )}
-        </section>
-      )}
+      <section aria-labelledby="materials-h" className="elev-sm rounded-[18px] bg-neutral-100">
+        {props.fold ? (
+          <details className="group/fold">
+            <summary className="flex cursor-pointer list-none items-center gap-2 rounded-[18px] px-4 py-3.5 select-none [&::-webkit-details-marker]:hidden">
+              <h2 id="materials-h" className="m-0 font-heading text-[17px] font-normal">{`Materials · ${count}`}</h2>
+              <ChevronDown aria-hidden="true" className="ml-auto size-4 text-muted-foreground transition-transform group-open/fold:rotate-180" />
+            </summary>
+            {body}
+          </details>
+        ) : (
+          <>
+            <div className="px-4 pt-3.5 pb-2.5">{heading}</div>
+            {body}
+          </>
+        )}
+      </section>
 
       {removing && props.onRemove && (
         <RemoveDialog
@@ -197,6 +187,45 @@ export function MaterialsList(props: MaterialsListProps) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+const CAPTION = "block px-2 pt-2.5 pb-1 text-[10.5px] font-semibold tracking-[.05em] text-muted-foreground uppercase";
+
+/** The icon tile of a row: the backbone's is dark green, the rest are plain. */
+function Tile({ kind, backbone }: { kind: MaterialKind; backbone: boolean }) {
+  const Icon = KIND_ICON[kind];
+  return (
+    <span className={cn("mt-0.5 flex size-[26px] shrink-0 items-center justify-center rounded-[7px]", backbone ? "bg-accent-2-800 text-accent-2-100" : "bg-card")}>
+      <Icon className="size-3.5" strokeWidth={2.25} />
+    </span>
+  );
+}
+
+/** What research has found so far, by kind, while it is still running. */
+function FoundList({ found }: { found: FoundMaterial[] }) {
+  const ordered = KIND_ORDER.flatMap((kind) => found.filter((f) => f.kind === kind));
+  return (
+    <div className="flex flex-col px-2 pb-3">
+      {ordered.map((f, i) => (
+        <div key={f.id} className="contents">
+          {(i === 0 || ordered[i - 1].kind !== f.kind) && <span className={CAPTION}>{KIND_LABEL[f.kind]}</span>}
+          <div className="flex items-start gap-2.5 px-2 py-1.5">
+            <Tile kind={f.kind} backbone={f.backbone} />
+            <span className="min-w-0 flex-1 text-[12.5px] font-semibold break-words">
+              {f.title}
+              {f.yours && (
+                <>
+                  {" "}
+                  <YoursBadge />
+                </>
+              )}
+            </span>
+          </div>
+        </div>
+      ))}
+      <p className="m-0 px-2 pt-2 text-[12px] text-muted-foreground">Still looking…</p>
     </div>
   );
 }
@@ -285,41 +314,14 @@ function titleLink(m: Material, className?: string) {
   );
 }
 
-function BackboneCard({ material: m, onRemove }: { material: Material; onRemove?: () => void }) {
-  return (
-    <div className="flex gap-4 rounded-[20px] border-[1.5px] border-accent-2-700 bg-background px-[18px] py-4 max-[640px]:flex-col max-[640px]:gap-3">
-      <div className="flex h-[72px] w-14 shrink-0 items-center justify-center rounded-lg bg-accent-2-800 max-[640px]:hidden">
-        <BookOpen className="size-6 text-accent-2-100" strokeWidth={2.25} />
-      </div>
-      <div className="flex min-w-0 grow flex-col gap-[5px]">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex rounded-full bg-accent-2-800 px-2 py-0.5 text-[10.5px] font-semibold tracking-wide text-accent-2-100 uppercase">Backbone</span>
-          {titleLink(m, "font-heading text-[17px]")}
-          {m.origin === "learner" && <YoursBadge />}
-        </div>
-        <span className="text-[12.5px] text-muted-foreground">{byline(m, true)}</span>
-        {m.why && <p className="m-0 text-[13px] leading-normal text-neutral-800">{m.why}</p>}
-        <SizeLine material={m} />
-        <PracticeLine material={m} />
-      </div>
-      <div className="flex shrink-0 items-start gap-1 self-start">
-        <VerifiedButton material={m} prominent />
-        {onRemove && <RemoveButton title={m.title} onClick={onRemove} />}
-      </div>
-    </div>
-  );
-}
-
 function MaterialRow({ material: m, onRemove }: { material: Material; onRemove?: () => void }) {
-  const Icon = KIND_ICON[m.kind];
   const meta = byline(m);
   return (
-    <div className="grid grid-cols-[22px_minmax(0,1fr)_auto] items-start gap-3 px-1 py-2 text-[13px] max-[640px]:grid-cols-[22px_minmax(0,1fr)] max-[640px]:gap-y-1">
-      <Icon className="mt-0.5 size-4 text-muted-foreground" strokeWidth={2.25} />
-      <div className="flex min-w-0 flex-col gap-0.5">
+    <div className="flex items-start gap-2.5 rounded-[10px] px-2 py-1.5 text-[12.5px]">
+      <Tile kind={m.kind} backbone={!!m.backbone} />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="min-w-0 break-words">
           {titleLink(m, "font-semibold")}
-          {meta && <span className="text-muted-foreground"> · {meta}</span>}
           {m.origin === "learner" && (
             <>
               {" "}
@@ -327,14 +329,15 @@ function MaterialRow({ material: m, onRemove }: { material: Material; onRemove?:
             </>
           )}
         </span>
-        {m.why && <span className="text-neutral-800">{m.why}</span>}
+        {meta && <span className="text-[11px] text-muted-foreground">{meta}</span>}
+        {m.why && <span className="text-[12px] text-neutral-800">{m.why}</span>}
         <SizeLine material={m} />
         <PracticeLine material={m} />
+        <span className="flex items-center gap-1 self-start -ml-2.5 empty:hidden">
+          <VerifiedButton material={m} />
+        </span>
       </div>
-      <div className="flex items-center gap-1 justify-self-end max-[640px]:col-start-2 max-[640px]:-ml-2.5 max-[640px]:justify-self-start">
-        <VerifiedButton material={m} />
-        {onRemove && <RemoveButton title={m.title} onClick={onRemove} />}
-      </div>
+      {onRemove && <RemoveButton title={m.title} onClick={onRemove} />}
     </div>
   );
 }
@@ -503,7 +506,7 @@ export function VerifiedButton({ material: m, prominent = false }: { material: M
         <div
           role="dialog"
           aria-label={`How ${m.title} was checked`}
-          className="absolute top-10 right-0 z-20 flex w-[340px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-neutral-900 px-4 py-3.5 text-[12.5px] leading-normal text-neutral-100 shadow-md"
+          className="absolute top-10 left-0 z-20 flex w-[300px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-neutral-900 px-4 py-3.5 text-[12.5px] leading-normal text-neutral-100 shadow-md"
         >
           <span className="font-semibold">{catalogued ? "Found on Open Library" : "Opened"} {opened}</span>
           {m.fetchedTitle && (

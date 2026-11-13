@@ -144,3 +144,23 @@ describe("badgeFor", () => {
     expect(badgeFor(material({ origin: "research", verifiedAt: null }))).toBeNull();
   });
 });
+
+describe("MaterialsList as the draft page's column", () => {
+  it("lists what research has found so far, with a still-looking line", () => {
+    const html = render({ materials: [], found: [{ id: "a", title: "Genki I", kind: "book", backbone: false, yours: false }] });
+    expect(html).toContain("Genki I");
+    expect(html).toContain("Books");
+    expect(html).toContain("Still looking…");
+  });
+  it("starts folded on a narrow screen", () => {
+    const html = render({ fold: true });
+    expect(html).toMatch(/<details(?![^>]*\bopen\b)/);
+    expect(html.replace(/<!-- -->/g, "")).toContain("Materials · 1");
+  });
+  it("says so in one line when the plan has no materials", () => {
+    expect(render({ materials: [] })).toContain("No materials yet.");
+  });
+  it("neither lights nor dims any material", () => {
+    expect(render({})).not.toMatch(/opacity-60|bg-accent-100 shadow-\[inset_2px/);
+  });
+});
