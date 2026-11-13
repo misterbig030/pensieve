@@ -41,6 +41,14 @@ describe("ReadSection", () => {
   });
 });
 
+describe("ReadSection kind", () => {
+  it("names a book row's kind in the singular", () => {
+    const out = html(createElement(ReadSection, { rows: readRowsFor([{ id: "aie", note: null, chapter: 3, tier: "must", minutes: 60 }], byId), budgetMinutes: 780, practiceMinutes: 0 }));
+    expect(out).toContain("Book");
+    expect(out).not.toContain("Books");
+  });
+});
+
 describe("DayCards", () => {
   it("marks finished days done and the current day today", () => {
     const out = html(createElement(DayCards, { root: plan3, week: findNode(plan3, "w3")!, byId, lockBefore: 12, currentLeafId: "w3d3" }));

@@ -17,7 +17,10 @@ import {
 } from "@/components/pensieve/ReadTable";
 import { isLocked, labelOf, type PlanNode } from "@/lib/planTree";
 import { formatDuration } from "@/lib/researchProgress";
-import { KIND_LABEL, type Material } from "@/lib/schemas/material";
+import type { Material, MaterialKind } from "@/lib/schemas/material";
+
+/** A material kind as one item's label: "Book", not the group heading "Books". */
+const KIND_SINGULAR: Record<MaterialKind, string> = { book: "Book", course: "Course", video: "Video", docs: "Docs", essay: "Essay", paper: "Paper", repo: "Repo", tool: "Tool", note: "Note", other: "Other" };
 
 /** The mock's `.rw` row: kind, text, time. On a narrow screen the kind sits above the text. */
 const ROW = "grid grid-cols-[118px_minmax(0,1fr)_64px] items-baseline gap-x-2.5 gap-y-0.5 rounded-[10px] px-2.5 py-1.5 text-[13px] even:bg-foreground/[0.03] max-[900px]:grid-cols-[minmax(0,1fr)_auto]";
@@ -40,7 +43,7 @@ export function ReadSection({ rows, budgetMinutes, practiceMinutes }: { rows: Re
           return (
             <div key={r.key} className={ROW}>
               <span className={KIND}>
-                {KIND_LABEL[r.material.kind]}
+                {KIND_SINGULAR[r.material.kind]}
                 <TierPill tier={r.tier} />
               </span>
               <span className="min-w-0">
