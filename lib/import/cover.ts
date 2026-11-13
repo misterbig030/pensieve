@@ -1,4 +1,4 @@
-import { isImportedRow } from "@/lib/materials";
+import { importedMatch } from "@/lib/materials";
 import { PRACTICE_REGISTRY, type PracticeFormat } from "@/lib/practice";
 import { budgetFor, type PlanNode } from "@/lib/planTree";
 import { MAX_UNIT_MINUTES, type UnitTime } from "@/lib/schemas/plan";
@@ -13,12 +13,12 @@ function runOf(r: { itemFrom?: number | null; itemTo?: number | null }): [number
 
 /**
  * Whether some day holds the imported reservation `row`. A sourced row is held by a day row of its format and source
- * whose items overlap its own (any such row, when either names no items); a sourceless row by a day row of its format with
- * its task, or one that starts with the first 24 characters of it (`isImportedRow`, as the drafts are marked).
+ * whose items overlap its own (any such row, when either names no items); a sourceless row by a day row that is it among
+ * the parent's imported rows (`importedMatch`, as the drafts are marked), so a sibling worded alike never stands in for it.
  */
-function holds(days: PlanNode[], row: PracticeCover): boolean {
+function holds(days: PlanNode[], row: PracticeCover, imported: readonly PracticeCover[]): boolean {
   const rows = days.flatMap((d) => d.practice ?? []).filter((r) => r.format === row.format);
-  if (row.id === null) return rows.some((r) => isImportedRow(r, row));
+  if (row.id === null) return rows.some((r) => importedMatch(r, imported) === row);
   const want = runOf(row);
   return rows.some((r) => {
     if (r.id !== row.id) return false;
@@ -61,10 +61,11 @@ export function coverImportedRows(parent: PlanNode, days: PlanNode[]): { days: P
   const out = days.map((d) => ({ ...d, ...(d.practice ? { practice: [...d.practice] } : {}), ...(d.materials ? { materials: [...d.materials] } : {}) }));
   if (out.length === 0) return { days: out, appended: 0 };
   let appended = 0;
-  for (const row of (parent.practiceCovers ?? []).filter((c) => c.imported === true)) {
+  const imported = (parent.practiceCovers ?? []).filter((c) => c.imported === true);
+  for (const row of imported) {
     // A sourceless row with no task has nothing to find a day's row by, so it is left as the days have it.
     if (row.id === null && !row.task?.trim()) continue;
-    if (holds(out, row)) continue;
+    if (holds(out, row, imported)) continue;
     const ref: PracticeRef = {
       format: row.format,
       id: row.id,

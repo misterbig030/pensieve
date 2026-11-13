@@ -53,7 +53,9 @@ export interface ImportedPlan {
 export type ConvertResult =
   | { ok: true; plan: ImportedPlan }
   | { ok: false; reason: "no_plan"; message: string }
-  | { ok: false; reason: "too_long"; message: string };
+  | { ok: false; reason: "too_long"; message: string }
+  /** A plan was found, but its conversion fails the schemas a save checks (`checkedPlan`). */
+  | { ok: false; reason: "unsavable"; message: string };
 
 /** The most top-level units an import keeps: the redraft schema's limit, so an imported track can always be redrafted. */
 export const MAX_IMPORT_UNITS = 40;

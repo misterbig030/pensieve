@@ -6,7 +6,7 @@ import type { LanguageModel } from "ai";
 import type { ResolvedModel } from "@/lib/ai/resolve";
 import type { GenerationLogRow } from "@/lib/ai/logged";
 import { WEEKLY_PLAN_DRAFT } from "./__fixtures__/weekly-plan.draft";
-import { runImport } from "./run";
+import { UNSAVABLE_PLAN_MESSAGE, runImport } from "./run";
 
 const mockedGenerateObject = vi.mocked(generateObject);
 const instance = { modelId: "claude-sonnet-5", provider: "anthropic.messages" } as unknown as LanguageModel;
@@ -46,7 +46,7 @@ describe("runImport", () => {
     } as unknown as Awaited<ReturnType<typeof generateObject>>);
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const { result } = await runImport({ fileName: "weekly-plan.md", text: "# Plan", model });
-    expect(result).toEqual({ ok: false, reason: "no_plan", message: "Its units don't fit the shape Pensieve saves a plan in." });
+    expect(result).toEqual({ ok: false, reason: "unsavable", message: UNSAVABLE_PLAN_MESSAGE });
     expect(error).toHaveBeenCalledWith(expect.stringContaining("[import]"), expect.anything());
     error.mockRestore();
   });

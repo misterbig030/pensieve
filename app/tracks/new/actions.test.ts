@@ -40,14 +40,14 @@ describe("importPlanAction", () => {
   });
 
   it("rejects empty and over-long text, and accepts an upper-case extension", async () => {
-    expect(await importPlanAction({ fileName: "a.md", text: "" })).toMatchObject({ ok: false, reason: "bad_file" });
+    expect(await importPlanAction({ fileName: "a.md", text: "" })).toMatchObject({ ok: false, reason: "bad_file", message: "That file is empty." });
     expect(await importPlanAction({ fileName: "a.md", text: "x".repeat(65537) })).toMatchObject({ ok: false, reason: "bad_file" });
     vi.mocked(runImport).mockResolvedValue({ result: converted, costUsd: 0 });
     expect(await importPlanAction({ fileName: "PLAN.TXT", text: "x" })).toMatchObject({ ok: true });
   });
 
   it("rejects whitespace-only text and malformed input as a bad file, before any model call", async () => {
-    expect(await importPlanAction({ fileName: "a.md", text: "  \n\t " })).toMatchObject({ ok: false, reason: "bad_file", message: "Pensieve imports .md or .txt files up to 64 KB." });
+    expect(await importPlanAction({ fileName: "a.md", text: "  \n\t " })).toMatchObject({ ok: false, reason: "bad_file", message: "That file is empty." });
     expect(await importPlanAction({ fileName: `${"a".repeat(253)}.md`, text: "x" })).toMatchObject({ ok: false, reason: "bad_file" });
     expect(await importPlanAction({ fileName: 7, text: "x" } as unknown as { fileName: string; text: string })).toMatchObject({ ok: false, reason: "bad_file" });
     expect(await importPlanAction(null as unknown as { fileName: string; text: string })).toMatchObject({ ok: false, reason: "bad_file" });

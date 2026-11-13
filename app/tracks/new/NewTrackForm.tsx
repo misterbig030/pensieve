@@ -17,10 +17,11 @@ import { confirmTrackAction, importPlanAction } from "./actions";
 /** Mirrors the server's limit (app/tracks/new/actions.ts): the file is checked here first so a wrong file never leaves the page. */
 const MAX_IMPORT_BYTES = 65536;
 const BAD_FILE_MESSAGE = "Pensieve imports .md or .txt files up to 64 KB.";
+const EMPTY_FILE_MESSAGE = "That file is empty.";
 const NO_PLAN_NOTE = "Import only copies plans that already exist. To have Pensieve build one, use the form above and add the file as a source.";
 const FAILED_MESSAGE = "Couldn't read that file. Try again.";
 
-type ImportFailure = { fileName: string; reason: "no_plan" | "too_long" | "bad_file" | "out_of_credits" | "key" | "failed"; message: string; resetsAt?: string };
+type ImportFailure = { fileName: string; reason: "no_plan" | "too_long" | "unsavable" | "bad_file" | "out_of_credits" | "key" | "failed"; message: string; resetsAt?: string };
 type Imported = { fileName: string; text: string; plan: ImportedPlan };
 
 const EMPTY_FORM: TrackFormValue = {
@@ -47,6 +48,10 @@ export function NewTrackForm() {
     setFailure(null);
     if (!/\.(md|txt)$/i.test(file.name) || file.size > MAX_IMPORT_BYTES) {
       setFailure({ fileName: file.name, reason: "bad_file", message: BAD_FILE_MESSAGE });
+      return;
+    }
+    if (file.size === 0) {
+      setFailure({ fileName: file.name, reason: "bad_file", message: EMPTY_FILE_MESSAGE });
       return;
     }
     setReading(file.name);

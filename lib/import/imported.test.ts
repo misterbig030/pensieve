@@ -65,11 +65,21 @@ describe("an imported plan's own formats", () => {
     expect(prompt).not.toContain("No source in the list: null");
   });
 
-  it("a sourceless draft of a never-written format resolves as the learner's own", () => {
+  it("keeps a sourceless Other draft the model wrote, as the model's, not the learner's", () => {
     const plan = converted();
+    // Not a task in the file: the learner asked for it, or the model reworded one past recognising.
     const { refs, refused } = resolvePracticeRefs([{ format: "other", task: "Pensieve: one benchmark round", done: "Verdict written", minutes: 90 }], aliasMaterials(plan.materials), plan.split);
     expect(refused).toEqual([]);
-    expect(refs).toEqual([{ format: "other", id: null, task: "Pensieve: one benchmark round", done: "Verdict written", minutes: 90, generated: true, imported: true }]);
+    expect(refs).toEqual([{ format: "other", id: null, task: "Pensieve: one benchmark round", done: "Verdict written", minutes: 90, generated: true }]);
+  });
+
+  it("a revision's new Other task is the model's, and breaks no never-written rule", () => {
+    const plan = converted();
+    const original = tree(plan);
+    const units = original.children!.map((w, i) => ({ ref: `n${i + 1}`, title: w.title, summary: w.summary, days: w.len }));
+    const revised = { units: [{ ...units[0], practice: [{ format: "other", task: "Review weeks 1 and 2", done: "Notes written", minutes: 30 }] }, ...units.slice(1)] };
+    const result = applyRevision(original, assignRefs(original), revised, 0, plan.granularity, aliasMaterials(plan.materials), plan.hoursPerWeek, plan.daysPerWeek, plan.split);
+    expect(result.children![0].practice).toEqual([{ format: "other", id: null, task: "Review weeks 1 and 2", done: "Notes written", minutes: 30, generated: true }]);
   });
 
   it("refuses a reworded sourceless row of a format the plan has a source for: the item is the source's own", () => {
@@ -110,14 +120,15 @@ describe("an imported plan whose share the learner moved", () => {
   // The slider sets the split's reason to the learner's; the picks still come from the file.
   const moved = (plan: ImportedPlan) => ({ ...plan.split, readingShare: 30, reason: "Set by you." });
 
-  it("keeps Other assignable and a sourceless Other draft the learner's own", () => {
+  it("keeps Other assignable and a sourceless Other draft kept", () => {
     const plan = converted();
     const split = moved(plan);
     expect(split.formats!.every((p) => p.reason === "From your file.")).toBe(true);
     expect(pickSources(split, plan.materials).find((p) => p.pick.format === "other")).toMatchObject({ assignable: true });
     const { refs, refused } = resolvePracticeRefs([{ format: "other", task: "Pensieve: one benchmark round", done: "Verdict written", minutes: 90 }], aliasMaterials(plan.materials), split);
     expect(refused).toEqual([]);
-    expect(refs[0]).toMatchObject({ format: "other", imported: true });
+    expect(refs[0]).toMatchObject({ format: "other", generated: true });
+    expect(refs[0].imported).toBeUndefined();
   });
 
   it("keeps the Other line in the re-draft prompt", () => {

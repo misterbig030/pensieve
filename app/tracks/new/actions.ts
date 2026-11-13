@@ -29,6 +29,7 @@ const topicSchema = z.string().trim().min(1).max(200);
 /** The most characters of a plan file an import reads (and a saved track keeps for redrafts). */
 const MAX_IMPORT_CHARS = 65536;
 const BAD_FILE_MESSAGE = "Pensieve imports .md or .txt files up to 64 KB.";
+const EMPTY_FILE_MESSAGE = "That file is empty.";
 const OUT_OF_CREDITS_MESSAGE = "You're out of free credits for now.";
 const importInputSchema = z.object({ fileName: z.string().max(255), text: z.string() });
 
@@ -37,7 +38,7 @@ export type ImportPlanResult =
   | { ok: true; plan: ImportedPlan; calls?: ModelCall[] }
   | {
       ok: false;
-      reason: "no_plan" | "too_long" | "bad_file" | "out_of_credits" | "key";
+      reason: "no_plan" | "too_long" | "unsavable" | "bad_file" | "out_of_credits" | "key";
       message: string;
       code?: KeyErrorKind;
       resetsAt?: string;
@@ -56,9 +57,8 @@ export async function importPlanAction(input: { fileName: string; text: string }
   const parsed = importInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, reason: "bad_file", message: BAD_FILE_MESSAGE };
   const { fileName, text } = parsed.data;
-  if (!/\.(md|txt)$/i.test(fileName) || text.trim().length < 1 || text.length > MAX_IMPORT_CHARS) {
-    return { ok: false, reason: "bad_file", message: BAD_FILE_MESSAGE };
-  }
+  if (!/\.(md|txt)$/i.test(fileName) || text.length > MAX_IMPORT_CHARS) return { ok: false, reason: "bad_file", message: BAD_FILE_MESSAGE };
+  if (text.trim().length < 1) return { ok: false, reason: "bad_file", message: EMPTY_FILE_MESSAGE };
 
   const admin = await isAdmin(userId);
   const calls: ModelCall[] = [];

@@ -32,6 +32,14 @@ describe("coverImportedRows", () => {
     expect(out.appended).toBe(0);
   });
 
+  it("never lets a sibling worded alike hold a dropped row", () => {
+    // Both start with the same 24 characters ("Applications, batch one:"); the days kept only the first.
+    const parent = week([other("Applications, batch one: xAI, Turing, Handshake", 60), other("Applications, batch one: OpenAI, Glean, Perplexity", 60)]);
+    const out = coverImportedRows(parent, [day("d1", [row("Applications, batch one: xAI, Turing, Handshake", 60)]), day("d2")]);
+    expect(out.appended).toBe(1);
+    expect(out.days[1].practice!.map((r) => r.task)).toEqual(["Applications, batch one: OpenAI, Glean, Perplexity"]);
+  });
+
   it("treats item ranges as covering", () => {
     const covers: PracticeCover[] = Array.from({ length: 7 }, (_, i) => ({ format: "problem-set" as const, id: "m1", note: null, task: `Item ${i + 1}`, minutes: 25, itemFrom: i + 1, itemTo: i + 1, imported: true }));
     const days = [

@@ -300,7 +300,9 @@ export interface ResolvePracticeOptions {
  * format is refused, since it is no practice source. A row of a source with an item list names one item (`M4.12`): it
  * keeps that position and takes the item's minutes; one naming the source without an item is unknown, as an item past
  * the list is. A draft marked `imported` (set in code from the learner's plan file) skips the picks and the
- * never-written rule: any registry format, with or without a source, is kept and carries `imported`.
+ * never-written rule: any registry format, with or without a source, is kept and carries `imported`. On a split made
+ * from the file, a sourceless row of a never-written pick no source serves ("other") is kept too (`writtenOnFilePlan`),
+ * but as one the model wrote: only `markImported` says a row is the learner's.
  */
 export function resolvePracticeRefs(
   drafts: PracticeRefDraft[] | undefined,
@@ -312,8 +314,7 @@ export function resolvePracticeRefs(
   const refs: PracticeRef[] = [];
   const unknown: string[] = [];
   const refused: string[] = [];
-  for (const raw of drafts ?? []) {
-    const draft = fileRow(raw, split, aliases);
+  for (const draft of drafts ?? []) {
     const name = rowName(draft.format, draft.task);
     // An imported row is the learner's own: any format the registry knows, picked or not.
     const format = draft.imported ? knownFormat(draft.format) : pickedFormat(draft.format, split);
@@ -344,7 +345,7 @@ export function resolvePracticeRefs(
     }
     const generated = serves !== format;
     // An imported row is never refused as written or unsourced: its task is the learner's.
-    if (generated && !draft.imported) {
+    if (generated && !draft.imported && !writtenOnFilePlan(format, split, aliases)) {
       const why =
         format === "recall"
           ? resolved && reads.includes(resolved.id)
@@ -373,16 +374,13 @@ export function resolvePracticeRefs(
 }
 
 /**
- * On a split made from the learner's plan file, a row with no source of a pick that is never written and that no
- * material on the list serves can only be one of the file's tasks (the prompt has the model copy them), so it is marked
- * `imported`; in practice that is "other", which exists only on such plans. A pick a source serves keeps its rows to
- * that source: a sourceless one is a reworded copy of an item the source holds, and is judged as usual. Any other
- * draft, and every draft on a plan not imported, is returned as it is.
+ * Whether a model may write a sourceless row of `format` on this plan though the registry says the format is never
+ * written: on a split made from the learner's plan file, a pick no material serves ("other", or a file's unsourced
+ * problems) has only the file's tasks, so a row the model adds or rewords there is kept, as one it wrote. A pick a
+ * source serves keeps its rows to that source; every plan not imported keeps the registry's rule.
  */
-function fileRow(draft: PracticeRefDraft, split: PlanSplit | null | undefined, aliases: MaterialAliases): PracticeRefDraft {
-  if (draft.imported || draft.id?.trim() || !isSplitFromFile(split)) return draft;
-  const format = pickedFormat(draft.format, split);
-  return format && PRACTICE_REGISTRY[format].generated === "never" && !aliases.hasSource(format) ? { ...draft, imported: true } : draft;
+export function writtenOnFilePlan(format: PracticeFormat, split: PlanSplit | null | undefined, aliases: Pick<MaterialAliases, "hasSource">): boolean {
+  return isSplitFromFile(split) && PRACTICE_REGISTRY[format].generated === "never" && !aliases.hasSource(format);
 }
 
 /**
@@ -626,24 +624,39 @@ export function importedCovers(node: PlanNode | null | undefined): PracticeCover
   return (node?.practiceCovers ?? []).filter((c) => c.imported === true);
 }
 
+/** How many leading characters of an imported task a reworded copy must keep to still be that row. */
+const IMPORTED_PREFIX = 24;
+
+type ImportedLike = { format: string; task?: string | null; id?: string | null; itemFrom?: number | null; itemTo?: number | null };
+
 /**
- * Whether `row` is the learner's imported `row`: the same format, and a task that is the imported row's or starts with
- * its first 24 characters (case and outer spaces aside). A blank imported task matches nothing.
+ * The one imported row in `imported` that `row` is, or undefined. Same format, and a task (case and outer spaces aside)
+ * that is the imported row's word for word; else, of the rows whose first 24 characters it starts with, the only one, or
+ * the only one whose whole task it starts with. Rows the file wrote alike ("LeetCode, Backtracking + Tries (8) · …")
+ * share their first 24 characters, so a prefix alone names none of them. Copies of one row in `imported` count once. A
+ * blank task matches nothing.
  */
-export function isImportedRow(row: { format: string; task?: string | null }, imported: { format: string; task?: string | null }): boolean {
-  const task = imported.task?.trim();
-  if (!task) return false;
-  const norm = (s: string) => s.trim().toLowerCase();
-  return norm(row.format) === imported.format && norm(row.task ?? "").startsWith(norm(task).slice(0, 24));
+export function importedMatch<R extends ImportedLike>(row: { format: string; task?: string | null }, imported: readonly R[]): R | undefined {
+  const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+  const task = norm(row.task);
+  if (!task) return undefined;
+  const same = imported.filter((r) => r.format === norm(row.format) && norm(r.task));
+  const only = (rows: R[]): R | undefined => {
+    const key = (r: R) => [norm(r.task), r.id ?? "", r.itemFrom ?? "", r.itemTo ?? ""].join("\u0000");
+    return rows.length > 0 && rows.every((r) => key(r) === key(rows[0])) ? rows[0] : undefined;
+  };
+  const exact = same.filter((r) => norm(r.task) === task);
+  if (exact.length > 0) return only(exact);
+  const prefixed = same.filter((r) => task.startsWith(norm(r.task).slice(0, IMPORTED_PREFIX)));
+  return only(prefixed) ?? only(prefixed.filter((r) => task.startsWith(norm(r.task))));
 }
 
 /**
- * The model's drafted rows never say which came from the learner's plan file. A draft of the same format as an imported
- * row in `known` whose task is that row's, or starts with its first 24 characters (`isImportedRow`), is that row: it is
- * marked `imported` so the rules that refuse an unpicked or never-written format let it through. The row its task is
- * word for word wins over one it only starts like. A draft written without an id that copies a sourced row takes the
- * row's id from `aliases` (the item's own, for a row of one listed item), so it is that row and not a sourceless copy
- * beside it. Any other draft is judged as usual.
+ * The model's drafted rows never say which came from the learner's plan file. A draft that is one imported row in
+ * `known` (`importedMatch`) is that row: it is marked `imported` so the rules that refuse an unpicked or never-written
+ * format let it through. A draft written without an id that copies a sourced row takes the row's id from `aliases` (the
+ * item's own, for a row of one listed item), so it is that row and not a sourceless copy beside it. Any other draft,
+ * one that could be several of the learner's rows included, is judged as usual.
  */
 export function markImported<T extends { format: string; task: string; id?: string | null }>(
   drafts: T[] | undefined,
@@ -652,11 +665,9 @@ export function markImported<T extends { format: string; task: string; id?: stri
 ): (T & { imported?: boolean })[] | undefined {
   const imported = (known ?? []).filter((r) => r.imported === true && r.task?.trim());
   if (!drafts || imported.length === 0) return drafts;
-  const norm = (s: string | undefined) => (s ?? "").trim().toLowerCase();
   return drafts.map((d) => {
-    const matches = imported.filter((r) => isImportedRow(d, r));
-    if (matches.length === 0) return d;
-    const row = matches.find((r) => norm(r.task) === norm(d.task)) ?? matches[0];
+    const row = importedMatch(d, imported);
+    if (!row) return d;
     const alias = !d.id?.trim() && row.id && aliases ? (row.itemFrom && row.itemFrom === row.itemTo ? aliases.alias(row.id, { item: row.itemFrom }) : row.itemFrom ? undefined : aliases.alias(row.id)) : undefined;
     return { ...d, ...(alias ? { id: alias } : {}), imported: true };
   });
@@ -1582,7 +1593,7 @@ export function levelChecks(input: LevelCheckInput): LevelChecks {
             ? r.id !== null && ownReading.has(r.id)
               ? null
               : "not from its own reading"
-            : PRACTICE_REGISTRY[r.format].generated === "never"
+            : PRACTICE_REGISTRY[r.format].generated === "never" && !writtenOnFilePlan(r.format, input.split, aliases)
               ? "which is never written"
               : null;
         if (why) practiceBreach("practice-generated", index, unit, r, `${unit} writes ${rowName(r.format, r.task)} itself, ${why}`);

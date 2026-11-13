@@ -36,12 +36,12 @@ export async function runImport(input: {
 }
 
 /** What the learner reads when the converted plan is not one the app can save. */
-export const UNSAVABLE_PLAN_MESSAGE = "Its units don't fit the shape Pensieve saves a plan in.";
+export const UNSAVABLE_PLAN_MESSAGE = "Pensieve found a plan in this file but couldn't copy it into a shape it can save. Try again, or simplify how the file lays out its weeks.";
 
 /**
  * The converted plan as the draft page and the confirm step take it, checked against the same schemas a save is: the
- * tree, the materials list and the split. One that fails is refused as no plan, with the reason logged here, so a bad
- * conversion stops before the learner shapes a plan that cannot be saved.
+ * tree, the materials list and the split. One that fails is refused as unsavable (the file did hold a plan), with the
+ * reason logged here, so a bad conversion stops before the learner shapes a plan that cannot be saved.
  */
 export function checkedPlan(result: ConvertResult): ConvertResult {
   if (!result.ok) return result;
@@ -53,7 +53,7 @@ export function checkedPlan(result: ConvertResult): ConvertResult {
   ] as const) {
     if (check.success) continue;
     console.error(`[import] the converted plan's ${name} failed validation`, check.error);
-    return { ok: false, reason: "no_plan", message: UNSAVABLE_PLAN_MESSAGE };
+    return { ok: false, reason: "unsavable", message: UNSAVABLE_PLAN_MESSAGE };
   }
   return result;
 }

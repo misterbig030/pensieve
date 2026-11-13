@@ -5,6 +5,8 @@ import { LISTED_PROBLEMS, PROBLEM_ITEMS } from "@/lib/__fixtures__/problemList";
 import { AIE_HOURS, AIE_MATERIALS, AIE_SHARE, AIE_TOC, aiePlan } from "@/lib/__fixtures__/aiEngineeringPlan";
 import {
   aliasMaterials,
+  importedMatch,
+  markImported,
   assignmentsOf,
   chapterGaps,
   chapterRegressions,
@@ -681,6 +683,31 @@ describe("practice rows and reservations", () => {
     expect(refs).toEqual([]);
     expect(refused).toEqual(['Problems "Five array problems": no source, and this format is never written']);
   });
+  describe("importedMatch", () => {
+    const known = (task: string, extra: Partial<PracticeCover> = {}): PracticeCover => ({ format: "problem-set", id: "m1", note: null, task, minutes: 25, imported: true, ...extra });
+    const heap = known("LeetCode, Backtracking + Tries (8) · Subsets", { itemFrom: 1, itemTo: 1 });
+    const queens = known("LeetCode, Backtracking + Tries (8) · N-Queens", { itemFrom: 2, itemTo: 2 });
+    it("finds the row a task copies word for word, case aside", () => {
+      expect(importedMatch({ format: "problem-set", task: "leetcode, backtracking + tries (8) · n-queens" }, [heap, queens])).toBe(queens);
+    });
+    it("names none of several rows that only share their first 24 characters", () => {
+      expect(importedMatch({ format: "problem-set", task: "LeetCode, Backtracking + Tries: one more" }, [heap, queens])).toBeUndefined();
+    });
+    it("finds the one row whose whole task a longer draft starts with", () => {
+      expect(importedMatch({ format: "problem-set", task: "LeetCode, Backtracking + Tries (8) · N-Queens, timed" }, [heap, queens])).toBe(queens);
+    });
+    it("takes a reworded copy by its prefix when one row has it, and counts copies of a row once", () => {
+      const mock = known("Mock interview on interviewing.io, coding round", { format: "mock", id: null });
+      expect(importedMatch({ format: "mock", task: "Mock interview on interviewing.io: coding" }, [mock, { ...mock }])).toBe(mock);
+    });
+    it("markImported leaves a draft that could be several rows unmarked, and gives it no item", () => {
+      const aliases = aliasMaterials([]);
+      const [d] = markImported([{ format: "problem-set", task: "LeetCode, Backtracking + Tries: one more", done: "", minutes: 25 }], [heap, queens], aliases)!;
+      expect(d).not.toHaveProperty("imported");
+      expect(d).not.toHaveProperty("id");
+    });
+  });
+
   describe("imported rows", () => {
     const row = { format: "problem-set", id: null, task: "LeetCode 703", done: "Solved", minutes: 30 };
     // The split's picks lack problem-set and other.
