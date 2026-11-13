@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
-import { ChevronRight, Lock, MessageCircle, PencilLine, Send, Undo2 } from "lucide-react";
+import { ChevronRight, Lock, PencilLine, Send, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { hasUserTurn, undoableChangeId, type ChatMessage } from "@/lib/planChat";
 import type { SourceInput, SourceType } from "@/lib/schemas/source";
@@ -82,28 +82,12 @@ export function ConversationRail({
 
   return (
     <>
-      {/* Desktop collapsed tab */}
-      <div className={cn("sticky top-5 flex-col items-center gap-2", open ? "hidden" : "hidden min-[901px]:flex")}>
-        <button
-          type="button"
-          onClick={onToggle}
-          title="Open conversation"
-          aria-label="Open conversation"
-          className="relative inline-flex size-11 items-center justify-center rounded-full bg-secondary shadow-sm hover:bg-accent-100"
-        >
-          <MessageCircle className="size-[18px]" strokeWidth={2.75} />
-          {unread && <span className="absolute top-2 right-2 size-[9px] rounded-full border-2 border-secondary bg-primary" />}
-        </button>
-        <span className="text-[11px] tracking-wide uppercase opacity-55 [writing-mode:vertical-rl]">Conversation</span>
-      </div>
-
-      {/* Rail: sticky column on desktop, bottom sheet on mobile */}
+      {/* Box under the materials on wide screens (the right column sets its height), bottom sheet on narrow ones */}
       <aside
         aria-label="Conversation"
         className={cn(
           "flex min-w-0 flex-col overflow-hidden rounded-[28px] bg-secondary shadow-sm",
-          "min-[901px]:sticky min-[901px]:top-5 min-[901px]:h-[calc(100vh-40px)] min-[901px]:max-h-[860px]",
-          !open && "min-[901px]:hidden",
+          "min-[901px]:min-h-[320px] min-[901px]:flex-1",
           "max-[900px]:fixed max-[900px]:inset-x-0 max-[900px]:bottom-0 max-[900px]:z-30 max-[900px]:rounded-b-none max-[900px]:shadow-lg max-[900px]:transition-transform max-[900px]:duration-300",
           open ? "max-[900px]:h-[78vh] max-[900px]:translate-y-0" : "max-[900px]:translate-y-[calc(100%-64px)]",
         )}
@@ -115,7 +99,7 @@ export function ConversationRail({
             if (window.innerWidth <= 900) onToggle();
           }}
         >
-          <h3 className="mr-auto font-heading text-base">Conversation</h3>
+          <h3 className="mr-auto font-heading text-base">Talk it over</h3>
           {!open && unread && (
             <Badge variant="accent" className="max-[900px]:inline-flex min-[901px]:hidden">
               New
@@ -127,9 +111,8 @@ export function ConversationRail({
               e.stopPropagation();
               onToggle();
             }}
-            title={open ? "Collapse" : "Open conversation"}
             aria-label={open ? "Collapse conversation" : "Open conversation"}
-            className="inline-flex size-[34px] items-center justify-center rounded-full hover:bg-foreground/7 active:bg-accent-200"
+            className="inline-flex size-[34px] items-center min-[901px]:hidden justify-center rounded-full hover:bg-foreground/7 active:bg-accent-200"
           >
             <ChevronRight
               className={cn("size-[18px] transition-transform", open ? "max-[900px]:rotate-90" : "max-[900px]:-rotate-90")}
