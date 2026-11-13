@@ -84,7 +84,10 @@ export function MaterialsList(props: MaterialsListProps) {
   const backbone = materials.find((m) => m.backbone) ?? null;
   const rest = materials.filter((m) => m !== backbone);
   const ordered = [...KIND_ORDER.flatMap((kind) => rest.filter((m) => m.kind === kind && !isPracticeOnly(m))), ...rest.filter(isPracticeOnly)];
-  const shown = showAll ? ordered : shownRows(ordered, initialShown);
+  // The backbone is the first row of its own group, and shows whatever the cut.
+  const withBackbone = backbone ? KIND_ORDER.flatMap((kind) => [...(backbone.kind === kind && !isPracticeOnly(backbone) ? [backbone] : []), ...ordered.filter((m) => m.kind === kind && !isPracticeOnly(m))]).concat(isPracticeOnly(backbone) ? [backbone] : [], ordered.filter(isPracticeOnly)) : ordered;
+  const cut = new Set(shownRows(ordered, initialShown));
+  const shown = showAll ? withBackbone : withBackbone.filter((m) => m === backbone || cut.has(m));
   const researched = materials.filter((m) => m.origin === "research").length;
   const { readingMinutes: sized, practiceMinutes } = materialTotals(materials);
   const unsized = materials.filter((m) => !m.minutes && !m.practice?.minutes).length;
@@ -113,12 +116,6 @@ export function MaterialsList(props: MaterialsListProps) {
 
   const list = (
     <div className="flex flex-col px-2 pb-2.5">
-      {backbone && (
-        <div id={BACKBONE_ANCHOR} className="scroll-mt-4">
-          <span className={CAPTION}>Backbone</span>
-          <MaterialRow material={backbone} onRemove={props.onRemove ? () => setRemoving(backbone) : undefined} />
-        </div>
-      )}
       {!backbone && !props.awaitingBackbone && <span className="px-2 pt-2 text-[12px] text-muted-foreground">No backbone: units draw on the materials below directly.</span>}
       {shown.map((m, i) => (
         <div key={m.id} className="contents">
@@ -127,7 +124,13 @@ export function MaterialsList(props: MaterialsListProps) {
               {groupLabel(m)}
             </span>
           )}
-          <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
+          {m === backbone ? (
+            <div id={BACKBONE_ANCHOR} className="scroll-mt-4">
+              <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
+            </div>
+          ) : (
+            <MaterialRow material={m} onRemove={props.onRemove ? () => setRemoving(m) : undefined} />
+          )}
         </div>
       ))}
       {shownRows(ordered, initialShown).length < ordered.length && (
@@ -205,7 +208,7 @@ function Tile({ kind, backbone }: { kind: MaterialKind; backbone: boolean }) {
 
 /** What research has found so far, by kind, while it is still running. */
 function FoundList({ found }: { found: FoundMaterial[] }) {
-  const ordered = KIND_ORDER.flatMap((kind) => found.filter((f) => f.kind === kind));
+  const ordered = KIND_ORDER.flatMap((kind) => [...found.filter((f) => f.kind === kind && f.backbone), ...found.filter((f) => f.kind === kind && !f.backbone)]);
   return (
     <div className="flex flex-col px-2 pb-3">
       {ordered.map((f, i) => (
@@ -213,14 +216,17 @@ function FoundList({ found }: { found: FoundMaterial[] }) {
           {(i === 0 || ordered[i - 1].kind !== f.kind) && <span className={CAPTION}>{KIND_LABEL[f.kind]}</span>}
           <div className="flex items-start gap-2.5 px-2 py-1.5">
             <Tile kind={f.kind} backbone={f.backbone} />
-            <span className="min-w-0 flex-1 text-[12.5px] font-semibold break-words">
-              {f.title}
-              {f.yours && (
-                <>
-                  {" "}
-                  <YoursBadge />
-                </>
-              )}
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-[12.5px] font-semibold break-words">
+                {f.title}
+                {f.yours && (
+                  <>
+                    {" "}
+                    <YoursBadge />
+                  </>
+                )}
+              </span>
+              {f.backbone && <span className="text-[11px] text-muted-foreground">backbone</span>}
             </span>
           </div>
         </div>
@@ -315,7 +321,7 @@ function titleLink(m: Material, className?: string) {
 }
 
 function MaterialRow({ material: m, onRemove }: { material: Material; onRemove?: () => void }) {
-  const meta = byline(m);
+  const meta = [byline(m), m.backbone ? "backbone" : null].filter(Boolean).join(" · ");
   return (
     <div className="flex items-start gap-2.5 rounded-[10px] px-2 py-1.5 text-[12.5px]">
       <Tile kind={m.kind} backbone={!!m.backbone} />

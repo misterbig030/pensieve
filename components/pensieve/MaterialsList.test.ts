@@ -161,6 +161,21 @@ describe("MaterialsList as the draft page's column", () => {
     expect(render({ materials: [] })).toContain("No materials yet.");
   });
   it("neither lights nor dims any material", () => {
-    expect(render({})).not.toMatch(/opacity-60|bg-accent-100 shadow-\[inset_2px/);
+    const html = render({ materials: [material({ id: "B", title: "Backbone book", origin: "research", backbone: true }), material({ id: "N", title: "Other", kind: "docs", origin: "research" })] });
+    expect(html).not.toMatch(/opacity-60|bg-accent-100 shadow-\[inset_2px/);
+  });
+  it("puts the backbone first in its kind group, marked in its small line", () => {
+    const text = render({ materials: [material({ id: "N", title: "Plain book", author: "Ann", origin: "research" }), material({ id: "B", title: "Backbone book", author: "Alex", origin: "research", backbone: true })] }).replace(/<!-- -->/g, "");
+    expect(text).not.toContain(">Backbone<");
+    expect(text.indexOf("Books")).toBeLessThan(text.indexOf("Backbone book"));
+    expect(text.indexOf("Backbone book")).toBeLessThan(text.indexOf("Plain book"));
+    expect(text).toContain("Alex · backbone");
+    expect(text.split("Books").length).toBe(2);
+  });
+  it("puts a found backbone first in its group, marked", () => {
+    const f = (id: string, title: string, backbone: boolean) => ({ id, title, kind: "book" as const, backbone, yours: false });
+    const text = render({ materials: [], found: [f("a", "Plain", false), f("b", "Spine", true)] });
+    expect(text.indexOf("Spine")).toBeLessThan(text.indexOf("Plain"));
+    expect(text).toContain("backbone");
   });
 });
