@@ -69,6 +69,7 @@ export function StatStrip(p: StatStripProps) {
         </Cell>
       )}
       <Cell
+        anchor={anchor}
         label="Change the reading share"
         disabled={p.disabled || p.deciding}
         panel={<ReadingPanel split={p.split} deciding={p.deciding} totalHours={p.totalHours} materials={p.materials} disabled={p.disabled} onChange={p.onChangeSplit} />}
