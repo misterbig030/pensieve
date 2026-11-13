@@ -79,18 +79,26 @@ Before the first deployment, in this order:
 
 ## CI and migrations
 
-**CI.** `.github/workflows/ci.yml` runs on every pull request and on `main`: `next typegen`, `tsc --noEmit`, lint and
-`npm test`. It needs no secrets, since the tests mock every model, database and network call. The evals stay manual.
+**CI.** `.github/workflows/ci.yml` runs on every pull request and on `main`: `next typegen`, `tsc --noEmit`, lint,
+`npm test`, and a check that `drizzle/` holds a migration for every change to `lib/db/schema.ts` (it runs
+`drizzle-kit generate` and fails if that writes anything). It needs no secrets, since the tests mock every model,
+database and network call. The evals stay manual.
 
 ### Migrations
 
-Every Vercel build runs `scripts/migrate-on-deploy.sh` before `next build` (`vercel.json`'s `buildCommand`): production
-migrates Neon `main`, and a preview migrates its own Neon branch, so a pull request's preview tries its migration first.
-A production build with no database URL fails rather than deploying unmigrated. Locally, `npx drizzle-kit migrate`
-still migrates `dev` only.
+A production build runs `scripts/migrate-on-deploy.sh` after `next build` (`vercel.json`'s `buildCommand`), which
+migrates Neon `main`. A build that fails never touches the database, and the deployment goes live only once the
+migration has succeeded too. A production build with no database URL fails rather than deploying unmigrated.
+Preview builds never migrate, whatever database they have, so an unmerged pull request cannot change production; the
+project's Ignored Build Step cancels most of them anyway. So the production build is the first real run of a
+migration: try it on `dev` first with `npx drizzle-kit migrate`, which locally migrates `dev` only.
 
-The migration runs **before** the new code serves, and stays applied if the build then fails, so the code already live
-runs against the new schema for a while. Every migration must work with that code:
+`lib/db/migrations.test.ts` checks that the journal is in order. Drizzle applies only migrations dated after the last
+one applied and silently skips any other, so after resolving a conflict in `drizzle/meta/_journal.json`, regenerate the
+later branch's migration rather than renumbering it by hand.
+
+The migration runs **before** the new code serves, so the code already live runs against the new schema for a while.
+Every migration must work with that code:
 
 - **Safe in one release:** a new table, a new nullable column, or a new column with a default (0021's `import_text` and
   `imported`).

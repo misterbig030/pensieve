@@ -28,3 +28,13 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm test
+      # A schema change needs its migration in the same PR: the production build only applies what is in drizzle/.
+      # generate reads lib/db/schema.ts and the snapshots, never a database.
+      - name: Migrations match the schema
+        run: |
+          npx drizzle-kit generate
+          if [ -n "$(git status --porcelain -- drizzle)" ]; then
+            git status --short -- drizzle
+            echo "::error::lib/db/schema.ts has changes with no migration. Run 'npx drizzle-kit generate' and commit drizzle/."
+            exit 1
+          fi
