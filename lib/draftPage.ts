@@ -71,11 +71,10 @@ export function nextLeafLabel(root: PlanNode, lockBefore: number): string | null
   return labelOf(root, leaf);
 }
 
-/** What adjust mode says about the finished part of the plan; null when nothing is done yet. */
-export function lockLine(root: PlanNode, lockBefore: number): string | null {
-  if (lockBefore <= 0) return null;
-  const next = nextLeaf(root, lockBefore);
-  if (!next) return "Every day of this plan is done, so there is nothing left to change.";
+const ALL_DONE = "Every day of this plan is done, so there is nothing left to change.";
+
+/** "Weeks 1–2 and the first 2 days of Week 3 are done and stay as they are.": the finished part, before `next`. */
+function doneSentence(root: PlanNode, lockBefore: number, next: PlanNode): string {
   const tops = root.children ?? [];
   const locked = tops.filter((t) => isLocked(t, lockBefore));
   const parts: string[] = [];
@@ -86,7 +85,23 @@ export function lockLine(root: PlanNode, lockBefore: number): string | null {
   if (top && partial > 0) parts.push(`the first ${partial === 1 ? "day" : `${partial} days`} of ${labelOf(root, top)}`);
   const single = (locked.length === 1 && partial === 0) || (locked.length === 0 && partial === 1);
   const done = parts.join(" and ");
-  return `${capitalize(done)} ${single ? "is" : "are"} done and ${single ? "stays" : "stay"} as ${single ? "it is" : "they are"}. Changes apply from ${nextLeafLabel(root, lockBefore)}.`;
+  return `${capitalize(done)} ${single ? "is" : "are"} done and ${single ? "stays" : "stay"} as ${single ? "it is" : "they are"}.`;
+}
+
+/** What adjust mode says about the finished part of the plan; null when nothing is done yet. */
+export function lockLine(root: PlanNode, lockBefore: number): string | null {
+  if (lockBefore <= 0) return null;
+  const next = nextLeaf(root, lockBefore);
+  if (!next) return ALL_DONE;
+  return `${doneSentence(root, lockBefore, next)} Changes apply from ${nextLeafLabel(root, lockBefore)}.`;
+}
+
+/** Adjust's first chat message: where the learner is, and what is done and stays. */
+export function adjustOpening(root: PlanNode, lockBefore: number): string {
+  if (lockBefore <= 0) return "Nothing is checked off yet, so the whole plan is open to change.";
+  const next = nextLeaf(root, lockBefore);
+  if (!next) return ALL_DONE;
+  return `You're on ${nextLeafLabel(root, lockBefore)}. Tell me what to change from here on. ${doneSentence(root, lockBefore, next)}`;
 }
 
 /** Whether the node, or anything under it, is one of `ids`. */

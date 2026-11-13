@@ -42,7 +42,6 @@ export function AdjustPlan({ trackId, trackTitle, granularity, hoursPerWeek, day
       backHref={`/tracks/${trackId}`}
       backLabel={trackTitle}
       heading="Adjust your plan"
-      subtext="Only the days you haven't finished will change."
       onConfirm={(tree, _summary, kept, time) =>
         confirmRevisionAction({
           trackId,

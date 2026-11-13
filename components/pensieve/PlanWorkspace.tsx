@@ -2,20 +2,22 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { Lock } from "lucide-react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConversationRail } from "@/components/pensieve/ConversationRail";
 import { OutOfCreditsAlert } from "@/components/pensieve/OutOfCreditsAlert";
 import { MaterialsList } from "@/components/pensieve/MaterialsList";
 import { ResearchProgress } from "@/components/pensieve/ResearchProgress";
-import { TimeSplitCard } from "@/components/pensieve/TimeSplitCard";
+import { PlanList, type WeekView } from "@/components/pensieve/draft/PlanList";
+import { StatStrip } from "@/components/pensieve/draft/StatStrip";
 import { KEY_ERRORS } from "@/lib/ai/models";
 import { OUT_OF_CREDITS } from "@/lib/credits";
 import type { Coverage, DroppedMaterial, ResearchNotice } from "@/lib/ai/research/events";
 import { assignmentsOf, draftedSplit, removeMaterialRefs } from "@/lib/materials";
 import { initialResearch, reduceResearch, type ResearchProgressState } from "@/lib/researchProgress";
-import { PlanTree, TreeLabel, type PendingSlots } from "@/components/pensieve/PlanTree";
-import { PlanSummaryCard } from "@/components/pensieve/PlanSummaryCard";
+import type { PendingSlots } from "@/components/pensieve/PlanTree";
+import { adjustOpening, lengthLabel, lockLine, openRows } from "@/lib/draftPage";
 import { splitWeekTime } from "@/lib/import/cover";
 import { importMessages, type ImportedFile } from "@/lib/import/messages";
 import { pushModelCalls } from "@/lib/modelCalls";
@@ -47,7 +49,6 @@ import {
   cloneTree,
   currentLeaf,
   findNode,
-  isLocked,
   fullLabelOf,
   labelOf,
   layout,
@@ -94,7 +95,6 @@ export interface PlanWorkspaceProps {
   backHref: string;
   backLabel: string;
   heading: string;
-  subtext: string;
   onConfirm: (
     tree: PlanNode,
     summary: string,
@@ -138,14 +138,16 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const [summaryNote, setSummaryNote] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages(props));
   const [highlight, setHighlight] = useState<string[]>([]);
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [openChips, setOpenChips] = useState<Set<string>>(() => new Set());
+  // The learner's own opening (true) and closing (false) of rows, laid over the defaults each render.
+  const [toggles, setToggles] = useState<Map<string, boolean>>(() => new Map());
+  const [weekView, setWeekView] = useState<Map<string, WeekView>>(() => new Map());
   const [busy, setBusy] = useState(false);
   // From an hours or split change until its re-draft is in: the conversation waits, the time pickers stay open.
   const [redrafting, setRedrafting] = useState(false);
   const isNarrow = useSyncExternalStore(subscribeNarrow, getNarrowSnapshot, getNarrowServerSnapshot);
   const [railToggled, setRailToggled] = useState<boolean | null>(null);
-  const railOpen = railToggled ?? !isNarrow;
+  // The chat is a box in the right column on wide screens, always shown; on narrow ones it is the bottom sheet.
+  const railOpen = isNarrow ? (railToggled ?? false) : true;
   const [unread, setUnread] = useState(false);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -321,11 +323,10 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     void streamDraft();
   }, [initialTree, streamDraft]);
 
-  const lockNote = isAdjust && lockBefore > 0 ? `${lockedRange(lockBefore)} locked.` : "";
   // While the draft streams in, the plan is the length the learner set; units still planning count as they were.
   const planWeeks = drafting || !tree.children || tree.children.length === 0 ? weeks : settledWeeks(tree, Object.keys(pending), daysPerWeek);
-  const note = [lockNote, summaryNote].filter(Boolean).join(" ");
-  const summary = drafting ? "" : summarizePlan(tree, props.imported ? null : topic, daysPerWeek, note || undefined);
+  // The latest change lives in the chat by Undo, and Adjust's lock in its own line: neither is in the summary.
+  const summary = drafting ? "" : summarizePlan(tree, props.imported ? null : topic, daysPerWeek);
 
   // A re-draft is built when it fires, from the workspace as it is then (a days change may have come since).
   const redraftFrom = useRef<() => { tree: PlanNode; summaryNote: string; time: typeof draftedTime.current; body: PlanRedraftRequest }>(null);
@@ -420,11 +421,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
     setErrorCode(null);
     setOutOfCredits(null);
     setPending((p) => ({ ...p, [nodeId]: slots }));
-    setCollapsed((c) => {
-      const next = new Set(c);
-      next.delete(nodeId);
-      return next;
-    });
+    setToggles((t) => new Map(t).set(nodeId, true));
     const body: PlanExpandRequest = {
       topic,
       weeks: planWeeks,
@@ -763,123 +760,116 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           ? "Re-drafting the open weeks…"
           : "";
 
+  const open = openRows(tree, mode, current?.id ?? null, toggles);
+  const locks = isAdjust ? lockLine(tree, lockBefore) : null;
+  const sourceLabel = props.imported?.fileName ?? (materials.some((m) => m.origin === "research") ? "researched" : null);
+  const firstReady = drafting && tops.length > 0 ? `${labelOf(tree, tops[0])} is ready to read` : "";
+
+  const materialsList = (
+    <MaterialsList
+      topic={topic}
+      materials={materials}
+      dropped={dropped}
+      notice={notice}
+      awaitingBackbone={awaitingAllocation}
+      coverage={coverage}
+      coverageSource={coverageSource}
+      researchCoverage={researchCoverage}
+      totalHours={totalHours(planWeeks, hoursPerWeek)}
+      usesOf={(id) => assignmentsOf(tree, id).map(({ label, role }) => ({ label, role }))}
+      onRemove={streaming || busy || redrafting || confirming ? undefined : removeMaterial}
+      onResearchAgain={isAdjust || streaming || busy || redrafting || confirming ? undefined : () => void streamDraft()}
+      found={researching ? research?.found : undefined}
+      fold={isNarrow}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <div className="text-[13px] text-foreground/60">
-        <Link href={props.backHref} className="hover:text-primary">
-          ← {props.backLabel}
-        </Link>
-      </div>
       <div className="space-y-3 pb-1">
+        <div className="text-[13px] text-foreground/60">
+          <Link href={props.backHref} className="hover:text-primary">
+            ← {props.backLabel}
+          </Link>
+        </div>
         <h1>{props.heading}</h1>
-        <p className="text-muted-foreground">{props.subtext}</p>
+        <Subtitle text={summary} loading={drafting} />
       </div>
 
-      <div
-        className={cn(
-          "grid items-start gap-7 transition-[grid-template-columns] duration-300",
-          railOpen
-            ? "min-[901px]:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]"
-            : "min-[901px]:grid-cols-[minmax(0,1fr)_56px]",
-        )}
-      >
-        <div className="flex min-w-0 flex-col gap-5 max-[900px]:pb-[72px]">
+      <div className="grid items-start gap-7 min-[901px]:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex min-w-0 flex-col gap-4 max-[900px]:pb-[72px]">
+          <StatStrip
+            lengthLabel={lengthLabel(planWeeks, daysPerWeek, tops)}
+            topLevel={topLevel}
+            hoursPerWeek={hoursPerWeek}
+            daysPerWeek={daysPerWeek}
+            split={split}
+            deciding={drafting && !split}
+            totalHours={totalHours(planWeeks, hoursPerWeek)}
+            materials={materials}
+            sourceLabel={sourceLabel}
+            disabled={streaming || busy || confirming || researching}
+            onChangeHours={changeHours}
+            // A one-week plan is its days: a different number is a change to ask for in the conversation.
+            onChangeDays={topLevel === "day" ? undefined : changeDays}
+            onChangeSplit={changeSplit}
+          />
+          {locks && (
+            <div className="flex items-center gap-2.5 rounded-[14px] bg-neutral-200 px-3.5 py-[9px] text-[12.5px] text-neutral-800">
+              <Lock className="size-3.5 shrink-0 opacity-80" strokeWidth={2.75} aria-hidden />
+              <span>{locks}</span>
+            </div>
+          )}
+          {draftingText && (
+            <div role="status" className="flex flex-wrap items-center gap-2.5 px-1 text-[13px] text-neutral-800">
+              <span className="caret-blink size-2 rounded-full bg-primary" />
+              {draftingText}
+              {firstReady && <span className="ml-auto text-[12px] text-muted-foreground">{firstReady}</span>}
+            </div>
+          )}
           {outOfCredits?.from === "draft" ? (
             <>
               <OutOfCreditsAlert resetsAt={outOfCredits.resetsAt} onRetry={props.imported ? undefined : () => void streamDraft()} />
-              <div className="flex flex-col gap-2.5">
-                <TreeLabel>Plan</TreeLabel>
-                <div className="h-16 rounded-[28px] bg-foreground/4" />
-                <div className="h-16 rounded-[28px] bg-foreground/3" />
+              <div className="flex flex-col gap-2.5" aria-hidden>
+                <div className="h-[58px] rounded-3xl bg-foreground/[0.04]" />
+                <div className="h-[58px] rounded-3xl bg-foreground/[0.03]" />
               </div>
             </>
           ) : researching && research ? (
             <>
               <ResearchProgress state={research} totalHours={totalHours(weeks, hoursPerWeek)} />
               <div className="flex flex-col gap-2.5">
-                <TreeLabel>Plan</TreeLabel>
-                <div className="flex h-16 items-center rounded-[28px] bg-foreground/5 px-[22px] text-[13px] text-muted-foreground">
+                <div className="flex min-h-[58px] items-center rounded-3xl bg-foreground/[0.05] px-[22px] text-[13px] text-muted-foreground max-[900px]:px-4">
                   {capitalize(topLevel)}s start drafting as soon as the materials list is set.
                 </div>
-                <div className="h-16 rounded-[28px] bg-foreground/4" />
-                <div className="h-16 rounded-[28px] bg-foreground/3" />
+                <div className="h-[58px] rounded-3xl bg-foreground/[0.04]" aria-hidden />
+                <div className="h-[58px] rounded-3xl bg-foreground/[0.03]" aria-hidden />
               </div>
             </>
           ) : (
-            <>
-          <PlanSummaryCard summary={summary} loading={drafting} changed={highlight.length > 0} />
-          <TimeSplitCard
-            weeks={planWeeks}
-            hoursPerWeek={hoursPerWeek}
-            daysPerWeek={daysPerWeek}
-            split={split}
-            materials={materials}
-            deciding={drafting && !split}
-            onChangeHours={changeHours}
-            // A one-week plan is its days: a different number is a change to ask for in the conversation.
-            onChangeDays={topLevel === "day" ? undefined : changeDays}
-            onChangeSplit={changeSplit}
-            disabled={streaming || busy || confirming}
-          />
-          <MaterialsList
-            topic={topic}
-            materials={materials}
-            dropped={dropped}
-            notice={notice}
-            awaitingBackbone={awaitingAllocation}
-            coverage={coverage}
-            coverageSource={coverageSource}
-            researchCoverage={researchCoverage}
-            totalHours={totalHours(planWeeks, hoursPerWeek)}
-            usesOf={(id) => assignmentsOf(tree, id).map(({ label, role }) => ({ label, role }))}
-            onRemove={streaming || busy || redrafting || confirming ? undefined : removeMaterial}
-            onResearchAgain={isAdjust || streaming || busy || redrafting || confirming ? undefined : () => void streamDraft()}
-          />
-          <TreeLabel>{topLevel === "day" ? "Plan at a glance" : "Plan"}</TreeLabel>
-          <PlanTree
-            materials={materials}
-            hoursPerWeek={hoursPerWeek}
-            daysPerWeek={daysPerWeek}
-            root={tree}
-            mode={mode}
-            highlight={new Set(highlight)}
-            lockBefore={isAdjust ? lockBefore : 0}
-            currentLeafId={current?.id ?? null}
-            pending={pending}
-            collapsed={collapsed}
-            openChips={openChips}
-            busy={streaming || busy || redrafting}
-            onToggle={(id) =>
-              setCollapsed((c) => {
-                const next = new Set(c);
-                if (next.has(id)) next.delete(id);
-                else next.add(id);
-                return next;
-              })
-            }
-            onToggleChip={(id) =>
-              setOpenChips((c) => {
-                const next = new Set(c);
-                if (next.has(id)) next.delete(id);
-                else next.add(id);
-                return next;
-              })
-            }
-            onExpand={(id) => void expand(id, "expand")}
-            onSplit={(id, days) => void expand(id, "split", days)}
-          />
-            </>
+            <PlanList
+              root={tree}
+              materials={materials}
+              hoursPerWeek={hoursPerWeek}
+              daysPerWeek={daysPerWeek}
+              open={open}
+              weekView={weekView}
+              highlight={new Set(highlight)}
+              lockBefore={isAdjust ? lockBefore : 0}
+              currentLeafId={current?.id ?? null}
+              pending={pending}
+              busy={streaming || busy || redrafting}
+              onToggleOpen={(id) => setToggles((t) => new Map(t).set(id, !open.has(id)))}
+              onSetView={(id, view) => setWeekView((v) => new Map(v).set(id, view))}
+              onExpand={(id) => void expand(id, "expand")}
+              onSplit={(id, days) => void expand(id, "split", days)}
+            />
           )}
+          {isNarrow && materialsList}
           <div className="flex flex-wrap items-center gap-3.5 pt-2">
             <Button onClick={confirm} disabled={!canConfirm}>
               Confirm plan
             </Button>
-            {draftingText && (
-              <span className="inline-flex items-center gap-2 text-[13px] opacity-70">
-                <span className="caret-blink size-2 rounded-full bg-primary" />
-                {draftingText}
-              </span>
-            )}
             {error && !drafting && tops.length === 0 && !props.imported && (
               <Button variant="secondary" onClick={() => void streamDraft()}>
                 Try again
@@ -901,36 +891,77 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
           )}
         </div>
 
-        <ConversationRail
-          mode={mode}
-          messages={messages}
-          open={railOpen}
-          unread={unread}
-          busy={busy || streaming || redrafting || chatLock !== null}
-          disabledHint={chatLock ?? undefined}
-          input={input}
-          suggestions={suggestions}
-          onToggle={() => {
-            setRailToggled(!railOpen);
-            setUnread(false);
-          }}
-          onInputChange={setInput}
-          onSend={() => void send()}
-          onUndo={undo}
-          notice={
-            outOfCredits?.from === "chat" ? (
-              <OutOfCreditsAlert resetsAt={outOfCredits.resetsAt} onClose={() => setOutOfCredits(null)} />
-            ) : undefined
-          }
-        />
+        {/* The materials and the chat stay in view while the plan scrolls; the chat takes what the materials leave. */}
+        <div className="flex min-w-0 flex-col gap-4 min-[901px]:sticky min-[901px]:top-5 min-[901px]:h-[calc(100vh-40px)]">
+          {!isNarrow && <div className="min-h-0 max-h-[55%] shrink overflow-y-auto">{materialsList}</div>}
+          <ConversationRail
+            mode={mode}
+            messages={messages}
+            open={railOpen}
+            unread={unread}
+            busy={busy || streaming || redrafting || chatLock !== null}
+            disabledHint={chatLock ?? undefined}
+            input={input}
+            suggestions={suggestions}
+            onToggle={() => {
+              setRailToggled(!railOpen);
+              setUnread(false);
+            }}
+            onInputChange={setInput}
+            onSend={() => void send()}
+            onUndo={undo}
+            notice={
+              outOfCredits?.from === "chat" ? (
+                <OutOfCreditsAlert resetsAt={outOfCredits.resetsAt} onClose={() => setOutOfCredits(null)} />
+              ) : undefined
+            }
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-/** "1 completed day is" / "5 completed days are", for lock notices. Days are numbered by week, so they are counted. */
-function lockedRange(lockBefore: number): string {
-  return lockBefore === 1 ? "1 completed day is" : `${lockBefore} completed days are`;
+/**
+ * The page's subtitle, the plan's summary: grey lines while the draft streams in. At 900px and under it is cut to three
+ * lines with More / Less, offered only when three lines don't hold it (measured as PlanGlance's summary is).
+ */
+function Subtitle({ text, loading }: { text: string; loading: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setClipped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text, loading]);
+
+  if (loading) {
+    return (
+      <div aria-hidden className="max-w-[720px]">
+        <span className="skeleton-bar my-1.5 h-[11px] w-[88%]" />
+        <span className="skeleton-bar h-[11px] w-[62%]" />
+      </div>
+    );
+  }
+  if (!text) return null;
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <p ref={ref} className={cn("m-0 text-[14px] leading-[1.45] text-muted-foreground", !open && "max-[900px]:line-clamp-3")}>
+        {text}
+      </p>
+      {(clipped || open) && (
+        <button type="button" className="text-[12px] font-semibold text-primary hover:underline min-[901px]:hidden" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          {open ? "Less" : "More"}
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** The root, the first top-level unit and its first child are the only parents planned in detail at creation. */
@@ -984,9 +1015,9 @@ function materialsText(materials: Material[]): string {
   if (backbone) {
     const by = [backbone.author, backbone.year].filter(Boolean).join(", ");
     const others = materials.length - 1;
-    return `Built the plan around ${backbone.title}${by ? ` (${by})` : ""}, with ${others} more material${others === 1 ? "" : "s"} listed above. `;
+    return `Built the plan around ${backbone.title}${by ? ` (${by})` : ""}, with ${others} more material${others === 1 ? "" : "s"} listed on the right. `;
   }
-  if (researched > 0) return `No textbook stood out, so units draw on the ${materials.length} materials above directly. `;
+  if (researched > 0) return `No textbook stood out, so units draw on the ${materials.length} materials on the right directly. `;
   return "";
 }
 
@@ -1003,7 +1034,7 @@ function draftedText(root: PlanNode, weeks: number, materials: Material[] = [], 
   const share = (s: PlanSplit) => (s.readingShare >= 100 ? "all of your time" : `about ${s.readingShare}% of your time`);
   // As drafted: a pick with no source was planned as reading.
   const drafted = split && draftedSplit(split, materials);
-  const time = drafted ? `I planned ${share(drafted)} for reading${isAllReading(drafted) ? "" : ` and the rest for ${practiceLabelOf(drafted)}`}; change that above if it is off. ` : "";
+  const time = drafted ? `I planned ${share(drafted)} for reading${isAllReading(drafted) ? "" : ` and the rest for ${practiceLabelOf(drafted)}`}; change it on the strip if it is off. ` : "";
   const lead = `${materialsText(materials)}${time}`;
   const level = tops[0].level;
   if (level === "day") return `${lead}Drafted ${tops.length} days, one topic each. Ask me why something sits where it does, or tell me what to change.`;
@@ -1029,21 +1060,8 @@ function getNarrowServerSnapshot(): boolean {
 function initialMessages(props: PlanWorkspaceProps): ChatMessage[] {
   if (props.mode === "adjust" && props.initialTree) {
     const root = layout(cloneTree(props.initialTree));
-    const lockBefore = props.lockBefore ?? 0;
-    const lockedTops = (root.children ?? []).filter((c) => isLocked(c, lockBefore)).map((c) => labelOf(root, c));
-    const names =
-      lockedTops.length > 0
-        ? `${lockedTops.join(" and ")} ${lockedTops.length > 1 ? "are" : "is"} already complete`
-        : `you've already completed ${lockBefore === 1 ? "it" : "them"}`;
     return [
-      {
-        id: nextMessageId(),
-        kind: "sys",
-        text:
-          lockBefore > 0
-            ? `${lockedRange(lockBefore)} locked — ${names}. The other ${root.len - lockBefore} ${root.len - lockBefore === 1 ? "day is" : "days are"} open to change.`
-            : `Nothing is checked off yet, so the whole plan is open to change.`,
-      },
+      { id: nextMessageId(), kind: "sys", text: adjustOpening(root, props.lockBefore ?? 0) },
       {
         id: nextMessageId(),
         kind: "answer",

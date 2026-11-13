@@ -95,7 +95,6 @@ export function NewTrackForm() {
         backHref="/"
         backLabel="Tracks"
         heading={`Here's the plan for "${plan.title}"`}
-        subtext="Imported from your file as written. Nothing was researched. Skim the plan, split a week into days, then confirm, or talk it over on the right."
         onConfirm={(tree, summary, materials, time) =>
           confirmTrackAction({
             topic: plan.title,
@@ -132,7 +131,6 @@ export function NewTrackForm() {
         backHref="/"
         backLabel="Tracks"
         heading={`Here's the plan for "${topic}"`}
-        subtext="Skim the plan, expand what you want to see, then confirm — or talk it over on the right."
         onConfirm={(tree, summary, materials, time) =>
           confirmTrackAction({
             topic,

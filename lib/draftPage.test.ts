@@ -4,7 +4,7 @@ import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
 import { practiceRowsFor, readRowsFor, rowBrief } from "@/components/pensieve/ReadTable";
 import { findNode, makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { Material, MaterialRef, PracticeRef } from "@/lib/schemas/material";
-import { defaultOpen, lengthLabel, lockLine, nextLeafLabel, openRows, rowLine, touches, unitHours } from "./draftPage";
+import { adjustOpening, defaultOpen, lengthLabel, lockLine, nextLeafLabel, openRows, rowLine, touches, unitHours } from "./draftPage";
 
 const bank: Material = { ...AIE_MATERIALS.find((m) => m.id === "evals")!, id: "nc", title: "NeetCode 150", backbone: false, practice: LISTED_PROBLEMS };
 const byId = new Map<string, Material>([...AIE_MATERIALS, bank].map((m) => [m.id, m]));
@@ -103,6 +103,14 @@ describe("lockLine and nextLeafLabel", () => {
   });
   it("names a part of the first week alone", () => {
     expect(lockLine(plan3, 1)).toBe("The first day of Week 1 is done and stays as it is. Changes apply from Day 2 of Week 1.");
+  });
+});
+
+describe("adjustOpening", () => {
+  it("tells the learner where they are in Adjust", () => {
+    expect(adjustOpening(plan3, 12)).toBe("You're on Day 3 of Week 3. Tell me what to change from here on. Weeks 1–2 and the first 2 days of Week 3 are done and stay as they are.");
+    expect(adjustOpening(plan3, 0)).toBe("Nothing is checked off yet, so the whole plan is open to change.");
+    expect(adjustOpening(plan3, 15)).toBe("Every day of this plan is done, so there is nothing left to change.");
   });
 });
 
