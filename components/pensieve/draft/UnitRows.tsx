@@ -107,10 +107,12 @@ export function DayCards({ root, week, byId, lockBefore, currentLeafId }: { root
             className={`grid grid-cols-[60px_minmax(0,1fr)_60px] items-start gap-3 rounded-[14px] px-3 py-2.5 ${today ? "bg-accent-100 shadow-[inset_2px_0_0_var(--color-accent-700)]" : "bg-foreground/[0.04]"} ${locked ? "opacity-50" : ""}`}
           >
             <span className="flex flex-col items-start pt-px">
-              <span className="font-heading text-xs text-accent-700">{labelOf(root, day)}</span>
-              {locked && (
+              <span className="inline-flex items-center gap-1 font-heading text-xs text-accent-700">
+                {labelOf(root, day)}
+                {locked && <Lock className="size-2.5 opacity-70" strokeWidth={2.75} aria-hidden />}
+              </span>
+              {day.status === "completed" && (
                 <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-neutral-300 px-[7px] py-px text-[10px] font-bold text-neutral-800">
-                  <Lock className="size-2.5" strokeWidth={2.75} aria-hidden />
                   Done
                 </span>
               )}

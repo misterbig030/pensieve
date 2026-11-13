@@ -114,3 +114,26 @@ export function adjustAnswer(root: PlanNode, lockBefore: number): string | null 
 export function touches(node: PlanNode, ids: ReadonlySet<string>): boolean {
   return ids.has(node.id) || (node.children?.some((c) => touches(c, ids)) ?? false);
 }
+
+/** The days a split bar splits into: the learner's own step if they made one, else the days a week they have set. */
+export function daysToSplit(picked: number | null, usual: number): number {
+  return picked ?? usual;
+}
+
+/** Every unit id under the root. */
+export function allUnitIds(root: PlanNode): Set<string> {
+  const ids = new Set<string>();
+  const visit = (n: PlanNode) => {
+    for (const c of n.children ?? []) {
+      ids.add(c.id);
+      visit(c);
+    }
+  };
+  visit(root);
+  return ids;
+}
+
+/** Ids under the root that are not in `known`: the units that arrived since. */
+export function newUnitIds(known: ReadonlySet<string>, root: PlanNode): string[] {
+  return [...allUnitIds(root)].filter((id) => !known.has(id));
+}

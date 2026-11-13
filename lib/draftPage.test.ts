@@ -4,7 +4,7 @@ import { LISTED_PROBLEMS } from "@/lib/__fixtures__/problemList";
 import { practiceRowsFor, readRowsFor, rowBrief } from "@/components/pensieve/ReadTable";
 import { findNode, makeNode, makeRoot, type PlanNode } from "@/lib/planTree";
 import type { Material, MaterialRef, PracticeRef } from "@/lib/schemas/material";
-import { adjustAnswer, adjustOpening, defaultOpen, lengthLabel, lockLine, nextLeafLabel, openRows, rowLine, touches, unitHours } from "./draftPage";
+import { adjustAnswer, allUnitIds, daysToSplit, newUnitIds, adjustOpening, defaultOpen, lengthLabel, lockLine, nextLeafLabel, openRows, rowLine, touches, unitHours } from "./draftPage";
 
 const bank: Material = { ...AIE_MATERIALS.find((m) => m.id === "evals")!, id: "nc", title: "NeetCode 150", backbone: false, practice: LISTED_PROBLEMS };
 const byId = new Map<string, Material>([...AIE_MATERIALS, bank].map((m) => [m.id, m]));
@@ -123,5 +123,22 @@ describe("touches", () => {
   it("is true when the node or anything under it is in the set", () => {
     expect(touches(findNode(plan3, "w3") as PlanNode, new Set(["w3d4"]))).toBe(true);
     expect(touches(findNode(plan3, "w2") as PlanNode, new Set(["w3d4"]))).toBe(false);
+  });
+});
+
+describe("daysToSplit", () => {
+  it("follows the days a week the learner sets until they step the count themselves", () => {
+    expect(daysToSplit(null, 5)).toBe(5);
+    expect(daysToSplit(null, 3)).toBe(3);
+    expect(daysToSplit(4, 3)).toBe(4);
+  });
+});
+
+describe("newUnitIds", () => {
+  const root = makeRoot([makeNode({ id: "a", level: "week", title: "A", summary: "", len: 5 }), makeNode({ id: "b", level: "week", title: "B", summary: "", len: 5 })]);
+  it("lists only units not known before", () => {
+    expect(newUnitIds(allUnitIds(root), root)).toEqual([]);
+    expect(newUnitIds(new Set(["a"]), root)).toEqual(["b"]);
+    expect(newUnitIds(new Set(), root)).toEqual(["a", "b"]);
   });
 });

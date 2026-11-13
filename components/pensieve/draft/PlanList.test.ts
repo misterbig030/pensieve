@@ -101,7 +101,20 @@ describe("PlanList header and arrival", () => {
     expect(out).toMatch(/<\/button><div role="group"[^>]*max-\[900px\]:basis-full/);
     expect(out).not.toMatch(/<button[^>]*aria-expanded[^>]*>(?:(?!<\/button>).)*role="group"/);
   });
-  it("gives every row the arrival outline class", () => {
-    expect(list({ root: plan3 }).match(/unit-arrive/g)).toHaveLength(3);
+  it("gives no row the arrival outline at first render, however many are there", () => {
+    expect(list({ root: plan3 }).match(/unit-arrive/g)).toBeNull();
+    expect(list({ root: plan3, busy: true, open: new Set(["w1"]) }).match(/unit-arrive/g)).toBeNull();
+  });
+  it("follows the days a week in a fresh split bar", () => {
+    expect(list({ root: weekLeaves, open: new Set(["w1"]), daysPerWeek: 5 })).toContain("5 days");
+    expect(list({ root: weekLeaves, open: new Set(["w1"]), daysPerWeek: 3 })).toContain("3 days");
+  });
+  it("marks a changed row for assistive tech", () => {
+    expect(list({ root: plan3, highlight: new Set(["w2"]) })).toContain("(changed)");
+    expect(list({ root: plan3 })).not.toContain("(changed)");
+  });
+  it("does not say a heading is unplanned while its slots are on the way", () => {
+    expect(list({ pending: { m2: { count: 4, groups: false } } })).toMatch(/Title m2<\/span><span[^>]*>Genki I lessons 5–8</);
+    expect(list({})).toContain("Not planned in detail yet · Genki I lessons 5–8");
   });
 });

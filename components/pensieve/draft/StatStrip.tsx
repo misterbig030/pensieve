@@ -91,14 +91,16 @@ function Cell({ label, anchor, disabled, panel, children }: { label: string; anc
   return (
     <Popover.Root>
       <Popover.Trigger
-        aria-label={label}
         disabled={disabled}
         className={cn(
           "-m-1 inline-flex items-center gap-1.5 rounded-[10px] p-1 text-left outline-none hover:bg-neutral-200 focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-neutral-200",
           disabled && "cursor-default opacity-45 hover:bg-transparent",
         )}
       >
-        <span>{children}</span>
+        <span>
+          <span className="sr-only">Change </span>
+          {children}
+        </span>
         <Pencil aria-hidden className="size-3 text-primary" />
       </Popover.Trigger>
       <Popover.Portal>

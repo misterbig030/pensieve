@@ -17,7 +17,7 @@ import {
   ReadSection,
 } from "@/components/pensieve/draft/UnitRows";
 import { Button } from "@/components/ui/button";
-import { rowLine, touches, unitHours } from "@/lib/draftPage";
+import { allUnitIds, daysToSplit, newUnitIds, rowLine, touches, unitHours } from "@/lib/draftPage";
 import { budgetMinutes, keptReadTable } from "@/lib/materials";
 import {
   childLevel,
@@ -56,12 +56,22 @@ export interface PlanListProps {
   onSplit: (id: string, days: number) => void;
 }
 
-type Ctx = PlanListProps & { byId: ReadonlyMap<string, Material> };
+type Ctx = PlanListProps & { byId: ReadonlyMap<string, Material>; arrived: ReadonlySet<string> };
 
 export function PlanList(props: PlanListProps) {
+  // Units that arrived while the plan was being drafted, expanded or redrafted get the arrival ring; rows
+  // present at first load, or mounting only because a month was opened, do not.
+  const [known, setKnown] = useState<ReadonlySet<string>>(() => allUnitIds(props.root));
+  const [arrived, setArrived] = useState<ReadonlySet<string>>(new Set());
+  const fresh = newUnitIds(known, props.root);
+  if (fresh.length > 0) {
+    setKnown(allUnitIds(props.root));
+    if (props.busy) setArrived(new Set(fresh));
+  }
   const ctx: Ctx = {
     ...props,
     byId: new Map(props.materials.map((m) => [m.id, m])),
+    arrived,
   };
   const slots = props.pending[props.root.id];
   return (
@@ -127,7 +137,8 @@ function Row({
       data-unit={node.id}
       data-changed={changed}
       className={cn(
-        "unit-arrive flex min-w-0 flex-col rounded-3xl border border-transparent",
+        ctx.arrived.has(node.id) && "unit-arrive",
+        "flex min-w-0 flex-col rounded-3xl border border-transparent",
         depth === 0 ? "bg-secondary" : "bg-background",
         changed && "border-accent-400",
         locked && "opacity-50",
@@ -151,10 +162,11 @@ function Row({
               )}
             >
               {node.title}
+              {changed && <span className="sr-only"> (changed)</span>}
             </span>
             {!open && (
               <span className="min-w-0 truncate text-[12.5px] text-muted-foreground">
-                {heading ? "Not planned in detail yet · " : ""}
+                {heading && !slots ? "Not planned in detail yet · " : ""}
                 {line}
               </span>
             )}
@@ -393,7 +405,9 @@ function SplitBar({
   busy: boolean;
   onSplit: (days: number) => void;
 }) {
-  const [n, setN] = useState(usual);
+  // The learner's own step, if any; until then the count follows the days a week they have set.
+  const [picked, setPicked] = useState<number | null>(null);
+  const n = daysToSplit(picked, usual);
   const step =
     "inline-flex size-8 cursor-pointer items-center justify-center rounded-full hover:bg-foreground/[0.07] disabled:cursor-default disabled:opacity-40";
   return (
@@ -407,7 +421,7 @@ function SplitBar({
           className={step}
           aria-label="One day fewer"
           disabled={n <= 1}
-          onClick={() => setN(n - 1)}
+          onClick={() => setPicked(n - 1)}
         >
           <Minus className="size-3.5" aria-hidden />
         </button>
@@ -419,7 +433,7 @@ function SplitBar({
           className={step}
           aria-label="One day more"
           disabled={n >= MAX_DAYS_PER_WEEK}
-          onClick={() => setN(n + 1)}
+          onClick={() => setPicked(n + 1)}
         >
           <Plus className="size-3.5" aria-hidden />
         </button>

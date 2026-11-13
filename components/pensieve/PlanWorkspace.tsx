@@ -764,7 +764,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
   const open = openRows(tree, mode, current?.id ?? null, toggles);
   const locks = isAdjust ? lockLine(tree, lockBefore) : null;
   const sourceLabel = props.imported?.fileName ?? (materials.some((m) => m.origin === "research") ? "researched" : null);
-  const firstReady = drafting && tops.length > 0 ? `${labelOf(tree, tops[0])} is ready to read` : "";
+  const firstReady = drafting && tops.length > 0 && !pending[tops[0].id] ? `${labelOf(tree, tops[0])} is ready to read` : "";
 
   const materialsList = (
     <MaterialsList
@@ -824,13 +824,16 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
               <span>{locks}</span>
             </div>
           )}
-          {draftingText && (
-            <div role="status" className="flex flex-wrap items-center gap-2.5 px-1 text-[13px] text-neutral-800">
-              <span className="caret-blink size-2 rounded-full bg-primary" />
-              {draftingText}
-              {firstReady && <span className="ml-auto text-[12px] text-muted-foreground">{firstReady}</span>}
-            </div>
-          )}
+          {/* The live region stays mounted so a screen reader announces its text when it changes. */}
+          <div role="status" className={draftingText ? "flex flex-wrap items-center gap-2.5 px-1 text-[13px] text-neutral-800" : "sr-only"}>
+            {draftingText && (
+              <>
+                <span className="caret-blink size-2 rounded-full bg-primary" />
+                {draftingText}
+                {firstReady && <span className="ml-auto text-[12px] text-muted-foreground">{firstReady}</span>}
+              </>
+            )}
+          </div>
           {outOfCredits?.from === "draft" ? (
             <>
               <OutOfCreditsAlert resetsAt={outOfCredits.resetsAt} onRetry={props.imported ? undefined : () => void streamDraft()} />
@@ -898,7 +901,7 @@ export function PlanWorkspace(props: PlanWorkspaceProps) {
         {/* The materials and the chat stay in view while the plan scrolls: the column is the screen's height less 20px above
             and below. The materials scroll inside at most 55% of it, and never into the chat's 320px (plus the 16px gap). */}
         <div className="flex min-w-0 flex-col gap-4 min-[901px]:sticky min-[901px]:top-5 min-[901px]:h-[calc(100dvh-40px)]">
-          {!isNarrow && <div className="min-h-0 max-h-[min(55%,calc(100%-336px))] shrink overflow-y-auto">{materialsList}</div>}
+          {!isNarrow && <div className="min-h-0 max-h-[min(55%,calc(100%-336px))] shrink overflow-y-auto overflow-x-hidden">{materialsList}</div>}
           <ConversationRail
             mode={mode}
             messages={messages}

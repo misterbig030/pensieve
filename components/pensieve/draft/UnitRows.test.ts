@@ -50,9 +50,23 @@ describe("ReadSection kind", () => {
 });
 
 describe("DayCards", () => {
+  const w3 = () => findNode(plan3, "w3")!;
+  const withStatus = (ids: string[]) => {
+    for (const d of w3().children ?? []) d.status = ids.includes(d.id) ? "completed" : "generated";
+    return plan3;
+  };
   it("marks finished days done and the current day today", () => {
-    const out = html(createElement(DayCards, { root: plan3, week: findNode(plan3, "w3")!, byId, lockBefore: 12, currentLeafId: "w3d3" }));
+    const root = withStatus(["w3d1", "w3d2"]);
+    const out = html(createElement(DayCards, { root, week: w3(), byId, lockBefore: 12, currentLeafId: "w3d3" }));
     expect(out.match(/>Done</g)).toHaveLength(2);
     expect(out.match(/>Today</g)).toHaveLength(1);
+  });
+  it("never tags a skipped, locked day Done, nor both Done and Today", () => {
+    const root = withStatus(["w3d2"]);
+    // d1 is locked behind the completed d2 but was never completed, and it is the current day.
+    const out = html(createElement(DayCards, { root, week: w3(), byId, lockBefore: 12, currentLeafId: "w3d1" }));
+    expect(out.match(/>Done</g)).toHaveLength(1);
+    expect(out.match(/>Today</g)).toHaveLength(1);
+    expect(out.match(/opacity-50/g)).toHaveLength(2);
   });
 });

@@ -512,7 +512,7 @@ export function VerifiedButton({ material: m, prominent = false }: { material: M
         <div
           role="dialog"
           aria-label={`How ${m.title} was checked`}
-          className="absolute top-10 left-0 z-20 flex w-[300px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-neutral-900 px-4 py-3.5 text-[12.5px] leading-normal text-neutral-100 shadow-md"
+          className="absolute top-10 left-0 z-20 flex w-[270px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-neutral-900 px-4 py-3.5 text-[12.5px] leading-normal text-neutral-100 shadow-md"
         >
           <span className="font-semibold">{catalogued ? "Found on Open Library" : "Opened"} {opened}</span>
           {m.fetchedTitle && (
