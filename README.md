@@ -54,10 +54,11 @@ Run these in the database (the Neon SQL editor), with the user's Clerk id:
 
 ## Deployment checklist
 
-There is no cloud deployment yet. The databases are two branches of one Neon project (connected through Vercel
+The databases are two branches of one Neon project (connected through Vercel
 Storage):
 
-- **`main`** is production. Vercel's Production and Preview environments get it from the Neon integration.
+- **`main`** is production. Vercel's Production environment gets it from the Neon integration; each Preview
+  deployment gets its own Neon branch, copied from `main`, from the integration's deployment action.
 - **`dev`** is a copy of `main` taken on 2026-11-04. Local `.env.local` and Vercel's Development environment
   (`vercel env pull`) point at it, so local work and `drizzle-kit migrate` never touch production.
 
@@ -71,15 +72,33 @@ Before the first deployment, in this order:
   `OPEN_LIBRARY_CONTACT` and `RESEARCH_ARM` (done 2026-11-04, same way). The database URLs come from the Neon
   integration and the Clerk keys from the Clerk integration. Admins are not an environment variable: they are
   `users.is_admin` in the database.
-- [ ] Apply any pending migrations to **production** **before** the deploy that needs them. `npx drizzle-kit migrate`
-  on its own migrates `dev`; for production, override the URL (the config's dotenv load does not replace a variable
-  that is already set):
-  `vercel env pull /tmp/pensieve-prod.env --environment=production && DATABASE_URL="$(grep '^DATABASE_URL=' /tmp/pensieve-prod.env | cut -d= -f2- | tr -d '"')" npx drizzle-kit migrate; rm -f /tmp/pensieve-prod.env`.
-  New columns must exist before the new code inserts into them; old code tolerates new columns because they carry defaults.
-  A migration that adds a foreign key is the exception: old code can insert rows it rejects (0017's `users` links
-  need a user's row before their first track or key), so ship the code that keeps it satisfied right after.
+- [x] Apply pending migrations to production before the deploy that needs them. Since 2026-11-12 the Vercel build
+  does this itself: see [Migrations](#migrations).
 - [ ] After the first deploy, run one plan draft on a stored user key and confirm the admin model-calls panel shows
   "user's key" on every row and the usage appears on that user's Anthropic Console, not the gateway.
+
+## CI and migrations
+
+**CI.** `.github/workflows/ci.yml` runs on every pull request and on `main`: `next typegen`, `tsc --noEmit`, lint and
+`npm test`. It needs no secrets, since the tests mock every model, database and network call. The evals stay manual.
+
+### Migrations
+
+Every Vercel build runs `scripts/migrate-on-deploy.sh` before `next build` (`vercel.json`'s `buildCommand`): production
+migrates Neon `main`, and a preview migrates its own Neon branch, so a pull request's preview tries its migration first.
+A production build with no database URL fails rather than deploying unmigrated. Locally, `npx drizzle-kit migrate`
+still migrates `dev` only.
+
+The migration runs **before** the new code serves, and stays applied if the build then fails, so the code already live
+runs against the new schema for a while. Every migration must work with that code:
+
+- **Safe in one release:** a new table, a new nullable column, or a new column with a default (0021's `import_text` and
+  `imported`).
+- **Two releases:** renaming or dropping a column or table, or making one `NOT NULL` with no default. First ship code
+  that no longer reads or writes it (or that always writes it); drop or tighten it in a later PR.
+- **A new foreign key:** old code can insert rows it rejects (0017's `users` links need a user's row before their first
+  track or key). Ship the code that keeps it satisfied first, or in the same release only if old code never inserts
+  such rows.
 
 ## Learn More
 
