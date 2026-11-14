@@ -36,7 +36,7 @@ describe("buildDailyContentPrompt", () => {
     const prompt = buildDailyContentPrompt({
       title: "Caching",
       summary: "Cache strategies",
-      materials: [{ url: "import:week-1-notes", type: "note", title: "Week 1 notes" }],
+      materials: [{ url: "import:week-1-notes", type: "note", origin: "import", title: "Week 1 notes" }],
       practice: [{ format: "problem-set", label: "Problems", task: "Do 1-5", done: "done", minutes: 30, source: { title: "Week 1 notes", url: "import:week-1-notes", type: "note" }, generated: false }],
     });
     expect(prompt).toContain("Week 1 notes");
@@ -67,10 +67,40 @@ describe("buildDailyContentPrompt", () => {
     expect(prompt).not.toContain("— generated");
   });
 
-  it("lists a note's tier, minutes and part beside its title", () => {
-    const prompt = buildDailyContentPrompt({ title: "A", summary: "B", materials: [{ url: "note:mine", type: "note", title: "My notes", tier: "should", minutes: 10, note: "the cache part" }] });
-    expect(prompt).toContain("- My notes — should, 10 min, the cache part");
-    expect(prompt).toMatch(/a local file or a free-text note/);
+  it("names the learner's own note or file by title only, as before plan import", () => {
+    const prompt = buildDailyContentPrompt({
+      title: "A",
+      summary: "B",
+      materials: [
+        { url: "My notes", type: "note", title: "My notes", tier: "should", minutes: 10, note: "the cache part" },
+        { url: "lecture3.pdf", type: "file", title: "lecture3.pdf", tier: "must", minutes: 20 },
+      ],
+    });
+    expect(prompt).toContain(
+      [
+        "The learner also referenced these materials (a local file or a free-text note) — you cannot access their contents, so use them only as context for what to emphasize, not as a citable source:",
+        "- My notes",
+        "- lecture3.pdf",
+      ].join("\n"),
+    );
+    expect(prompt).not.toContain("should, 10 min");
+    expect(prompt).not.toContain("point the learner to the part");
+  });
+
+  it("gives a plan-file material its full row and a learner's own note just its title when both are listed", () => {
+    const prompt = buildDailyContentPrompt({
+      title: "A",
+      summary: "B",
+      materials: [
+        { url: "import:clrs", type: "note", origin: "import", kind: "book", title: "CLRS", tier: "must", minutes: 90, note: "Ch. 3–4" },
+        { url: "My notes", type: "note", title: "My notes", tier: "should", minutes: 10, note: "the cache part" },
+      ],
+    });
+    expect(prompt).toMatch(/a local file, a free-text note, or one named in their plan file/);
+    // Only the plan-file row names a part, so the instruction points to that row's part, not to one on every row.
+    expect(prompt).toContain("point the learner to the part each row from the learner's plan file names");
+    expect(prompt).toContain("- CLRS — must, 90 min, Ch. 3–4 — from the learner's plan file");
+    expect(prompt).toContain("\n- My notes\n");
   });
 
   it("mentions file/note materials as context without treating them as citable", () => {
