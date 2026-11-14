@@ -169,14 +169,15 @@ export function buildDailyContentPrompt(input: BuildDailyContentPromptInput): st
       );
     } else {
       // A material the learner's plan file names has no link; its row still says which part this unit takes.
-      const what =
+      // Only those rows name a part, so a list that mixes in the learner's own notes says whose parts to point to.
+      const [what, which] =
         fromFile.length === other.length
-          ? "These materials are named in the learner's own plan file, without a link"
-          : "The learner also referenced these materials (a local file, a free-text note, or one named in their plan file)";
-      parts.push(`${what} — you cannot access their contents, so point the learner to the part each row names and use them only as context for what to emphasize, not as a citable source:`);
+          ? ["These materials are named in the learner's own plan file, without a link", "each row"]
+          : ["The learner also referenced these materials (a local file, a free-text note, or one named in their plan file)", `each row ${FROM_PLAN_FILE}`];
+      parts.push(`${what} — you cannot access their contents, so point the learner to the part ${which} names and use them only as context for what to emphasize, not as a citable source:`);
     }
     // Only a plan-file material gets its full row; the learner's own notes and files keep their one-line name.
-    for (const s of other) parts.push(s.origin === "import" ? `${row(s)} — ${FROM_PLAN_FILE}` : `- ${label(s)}${s.title ?? s.url}`);
+    for (const s of other) parts.push(s.origin === "import" ? `${row(s)} — ${FROM_PLAN_FILE}` : `- ${label(s)}${s.title}`);
   }
 
   const steps = [...input.materials, ...(input.practice ?? [])].some((row) => row.step);

@@ -36,7 +36,7 @@ describe("buildDailyContentPrompt", () => {
     const prompt = buildDailyContentPrompt({
       title: "Caching",
       summary: "Cache strategies",
-      materials: [{ url: "import:week-1-notes", type: "note", title: "Week 1 notes" }],
+      materials: [{ url: "import:week-1-notes", type: "note", origin: "import", title: "Week 1 notes" }],
       practice: [{ format: "problem-set", label: "Problems", task: "Do 1-5", done: "done", minutes: 30, source: { title: "Week 1 notes", url: "import:week-1-notes", type: "note" }, generated: false }],
     });
     expect(prompt).toContain("Week 1 notes");
@@ -97,6 +97,8 @@ describe("buildDailyContentPrompt", () => {
       ],
     });
     expect(prompt).toMatch(/a local file, a free-text note, or one named in their plan file/);
+    // Only the plan-file row names a part, so the instruction points to that row's part, not to one on every row.
+    expect(prompt).toContain("point the learner to the part each row from the learner's plan file names");
     expect(prompt).toContain("- CLRS — must, 90 min, Ch. 3–4 — from the learner's plan file");
     expect(prompt).toContain("\n- My notes\n");
   });
