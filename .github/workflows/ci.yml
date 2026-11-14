@@ -1,0 +1,40 @@
+# Type-checks, lints and tests every pull request (and main after a merge). No secrets: the tests mock every model,
+# database and network call. The converter and draft evals stay manual, since they spend real credits.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Vercel builds on Node 24.x.
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Generates the route helper types (`LayoutProps`, `PageProps`) that tsc needs; next dev and next build do it too.
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm test
+      # A schema change needs its migration in the same PR: the production build only applies what is in drizzle/.
+      # generate reads lib/db/schema.ts and the snapshots, never a database.
+      - name: Migrations match the schema
+        run: |
+          npx drizzle-kit generate
+          if [ -n "$(git status --porcelain -- drizzle)" ]; then
+            git status --short -- drizzle
+            echo "::error::lib/db/schema.ts has changes with no migration. Run 'npx drizzle-kit generate' and commit drizzle/."
+            exit 1
+          fi
