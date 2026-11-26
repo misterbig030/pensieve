@@ -3,7 +3,7 @@
 # runs this after `next build`, so a build that fails never touches the database, and Vercel only promotes the
 # deployment once this has succeeded too. Any other build skips it, whatever database URL it has, so an unmerged pull
 # request's migration can never reach production. Every migration must keep working with the code already live: see
-# "Migrations" in the README.
+# "Migrations" in docs/operations.md.
 set -e
 
 if [ "$VERCEL_ENV" != "production" ]; then
