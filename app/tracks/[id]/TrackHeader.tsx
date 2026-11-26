@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SlidersHorizontal } from "lucide-react";
+import { Archive, ArchiveRestore, SlidersHorizontal } from "lucide-react";
 import { shortDate } from "@/lib/activity";
 import { Button } from "@/components/ui/button";
 
@@ -16,7 +16,7 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** The plan page's title row: pace, how far along the track is, and the way to adjust it. */
+/** The plan page's title row: pace, how far along the track is, and the ways to adjust it or archive it. */
 export function TrackHeader(props: {
   title: string;
   pace: string;
@@ -26,6 +26,9 @@ export function TrackHeader(props: {
   planned: number;
   finish: Date | null;
   adjustHref: string;
+  archived: boolean;
+  /** Archives this track; a form action, so it works before the page's scripts load. */
+  archiveAction: () => Promise<void>;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -48,6 +51,29 @@ export function TrackHeader(props: {
           </Link>
         }
       />
+      {!props.archived && (
+        <form action={props.archiveAction}>
+          <Button type="submit" variant="ghost" title="Take this track off your home page. You can restore it.">
+            <Archive />
+            Archive
+          </Button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/** Above an archived track's header: why it is not on the home page, and the way back. */
+export function ArchivedNotice({ restoreAction }: { restoreAction: () => Promise<void> }) {
+  return (
+    <div role="status" className="flex flex-wrap items-center gap-3 rounded-2xl bg-secondary py-2.5 pr-2.5 pl-4 text-[13.5px]">
+      <span className="mr-auto">This track is archived, so it isn&apos;t on your home page.</span>
+      <form action={restoreAction}>
+        <Button type="submit" variant="outline" size="sm">
+          <ArchiveRestore />
+          Restore
+        </Button>
+      </form>
     </div>
   );
 }

@@ -202,6 +202,19 @@ export async function updateTrackSummary(trackId: string, userId: string, summar
     .where(and(eq(tracks.id, trackId), eq(tracks.userId, userId)));
 }
 
+/**
+ * Archives a track (off the home page; its plan and check-ins stay) or restores it. Only the owner's row changes;
+ * says whether one did.
+ */
+export async function setTrackArchived(trackId: string, userId: string, archived: boolean): Promise<boolean> {
+  const rows = await db
+    .update(tracks)
+    .set({ status: archived ? "archived" : "active" })
+    .where(and(eq(tracks.id, trackId), eq(tracks.userId, userId)))
+    .returning({ id: tracks.id });
+  return rows.length > 0;
+}
+
 /** Saves the learner's weekly hours, usual days a week and the plan's time split, as the adjust page left them. */
 export async function updateTrackStudyTime(
   trackId: string,

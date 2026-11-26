@@ -12,7 +12,7 @@ import { UserKeyError, guardUserKey } from "@/lib/ai/userKeyError";
 import { GatewayFundsError } from "@/lib/ai/gatewayFunds";
 import type { KeyErrorKind } from "@/lib/ai/models";
 import { insertGenerationLog } from "@/lib/db/generationLog";
-import { getTrackDetail, updateTrackProblems, updateTrackStudyTime, updateTrackSummary } from "@/lib/db/queries";
+import { getTrackDetail, setTrackArchived, updateTrackProblems, updateTrackStudyTime, updateTrackSummary } from "@/lib/db/queries";
 import { insertChildren, logSession, markLeafComplete, replacePlanTree } from "@/lib/db/planQueries";
 import { fromTreeInput } from "@/lib/planInput";
 import { summarizePlan } from "@/lib/planSummary";
@@ -161,4 +161,26 @@ export async function logSessionAction(nodeId: string, hours: number): Promise<v
   revalidatePath(`/tracks/${trackId}`);
   revalidatePath(`/tracks/${trackId}/nodes/${nodeId}`);
   revalidatePath("/");
+}
+
+/** The track to archive or restore, as the page's form sends it: ownership is checked against the session. */
+async function archiving(trackId: string, archived: boolean): Promise<string> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Not authenticated");
+  const id = z.string().uuid().parse(trackId);
+  if (!(await setTrackArchived(id, userId, archived))) throw new Error("Track not found");
+  revalidatePath("/");
+  return id;
+}
+
+/** Takes the track off the home page; its plan, check-ins and page stay, and Restore brings it back. */
+export async function archiveTrackAction(trackId: string): Promise<void> {
+  await archiving(trackId, true);
+  redirect("/");
+}
+
+/** Puts an archived track back on the home page, staying on its page. */
+export async function restoreTrackAction(trackId: string): Promise<void> {
+  const id = await archiving(trackId, false);
+  revalidatePath(`/tracks/${id}`);
 }

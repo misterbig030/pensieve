@@ -10,7 +10,8 @@ import { dayStrip, finishDate, plannedHours, studyEvents } from "@/lib/trackProg
 import { PageShell } from "@/components/pensieve/PageShell";
 import { DayStrip } from "@/components/pensieve/DayStrip";
 import { PlanGlance } from "./PlanGlance";
-import { TrackHeader } from "./TrackHeader";
+import { ArchivedNotice, TrackHeader } from "./TrackHeader";
+import { archiveTrackAction, restoreTrackAction } from "./actions";
 import { DayPane } from "./DayPane";
 import { PlanOutline } from "./PlanOutline";
 import { StudyDaysCard } from "./StudyDaysCard";
@@ -54,6 +55,7 @@ export default async function TrackDetailPage({
   const today = new Date();
   const finish = finishDate(root, track.daysPerWeek, today);
   const planned = halfHours(plannedHours(root, track.hoursPerWeek, track.daysPerWeek));
+  const archived = track.status === "archived";
   const pace = `${track.granularity === "day" ? "Daily" : "Weekly"} · ${track.daysPerWeek} days a week · ${track.hoursPerWeek} h a week`;
 
   return (
@@ -69,6 +71,7 @@ export default async function TrackDetailPage({
             <ChevronRight className="size-3.5" />
             <b className="truncate font-semibold text-foreground">{track.title}</b>
           </nav>
+          {archived && <ArchivedNotice restoreAction={restoreTrackAction.bind(null, track.id)} />}
           <TrackHeader
             title={track.title}
             pace={pace}
@@ -78,6 +81,8 @@ export default async function TrackDetailPage({
             planned={planned}
             finish={finish}
             adjustHref={`/tracks/${track.id}/adjust`}
+            archived={archived}
+            archiveAction={archiveTrackAction.bind(null, track.id)}
           />
           <DayStrip cells={dayStrip(root, track.granularity, track.daysPerWeek)} />
           <div className="pt-3">

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
-import { Plus } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import { getDashboardTracksForUser } from "@/lib/db/queries";
 import { heatmapWeeks, monthTotals } from "@/lib/activity";
 import { computeStreak, longestStreak } from "@/lib/streak";
-import { homeStatus, toTrackCard } from "@/lib/trackCard";
+import { homeStatus, homeTracks, toTrackCard, type HomeView } from "@/lib/trackCard";
 import { sortTracks, studyEvents, type SortKey } from "@/lib/trackProgress";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/pensieve/PageShell";
@@ -14,17 +14,20 @@ import { TrackCard } from "@/components/pensieve/home/TrackCard";
 
 const SORT_KEYS: readonly SortKey[] = ["next", "recent", "newest"];
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
+export default async function Home({ searchParams }: { searchParams: Promise<{ sort?: string; view?: string }> }) {
   const { userId } = await auth();
   if (!userId) return null;
 
-  const { sort } = await searchParams;
+  const { sort, view: viewParam } = await searchParams;
   const sortKey: SortKey = SORT_KEYS.find((k) => k === sort) ?? "next";
+  const view: HomeView = viewParam === "archived" ? "archived" : "tracks";
   const today = new Date();
   const dashboardTracks = await getDashboardTracksForUser(userId);
 
+  // Archived tracks leave the list, but their check-ins still count in the streak, heatmap and month below.
+  const { listed, archived } = homeTracks(dashboardTracks, view);
   const cards = sortTracks(
-    dashboardTracks.map(({ track, root, checkIns }) => toTrackCard(track, root, checkIns, today)),
+    listed.map(({ track, root, checkIns }) => toTrackCard(track, root, checkIns, today)),
     sortKey,
   );
 
@@ -37,26 +40,60 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
       <div className="flex min-w-0 flex-col gap-5 px-8 pt-7 pb-24 max-[640px]:px-4">
         <div className="flex items-end gap-4">
           <div className="mr-auto">
-            <h1 className="font-heading text-[30px] leading-[1.1]">Your tracks</h1>
-            {cards.length > 0 && <p className="mt-1.5 text-[14px] text-muted-foreground">{homeStatus(cards)}</p>}
+            {view === "archived" ? (
+              <>
+                <nav className="mb-1.5 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                  <Link href="/" className="hover:text-primary">
+                    Your tracks
+                  </Link>
+                  <ChevronRight className="size-3.5" />
+                </nav>
+                <h1 className="font-heading text-[30px] leading-[1.1]">Archived tracks</h1>
+                <p className="mt-1.5 text-[14px] text-muted-foreground">
+                  Off your home page, with their check-ins still counted. Open one to restore it.
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="font-heading text-[30px] leading-[1.1]">Your tracks</h1>
+                {cards.length > 0 && <p className="mt-1.5 text-[14px] text-muted-foreground">{homeStatus(cards)}</p>}
+              </>
+            )}
           </div>
-          <Button
-            nativeButton={false}
-            render={
-              <Link href="/tracks/new">
-                <Plus />
-                New track
-              </Link>
-            }
-          />
+          {view === "tracks" && (
+            <Button
+              nativeButton={false}
+              render={
+                <Link href="/tracks/new">
+                  <Plus />
+                  New track
+                </Link>
+              }
+            />
+          )}
         </div>
 
-        {cards.length > 0 ? (
+        {view === "archived" ? (
+          cards.length > 0 ? (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+              {cards.map((card) => (
+                <TrackCard key={card.id} card={card} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-[14px] text-muted-foreground">Nothing is archived.</p>
+          )
+        ) : cards.length > 0 || archived > 0 ? (
           <>
             <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
               <span>
                 {cards.length} {cards.length === 1 ? "track" : "tracks"}
               </span>
+              {archived > 0 && (
+                <Link href="/?view=archived" className="hover:text-primary">
+                  {archived} archived
+                </Link>
+              )}
               <SortMenu value={sortKey} />
             </div>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
