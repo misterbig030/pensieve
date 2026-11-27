@@ -15,6 +15,7 @@ vi.mock("@/lib/planSummary", () => ({ summarizePlan: vi.fn(() => "summary") }));
 vi.mock("@/lib/ai/planDraft", () => ({ streamExpandNode: vi.fn() }));
 vi.mock("@/lib/db/queries", () => ({
   getTrackDetail: vi.fn(),
+  setTrackArchived: vi.fn(),
   updateTrackProblems: vi.fn(),
   updateTrackStudyTime: vi.fn(),
   updateTrackSummary: vi.fn(),
@@ -28,10 +29,12 @@ vi.mock("@/lib/db/planQueries", () => ({
 
 import { streamExpandNode } from "@/lib/ai/planDraft";
 import { insertChildren, replacePlanTree } from "@/lib/db/planQueries";
-import { getTrackDetail, updateTrackProblems, updateTrackStudyTime } from "@/lib/db/queries";
+import { getTrackDetail, setTrackArchived, updateTrackProblems, updateTrackStudyTime } from "@/lib/db/queries";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { toTreeInput } from "@/lib/planInput";
 import { walk } from "@/lib/planTree";
-import { confirmRevisionAction, expandNodeAction } from "./actions";
+import { archiveTrackAction, confirmRevisionAction, expandNodeAction, restoreTrackAction } from "./actions";
 
 const problems = ["Week 3 plans 2 h 10 min of reading in a week that gave itself 1 h for it."];
 
@@ -86,5 +89,42 @@ describe("confirmRevisionAction", () => {
     expect(replacePlanTree).toHaveBeenCalledOnce();
     expect(updateTrackProblems).toHaveBeenCalledWith("t", "u1", ["Week 1 has no time set for its activities."]);
     expect(updateTrackStudyTime).toHaveBeenCalledWith("t", "u1", { hoursPerWeek: 8, daysPerWeek: 5, split: null });
+  });
+});
+
+describe("archiving a track", () => {
+  const id = "c3c25c68-7ea4-42df-be56-8b646fda2c04";
+
+  beforeEach(() => {
+    vi.mocked(setTrackArchived).mockReset().mockResolvedValue(true);
+    vi.mocked(redirect).mockReset();
+    vi.mocked(revalidatePath).mockReset();
+  });
+
+  it("archives the caller's track and goes back to the home page", async () => {
+    await archiveTrackAction(id);
+    expect(setTrackArchived).toHaveBeenCalledWith(id, "u1", true);
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+    expect(redirect).toHaveBeenCalledWith("/");
+  });
+
+  it("restores it and stays on the track", async () => {
+    await restoreTrackAction(id);
+    expect(setTrackArchived).toHaveBeenCalledWith(id, "u1", false);
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+    expect(revalidatePath).toHaveBeenCalledWith(`/tracks/${id}`);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("fails loudly for a track the caller does not own", async () => {
+    vi.mocked(setTrackArchived).mockResolvedValue(false);
+    await expect(archiveTrackAction(id)).rejects.toThrow("Track not found");
+    await expect(restoreTrackAction(id)).rejects.toThrow("Track not found");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("refuses an id that is not a track id", async () => {
+    await expect(archiveTrackAction("not-a-uuid")).rejects.toThrow();
+    expect(setTrackArchived).not.toHaveBeenCalled();
   });
 });

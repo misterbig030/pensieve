@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { makeRoot } from "@/lib/planTree";
 import { day, sampleDayPlan, sampleWeekPlan, week } from "@/lib/testPlans";
 import type { CardAction } from "./trackProgress";
-import { homeStatus, toTrackCard, type CardCheckIn } from "./trackCard";
+import { homeStatus, homeTracks, toTrackCard, type CardCheckIn } from "./trackCard";
 
 const today = new Date("2026-10-30T12:00:00Z");
 const createdAt = new Date("2026-10-01T00:00:00Z");
@@ -80,5 +80,26 @@ describe("homeStatus", () => {
   it("calls the day done only when something was studied", () => {
     expect(homeStatus([card("start", true), card("finished")])).toBe("You're done for today.");
     expect(homeStatus([card("finished")])).toBe("Every track is finished.");
+  });
+});
+
+describe("homeTracks", () => {
+  const rows = [
+    { track: { id: "a", status: "active" } },
+    { track: { id: "b", status: "archived" } },
+    { track: { id: "c", status: "completed" } },
+    { track: { id: "d", status: "archived" } },
+  ];
+
+  it("lists every track that is not archived, and counts the archived ones", () => {
+    const { listed, archived } = homeTracks(rows, "tracks");
+    expect(listed.map((r) => r.track.id)).toEqual(["a", "c"]);
+    expect(archived).toBe(2);
+  });
+
+  it("lists only the archived ones in the archived view", () => {
+    const { listed, archived } = homeTracks(rows, "archived");
+    expect(listed.map((r) => r.track.id)).toEqual(["b", "d"]);
+    expect(archived).toBe(2);
   });
 });

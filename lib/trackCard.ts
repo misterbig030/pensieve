@@ -79,6 +79,18 @@ export function toTrackCard(track: CardTrack, root: PlanNode, checkIns: CardChec
   };
 }
 
+/** Which part of the home is showing: the tracks in use, or the archived ones (`?view=archived`). */
+export type HomeView = "tracks" | "archived";
+
+/** The tracks a home view lists, and how many are archived for the link to them. */
+export function homeTracks<T extends { track: { status: string } }>(rows: T[], view: HomeView): { listed: T[]; archived: number } {
+  const isArchived = (row: T) => row.track.status === "archived";
+  return {
+    listed: rows.filter((row) => isArchived(row) === (view === "archived")),
+    archived: rows.filter(isArchived).length,
+  };
+}
+
 /**
  * The line under the home's title: the sessions left today, else whether today is done (only when something was
  * studied) and how many tracks wait on planning.
