@@ -1,0 +1,1428 @@
+{
+  "id": "aieng-2/month-1",
+  "topic": "aieng",
+  "sourceRun": "draft-2026-11-07T22-49-11-746Z-aieng-1",
+  "commit": "d2768ae",
+  "label": "Month 1 · 4 weeks",
+  "group": "leaves",
+  "leaf": true,
+  "request": {
+    "topic": "AI engineering: building applications on foundation models",
+    "instructions": "Backend engineer moving into LLM apps. About 6 hours a week, heavy on building.",
+    "granularity": "week",
+    "weeks": 12,
+    "daysPerWeek": 5,
+    "hoursPerWeek": 6
+  },
+  "materials": [
+    {
+      "id": "M1",
+      "origin": "learner",
+      "type": "link",
+      "kind": "essay",
+      "url": "https://hamel.dev/blog/posts/evals",
+      "title": "Your AI Product Needs Evals",
+      "author": "Hamel Husain",
+      "year": 2024,
+      "why": "Practical essay on building eval systems (unit tests, human review, LLM-as-judge) for LLM products, based on the author's experience.",
+      "backbone": false,
+      "verifiedAt": "2026-11-07T22:49:11.899Z",
+      "fetchedTitle": "Your AI Product Needs Evals – Hamel’s Blog",
+      "recommendedBy": [],
+      "sig": "7Nhqz2sGdV24HoSpvR3kQ8ETiGI5hpOYOTp3CFlN0d4",
+      "minutes": 17,
+      "minutesBasis": "measured",
+      "pageMinutes": 17,
+      "hub": true,
+      "uses": "eval mindset for the project",
+      "toc": null,
+      "foundBy": [
+        "learner"
+      ],
+      "note": "Single long essay with sections on motivation, a case study, three levels of evals (unit tests, human/model eval, A/B), and payoffs. Best read straight through."
+    },
+    {
+      "id": "M2",
+      "origin": "research",
+      "type": "link",
+      "kind": "book",
+      "author": "Chip Huyen",
+      "year": 2024,
+      "why": "Backbone book covering the full application stack: evaluation, prompting, RAG, agents, finetuning, inference and architecture.",
+      "recommendedBy": [
+        "https://travis.media/blog/ai-reading-list-2026-devs",
+        "https://productsummaries.com/2026/09/07/book-review-ai-engineering-building-applications-with-foundation-models-by-chip-huyen"
+      ],
+      "url": "https://oreilly.com/library/view/ai-engineering/9781098166298",
+      "title": "AI Engineering: Building Applications with Foundation Models",
+      "backbone": true,
+      "verifiedAt": "2026-11-07T22:49:50.979Z",
+      "fetchedTitle": "AI Engineering",
+      "sig": "sAIxv4DefFzVqlmA_GtB3xME-pCsYZouFoHAINv6oWA",
+      "minutes": 840,
+      "minutesBasis": "measured",
+      "uses": "backbone read in order",
+      "toc": {
+        "source": "catalogue",
+        "url": "https://openlibrary.org/books/OL54058212M",
+        "printPages": false,
+        "end": 1027,
+        "chapters": [
+          {
+            "n": 1,
+            "title": "Introduction to Building AI Applications with Foundation Models",
+            "page": 34,
+            "minutes": 107,
+            "sections": [
+              "The Rise of AI Engineering",
+              "Foundation Model Use Cases",
+              "Planning AI Applications",
+              "The AI Engineering Stack"
+            ]
+          },
+          {
+            "n": 2,
+            "title": "Understanding Foundation Models",
+            "page": 130,
+            "minutes": 140,
+            "sections": [
+              "Training Data",
+              "Modeling",
+              "Post-Training",
+              "Sampling"
+            ]
+          },
+          {
+            "n": 3,
+            "title": "Evaluation Methodology",
+            "page": 256,
+            "minutes": 93,
+            "sections": [
+              "Challenges of Evaluating Foundation Models",
+              "Understanding Language Modeling Metrics",
+              "Exact Evaluation",
+              "AI as a Judge",
+              "Ranking Models with Comparative Evaluation"
+            ]
+          },
+          {
+            "n": 4,
+            "title": "Evaluate AI Systems",
+            "page": 340,
+            "minutes": 126,
+            "sections": [
+              "Evaluation Criteria",
+              "Model Selection",
+              "Design Your Evaluation Pipeline"
+            ]
+          },
+          {
+            "n": 5,
+            "title": "Prompt Engineering",
+            "page": 453,
+            "minutes": 98,
+            "sections": [
+              "Introduction to Prompting",
+              "Prompt Engineering Best Practices",
+              "Defensive Prompt Engineering"
+            ]
+          },
+          {
+            "n": 6,
+            "title": "RAG and Agents",
+            "page": 541,
+            "minutes": 127,
+            "sections": [
+              "RAG",
+              "Agents",
+              "Memory"
+            ]
+          },
+          {
+            "n": 7,
+            "title": "Finetuning",
+            "page": 655,
+            "minutes": 126,
+            "sections": [
+              "Finetuning Overview",
+              "When to Finetune",
+              "Memory Bottlenecks",
+              "Finetuning Techniques"
+            ]
+          },
+          {
+            "n": 8,
+            "title": "Dataset Engineering",
+            "page": 768,
+            "minutes": 93,
+            "sections": [
+              "Data Curation",
+              "Data Augmentation and Synthesis",
+              "Data Processing"
+            ]
+          },
+          {
+            "n": 9,
+            "title": "Inference Optimization",
+            "page": 852,
+            "minutes": 99,
+            "sections": [
+              "Understanding Inference Optimization",
+              "Inference Optimization"
+            ]
+          },
+          {
+            "n": 10,
+            "title": "AI Engineering Architecture and User Feedback",
+            "page": 941,
+            "minutes": 96,
+            "sections": [
+              "AI Engineering Architecture",
+              "User Feedback"
+            ]
+          }
+        ]
+      },
+      "catalogued": true,
+      "foundBy": [
+        "backbone"
+      ]
+    },
+    {
+      "id": "M5",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Anthropic",
+      "year": 2024,
+      "why": "Core patterns for agents and workflows, favoring simple composable designs over heavy frameworks.",
+      "recommendedBy": [],
+      "url": "https://anthropic.com/research/building-effective-agents",
+      "title": "Building effective AI agents",
+      "backbone": false,
+      "verifiedAt": "2026-11-07T22:49:19.591Z",
+      "fetchedTitle": "Building effective AI agents \\ Anthropic",
+      "sig": "4YnNf8EYFeudmVn5nZwu_PvySFiT0n8f_UMSm0SVGWo",
+      "minutes": 12,
+      "minutesBasis": "measured",
+      "uses": "agent and workflow patterns",
+      "pageMinutes": 12,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M6",
+      "origin": "research",
+      "type": "link",
+      "kind": "docs",
+      "author": "OpenAI",
+      "year": null,
+      "why": "Official prompting guidance with API examples.",
+      "recommendedBy": [],
+      "url": "https://developers.openai.com/api/docs/guides/prompt-engineering",
+      "title": "Prompt engineering | OpenAI API",
+      "backbone": false,
+      "verifiedAt": "2026-11-07T22:49:19.715Z",
+      "fetchedTitle": "Prompt engineering | OpenAI API",
+      "sig": "1ho03pkJQ2Bk48VQ1JTNcgVVaHDEEgo0Ikp9ODHwqNg",
+      "minutes": 28,
+      "minutesBasis": "estimated",
+      "uses": "official prompting guidance",
+      "pageMinutes": 24,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M7",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Goku Mohandas and Philipp Moritz",
+      "year": 2023,
+      "why": "Long build-along RAG guide with evaluation and cost analysis.",
+      "recommendedBy": [],
+      "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1",
+      "title": "Building RAG-based LLM Applications for Production",
+      "backbone": false,
+      "verifiedAt": "2026-11-07T22:49:19.933Z",
+      "fetchedTitle": "Building RAG-based LLM Applications for Production",
+      "sig": "46XrTB6jid4e_FCAeDk_BGhr82diGBw-ccdUR_OLE74",
+      "minutes": 52,
+      "minutesBasis": "measured",
+      "uses": "build-along RAG reference",
+      "pageMinutes": 54,
+      "hub": true,
+      "toc": {
+        "source": "page",
+        "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Overview",
+            "page": null,
+            "minutes": 2,
+            "sections": [],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#overview",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Vector DB creation",
+            "page": null,
+            "minutes": 6,
+            "sections": [
+              "Link Load data",
+              "Link Sections",
+              "Link Chunk data",
+              "Link Embed data",
+              "Link Index data"
+            ],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#vector-db-creation",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Query Retrieval",
+            "page": null,
+            "minutes": 2,
+            "sections": [],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#query-retrieval",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Response Generation",
+            "page": null,
+            "minutes": 3,
+            "sections": [
+              "Link Agent"
+            ],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#response-generation",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Evaluation",
+            "page": null,
+            "minutes": 5,
+            "sections": [
+              "Link Evaluator",
+              "Link Cold Start"
+            ],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#evaluation",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "LLM Experiments",
+            "page": null,
+            "minutes": 7,
+            "sections": [
+              "Link Utilities",
+              "Link Context",
+              "Link Chunk size",
+              "Link Number of chunks",
+              "Link Embedding models",
+              "Link OSS vs. closed LLMs",
+              "Link MoEs without context"
+            ],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#llm-experiments",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Fine-tuning",
+            "page": null,
+            "minutes": 8,
+            "sections": [
+              "Link Synthetic dataset",
+              "Link Training data",
+              "Link Validation",
+              "Link Embedding model",
+              "Link Resize tokenizer",
+              "Link Full parameter",
+              "Link Embedding layer"
+            ],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#fine-tuning",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Prompt engineering",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#prompt-engineering",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Lexical search",
+            "page": null,
+            "minutes": 3,
+            "sections": [
+              "Link BM25",
+              "Link Semantic",
+              "Link Lexical experiments"
+            ],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#lexical-search",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Reranking",
+            "page": null,
+            "minutes": 7,
+            "sections": [
+              "Link Dataset",
+              "Link Preprocessing",
+              "Link Training",
+              "Link Testing",
+              "Link Reranking experiments"
+            ],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#reranking",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Cost analysis",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#cost-analysis",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Routing",
+            "page": null,
+            "minutes": 2,
+            "sections": [],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#routing",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Serving",
+            "page": null,
+            "minutes": 3,
+            "sections": [],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#serving",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Data flywheel",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#data-flywheel",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Impact",
+            "page": null,
+            "minutes": 1,
+            "sections": [
+              "Link Products and productivity",
+              "Link Foundational agents"
+            ],
+            "url": "https://anyscale.com/blog/a-comprehensive-guide-for-building-rag-based-llm-applications-part-1#impact",
+            "group": null
+          }
+        ]
+      },
+      "foundBy": [
+        "canonical"
+      ],
+      "note": "One long single-page essay with a build-along structure: vector DB, retrieval, generation, evaluation, experiments, fine-tuning, reranking, cost, routing, serving. Best for end-to-end RAG practice."
+    },
+    {
+      "id": "M8",
+      "origin": "research",
+      "type": "link",
+      "kind": "repo",
+      "author": "OpenAI",
+      "year": null,
+      "why": "Code examples for common API tasks.",
+      "recommendedBy": [],
+      "url": "https://github.com/openai/openai-cookbook",
+      "title": "GitHub - openai/openai-cookbook: Examples and guides for using the OpenAI API",
+      "backbone": false,
+      "verifiedAt": "2026-11-07T22:49:20.056Z",
+      "fetchedTitle": "GitHub - openai/openai-cookbook: Examples and guides for using the OpenAI API · GitHub",
+      "sig": "mJc2zReW05EG-REsouZOISs2OVmRji8NYjbuKfuMNmc",
+      "minutes": 30,
+      "minutesBasis": "estimated",
+      "uses": "API code examples while building",
+      "pageMinutes": 1,
+      "hub": false,
+      "toc": null,
+      "foundBy": [
+        "canonical"
+      ]
+    },
+    {
+      "id": "M9",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Truto",
+      "year": 2026,
+      "why": "Covers MCP servers and tool integration for agents, relevant to backend engineers.",
+      "recommendedBy": [],
+      "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026",
+      "title": "The Hands-On Guide to Building MCP Servers for AI Agents (2026 Architecture) | Truto Blog",
+      "backbone": false,
+      "verifiedAt": "2026-11-07T22:49:18.421Z",
+      "fetchedTitle": "The Hands-On Guide to Building MCP Servers for AI Agents (2026 Architecture) | Truto Blog",
+      "sig": "5cszQgcNJJGJEnFJjB6p-LSXn2XNUTUD52Y5MqCrWEU",
+      "minutes": 18,
+      "minutesBasis": "measured",
+      "uses": "building MCP tool servers",
+      "pageMinutes": 31,
+      "hub": true,
+      "toc": {
+        "source": "page",
+        "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Why B2B SaaS Needs an MCP Strategy in 2026",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#why-b2b-saas-needs-an-mcp-strategy-in-2026",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "The Architecture of a Production-Ready MCP Server",
+            "page": null,
+            "minutes": 2,
+            "sections": [],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#the-architecture-of-a-production-ready-mcp-server",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "MCP in Practice: Raw Protocol Examples",
+            "page": null,
+            "minutes": 3,
+            "sections": [
+              "Discovering Tools ( tools/list )",
+              "Executing a Tool ( tools/call )"
+            ],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#mcp-in-practice-raw-protocol-examples",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "End-to-End Tutorial: Build an MCP Server From Scratch",
+            "page": null,
+            "minutes": 5,
+            "sections": [
+              "Prerequisites",
+              "Step 1: Scaffold the project",
+              "Step 2: Register a tool",
+              "Step 3: Wire the HTTP transport",
+              "Step 4: Run it and hit it with curl",
+              "Step 5: What this tutorial deliberately skipped"
+            ],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#end-to-end-tutorial-build-an-mcp-server-from-scratch",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "The Gap Between the Protocol and the Platform",
+            "page": null,
+            "minutes": 3,
+            "sections": [
+              "1. The OAuth Token Concurrency Problem",
+              "2. Rate Limits and Exponential Backoff",
+              "3. Handling the Flat Input Namespace",
+              "4. Pagination Context Injection"
+            ],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#the-gap-between-the-protocol-and-the-platform",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Hands-On: Generating Managed MCP Servers with Truto",
+            "page": null,
+            "minutes": 3,
+            "sections": [
+              "Dynamic, Documentation-Driven Tool Generation",
+              "Cryptographic Tenant Isolation",
+              "Creating a Server via API",
+              "Token Scoping and Tool Filtering in Action"
+            ],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#hands-on-generating-managed-mcp-servers-with-truto",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Proxy API Flow: Agent to Native Provider Data",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#proxy-api-flow-agent-to-native-provider-data",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Connecting Your MCP Server to Claude and Custom Agents",
+            "page": null,
+            "minutes": 1,
+            "sections": [
+              "Step-by-Step for Claude Desktop",
+              "Step-by-Step for ChatGPT",
+              "Custom LangGraph or LangChain Agent",
+              "Enterprise Security: Secondary Authentication"
+            ],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#connecting-your-mcp-server-to-claude-and-custom-agents",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "AI Agent Code Samples: Consuming an MCP Server",
+            "page": null,
+            "minutes": 5,
+            "sections": [
+              "Anthropic Claude with the MCP Client",
+              "OpenAI Function Calling",
+              "LangGraph Agent with Multiple MCP Servers",
+              "Python: Direct MCP Client",
+              "Agent Loop Reference Pattern"
+            ],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#ai-agent-code-samples-consuming-an-mcp-server",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Production Readiness Checklist",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#production-readiness-checklist",
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Build vs. Buy for AI Agent Integrations",
+            "page": null,
+            "minutes": 1,
+            "sections": [],
+            "url": "https://truto.one/blog/the-hands-on-guide-to-building-mcp-servers-for-ai-agents-2026#build-vs-buy-for-ai-agent-integrations",
+            "group": null
+          }
+        ]
+      },
+      "foundBy": [
+        "current"
+      ],
+      "note": "Single long essay with H2 sections and H3 subsections: MCP architecture, protocol examples, a from-scratch tutorial, platform gaps, Truto managed servers, agent code samples, and a checklist. Best for backend engineers building MCP servers."
+    },
+    {
+      "id": "M10",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "MLflow",
+      "year": 2026,
+      "why": "Compares agent evaluation frameworks and tracing tools.",
+      "recommendedBy": [],
+      "url": "https://mlflow.org/top-5-agent-evaluation-frameworks",
+      "title": "MLflow",
+      "backbone": false,
+      "verifiedAt": "2026-11-07T22:49:18.661Z",
+      "fetchedTitle": "Top 5 Agent Evaluation Tools in 2026 | MLflow",
+      "sig": "oG6taf38DxDH9spzRq9BwZufNrjjdfg7BAfsPjsk0JQ",
+      "minutes": 19,
+      "minutesBasis": "measured",
+      "uses": "choosing eval and tracing tools",
+      "pageMinutes": 19,
+      "hub": true,
+      "toc": null,
+      "foundBy": [
+        "current"
+      ]
+    },
+    {
+      "id": "M12",
+      "origin": "research",
+      "type": "link",
+      "kind": "repo",
+      "author": "Anthropic",
+      "year": null,
+      "why": "Nine-chapter prompting lab with exercises and an answer key.",
+      "recommendedBy": [],
+      "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial",
+      "title": "GitHub - anthropics/prompt-eng-interactive-tutorial: Anthropic's Interactive Prompt Engineering Tutorial",
+      "backbone": false,
+      "verifiedAt": "2026-11-07T22:49:20.369Z",
+      "fetchedTitle": "GitHub - anthropics/prompt-eng-interactive-tutorial: Anthropic's Interactive Prompt Engineering Tutorial · GitHub",
+      "sig": "h33E1X3UmFTMylSZrojjOx_HOWD6JEqOmXMJsz-Cy6w",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "prompt engineering lab",
+      "pageMinutes": 2,
+      "hub": false,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": 9,
+        "perItemMinutes": 5,
+        "minutes": 45,
+        "answers": true,
+        "list": {
+          "items": [
+            {
+              "title": "01_Basic_Prompt_Structure.ipynb",
+              "number": null,
+              "group": "Beginner",
+              "difficulty": null,
+              "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial/blob/master/Anthropic%201P/01_Basic_Prompt_Structure.ipynb",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "02_Being_Clear_and_Direct.ipynb",
+              "number": null,
+              "group": "Beginner",
+              "difficulty": null,
+              "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial/blob/master/Anthropic%201P/02_Being_Clear_and_Direct.ipynb",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "03_Assigning_Roles_Role_Prompting.ipynb",
+              "number": null,
+              "group": "Beginner",
+              "difficulty": null,
+              "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial/blob/master/Anthropic%201P/03_Assigning_Roles_Role_Prompting.ipynb",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "04_Separating_Data_and_Instructions.ipynb",
+              "number": null,
+              "group": "Intermediate",
+              "difficulty": null,
+              "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial/blob/master/Anthropic%201P/04_Separating_Data_and_Instructions.ipynb",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "05_Formatting_Output_and_Speaking_for_Claude.ipynb",
+              "number": null,
+              "group": "Intermediate",
+              "difficulty": null,
+              "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial/blob/master/Anthropic%201P/05_Formatting_Output_and_Speaking_for_Claude.ipynb",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "06_Precognition_Thinking_Step_by_Step.ipynb",
+              "number": null,
+              "group": "Intermediate",
+              "difficulty": null,
+              "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial/blob/master/Anthropic%201P/06_Precognition_Thinking_Step_by_Step.ipynb",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "07_Using_Examples_Few-Shot_Prompting.ipynb",
+              "number": null,
+              "group": "Intermediate",
+              "difficulty": null,
+              "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial/blob/master/Anthropic%201P/07_Using_Examples_Few-Shot_Prompting.ipynb",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "08_Avoiding_Hallucinations.ipynb",
+              "number": null,
+              "group": "Advanced",
+              "difficulty": null,
+              "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial/blob/master/Anthropic%201P/08_Avoiding_Hallucinations.ipynb",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "09_Complex_Prompts_from_Scratch.ipynb",
+              "number": null,
+              "group": "Advanced",
+              "difficulty": null,
+              "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial/blob/master/Anthropic%201P/09_Complex_Prompts_from_Scratch.ipynb",
+              "solutionUrl": null,
+              "minutes": null
+            }
+          ],
+          "source": "page",
+          "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial"
+        },
+        "totalItems": 9
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "Nine chapter notebooks in the \"Anthropic 1P\" folder (beginner to advanced), each with exercises. The answer key is a separate Google Sheet. Best for hands-on prompt-engineering practice."
+    },
+    {
+      "id": "M13",
+      "origin": "research",
+      "type": "link",
+      "kind": "docs",
+      "author": "Langfuse",
+      "year": null,
+      "why": "Hands-on error-analysis notebook with a worked taxonomy, a practical companion to the evals post.",
+      "recommendedBy": [],
+      "url": "https://langfuse.com/guides/cookbook/error-analysis-llm-applications",
+      "title": "Error Analysis for LLM Applications - Langfuse",
+      "backbone": false,
+      "verifiedAt": "2026-11-07T22:49:20.166Z",
+      "fetchedTitle": "Error Analysis for LLM Applications - Langfuse",
+      "sig": "g6A2dKanUBZAgTdFqwG0ui6mN2nqBgjRHAm5XiaAzHI",
+      "minutes": null,
+      "minutesBasis": null,
+      "uses": "error analysis lab",
+      "pageMinutes": 11,
+      "hub": true,
+      "toc": null,
+      "practice": {
+        "format": "lab",
+        "items": 8,
+        "perItemMinutes": 5,
+        "minutes": 40,
+        "answers": true,
+        "list": {
+          "items": [
+            {
+              "title": "Step 1.1: Choose what to annotate",
+              "number": null,
+              "group": "The process",
+              "difficulty": null,
+              "url": "https://langfuse.com/guides/cookbook/error-analysis-llm-applications#step-11-choose-what-to-annotate",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Step 1.2: Select a representative sample",
+              "number": null,
+              "group": "The process",
+              "difficulty": null,
+              "url": "https://langfuse.com/guides/cookbook/error-analysis-llm-applications#step-12-select-a-representative-sample",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Step 1.3: Create an annotation queue",
+              "number": null,
+              "group": "The process",
+              "difficulty": null,
+              "url": "https://langfuse.com/guides/cookbook/error-analysis-llm-applications#step-13-create-an-annotation-queue",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Step 2: Open code your first 30-50 traces",
+              "number": null,
+              "group": "The process",
+              "difficulty": null,
+              "url": "https://langfuse.com/guides/cookbook/error-analysis-llm-applications#step-2-open-code-your-first-30-50-traces",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Step 3: Cluster into failure categories",
+              "number": null,
+              "group": "The process",
+              "difficulty": null,
+              "url": "https://langfuse.com/guides/cookbook/error-analysis-llm-applications#step-3-cluster-into-failure-categories",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Step 4.1: Label all traces against the categories",
+              "number": null,
+              "group": "The process",
+              "difficulty": null,
+              "url": "https://langfuse.com/guides/cookbook/error-analysis-llm-applications#step-41-label-all-traces-against-the-categories",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Step 4.2: Compute failure rates",
+              "number": null,
+              "group": "The process",
+              "difficulty": null,
+              "url": "https://langfuse.com/guides/cookbook/error-analysis-llm-applications#step-42-compute-failure-rates",
+              "solutionUrl": null,
+              "minutes": null
+            },
+            {
+              "title": "Step 5: Decide what to do about each category",
+              "number": null,
+              "group": "The process",
+              "difficulty": null,
+              "url": "https://langfuse.com/guides/cookbook/error-analysis-llm-applications#step-5-decide-what-to-do-about-each-category",
+              "solutionUrl": null,
+              "minutes": null
+            }
+          ],
+          "source": "page",
+          "url": "https://langfuse.com/guides/cookbook/error-analysis-llm-applications"
+        },
+        "totalItems": 8
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "Single notebook-style guide walking a five-step error-analysis process on a example app; the steps are hands-on tasks."
+    },
+    {
+      "id": "M14",
+      "origin": "research",
+      "type": "link",
+      "kind": "essay",
+      "author": "Hamel Husain",
+      "year": null,
+      "why": "FAQ extending the evals post with error analysis and testing guidance.",
+      "recommendedBy": [],
+      "url": "https://hamel.dev/blog/posts/evals-faq",
+      "title": "AI Evals: Everything You Need to Know – Hamel’s Blog",
+      "backbone": false,
+      "verifiedAt": "2026-11-07T22:49:47.862Z",
+      "fetchedTitle": "AI Evals: Everything You Need to Know – Hamel’s Blog",
+      "sig": "umRVt-89ckQv7xM2ubCdqy2GwAapfqdjxei4rJDhNpM",
+      "minutes": 40,
+      "minutesBasis": "measured",
+      "uses": "error analysis and eval design FAQ",
+      "pageMinutes": 79,
+      "hub": true,
+      "toc": {
+        "source": "page",
+        "url": "https://hamel.dev/blog/posts/evals-faq",
+        "printPages": false,
+        "end": null,
+        "chapters": [
+          {
+            "n": null,
+            "title": "Getting Started & Fundamentals",
+            "page": null,
+            "minutes": 6,
+            "sections": [
+              "Q: What are AI Evals?",
+              "Q: What is a trace?",
+              "Q: What’s a minimum viable evaluation setup?",
+              "Q: How much of my development budget should I allocate to evals?",
+              "Q: Will today’s evaluation methods still be relevant in 5-10 years given how fast AI is changing?",
+              "Q: How do I make the case for investing in evaluations to my team?"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Error Analysis & Data Collection",
+            "page": null,
+            "minutes": 17,
+            "sections": [
+              "Q: Why is \"error analysis\" so important in AI evals, and how is it performed?",
+              "Q: Do I need a reference answer or rubric before annotating data?",
+              "Q: Should I record problems that aren’t the model’s fault?",
+              "Q: How many examples do I need for an eval?",
+              "Q: How do I surface problematic traces for review beyond user feedback?",
+              "Q: How often should I re-run error analysis on my production system?",
+              "Q: What should I do when my \"gold\" eval dataset becomes stale?",
+              "Q: What is the best approach for generating synthetic data?",
+              "Q: Are there scenarios where synthetic data may not be reliable?",
+              "Q: How can I do evals when traces contain sensitive data?",
+              "Q: How do I approach evaluation when my system handles diverse user queries?",
+              "Q: How can I efficiently sample production traces for review?"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Evaluation Design & Methodology",
+            "page": null,
+            "minutes": 15,
+            "sections": [
+              "Q: Why do you recommend binary (pass/fail) evaluations instead of 1-5 ratings (Likert scales)?",
+              "Q: How do I combine my evals into a single metric?",
+              "Q: What does a good eval dashboard look like for sharing with stakeholders?",
+              "Q: Should I practice eval-driven development?",
+              "Q: Should I build automated evaluators for every failure mode I find?",
+              "Q: What model or LLM should I use to build automated evals?",
+              "Q: Can I use Jev for evals?",
+              "Q: How do I know if I can trust my automated eval?",
+              "Q: What should I do when I can’t get my LLM judge to agree with human reviewers?",
+              "Q: Should I use \"ready-to-use\" evaluation metrics?",
+              "Q: Are similarity metrics (BERTScore, ROUGE, etc.) useful for evaluating LLM outputs?",
+              "Q: Can I use the same model for both the main task and evaluation?"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Human Annotation & Process",
+            "page": null,
+            "minutes": 11,
+            "sections": [
+              "Q: How many people should annotate my LLM outputs?",
+              "Q: How can I make AI outputs easier for people to evaluate?",
+              "Q: Should product managers and engineers collaborate on error analysis? How?",
+              "Q: Can I help with evals if I’m not a domain expert?",
+              "Q: How do I evaluate outputs in a language I don’t speak?",
+              "Q: Should I outsource annotation & labeling to a third party?",
+              "Q: How do you review a trace that is really large?",
+              "Q: What parts of evals can be automated with LLMs?",
+              "Q: Should I stop writing prompts manually in favor of automated tools?"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Tools & Infrastructure",
+            "page": null,
+            "minutes": 9,
+            "sections": [
+              "Q: Should I build a custom annotation tool or use something off-the-shelf?",
+              "Q: What makes a good custom interface for reviewing LLM outputs?",
+              "Q: What gaps in eval tooling should I be prepared to fill myself?",
+              "Q: What should an internal eval platform standardize across teams?",
+              "Q: What’s your favorite eval vendor?",
+              "Q: How should I version and manage prompts?",
+              "Q: What should go in the system prompt vs. the user prompt?"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Production & Deployment",
+            "page": null,
+            "minutes": 6,
+            "sections": [
+              "Q: How are evaluations used differently in CI/CD vs. monitoring production?",
+              "Q: How often should I run my evals?",
+              "Q: What’s the difference between guardrails & evaluators?",
+              "Q: Can my evaluators also be used to automatically fix or correct outputs in production?",
+              "Q: How much time should I spend on model selection?"
+            ],
+            "url": null,
+            "group": null
+          },
+          {
+            "n": null,
+            "title": "Domain-Specific Applications",
+            "page": null,
+            "minutes": 12,
+            "sections": [
+              "Q: Is RAG dead?",
+              "Q: How should I evaluate a coding agent?",
+              "Q: How should I approach evaluating my RAG system?",
+              "Q: How do I choose the right chunk size for my document processing tasks?",
+              "Q: How do I debug multi-turn conversation traces?",
+              "Q: How do I evaluate sessions with human handoffs?",
+              "Q: How do I evaluate complex multi-step workflows?",
+              "Q: How do I evaluate agentic workflows?",
+              "Footnotes"
+            ],
+            "url": null,
+            "group": null
+          }
+        ]
+      },
+      "foundBy": [
+        "practice"
+      ],
+      "note": "One long FAQ essay split into six topic sections of Q&As (about 60 questions in total). It works best as a reference you dip into by question. The outline gave no heading anchors, so the units are the sections."
+    }
+  ],
+  "split": {
+    "readingShare": 24,
+    "practice": "building LLM applications",
+    "formats": [
+      {
+        "format": "project",
+        "share": 86,
+        "focus": "RAG-plus-agent app with evals",
+        "reason": "You asked for a build-heavy plan, and one app grown milestone by milestone (prompting, RAG, tools/MCP, evals, serving) mirrors the book's order and real backend work."
+      },
+      {
+        "format": "lab",
+        "share": 3,
+        "focus": "prompting and error analysis",
+        "reason": "Anthropic's prompting notebooks and Langfuse's error-analysis walkthrough give guided, checkable practice in real tools."
+      },
+      {
+        "format": "design-exercise",
+        "share": 6,
+        "focus": "LLM app architecture trade-offs",
+        "reason": "Timed system designs (RAG vs finetune, agent vs workflow, eval pipelines) build the judgement that architecture chapters describe."
+      },
+      {
+        "format": "recall",
+        "share": 5,
+        "focus": "core concepts and terms",
+        "reason": "Brief recall after each chapter keeps evaluation, sampling and inference vocabulary available while you build."
+      }
+    ],
+    "reason": "About a quarter of the 72 hours goes to reading Chip Huyen's AI Engineering in order, plus short guides on evals, RAG, agents and MCP. The rest is hands-on: one LLM app built in milestones alongside the book, short prompting and error-analysis labs, a few timed design exercises and quick recall che…"
+  },
+  "level": "week",
+  "spans": [
+    5,
+    5,
+    5,
+    5
+  ],
+  "tree": {
+    "id": "root",
+    "level": "month",
+    "title": "",
+    "summary": "",
+    "len": 60,
+    "status": "pending",
+    "budgetHours": null,
+    "manualSplit": false,
+    "children": [
+      {
+        "id": "tmp-mw6zysx0-1",
+        "level": "month",
+        "title": "Foundation Models and Evaluation Fundamentals",
+        "summary": "Covers how foundation models work, how AI applications are planned, and how to evaluate them, alongside hands-on prompting practice, so the learner starts the project with an eval-first mindset before building retrieval or agents.",
+        "len": 20,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 1,
+        "end": 20,
+        "covers": [
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 1
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 2
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 3
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 4
+          },
+          {
+            "id": "M1",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M6",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M8",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "lab",
+            "id": "M12",
+            "note": null,
+            "itemFrom": 1,
+            "itemTo": 9
+          }
+        ],
+        "time": {
+          "reading": 543,
+          "practice": {
+            "project": 770,
+            "lab": 50,
+            "recall": 70
+          }
+        }
+      },
+      {
+        "id": "tmp-mw6zyv8f-2",
+        "level": "month",
+        "title": "Prompting, Retrieval and Agent Workflows",
+        "summary": "Moves from evaluation into building: prompt engineering, retrieval-augmented generation end to end, agent and workflow patterns, and systematic error analysis, which is where the core of the retrieval-plus-agent project gets built and measured.",
+        "len": 20,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 21,
+        "end": 40,
+        "covers": [
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 5
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 6
+          },
+          {
+            "id": "M5",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 1
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 2
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 3
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 4
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 5
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 6
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 7
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 8
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 9
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 10
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 11
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 12
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 13
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 14
+          },
+          {
+            "id": "M7",
+            "note": null,
+            "activity": "read",
+            "chapter": 15
+          },
+          {
+            "id": "M14",
+            "note": null,
+            "activity": "read",
+            "chapter": 1
+          },
+          {
+            "id": "M14",
+            "note": null,
+            "activity": "read",
+            "chapter": 2
+          },
+          {
+            "id": "M14",
+            "note": null,
+            "activity": "read",
+            "chapter": 3
+          }
+        ],
+        "practiceCovers": [
+          {
+            "format": "lab",
+            "id": "M13",
+            "note": null,
+            "itemFrom": 1,
+            "itemTo": 8
+          }
+        ],
+        "time": {
+          "reading": 324,
+          "practice": {
+            "project": 960,
+            "lab": 49,
+            "design-exercise": 49,
+            "recall": 54
+          }
+        }
+      },
+      {
+        "id": "tmp-mw6zywpi-3",
+        "level": "month",
+        "title": "Production Architecture, Tools and Inference",
+        "summary": "Finishes with the most applied material: inference optimization, overall application architecture and user feedback, tool servers for agents, and eval and tracing tooling, so the learner hardens the project for production and weighs architecture trade-offs.",
+        "len": 20,
+        "status": "pending",
+        "budgetHours": null,
+        "manualSplit": false,
+        "children": null,
+        "start": 41,
+        "end": 60,
+        "covers": [
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 9
+          },
+          {
+            "id": "M2",
+            "note": null,
+            "activity": "read",
+            "chapter": 10
+          },
+          {
+            "id": "M9",
+            "note": null,
+            "activity": "read",
+            "chapter": 2
+          },
+          {
+            "id": "M9",
+            "note": null,
+            "activity": "read",
+            "chapter": 3
+          },
+          {
+            "id": "M9",
+            "note": null,
+            "activity": "read",
+            "chapter": 4
+          },
+          {
+            "id": "M9",
+            "note": null,
+            "activity": "read",
+            "chapter": 8
+          },
+          {
+            "id": "M9",
+            "note": null,
+            "activity": "read",
+            "chapter": 9
+          },
+          {
+            "id": "M9",
+            "note": null,
+            "activity": "read",
+            "chapter": 10
+          },
+          {
+            "id": "M10",
+            "note": null,
+            "activity": "read",
+            "chapter": null
+          }
+        ],
+        "time": {
+          "reading": 228,
+          "practice": {
+            "project": 1020,
+            "design-exercise": 148,
+            "recall": 40
+          }
+        }
+      }
+    ],
+    "start": 1,
+    "end": 60
+  },
+  "parentId": "tmp-mw6zysx0-1",
+  "timeLimitMs": 179592,
+  "baseline": {
+    "inputTokens": 7945,
+    "outputTokens": 4389,
+    "ms": 39120
+  }
+}
